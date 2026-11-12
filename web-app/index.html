@@ -1,0 +1,239 @@
+<meta charset="utf-8">
+<title>U2C Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Anton&display=swap">
+<style>
+/* Tokens. Dark-first studio chrome (Charcoal); --accent follows the selected U2C palette. */
+:root{
+  --pal-main:#c8c8c8; --pal-dark:#161616;
+  --bg:#121212; --bg-2:#181818; --panel:#1a1a1a; --stage:#0b0b0b;
+  --fg:#e6e6e6; --muted:#8b8b8b; --faint:#5e5e5e;
+  --line:rgba(200,200,200,.10); --line-2:rgba(200,200,200,.18);
+  --accent:var(--pal-main); --on-accent:#161616; --tint:rgba(200,200,200,.07);
+  --sans:"Instrument Sans",ui-sans-serif,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --serif:"Instrument Serif","Iowan Old Style",Palatino,Georgia,serif;
+  --radius:8px; --ease:cubic-bezier(.2,.7,.2,1);
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#e8e7e4; --bg-2:#efeeeb; --panel:#f4f3f0; --stage:#161616;
+    --fg:#161616; --muted:#5a5a5a; --faint:#8c8c8c;
+    --line:rgba(22,22,22,.12); --line-2:rgba(22,22,22,.22);
+    --accent:var(--pal-dark); --on-accent:#f4f3f0; --tint:rgba(22,22,22,.06);
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#e8e7e4; --bg-2:#efeeeb; --panel:#f4f3f0; --stage:#161616;
+  --fg:#161616; --muted:#5a5a5a; --faint:#8c8c8c;
+  --line:rgba(22,22,22,.12); --line-2:rgba(22,22,22,.22);
+  --accent:var(--pal-dark); --on-accent:#f4f3f0; --tint:rgba(22,22,22,.06);
+  color-scheme:light;
+}
+body{background:var(--bg);color:var(--fg)}
+</style>
+<link rel="stylesheet" href="src/styles.css">
+<script type="importmap">{"imports":{"pixi.js":"https://cdn.jsdelivr.net/npm/pixi.js@8.22.0/dist/pixi.min.mjs"}}</script>
+
+<header class="top">
+  <div class="brand"><i class="dot"></i><b>U2C</b><span>/ studio</span></div>
+  <div class="proj"><input id="projTitle" aria-label="Beat title" value="Night Shift"><span class="saved" id="savedTxt">saved locally</span></div>
+  <button class="btn small" id="creditsBtn" aria-expanded="false">Credits</button>
+  <button class="btn" id="backBtn" hidden>All looks</button>
+  <button class="btn primary" id="exportTop" hidden>Export</button>
+  <div class="pop" id="credits" hidden>
+    <div class="lbl">Open-source credits</div>
+    <ul id="creditList"></ul>
+    <p class="note">U2C artwork, chain logo and elephant © Uche2Crazy. Runs in your browser; your audio never leaves this tab.</p>
+  </div>
+</header>
+
+<main>
+<section id="home">
+ <div class="home-in">
+  <div class="hero">
+   <div class="drop" id="drop">
+     <div>
+       <h1>Your beat, <em>in chains.</em></h1>
+       <p>Drop a beat and U2C Studio renders it into twelve branded, beat‑reactive looks for Reels, TikTok and Shorts (9:16) or YouTube (16:9). Everything runs in this tab.</p>
+     </div>
+     <div class="row">
+       <label class="btn primary" for="file">Choose audio</label>
+       <input type="file" id="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.aif,.aiff,.ogg" hidden>
+       <button class="btn" id="demoBtn">Reload demo beat</button>
+       <span class="hint">mp3 · wav · flac · m4a, or drag a file here</span>
+     </div>
+     <div class="prog"><i id="anaProg"></i></div>
+     <div class="status" id="status" role="status">Loading…</div>
+   </div>
+   <div class="fields">
+     <div class="field wide"><label class="lbl" for="fTitle">Title</label><input class="inp" id="fTitle"></div>
+     <div class="field"><label class="lbl" for="fBpm">BPM <span id="bpmSrc" class="hint"></span></label>
+       <div class="inrow"><input class="inp mono" id="fBpm" type="number" min="40" max="250" step="0.1" style="width:96px"><button class="btn small" data-bpm="0.5">÷2</button><button class="btn small" data-bpm="2">×2</button></div></div>
+     <div class="field"><label class="lbl" for="fKey">Key</label><input class="inp mono" id="fKey"></div>
+     <div class="field wide"><label class="lbl" for="fTag">Producer tag</label><input class="inp" id="fTag"></div>
+     <div class="field wide"><span class="hint" id="trackInfo">Tag, handle and caption format are remembered for next time.</span></div>
+   </div>
+  </div>
+  <div>
+   <div class="looks-head">
+     <div><div class="lbl" style="margin-bottom:6px">Step 2</div><h2>Pick a look. <em>Each one is playing your beat.</em></h2></div>
+     <div class="inrow"><span class="lbl">Format</span><div class="seg" id="gridAspect"><button data-a="916" aria-pressed="true">9:16</button><button data-a="169" aria-pressed="false">16:9</button></div></div>
+   </div>
+   <p class="note" id="loopNote" style="margin:8px 0 16px">Previews loop the loudest 8 bars, muted. Hover a card to hear it.</p>
+   <div class="grid" id="grid"></div>
+  </div>
+ </div>
+</section>
+
+<section id="studio" hidden>
+ <div class="stage-col">
+  <div class="stage-bar">
+    <div class="inrow"><span class="lbl" id="metaLine">9:16 · 1080×1920 · 30 fps</span><span class="hint" id="fxBadge"></span></div>
+    <div class="ctrls">
+      <div class="seg" id="aspectSeg"><button data-a="916" aria-pressed="true">9:16</button><button data-a="169" aria-pressed="false">16:9</button></div>
+      <div class="seg" id="zoomSeg"><button data-z="fit" aria-pressed="true">Fit</button><button data-z="100" aria-pressed="false">100%</button></div>
+      <button class="btn small" id="safeBtn" aria-pressed="false">Safe area</button>
+      <button class="btn small" id="fsBtn">Fullscreen</button>
+    </div>
+  </div>
+  <div class="stage" id="stage"><div class="cwrap" id="cwrap"><canvas id="view" width="540" height="960" aria-label="Video preview. Drag the chains, elephant or text to move them."></canvas><div class="safe" id="safe" hidden></div></div></div>
+  <div class="variant"><span class="lbl">Variant</span><div class="inrow" id="palChips"></div></div>
+  <div class="transport">
+    <button class="play" id="playBtn" aria-label="Play"><svg id="playIco" width="16" height="16" viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z" fill="currentColor"/></svg></button>
+    <button class="ib" id="restartBtn" aria-label="Back to in point"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 2v10M12 2L5 7l7 5z" stroke="currentColor" fill="currentColor" stroke-width="1.5"/></svg></button>
+    <button class="ib" id="loopBtn" aria-label="Loop in to out" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 6a3 3 0 013-3h6l-2-2M13 10a3 3 0 01-3 3H4l2 2"/></svg></button>
+    <span class="tc" id="tc">00:00.000</span>
+    <span class="pill" id="barPill">bar 1.1</span>
+    <div class="vol"><span class="lbl">Vol</span><input type="range" id="vol" min="0" max="1" step="0.01" value="0.9" aria-label="Volume"></div>
+    <div class="readout" id="readout"></div>
+  </div>
+  <div class="tlwrap">
+    <div id="wave"></div>
+    <div class="legend">
+      <div class="inrow"><span class="lbl">Auto hook</span><button class="btn small" data-len="7">7s loop</button><button class="btn small" data-len="15">15s</button><button class="btn small" data-len="30">30s</button><button class="btn small" data-len="60">60s</button><button class="btn small" data-len="full">Full</button></div>
+      <div class="inrow"><span class="lbl">Zoom</span><input type="range" id="wsZoom" min="0" max="200" step="1" value="0" aria-label="Timeline zoom" style="width:110px;accent-color:var(--accent)"></div>
+    </div>
+    <div class="legend"><span>drag the clip region · snaps to bars · <kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> beat · <kbd>I</kbd><kbd>O</kbd> in/out · <kbd>1</kbd>–<kbd>9</kbd> looks</span><span id="lgCounts"></span></div>
+  </div>
+ </div>
+ <aside class="panel">
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="beat" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 9h2M6 5v8M9 3v12M12 6v6M15 8v2"/></svg>Beat</button>
+    <button role="tab" data-tab="look" aria-selected="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="10" y="2" width="6" height="6" rx="1"/><rect x="2" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/></svg>Look</button>
+    <button role="tab" data-tab="style" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9 1.5Q9 9 16.5 9Q9 9 9 16.5Q9 9 1.5 9Q9 9 9 1.5z"/></svg>Style</button>
+    <button role="tab" data-tab="fx" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 5h14M2 9h9M2 13h14M13 7l3 2-3 2"/></svg>FX</button>
+    <button role="tab" data-tab="text" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 15L8 3l5 12M5 11h6M14 7v8"/></svg>Text</button>
+    <button role="tab" data-tab="export" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9 2v9M5 7l4 4 4-4M3 13v3h12v-3"/></svg>Export</button>
+    <i class="ul" id="tabUl"></i>
+  </div>
+  <div class="pane" data-pane="beat" hidden>
+    <h3>Beat grid</h3>
+    <div class="group">
+      <div class="field"><label class="lbl" for="sBpm">BPM</label><div class="inrow"><input class="inp mono" id="sBpm" type="number" min="40" max="250" step="0.1" style="width:96px"><button class="btn small" data-bpm="0.5">÷2</button><button class="btn small" data-bpm="2">×2</button><button class="btn small" id="tapBtn">Tap</button></div></div>
+      <div class="field"><label class="lbl" for="sKey">Key</label><input class="inp mono" id="sKey"></div>
+      <div class="field"><span class="lbl">Downbeat</span><div class="inrow"><button class="btn small" data-nudge="-b">−1 beat</button><button class="btn small" data-nudge="+b">+1 beat</button><button class="btn small" data-nudge="-ms">−10 ms</button><button class="btn small" data-nudge="+ms">+10 ms</button></div></div>
+      <div class="hint" id="gridInfo"></div>
+    </div>
+    <div class="group"><div class="lbl">Analysis</div><dl class="kv" id="anaKv"></dl></div>
+  </div>
+  <div class="pane" data-pane="look">
+    <h3>Looks</h3>
+    <div class="lookgrid" id="lookGrid"></div>
+    <div class="group" id="tplParams"></div>
+  </div>
+  <div class="pane" data-pane="style" hidden>
+    <h3>Overlays <em>&amp; finish</em></h3>
+    <div class="group">
+      <div class="group-h"><label class="tog"><input type="checkbox" id="chOn" checked> U2C chains</label><span class="hint">fly in · pulse · shatter</span></div>
+      <div class="ctl"><label class="lbl" for="chX">Position X</label><input type="range" id="chX" min="0" max="1" step="0.01"><output for="chX"></output></div>
+      <div class="ctl"><label class="lbl" for="chY">Position Y</label><input type="range" id="chY" min="0" max="1" step="0.01"><output for="chY"></output></div>
+      <div class="ctl"><label class="lbl" for="chS">Scale</label><input type="range" id="chS" min="0.12" max="1.4" step="0.01"><output for="chS"></output></div>
+      <div class="ctl"><label class="lbl" for="chC">Shatter every</label><select class="inp mono" id="chC"><option value="auto">clip length (loop-safe)</option><option value="4">4 bars</option><option value="8">8 bars</option><option value="16">16 bars</option></select><span></span></div>
+      <p class="hint">Or drag the logo on the preview.</p>
+    </div>
+    <div class="group">
+      <div class="group-h"><label class="tog"><input type="checkbox" id="elOn" checked> Elephant pendant</label><span class="hint">swing locked to the beat</span></div>
+      <div class="ctl"><label class="lbl" for="elX">Hang from X</label><input type="range" id="elX" min="0" max="1" step="0.01"><output for="elX"></output></div>
+      <div class="ctl"><label class="lbl" for="elS">Scale</label><input type="range" id="elS" min="0.15" max="1.6" step="0.01"><output for="elS"></output></div>
+      <div class="ctl"><label class="lbl" for="elL">Chain length</label><input type="range" id="elL" min="0" max="0.6" step="0.01"><output for="elL"></output></div>
+    </div>
+    <div class="group">
+      <div class="lbl">Finish</div>
+      <div class="ctl"><label class="lbl" for="fGrain">Grain</label><input type="range" id="fGrain" min="0" max="1" step="0.01"><output for="fGrain"></output></div>
+      <div class="ctl"><label class="lbl" for="fInt">Reactivity</label><input type="range" id="fInt" min="0.2" max="2" step="0.01"><output for="fInt"></output></div>
+      <label class="tog"><input type="checkbox" id="fZoom" checked> Slow zoom (always-on motion)</label>
+    </div>
+  </div>
+  <div class="pane" data-pane="fx" hidden>
+    <h3>Post FX</h3>
+    <div class="group">
+      <div class="group-h"><label class="tog"><input type="checkbox" id="fxOn" checked> Audio-driven FX</label><span class="hint" id="fxStatus"></span></div>
+      <div class="ctl"><label class="lbl" for="fxCrt">CRT · scan</label><input type="range" id="fxCrt" min="0" max="1" step="0.01"><output for="fxCrt"></output></div>
+      <div class="ctl"><label class="lbl" for="fxRgb">RGB split</label><input type="range" id="fxRgb" min="0" max="1" step="0.01"><output for="fxRgb"></output></div>
+      <div class="ctl"><label class="lbl" for="fxGlitch">Glitch</label><input type="range" id="fxGlitch" min="0" max="1" step="0.01"><output for="fxGlitch"></output></div>
+      <div class="ctl"><label class="lbl" for="fxBloom">Bloom</label><input type="range" id="fxBloom" min="0" max="1.5" step="0.01"><output for="fxBloom"></output></div>
+      <div class="ctl"><label class="lbl" for="fxShock">Shockwave</label><input type="range" id="fxShock" min="0" max="1.5" step="0.01"><output for="fxShock"></output></div>
+      <div class="ctl"><label class="lbl" for="fxShatter">Twist · zoom</label><input type="range" id="fxShatter" min="0" max="1.5" step="0.01"><output for="fxShatter"></output></div>
+    </div>
+    <dl class="kv"><dt>RGB split</dt><dd>snares</dd><dt>Glitch slices</dt><dd>kicks</dd><dt>Bloom</dt><dd>low band</dd><dt>Shockwave</dt><dd>phrase downbeat + drops</dd><dt>Twist · zoom blur</dt><dd>chain shatter</dd><dt>CRT</dt><dd>always</dd></dl>
+  </div>
+  <div class="pane" data-pane="text" hidden>
+    <h3>Text</h3>
+    <div class="group">
+      <div class="field"><div class="group-h"><label class="lbl" for="wTitle">Beat name</label><label class="tog"><input type="checkbox" id="wTitleOn" checked> show</label></div><input class="inp" id="wTitle"></div>
+      <div class="group-h"><span class="lbl">BPM + key</span><label class="tog"><input type="checkbox" id="wBpmOn" checked> show</label></div>
+      <div class="field"><div class="group-h"><label class="lbl" for="wTag">Producer tag</label><label class="tog"><input type="checkbox" id="wTagOn" checked> show</label></div><input class="inp" id="wTag"></div>
+      <div class="field"><div class="group-h"><label class="lbl" for="wHandle">Handle</label><label class="tog"><input type="checkbox" id="wHandleOn"> show</label></div><input class="inp mono" id="wHandle"></div>
+    </div>
+    <div class="group">
+      <div class="field"><label class="lbl" for="wPreset">Overlay preset</label><select class="inp mono" id="wPreset"></select></div>
+      <div class="inrow"><div class="field" style="flex:1"><label class="lbl" for="wA">Artist A</label><input class="inp" id="wA"></div><div class="field" style="flex:1"><label class="lbl" for="wB">Artist B</label><input class="inp" id="wB"></div></div>
+      <div class="inrow"><div class="field" style="flex:1"><label class="lbl" for="wPrice">Lease price</label><input class="inp mono" id="wPrice"></div><div class="field" style="flex:2"><label class="lbl" for="wLink">Store link / CTA</label><input class="inp mono" id="wLink"></div></div>
+      <p class="hint">Preset text sits inside the safe box (x162–918, y288–1248 on 9:16). Drag it on the preview to move it.</p>
+    </div>
+    <div class="group">
+      <div class="group-h"><span class="lbl">Caption builder</span><button class="btn small" id="capCopy">Copy all</button></div>
+      <div class="field"><label class="lbl" for="capFmt">Title format</label><input class="inp mono" id="capFmt"></div>
+      <textarea class="inp" id="capOut" rows="10" readonly aria-label="Generated title, captions and tags"></textarea>
+      <div class="inrow"><button class="btn small" id="capSave">Save .txt</button><span class="hint" id="capInfo"></span></div>
+    </div>
+  </div>
+  <div class="pane" data-pane="export" hidden>
+    <h3>Export</h3>
+    <div class="group">
+      <dl class="kv" id="exKv"></dl>
+      <div class="inrow"><span class="lbl" style="width:70px">Frame rate</span><div class="seg" id="exFps"><button data-v="30" aria-pressed="true">30</button><button data-v="60" aria-pressed="false">60</button></div></div>
+      <div class="inrow"><span class="lbl" style="width:70px">Bitrate</span><div class="seg" id="exMbps"><button data-v="10">10</button><button data-v="11">11</button><button data-v="12">12 Mbps</button></div></div>
+      <div class="inrow"><span class="lbl" style="width:70px">Loudness</span><div class="seg" id="exLufs"><button data-v="-14">−14 LUFS</button><button data-v="-12">−12</button><button data-v="off">off</button></div></div>
+      <label class="tog"><input type="checkbox" id="exLoop" checked> Loop-safe (bar-aligned end, 20 ms audio crossfade)</label>
+      <div class="exfoot inrow"><button class="btn primary" id="exBtn">Export MP4</button><button class="btn" id="exCancel" hidden>Cancel</button><button class="btn small" id="ytBtn">YouTube full-length</button></div>
+      <div class="prog"><i id="exProg"></i></div>
+      <div class="status" id="exStatus">Frame-exact offline render (WebCodecs). Falls back to real-time recording if the browser cannot encode.</div>
+      <dl class="kv" id="loudKv"></dl>
+    </div>
+    <div class="group">
+      <div class="group-h"><span class="lbl">Voice tag</span><label class="tog"><input type="checkbox" id="vtOn"> tagged export</label></div>
+      <div class="inrow"><label class="btn small" for="vtFile">Upload tag audio</label><input type="file" id="vtFile" accept="audio/*" hidden><span class="hint" id="vtInfo">none loaded</span></div>
+      <div class="ctl"><label class="lbl" for="vtEvery">Repeat every</label><input type="range" id="vtEvery" min="10" max="40" step="1"><output for="vtEvery"></output></div>
+    </div>
+    <div class="group">
+      <div class="group-h"><span class="lbl">Batch</span><button class="btn small" id="batchBtn">Export batch</button></div>
+      <div class="checks" id="batchTpl"></div>
+      <div class="inrow"><span class="lbl">Lengths</span><label class="tog"><input type="checkbox" data-blen="7"> 7s</label><label class="tog"><input type="checkbox" data-blen="15"> 15s</label><label class="tog"><input type="checkbox" data-blen="30"> 30s</label></div>
+      <p class="hint">Each look × length is rendered from its own auto-picked hook, in the current aspect and palette.</p>
+    </div>
+    <div class="group">
+      <div class="group-h"><span class="lbl">YouTube thumbnails</span><button class="btn small" id="thumbBtn">Make 3 variants</button></div>
+      <div class="thumbs" id="thumbs"></div>
+    </div>
+    <div class="results" id="results"></div>
+  </div>
+ </aside>
+</section>
+</main>
+<script type="module" src="src/main.js"></script>
