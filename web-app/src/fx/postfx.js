@@ -15,9 +15,7 @@ export function createPostFX(libs) {
       F = { rgb: new f.RGBSplitFilter({ red: { x: 0, y: 0 }, green: { x: 0, y: 0 }, blue: { x: 0, y: 0 } }),
         crt: new f.CRTFilter({ curvature: .6, lineWidth: 2, lineContrast: .1, noise: .05, noiseSize: 1.5, vignetting: .32, vignettingAlpha: .35, vignettingBlur: .3 }),
         bloom: new f.AdvancedBloomFilter({ threshold: .55, bloomScale: .6, brightness: 1, blur: 6, quality: 3 }),
-        shock: new f.ShockwaveFilter({ center: { x: 0, y: 0 }, speed: 900, amplitude: 10, wavelength: 180, brightness: 1.05, radius: -1 }),
-        zoom: new f.ZoomBlurFilter({ strength: 0, center: { x: 0, y: 0 }, innerRadius: 60 }),
-        twist: new f.TwistFilter({ radius: 300, angle: 0, offset: { x: 0, y: 0 }, padding: 0 }) };
+        shock: new f.ShockwaveFilter({ center: { x: 0, y: 0 }, speed: 900, amplitude: 10, wavelength: 180, brightness: 1.05, radius: -1 }) };
       F.bloom.resolution = .5; // bloom is a soft glow: half-resolution blur passes cost a quarter and look the same
       ok = true;
     } catch (e) { console.warn('[u2c] WebGL post-FX unavailable, using Canvas2D fallback:', e && e.message); failed = true; ok = false; }
@@ -30,28 +28,21 @@ export function createPostFX(libs) {
     else e.tex.source.update();
     return e.tex;
   }
-  /** RGB split in px for this frame: <= ~3.5 px at 1080p with default settings, decays within ~60 ms. */
-  function rgbPx(fs, P, ev, s) {
-    const fx = P.fx, A = fx.amount / .35, k = fs.kickStrong ? Math.exp(-fs.kickAge / .05) : .35 * Math.exp(-fs.kickAge / .04), sn = .6 * fs.snare * Math.exp(-fs.snareAge / .05), g = ev.gh ? ev.gh.e : 0;
-    return Math.min(14, 6 * fx.rgb * A * Math.max(k * fs.kickS, sn, g) * (ev.tpl.glitchBoost || 1)) * P.u * s;
-  }
+  /** RGB split in px: only as part of an opt-in glitch hit (never on plain kicks); <= ~3.5 px at 1080p. */
+  function rgbPx(fs, P, ev, s) { const g = ev.gh ? ev.gh.e : 0; return g ? Math.min(14, 6 * P.fx.rgb * (P.fx.amount / .35) * g * Math.max(.3, P.fx.glitch)) * P.u * s : 0; }
   function gpu(canvas, fs, P, ev, s) {
     const fx = P.fx, w = canvas.width, h = canvas.height, flat = ev.tpl.surface === 'paper' || ev.pal.light, A = fx.amount / .35;
     if (R.width !== w || R.height !== h) R.resize(w, h);
     sprite.texture = texFor(canvas);
     const list = [], u = s * P.u, cx = ev.center.x * s, cy = ev.center.y * s;
-    // twist + zoom blur while the chains shatter / fly back in (short: the shatter is only the last beats of a phrase)
-    const sh = fx.shatter * A * .6;
-    if (sh > 0 && ev.ph.shatterQ > 0) { F.zoom.strength = .1 * sh * Math.sin(Math.PI * ev.ph.shatterQ); F.zoom.center = { x: cx, y: cy }; F.zoom.innerRadius = 40 * u; list.push(F.zoom); }
-    if (sh > 0 && ev.ph.flyQ > 0) { F.twist.angle = 1.2 * sh * Math.sin(Math.PI * ev.ph.flyQ) * (1 - ev.ph.flyQ); F.twist.radius = ev.radius * s; F.twist.offset = { x: cx, y: cy }; list.push(F.twist); }
-    // shockwave only on the phrase downbeat (chains slam) and on detected drops
+    // optional shockwave (opt-in, default 0) on the phrase downbeat and on drops; never on kicks
     const sa = Math.min(ev.ph.impactAge, ev.dropAge);
     if (fx.shock > 0 && sa < .9) { F.shock.time = sa; F.shock.center = { x: cx, y: cy }; F.shock.speed = 1100 * u; F.shock.amplitude = 14 * u * fx.shock * A; F.shock.wavelength = 200 * u; list.push(F.shock); }
     const d = rgbPx(fs, P, ev, s);
     if (d > .4) { F.rgb.red = { x: -d, y: 0 }; F.rgb.green = { x: 0, y: 0 }; F.rgb.blue = { x: d, y: d * .3 }; list.push(F.rgb); }
     if (fx.bloom > 0 && !flat) { F.bloom.bloomScale = fx.bloom * A * (.25 + .8 * fs.lowSlow); F.bloom.threshold = .55; F.bloom.blur = 3 * u; F.bloom.brightness = 1; list.push(F.bloom); }
-    if (fx.crt > 0) { const c = clamp(fx.crt * A, 0, 2); F.crt.lineWidth = Math.max(1, 3 * u); F.crt.lineContrast = (flat ? .05 : .1) * c; F.crt.noise = (flat ? .03 : .06) * c; F.crt.noiseSize = Math.max(1, 2 * u);
-      F.crt.vignettingAlpha = (flat ? .18 : .35) * c; F.crt.curvature = .6 * c; F.crt.seed = (Math.floor(fs.lt * 30) % 997) / 997; F.crt.time = fs.lt * 2; list.push(F.crt); }
+    if (fx.crt > 0) { const c = clamp(fx.crt * A, 0, 2); F.crt.lineWidth = Math.max(1, 3 * u); F.crt.lineContrast = (flat ? .03 : .07) * c; F.crt.noise = (flat ? .02 : .04) * c; F.crt.noiseSize = Math.max(1, 2 * u);
+      F.crt.vignettingAlpha = (flat ? .15 : .3) * c; F.crt.curvature = .3 * c; F.crt.seed = (Math.floor(fs.lt * 30) % 997) / 997; F.crt.time = fs.lt * 2; list.push(F.crt); }
     sprite.filters = list.length ? list : null;
     R.render({ container: stage });
     return R.canvas;

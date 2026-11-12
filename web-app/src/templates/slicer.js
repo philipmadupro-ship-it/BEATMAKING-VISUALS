@@ -13,6 +13,7 @@ function halftone(assets, p, w) {
 export default {
   id: 'slicer', name: 'Slicer', category: 'Grid', pal: 'rust', surface: 'dark', chainStyle: 'solid', selfChains: true, selfEleph: true,
   owns: ['bpm'], textPos: 'bottom',
+  reserved(P) { const sb = P.safe.hard, u = P.u, G0 = P.V ? { x: sb.x0 - 90 * u, y: sb.y0 + 70 * u, w: sb.x1 - sb.x0 + 180 * u, h: 880 * u } : { x: P.W * .25, y: P.H * .09, w: P.W * .5, h: P.H * .8 }; return [{ x: G0.x - 20 * u, y: G0.y - 60 * u, w: G0.w + 40 * u, h: G0.h + 100 * u }]; },
   params: [{ id: 'grid', label: 'Grid', min: 4, max: 12, step: 1, def: 8 }],
   defaults: a => a === '916' ? { chains: { x: .5, y: .5, s: .8 }, eleph: { x: .5, y: 0, s: .6, len: .03 } } : { chains: { x: .5, y: .5, s: .8 }, eleph: { x: .5, y: 0, s: .6, len: .03 } },
   draw(ctx, fs, P, p, assets) {
@@ -21,11 +22,11 @@ export default {
     // live source: bg, swinging halftone elephant, U2C chains (half resolution)
     const ow = Math.round(G0.w * .5), oh = Math.round(G0.h * .5), src = cached(`slsrc|${ow}x${oh}`, ow, oh, () => {}), g = src.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.fillStyle = p.bg2; g.fillRect(0, 0, ow, oh);
-    if (P.eleph.on) { const ew = ow * .62 * (P.eleph.s / .6), ht = halftone(assets, p, ew), th = swingAngle(fs), piv = { x: ow * P.eleph.x, y: -oh * .04 }, len = oh * .08 + P.eleph.len * oh;
+    if (P.eleph.on) { const ew = ow * .62 * (P.eleph.s / .6), ht = halftone(assets, p, ew), th = swingAngle(fs, P), piv = { x: ow * P.eleph.x, y: -oh * .04 }, len = oh * .08 + P.eleph.len * oh;
       g.save(); g.translate(piv.x, piv.y); g.rotate(th); g.strokeStyle = p.main; g.lineWidth = 4; g.setLineDash([10, 6]); g.beginPath(); g.moveTo(0, 0); g.lineTo(0, len); g.stroke(); g.setLineDash([]);
       g.translate(0, len); g.drawImage(ht, -ht.width / 2, 0); g.restore(); }
     if (P.chains.on) { const L = assets.links, sc = ow * .86 * (P.chains.s / .8) / L.w, pose = chainPose(fs, P, assets, { x: ow * P.chains.x, y: oh * (.62 + (P.chains.y - .5) * .5), sc });
-      pose.flash = Math.max(pose.ph.tt >= 4 ? fs.snare : 0, pose.impact); drawChains(g, pose, chainImages(assets, p, 'solid', false, p.hi)); }
+      drawChains(g, pose, chainImages(assets, p, 'solid', false, p.hi)); }
     const gap = (2 + 14 * fs.bass) * u, tw = G0.w / n, th = G0.h / n;
     const col = Math.floor(hash(fs.kickIdx, 5) * n), inv = new Set(); if (fs.snare > .2) for (let j = 0; j < 3; j++) inv.add(Math.floor(hash(fs.snareIdx, 30 + j) * n * n));
     for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) { const dc = Math.abs(c - col), dy = dc === 0 ? (hash(fs.kickIdx, 6) - .5) * 160 * u * fs.kick : dc === 1 ? (hash(fs.kickIdx, 7) - .5) * 60 * u * fs.kick : 0;

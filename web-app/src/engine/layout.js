@@ -23,16 +23,23 @@ export function makeParams(project, track) {
     finish: project.finish, fx: project.fx, pal: project.pal, tpl: project.tpl, loop: project.export && project.export.loopSafe === false ? null : { a: project.inT, b: project.outT } };
 }
 /**
- * Chain cycle position tt in [0,6]: [0,2.5) shatter, [2.5,4) fly-in landing on the phrase downbeat, [4,6) impact, 6 = hold.
- * The shatter + fly-in is squeezed into the last S beats of the cycle (S = 2 for 2-bar cycles, 3 for 4-bar, 4 for longer),
- * so the logo is fully assembled for >= 75 % of the clip and only breaks right before the phrase turns over.
+ * Phrase position for the logo cycle. The logo is whole for most of the phrase; in the last D beats it dissolves
+ * letter by letter (U → 2 → C) and in the first R beats of the next phrase it rebuilds letter by letter.
+ * D = 4 beats for 8-bar cycles, 3 for 4-bar, 2 for 2-bar; R = 2 (1.5 for 2-bar). Readable >= ~80 % of the time.
  */
 export function phrase(fs, P) {
-  const b = fs.beat - P.anchorBeat, C = P.cycleBeats, k = Math.floor(b / C), lb = b - k * C, S = C >= 32 ? 4 : C >= 16 ? 3 : 2;
-  const tt = lb >= C - S ? (lb - (C - S)) * 4 / S : lb < 2 ? lb + 4 : 6;
-  return { b, k, lb, C, S, tt, impactAge: tt >= 4 && tt < 6 ? (tt - 4) * fs.spb : 99, shatterQ: tt < 2.5 ? tt / 2.5 : 0, flyQ: tt >= 2.5 && tt < 4 ? (tt - 2.5) / 1.5 : 0,
-    // 0..1 how much of the logo is readable (1 = assembled)
-    vis: tt >= 4 ? 1 : tt < 2.5 ? 1 - tt / 2.5 : (tt - 2.5) / 1.5 };
+  const b = fs.beat - P.anchorBeat, C = P.cycleBeats, k = Math.floor(b / C), lb = b - k * C, D = C >= 32 ? 4 : C >= 16 ? 3 : 2, R = C >= 16 ? 2 : 1.5;
+  const ph = { b, k, lb, C, D, R, impactAge: lb * fs.spb, endIn: (C - lb) * fs.spb, tt: 6, shatterQ: 0, flyQ: 0 };
+  ph.vis = (letterState(ph, 0).fill + letterState(ph, 1).fill + letterState(ph, 2).fill) / 3;
+  return ph;
+}
+const ease = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+/** {mode, outline 0..1, fill 0..1} for letter i (0 U, 1 2, 2 C). */
+export function letterState(ph, i) {
+  const { lb, C, D, R } = ph;
+  if (lb < R * 1.25) { const s0 = i * R / 4; return { mode: 'rebuild', outline: ease((lb - s0) / (R * .45)), fill: ease((lb - s0 - R * .25) / (R * .5)) }; }
+  if (lb >= C - D) { const d0 = C - D + i * D / 4, q = ease((lb - d0) / (D / 2)); return { mode: 'dissolve', outline: 1 - q, fill: 1 - q }; }
+  return { mode: 'full', outline: 1, fill: 1 };
 }
 /** Whole-phrase clip (2/4/8/16/32 bars) nearest to `sec`, as a bar count. */
 export function phraseBars(track, sec) { const want = sec / track.barDur; let best = 2; for (const n of [2, 4, 8, 16, 32, 64]) if (n <= track.bars.length && Math.abs(Math.log(n / want)) < Math.abs(Math.log(best / want))) best = n; return Math.min(best, Math.max(1, track.bars.length)); }

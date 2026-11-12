@@ -46,7 +46,7 @@ export function createStudio(app) {
   // ---- drag overlays on the canvas
   function logical(e) { const r = view.getBoundingClientRect(), { W, H } = ASPECTS[S().aspect]; return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; }
   function hit(pt) { const tr = track(); if (!tr) return null; const P = makeParams(S(), tr), A = app.assets, inside = b => b && pt.x >= b.x && pt.x <= b.x + b.w && pt.y >= b.y && pt.y <= b.y + b.h;
-    const fs = getFrameState(tr, app.clock.time(), {}); const boxes = textBoxes(vctx, P, fs, TEMPLATES[S().tpl]);
+    const fs = getFrameState(tr, app.clock.time(), {}); const boxes = textBoxes(vctx, P, fs, TEMPLATES[S().tpl], app.assets);
     for (const b of boxes) if (inside({ x: b.x, y: b.y, w: b.bw, h: b.bh })) return { kind: 'text', id: b.id, cx: (b.x + b.bw / 2) / P.W, cy: (b.y + b.bh / 2) / P.H }; if (S().chains.on && inside(chainsBounds(P, A))) return { kind: 'chains' }; if (S().eleph.on && inside(elephantBounds(P, A))) return { kind: 'eleph' }; return null; }
   view.addEventListener('pointerdown', e => { const pt = logical(e), h = hit(pt); if (!h) return; view.setPointerCapture(e.pointerId); const p = S(); drag = { ...h, start: pt, orig: JSON.parse(JSON.stringify({ chains: p.chains, eleph: p.eleph })) }; view.classList.add('grabbing'); });
   view.addEventListener('pointermove', e => { const pt = logical(e), { W, H } = ASPECTS[S().aspect];

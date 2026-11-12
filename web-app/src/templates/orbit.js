@@ -1,55 +1,64 @@
-import { rgba, txt, mono, hud, sparkle, clamp } from '../util/draw.js';
-import { accentOn } from '../brand/palettes.js';
-import { chainsScale, chainImages } from '../overlays/chains.js';
+import { rgba, txt, mono, hud, sparkle, clamp, rrect } from '../util/draw.js';
+import { accentOn, glowOp } from '../brand/palettes.js';
+import { chainsScale, chainImages, letterOf, spring } from '../overlays/chains.js';
 import { phrase } from '../engine/layout.js';
-// BLOOM ORBIT: the elephant hangs in the centre while the U2C chain links orbit it in three rings. Ring radius follows
-// a band (bass / mid / highs) and the orbit speed is that band's energy, integrated over the loop (whole turns per
-// loop, so it is seamless). On every phrase start the links snap out of orbit into the U2C word, hold, then release.
-const RING_BAND = [1, 3, 4], RING_RATE = [.05, .08, .12];
-function ease(x) { x = clamp(x); return x * x * (3 - 2 * x); }
-/** 0 = orbiting, 1 = assembled into the logo. */
+// BLOOM ORBIT: the elephant hangs in the centre. The three letters of the logo (U, 2, C) orbit it as whole, upright
+// letters on the middle ring, between two clean chain necklaces (inner + outer) whose radius follows the bass / highs.
+// Orbit speed is the band energy integrated over the loop (whole turns per loop: seamless). On each phrase start the
+// letters glide out of orbit and lock into the U2C word, hold for a bar, then release back into orbit.
+const ease = x => { x = clamp(x); return x * x * (3 - 2 * x); };
+/** 0 = orbiting, 1 = locked into the logo. */
 export function snapAmount(fs, P) {
   const ph = phrase(fs, P), C = ph.C, lb = ph.lb, hold = Math.min(4, C / 4), out = Math.min(2, C / 4);
   if (lb >= C - 1) return ease(lb - (C - 1)); if (lb < hold) return 1; if (lb < hold + out) return 1 - ease((lb - hold) / out); return 0;
 }
-function poses(fs, P, assets) {
-  const { W, H, u, V } = P, L = assets.links, N = L.pieces.length, sc = chainsScale(P, L), lx = P.chains.x * W, ly = P.chains.y * H;
-  const cx = W / 2, cy = V ? H * .4 : H * .5, R0 = Math.min(W, H) * (V ? .27 : .25), m = snapAmount(fs, P), Lp = Math.max(1, P.outT - P.inT), out = [];
-  for (let i = 0; i < N; i++) { const pc = L.pieces[i], k = i % 3, idx = Math.floor(i / 3), cnt = Math.ceil((N - k) / 3), band = fs.bands[RING_BAND[k]];
-    const r = R0 * (1 + .42 * k) * (1 + .22 * band + .05 * fs.kick), dir = k % 2 ? -1 : 1, cyc = Math.max(1, Math.round(Lp * RING_RATE[k]));
-    const th = (idx / cnt + dir * fs.flow(RING_BAND[k], cyc)) * Math.PI * 2, ox = cx + Math.cos(th) * r, oy = cy + Math.sin(th) * r * (V ? .92 : .8);
-    const hx = lx + (pc.x + pc.w / 2 - L.w / 2) * sc, hy = ly + (pc.y + pc.h / 2 - L.h / 2) * sc, me = clamp(m * 1.15 - (i / N) * .15);
-    out.push({ pc, x: ox + (hx - ox) * me, y: oy + (hy - oy) * me, r: (th + Math.PI / 2) * (1 - me), s: (u * .78 * (1 + .18 * k)) * (1 - me) + sc * me * (1 + .05 * fs.kick * me), front: me >= .5 || Math.sin(th) > 0, k }); }
-  return { list: out, m, cx, cy, R0 };
+let LETTERS = null;
+function letters(L) { return LETTERS || (LETTERS = [0, 1, 2].map(k => { const ps = L.pieces.filter(pc => letterOf(pc) === k); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const pc of ps) { x0 = Math.min(x0, pc.x); y0 = Math.min(y0, pc.y); x1 = Math.max(x1, pc.x + pc.w); y1 = Math.max(y1, pc.y + pc.h); } return { ps, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 }; })); }
+function geom(fs, P) { const { W, H, V } = P, cx = W / 2, cy = V ? H * .47 : H * .5, R0 = Math.min(W, H) * (V ? .2 : .25), ry = V ? .92 : .78;
+  return { cx, cy, R0, ry, rIn: R0 * .62 * (1 + .12 * fs.bass), rMid: R0 * 1.18 * (1 + .06 * fs.mid), rOut: R0 * 1.72 * (1 + .1 * fs.hi) }; }
+function necklace(ctx, cx, cy, r, ry, rot, Lk, col, al, u) {
+  const n = Math.max(12, Math.round(2 * Math.PI * r / (Lk * .86)));
+  for (let i = 0; i < n; i++) { const a = rot + i / n * Math.PI * 2, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * ry, t = Math.atan2(Math.cos(a) * r * ry, -Math.sin(a) * r);
+    ctx.save(); ctx.globalAlpha = al; ctx.translate(x, y); ctx.rotate(t); ctx.strokeStyle = col; ctx.fillStyle = col;
+    if (i % 2 === 0) { ctx.lineWidth = Lk * .15; rrect(ctx, -Lk * .5, -Lk * .24, Lk, Lk * .48, Lk * .2); ctx.stroke(); } else ctx.fillRect(-Lk * .55, -Lk * .065, Lk * 1.1, Lk * .13); ctx.restore(); }
+  void u;
 }
-function drawPieces(ctx, list, imgs, front) {
-  for (const q of list) { if (q.front !== front) continue; const pc = q.pc; ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.r); ctx.scale(q.s, q.s);
-    ctx.drawImage(imgs.img, pc.ax - imgs.pad, pc.ay - imgs.pad, pc.w + 2 * imgs.pad, pc.h + 2 * imgs.pad, -pc.w / 2 - imgs.pad, -pc.h / 2 - imgs.pad, pc.w + 2 * imgs.pad, pc.h + 2 * imgs.pad); ctx.restore(); }
+function letterPoses(fs, P, assets) {
+  const L = assets.links, G = geom(fs, P), m = snapAmount(fs, P), sc = chainsScale(P, L), lx = P.chains.x * P.W, ly = P.chains.y * P.H, Lp = Math.max(1, P.outT - P.inT);
+  const so = sc * .62, turn = fs.flow(3, Math.max(1, Math.round(Lp * .05))), punch = 1 + .02 * Math.max(0, spring(fs.kickAge)) * fs.kickS;
+  return letters(L).map((lt, k) => { const me = ease(m * 1.3 - k * .15), a = (k / 3 + turn) * Math.PI * 2 - Math.PI / 2, ox = G.cx + Math.cos(a) * G.rMid, oy = G.cy + Math.sin(a) * G.rMid * G.ry;
+    const hx = lx + (lt.cx - L.w / 2) * sc, hy = ly + (lt.cy - L.h / 2) * sc; return { lt, x: ox + (hx - ox) * me, y: oy + (hy - oy) * me, s: (so + (sc - so) * me) * punch, front: me > .5 || Math.sin(a) > 0, me }; });
+}
+function drawLetters(ctx, poses, imgs, front) {
+  for (const q of poses) { if (q.front !== front) continue; ctx.save(); ctx.translate(q.x, q.y); ctx.scale(q.s, q.s);
+    for (const pc of q.lt.ps) ctx.drawImage(imgs.img, pc.ax, pc.ay, pc.w, pc.h, pc.x - q.lt.cx, pc.y - q.lt.cy, pc.w, pc.h); ctx.restore(); }
 }
 export default {
   id: 'orbit', name: 'Bloom Orbit', category: 'Bloom', pal: 'amethyst', surface: 'dark', chainStyle: 'solid', selfChains: true,
   textPos: 'top',
+  reserved(P) { const V = P.V, cx = P.W / 2, cy = V ? P.H * .47 : P.H * .5, R = Math.min(P.W, P.H) * (V ? .2 : .25) * 1.75; return [{ x: cx - R, y: cy - R * (V ? .92 : .78), w: 2 * R, h: 2 * R * (V ? .92 : .78) }]; },
   params: [{ id: 'trail', label: 'Ring glow', min: 0, max: 1, step: .05, def: .5 }],
-  defaults: a => a === '916' ? { chains: { x: .5, y: .72, s: .66 }, eleph: { x: .5, y: 0, s: .72, len: .37 } } : { chains: { x: .84, y: .52, s: .62 }, eleph: { x: .5, y: 0, s: .7, len: .45 } },
+  defaults: a => a === '916' ? { chains: { x: .5, y: .79, s: .58 }, eleph: { x: .5, y: 0, s: .6, len: .435 } } : { chains: { x: .84, y: .52, s: .62 }, eleph: { x: .5, y: 0, s: .6, len: .45 } },
   draw(ctx, fs, P, p, assets) {
-    const { W, H, u, V } = P, a2 = accentOn(p), glow = (P.params && P.params.trail != null) ? P.params.trail : .5, TAU = Math.PI * 2;
-    const G = poses(fs, P, assets), { cx, cy, R0 } = G;
-    const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * .65); gr.addColorStop(0, p.bg2); gr.addColorStop(1, p.bg); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
-    // orbit rings: dotted ellipses, brightness from their band
-    ctx.save(); ctx.translate(cx, cy);
-    for (let k = 0; k < 3; k++) { const band = fs.bands[RING_BAND[k]], r = R0 * (1 + .42 * k) * (1 + .22 * band + .05 * fs.kick);
-      ctx.strokeStyle = rgba(k === 1 ? a2 : p.main, (.12 + .4 * band) * glow * (1 - G.m * .7)); ctx.lineWidth = (2 + 6 * band * glow) * u; ctx.setLineDash([2 * u, 10 * u]);
-      ctx.beginPath(); ctx.ellipse(0, 0, r, r * (V ? .92 : .8), 0, 0, TAU); ctx.stroke(); }
-    ctx.setLineDash([]);
-    for (let d = 0; d < 360; d += 30) { const a = d * Math.PI / 180 + fs.cyc(.01) * TAU, r = R0 * 2.15; ctx.fillStyle = rgba(p.main, .5); ctx.fillRect(Math.cos(a) * r - 2 * u, Math.sin(a) * r * (V ? .92 : .8) - 2 * u, 4 * u, 4 * u); }
-    for (const r of fs.recent('snares', .5, 2)) { const q = r.age / .5; ctx.strokeStyle = rgba(p.spark, (1 - q) * .8 * r.s); ctx.lineWidth = 3 * u * (1 - q) + 1; ctx.beginPath(); ctx.arc(0, 0, R0 * (.4 + q * .9), 0, TAU); ctx.stroke(); }
+    const { W, H, u, V } = P, a2 = accentOn(p), glow = (P.params && P.params.trail != null) ? P.params.trail : .5, TAU = Math.PI * 2, G = geom(fs, P), m = snapAmount(fs, P);
+    const gr = ctx.createRadialGradient(G.cx, G.cy, 0, G.cx, G.cy, Math.max(W, H) * .65); gr.addColorStop(0, p.bg2); gr.addColorStop(1, p.bg); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+    // guide ellipses + degree ticks
+    ctx.strokeStyle = rgba(p.main, .12 + .1 * glow); ctx.lineWidth = 1.2 * u; ctx.setLineDash([2 * u, 9 * u]);
+    for (const r of [G.rMid, G.rOut * 1.14]) { ctx.beginPath(); ctx.ellipse(G.cx, G.cy, r, r * G.ry, 0, 0, TAU); ctx.stroke(); } ctx.setLineDash([]);
+    const tk = fs.cyc(.01) * TAU; for (let d = 0; d < 360; d += 15) { const a = d * Math.PI / 180 + tk, r = G.rOut * 1.14; ctx.fillStyle = rgba(p.main, d % 90 ? .3 : .8); ctx.fillRect(G.cx + Math.cos(a) * r - 2 * u, G.cy + Math.sin(a) * r * G.ry - 2 * u, 4 * u, 4 * u); }
+    // chain necklaces (counter-rotating), fade a little while the letters are locked
+    ctx.save(); ctx.globalCompositeOperation = glowOp(p);
+    necklace(ctx, G.cx, G.cy, G.rIn, G.ry, -fs.flow(1, Math.max(1, Math.round((P.outT - P.inT) * .04))) * TAU, 30 * u, a2, (.55 + .35 * glow) * (1 - m * .5), u);
+    necklace(ctx, G.cx, G.cy, G.rOut, G.ry, fs.flow(4, Math.max(1, Math.round((P.outT - P.inT) * .03))) * TAU, 38 * u, p.main, (.5 + .35 * glow) * (1 - m * .5), u);
     ctx.restore();
-    if (P.chains.on) drawPieces(ctx, G.list, chainImages(assets, p, 'solid', false), false);
+    for (const r of fs.recent('snares', .5, 2)) { const q = r.age / .5; ctx.strokeStyle = rgba(p.spark, (1 - q) * .7 * r.s); ctx.lineWidth = 2 * u * (1 - q) + 1; ctx.beginPath(); ctx.ellipse(G.cx, G.cy, G.rIn * (.6 + q * .5), G.rIn * (.6 + q * .5) * G.ry, 0, 0, TAU); ctx.stroke(); }
+    if (P.chains.on) drawLetters(ctx, letterPoses(fs, P, assets), chainImages(assets, p, 'solid', false), false);
     const mx = V ? 70 * u : W * .04, ty = V ? 100 * u : H * .08;
-    txt(ctx, 'ORBIT.SYS', mx, ty, mono(22 * u, 700), p.main); txt(ctx, G.m > .5 ? 'LOCKED · U2C' : 'ORBIT · ' + ['BASS', 'MID', 'HI'].map((b, k) => b + ' ' + fs.bands[RING_BAND[k]].toFixed(2)).join(' '), mx, ty + 30 * u, mono(16 * u), rgba(p.main, .65));
-    sparkle(ctx, W - mx, ty, 18 * u + 12 * u * fs.hat, p.spark);
+    txt(ctx, 'ORBIT.SYS', mx, ty, mono(22 * u, 700), p.main); txt(ctx, m > .5 ? 'LOCKED · U2C' : 'ORBIT · U / 2 / C', mx, ty + 30 * u, mono(16 * u), rgba(p.main, .65));
+    sparkle(ctx, W - mx, ty, 14 * u + 6 * u * fs.hat, p.spark);
     hud(ctx, 28 * u, 28 * u, W - 56 * u, H - 56 * u, 44 * u, rgba(p.main, .5), 2 * u);
   },
-  // links on the near side of each ring pass in front of the elephant
-  drawAfter(ctx, fs, P, p, assets) { if (P.chains.on) drawPieces(ctx, poses(fs, P, assets).list, chainImages(assets, p, 'solid', false), true); },
+  // letters on the near side of the ring (and locked letters) pass in front of the elephant
+  drawAfter(ctx, fs, P, p, assets) { if (P.chains.on) drawLetters(ctx, letterPoses(fs, P, assets), chainImages(assets, p, 'solid', false), true); },
 };

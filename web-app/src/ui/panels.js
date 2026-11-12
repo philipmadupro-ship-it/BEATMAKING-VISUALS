@@ -13,7 +13,7 @@ export function createPanels(app) {
   const P = () => app.store.project, set = (path, v) => app.store.set({ project: nest(path, v) });
   const fmt = { pct: v => Math.round(v * 100) + '%', x: v => (+v).toFixed(2) + '×', n: v => (+v).toFixed(2), s: v => v + 's', i100: v => Math.round(v * 100) };
   const ranges = [['chX', 'chains.x', 'n'], ['chY', 'chains.y', 'n'], ['chS', 'chains.s', 'x'], ['elX', 'eleph.x', 'n'], ['elS', 'eleph.s', 'x'], ['elL', 'eleph.len', 'n'],
-    ['fGrain', 'finish.grain', 'pct'], ['fInt', 'finish.intensity', 'x'], ['fxAmt', 'fx.amount', 'pct'], ['fxCrt', 'fx.crt', 'pct'], ['fxRgb', 'fx.rgb', 'pct'], ['fxBloom', 'fx.bloom', 'pct'], ['fxShock', 'fx.shock', 'pct'], ['fxShatter', 'fx.shatter', 'pct'], ['vtEvery', 'export.voiceEvery', 's']];
+    ['fGrain', 'finish.grain', 'pct'], ['fInt', 'finish.intensity', 'x'], ['fxAmt', 'fx.amount', 'pct'], ['fxCrt', 'fx.crt', 'pct'], ['fxRgb', 'fx.rgb', 'pct'], ['fxBloom', 'fx.bloom', 'pct'], ['fxShock', 'fx.shock', 'pct'], ['vtEvery', 'export.voiceEvery', 's']];
   const checks = [['chOn', 'chains.on'], ['elOn', 'eleph.on'], ['fZoom', 'finish.zoom'], ['fxOn', 'fx.on'], ['exLoop', 'export.loopSafe'], ['exDraft', 'export.draft'], ['vtOn', 'export.voiceTag']];
   const texts = [['wA', 'text.artistA'], ['wB', 'text.artistB'], ['wPrice', 'text.price'], ['wLink', 'text.link'], ['capFmt', 'text.titleFormat'],
     ['fTag', 'text.lines.tag.text'], ['fKey', 'text.lines.key.text'], ['sKey', 'text.lines.key.text'], ['fTitle', 'text.lines.title.text'], ['projTitle', 'text.lines.title.text']];

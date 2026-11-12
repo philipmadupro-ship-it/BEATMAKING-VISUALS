@@ -1,75 +1,42 @@
-// U2C chain logo overlay: links fly in and slam together on the phrase downbeat, pulse on kicks/snares,
-// then shatter in the last bar of the phrase. Motion is a paused GSAP timeline seeked from audio time.
-import { cached, clamp, hash, mk } from '../util/draw.js';
-import { phrase } from '../engine/layout.js';
-let G = null, built = null;
-export function useGsap(gsap) { G = gsap; built = null; }
-const easeBackOut = (x, s = 1.6) => 1 + (s + 1) * Math.pow(x - 1, 3) + s * Math.pow(x - 1, 2);
-const easeElastic = (x, p = .4) => x <= 0 ? 0 : x >= 1 ? 1 : Math.pow(2, -10 * x) * Math.sin((x * 10 - .75) * (2 * Math.PI) / (p * 3.33)) + 1;
-function pieceSpec(L, i) {
-  const P = L.pieces, N = P.length, pc = P[i], pcx = pc.x + pc.w / 2 - L.w / 2, pcy = pc.y + pc.h / 2 - L.h / 2, dl = Math.hypot(pcx, pcy) || 1;
-  const h1 = hash(i, 11), h2 = hash(i, 12), h3 = hash(i, 13);
-  // fly-in starts after the shatter has finished (2.5): links launch in logo order, so the word assembles left to right
-  const st = h1 * .35, land = 3.25 + Math.round(i / (N - 1) * 6) / 8;
-  return { st, land, start: land - .75, sx: pcx / dl * 1500 + (h2 - .5) * 900, up: -(250 + 320 * h3), r1: (h1 - .5) * 10, jx: (h2 - .5) * 300, drop: -2600 - h3 * 600, r0: (h1 - .5) * 1.6 };
-}
-function build(L) {
-  const objs = L.pieces.map(() => ({ x: 0, y: 0, r: 0, s: 1, a: 1 }));
-  if (!G) return { objs, tl: null };
-  const tl = G.timeline({ paused: true });
-  objs.forEach((o, i) => { const q = pieceSpec(L, i), T = 2.5 - q.st;
-    tl.fromTo(o, { x: 0, r: 0 }, { x: q.sx, r: q.r1, duration: T, ease: 'power1.in', immediateRender: false }, q.st);
-    tl.fromTo(o, { y: 0 }, { y: q.up, duration: T * .3, ease: 'power2.out', immediateRender: false }, q.st);
-    tl.to(o, { y: 2600, duration: T * .7, ease: 'power2.in' }, q.st + T * .3);
-    tl.to(o, { a: 0, duration: T * .35, ease: 'none' }, 2.5 - T * .35);
-    tl.set(o, { x: q.jx, y: q.drop, r: q.r0, a: 0 }, 2.5);
-    tl.set(o, { a: 1 }, q.start);
-    tl.to(o, { y: 0, duration: .75, ease: 'back.out(1.6)' }, q.start);
-    tl.to(o, { x: 0, duration: .75, ease: 'power3.out' }, q.start);
-    tl.to(o, { r: 0, duration: 1.4, ease: 'elastic.out(1,0.4)' }, q.start);
-    tl.fromTo(o, { s: 1 }, { s: 1.16, duration: .01, ease: 'none', immediateRender: false }, 3.99);
-    tl.to(o, { s: 1, duration: 1.6, ease: 'elastic.out(1.1,0.35)' }, 4);
-  });
-  tl.set({}, {}, 6);
-  return { objs, tl };
-}
-// Same motion without GSAP (fallback).
-function analytic(L, i, tt, o) {
-  const q = pieceSpec(L, i); o.s = 1; o.a = 1; o.x = 0; o.y = 0; o.r = 0;
-  if (tt < 2.5) { const T = 2.5 - q.st, u = clamp((tt - q.st) / T); if (u <= 0) return o; o.x = q.sx * u * u; o.r = q.r1 * u * u;
-    o.y = u < .3 ? q.up * (1 - Math.pow(1 - u / .3, 2)) : q.up + (2600 - q.up) * Math.pow((u - .3) / .7, 2); o.a = clamp((2.5 - tt) / (T * .35)); return o; }
-  if (tt < 4 || tt < q.start + 1.4) { if (tt < q.start) { o.a = 0; return o; } const u = clamp((tt - q.start) / .75);
-    o.y = q.drop * (1 - easeBackOut(u)); o.x = q.jx * (1 - (1 - Math.pow(1 - u, 3))); o.r = q.r0 * (1 - easeElastic(clamp((tt - q.start) / 1.4))); }
-  if (tt >= 4 && tt < 5.6) o.s = 1 + .16 * (1 - easeElastic((tt - 4) / 1.6, .35));
-  return o;
-}
+// U2C chain logo overlay. The logo never breaks: near the end of each phrase it dissolves gently letter by letter
+// (U → 2 → C) through an ordered-dither mask with a scanline wipe; at the phrase start it rebuilds letter by letter
+// (outline draws on left→right, then the fill dithers in). Kicks give the whole logo a 1-3 % spring scale punch and
+// a brief edge-brightness pulse. Everything is a pure function of the phrase position (loop-safe).
+import { cached, clamp, mk } from '../util/draw.js';
+import { phrase, letterState } from '../engine/layout.js';
+export function useGsap() {} // kept for API compatibility: the logo motion is analytic now
+/** Letter of each link: 0 = U, 1 = 2, 2 = C (by the link's centre x in logo space). */
+export const letterOf = pc => (pc.x + pc.w / 2 < 245 ? 0 : pc.x + pc.w / 2 < 540 ? 1 : 2);
+let LB = null;
+function letterBoxes(L) { return LB || (LB = [0, 1, 2].map(k => { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const pc of L.pieces) if (letterOf(pc) === k) { x0 = Math.min(x0, pc.x); y0 = Math.min(y0, pc.y); x1 = Math.max(x1, pc.x + pc.w); y1 = Math.max(y1, pc.y + pc.h); } return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }; })); }
 const solidAtlas = (A, col) => cached('sa|' + col, A.atlas.width, A.atlas.height, (g, w, h) => { g.drawImage(A.atlas, 0, 0); g.globalCompositeOperation = 'multiply'; g.fillStyle = col; g.fillRect(0, 0, w, h); g.globalCompositeOperation = 'destination-in'; g.drawImage(A.atlas, 0, 0); });
 const flatAtlas = (A, col) => cached('fa|' + col, A.atlas.width, A.atlas.height, (g, w, h) => { g.drawImage(A.atlas, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, w, h); });
+const edgeAtlas = (A, col) => cached('ea|' + col, A.edge.width, A.edge.height, (g, w, h) => { g.drawImage(A.edge, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, w, h); });
 const neonAtlas = (A, col, glow) => cached('na|' + col + glow, A.edge.width, A.edge.height, (g, w, h) => {
   const tint = c => { const e = mk(w, h), eg = e.getContext('2d'); eg.drawImage(A.edge, 0, 0); eg.globalCompositeOperation = 'source-in'; eg.fillStyle = c; eg.fillRect(0, 0, w, h); return e; };
   const e = tint(glow), c = tint(col);
   try { g.filter = 'blur(7px)'; g.drawImage(e, 0, 0); g.drawImage(e, 0, 0); g.filter = 'blur(2px)'; g.drawImage(e, 0, 0); g.filter = 'none'; } catch (_) {}
   g.drawImage(c, 0, 0); g.drawImage(c, 0, 0); });
+// 4x4 Bayer dither masks: level q in 0..16 → that many cells of every 4x4 block kept (cell = `px` canvas pixels)
+const B4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+function ditherTile(q, px) { return cached(`dt|${q}|${px}`, 4 * px, 4 * px, g => { g.fillStyle = '#fff'; for (let i = 0; i < 16; i++) if (B4[i] < q) g.fillRect((i % 4) * px, Math.floor(i / 4) * px, px, px); }); }
 export function chainsScale(P, L) { return Math.min(P.W * .84 / L.w, P.H * .46 / L.h) * P.chains.s; }
 export function chainsBounds(P, assets) { const L = assets.links, sc = chainsScale(P, L); return { x: P.chains.x * P.W - L.w * sc / 2, y: P.chains.y * P.H - L.h * sc / 2, w: L.w * sc, h: L.h * sc }; }
-/** Seek the chain timeline for this frame. Returns the logo transform and each link's pose in canvas pixels. */
+/** Spring for kick punches: 0 at the hit → fast ease-out with one small overshoot. Returns 0..~1.1 → 0. */
+export const spring = age => (age < 0 || age > .6 ? 0 : Math.exp(-age / .085) * Math.cos(age * 28));
+/** Logo pose for this frame: place, per-link positions (assembled, never scattered), per-letter states. */
 export function chainPose(fs, P, assets, place) {
-  const L = assets.links, N = L.pieces.length; if (!built) built = build(L);
-  const pl = place || { x: P.chains.x * P.W, y: P.chains.y * P.H, sc: chainsScale(P, L) }, ph = phrase(fs, P), I = fs.I, hold = ph.tt >= 4 ? 1 : 0;
-  if (built.tl) built.tl.time(ph.tt, true);
-  const pieces = [];
-  for (let i = 0; i < N; i++) { const pc = L.pieces[i], o = built.tl ? built.objs[i] : analytic(L, i, ph.tt, built.objs[i]), h2 = hash(i, 12), h3 = hash(i, 13);
-    const lx = pc.x + pc.w / 2 - L.w / 2 + o.x, ly = pc.y + pc.h / 2 - L.h / 2 + o.y - hold * fs.kick * 10 * h3;
-    pieces.push({ i, pc, lx, ly, x: pl.x + lx * pl.sc, y: pl.y + ly * pl.sc, a: o.a, s: o.s * (1 + hold * .045 * fs.kick),
-      r: o.r + hold * ((h2 - .5) * 2 * .085 * fs.kick * I + Math.sin(fs.beat * Math.PI + i) * .012), hx: pl.x + (pc.x + pc.w / 2 - L.w / 2) * pl.sc, hy: pl.y + (pc.y + pc.h / 2 - L.h / 2) * pl.sc }); }
-  return { ph, place: pl, pieces, impact: ph.impactAge < .25 ? 1 - ph.impactAge / .25 : 0 };
+  const L = assets.links, pl = place || { x: P.chains.x * P.W, y: P.chains.y * P.H, sc: chainsScale(P, L) }, ph = phrase(fs, P);
+  const punch = 1 + .022 * spring(fs.kickAge) * Math.min(1, fs.kickS * 1.2) * fs.I, letters = [0, 1, 2].map(k => letterState(ph, k)), pieces = [];
+  for (const pc of L.pieces) { const k = letterOf(pc), lx = (pc.x + pc.w / 2 - L.w / 2) * punch, ly = (pc.y + pc.h / 2 - L.h / 2) * punch, st = letters[k];
+    pieces.push({ pc, k, x: pl.x + lx * pl.sc, y: pl.y + ly * pl.sc, hx: pl.x + lx * pl.sc, hy: pl.y + ly * pl.sc, a: Math.max(st.fill, st.outline * .6), s: punch, r: 0 }); }
+  return { ph, place: pl, pieces, letters, punch, pulse: Math.max(0, spring(fs.kickAge)) * fs.kickS, impact: ph.impactAge < .25 ? 1 - ph.impactAge / .25 : 0, boxes: letterBoxes(L), lw: L.w, lh: L.h };
 }
 /** Atlas images for a style: 'neon' (outline + glow) or 'solid'; colours from the palette unless given. */
 export function chainImages(assets, pal, style, surfacePaper, col) {
-  const neon = style === 'neon';
-  const img = neon ? (surfacePaper ? neonAtlas(assets, col || pal.ink, pal.pacc) : neonAtlas(assets, col || pal.hi, pal.main)) : solidAtlas(assets, col || (surfacePaper ? pal.ink : pal.chain));
-  const flash = neon ? neonAtlas(assets, pal.light || surfacePaper ? pal.ink : '#ffffff', pal.main) : flatAtlas(assets, surfacePaper ? pal.pacc : pal.hi);
-  return { img, flash, pad: neon ? 16 : 0 };
+  const neon = style === 'neon', c = col || (neon ? (surfacePaper ? pal.ink : pal.hi) : (surfacePaper ? pal.ink : pal.chain));
+  const img = neon ? (surfacePaper ? neonAtlas(assets, c, pal.pacc) : neonAtlas(assets, c, pal.main)) : solidAtlas(assets, c);
+  return { img, edge: edgeAtlas(assets, neon || surfacePaper ? c : (pal.light ? pal.main : pal.hi)), flash: flatAtlas(assets, surfacePaper ? pal.pacc : pal.hi), pad: neon ? 16 : 0 };
 }
 /** The assembled logo as one cached image (for static prints: phone screen, app icon, stickers). */
 export function logoImage(assets, col, style = 'solid') {
@@ -77,23 +44,29 @@ export function logoImage(assets, col, style = 'solid') {
   return cached('logo|' + col + style, L.w + 40, L.h + 40, (g) => { const A = style === 'neon' ? neonAtlas(assets, col, col) : flatAtlas(assets, col), pad = style === 'neon' ? 16 : 0;
     for (const pc of L.pieces) g.drawImage(A, pc.ax - pad, pc.ay - pad, pc.w + 2 * pad, pc.h + 2 * pad, 20 + pc.x - pad, 20 + pc.y - pad, pc.w + 2 * pad, pc.h + 2 * pad); });
 }
-/** Draw the animated logo from a pose. */
+function drawLetter(g, pose, k, A, pad) { for (const q of pose.pieces) if (q.k === k) { const pc = q.pc; g.drawImage(A, pc.ax - pad, pc.ay - pad, pc.w + 2 * pad, pc.h + 2 * pad, pc.x - pad, pc.y - pad, pc.w + 2 * pad, pc.h + 2 * pad); } }
+/** Draw the logo from a pose: full letters directly; dissolving / rebuilding letters through dither + wipe masks. */
 export function drawChains(ctx, pose, imgs, alpha = 1) {
-  const { img, flash, pad } = imgs, sc = pose.place.sc;
-  for (const q of pose.pieces) { if (q.a <= .01) continue; const pc = q.pc;
-    ctx.save(); ctx.globalAlpha = q.a * alpha; ctx.translate(q.x, q.y); ctx.scale(sc, sc); ctx.rotate(q.r); ctx.scale(q.s, q.s);
-    const sx = pc.ax - pad, sy = pc.ay - pad, sw = pc.w + 2 * pad, sh = pc.h + 2 * pad;
-    ctx.drawImage(img, sx, sy, sw, sh, -pc.w / 2 - pad, -pc.h / 2 - pad, sw, sh);
-    ctx.restore(); }
-  const fl = pose.flash || 0; if (fl > .05) for (const q of pose.pieces) { if (q.a <= .01) continue; const pc = q.pc;
-    ctx.save(); ctx.globalAlpha = q.a * alpha * fl * .8; ctx.translate(q.x, q.y); ctx.scale(sc, sc); ctx.rotate(q.r); ctx.scale(q.s, q.s);
-    ctx.drawImage(flash, pc.ax - pad, pc.ay - pad, pc.w + 2 * pad, pc.h + 2 * pad, -pc.w / 2 - pad, -pc.h / 2 - pad, pc.w + 2 * pad, pc.h + 2 * pad); ctx.restore(); }
+  const { img, edge, pad } = imgs, sc = pose.place.sc * pose.punch, m = ctx.getTransform(), dev = Math.hypot(m.a, m.b) * sc, px = Math.max(1, Math.round(2.2 * Math.max(1, dev * 2)));
+  ctx.save(); ctx.translate(pose.place.x, pose.place.y); ctx.scale(sc, sc); ctx.translate(-pose.lw / 2, -pose.lh / 2);
+  for (let k = 0; k < 3; k++) { const st = pose.letters[k], b = pose.boxes[k];
+    if (st.fill >= .999 && st.outline >= .999) { ctx.globalAlpha = alpha; drawLetter(ctx, pose, k, img, pad);
+      if (pose.pulse > .05) { ctx.globalAlpha = alpha * Math.min(1, pose.pulse) * .55; drawLetter(ctx, pose, k, edge, 0); } continue; }
+    if (st.fill <= .001 && st.outline <= .001) continue;
+    // offscreen letter at device resolution, masked by the dither level (fill) and the wipe (outline draw-on / scanline)
+    const W = Math.ceil((b.w + 2 * pad + 8) * dev) + 2, H = Math.ceil((b.h + 2 * pad + 8) * dev) + 2, k2 = W / (b.w + 2 * pad + 8);
+    const off = cached(`lt|${k}|${W}x${H}`, W, H, () => {}), g = off.getContext('2d');
+    const paint = (A, p2, q, wipe, wipeDir) => { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.clearRect(0, 0, W, H);
+      g.setTransform(k2, 0, 0, k2, (-b.x + pad + 4) * k2, (-b.y + pad + 4) * k2); drawLetter(g, pose, k, A, p2); g.setTransform(1, 0, 0, 1, 0, 0);
+      if (q < 16) { g.globalCompositeOperation = 'destination-in'; g.fillStyle = g.createPattern(ditherTile(q, px), 'repeat'); g.fillRect(0, 0, W, H); }
+      if (wipe < 1) { g.globalCompositeOperation = 'destination-in'; g.fillStyle = '#fff'; if (wipeDir === 'x') g.fillRect(0, 0, W * wipe, H); else { const y = H * (1 - wipe); g.globalCompositeOperation = 'destination-out'; g.fillRect(0, 0, W, y); } }
+      ctx.save(); ctx.globalAlpha = alpha; ctx.drawImage(off, b.x - pad - 4, b.y - pad - 4, W / k2, H / k2); ctx.restore(); };
+    if (st.mode === 'rebuild') { if (st.outline > 0) paint(edge, 0, 16, st.outline, 'x'); if (st.fill > 0) paint(img, pad, Math.round(st.fill * 16), 1, 'x'); }
+    else { const q = Math.round(st.fill * 16); if (q > 0) paint(img, pad, q, Math.min(1, st.fill * 1.6), 'y'); }
+  }
+  ctx.restore();
 }
 export const chains = {
   id: 'chains', name: 'U2C chains',
-  draw(ctx, fs, P, pal, assets, tpl) {
-    const pose = chainPose(fs, P, assets), hold = pose.ph.tt >= 4 ? 1 : 0;
-    pose.flash = Math.max(hold * fs.snare, pose.impact);
-    drawChains(ctx, pose, chainImages(assets, pal, tpl.chainStyle, tpl.surface === 'paper'));
-  },
+  draw(ctx, fs, P, pal, assets, tpl) { drawChains(ctx, chainPose(fs, P, assets), chainImages(assets, pal, tpl.chainStyle, tpl.surface === 'paper')); },
 };

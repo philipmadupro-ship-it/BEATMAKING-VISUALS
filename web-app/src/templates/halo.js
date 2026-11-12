@@ -6,6 +6,7 @@ import { accentOn, glowOp } from '../brand/palettes.js';
 export default {
   id: 'halo', name: 'Bloom Halo', category: 'Bloom', pal: 'amethyst', surface: 'dark', chainStyle: 'solid',
   textPos: 'top',
+  reserved(P) { const V = P.V, cx = V ? P.W / 2 : P.W * .42, cy = V ? P.H * .4 : P.H * .5, R = Math.min(P.W, P.H) * (V ? .23 : .21) * 1.9; return [{ x: cx - R, y: cy - R, w: 2 * R, h: 2 * R }]; },
   params: [{ id: 'spokes', label: 'Spokes', min: 12, max: 48, step: 2, def: 28 }],
   defaults: a => a === '916' ? { chains: { x: .5, y: .78, s: .6 }, eleph: { x: .5, y: 0, s: .62, len: .373 } } : { chains: { x: .84, y: .76, s: .5 }, eleph: { x: .42, y: 0, s: .64, len: .45 } },
   draw(ctx, fs, P, p, assets) {

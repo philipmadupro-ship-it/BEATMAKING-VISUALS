@@ -6,6 +6,7 @@ import { lineText, lineFont, lineColor } from '../overlays/text.js';
 export default {
   id: 'bloom', name: 'Pendant Bloom', category: 'Bloom', pal: 'amethyst', surface: 'dark', chainStyle: 'solid',
   owns: ['bpm'], textPos: 'top',
+  reserved(P) { const V = P.V, cx = P.W / 2, cy = V ? P.H * .42 : P.H * .56, R = Math.min(P.W, P.H) * .3 * 1.45; return [{ x: cx - R, y: cy - R, w: 2 * R, h: 2 * R }]; },
   params: [{ id: 'spokes', label: 'Spokes', min: 32, max: 160, step: 8, def: 96 }],
   defaults: a => a === '916' ? { chains: { x: .5, y: .79, s: .66 }, eleph: { x: .5, y: 0, s: .8, len: .375 } } : { chains: { x: .83, y: .7, s: .62 }, eleph: { x: .5, y: 0, s: .85, len: .48 } },
   draw(ctx, fs, P, p) {
