@@ -6,11 +6,15 @@ import { rgba, txt, mono, hash, tc2, clamp } from '../util/draw.js';
 import { spring } from '../overlays/chains.js';
 export const ease = x => (x <= 0 ? 0 : x >= 1 ? 1 : 1 - Math.pow(1 - x, 3));
 export const easeIO = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
-/** Open amount 0..1 for window i in a phrase: opens staggered at the phrase start, closes in the last beat. */
+/**
+ * Open amount 0..1 for window i around the phrase turnover. Each window folds briefly around its own moment
+ * (-0.6, -0.2, +0.2, +0.6 … beats from the downbeat), so the folds ripple across the turn and at most two windows
+ * are shut at any instant; the screen is never empty.
+ */
 export function openAmount(ph, i, keep = false) {
   if (keep) return 1;
-  const open = ease((ph.lb - .15 - i * .22) / .9), close = easeIO((ph.lb - (ph.C - .9) + i * .06) / .7);
-  return Math.max(0, Math.min(open, 1 - close));
+  let rel = ph.lb - (-.6 + i * .4); rel = ((rel % ph.C) + ph.C * 1.5) % ph.C - ph.C / 2;
+  return easeIO((Math.abs(rel) - .15) / .35);
 }
 /** Kick pulse 0..1 (fast ease-out) for border brightness / punches. */
 export const pulse = fs => Math.max(0, spring(fs.kickAge)) * Math.min(1, fs.kickS * 1.3);

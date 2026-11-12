@@ -49,6 +49,8 @@ function drawLetter(g, pose, k, A, pad) { for (const q of pose.pieces) if (q.k =
 export function drawChains(ctx, pose, imgs, alpha = 1) {
   const { img, edge, pad } = imgs, sc = pose.place.sc * pose.punch, m = ctx.getTransform(), dev = Math.hypot(m.a, m.b) * sc, px = Math.max(1, Math.round(2.2 * Math.max(1, dev * 2)));
   ctx.save(); ctx.translate(pose.place.x, pose.place.y); ctx.scale(sc, sc); ctx.translate(-pose.lw / 2, -pose.lh / 2);
+  // a dim outline ghost of every letter that is not whole: the logo is never fully gone between dissolve and rebuild
+  for (let k = 0; k < 3; k++) { const st = pose.letters[k]; if (st.fill < .999) { ctx.globalAlpha = alpha * .25 * (1 - st.fill); drawLetter(ctx, pose, k, edge, 0); } }
   for (let k = 0; k < 3; k++) { const st = pose.letters[k], b = pose.boxes[k];
     if (st.fill >= .999 && st.outline >= .999) { ctx.globalAlpha = alpha; drawLetter(ctx, pose, k, img, pad);
       if (pose.pulse > .05) { ctx.globalAlpha = alpha * Math.min(1, pose.pulse) * .55; drawLetter(ctx, pose, k, edge, 0); } continue; }

@@ -15,7 +15,8 @@ export function elephFor(assets, pal, surface) {
     g.putImageData(d, 0, 0); });
 }
 // ---- rope simulation (normalised: rope length 1, anchor at 0,0, y down)
-const N = 9, HZ = 120, G = 13, DAMP = .9975, ITER = 12, INV_END = .12, PUSH = 1.1, KICKV = .55;
+// gentle defaults: ~6-8° peak swing at swing = 0.4 (the Style slider scales the drive linearly)
+const N = 9, HZ = 120, G = 13, DAMP = .9955, ITER = 12, INV_END = .12, PUSH = .3, KICKV = .16;
 const SIMS = new WeakMap();
 function simulate(T, a, b, anchorBeat, C, I) {
   const L = Math.max(.25, b - a), steps = Math.max(2, Math.round(L * HZ)), loops = 3, seg = 1 / N, dt = 1 / HZ;
@@ -37,8 +38,8 @@ function simulate(T, a, b, anchorBeat, C, I) {
   for (let i = 0; i <= N; i++) { rec[r++] = x[i]; rec[r++] = y[i]; } // state at the very end
   return { rec, steps, L, a, b };
 }
-function sim(T, P, I) {
-  const lp = P.loop || { a: 0, b: T.duration }, key = [lp.a.toFixed(4), lp.b.toFixed(4), P.anchorBeat, P.cycleBeats, I.toFixed(2)].join('|');
+function sim(T, P, I0) {
+  const I = I0 * (P.eleph.swing ?? .4) / .4, lp = P.loop || { a: 0, b: T.duration }, key = [lp.a.toFixed(4), lp.b.toFixed(4), P.anchorBeat, P.cycleBeats, I.toFixed(3)].join('|');
   let m = SIMS.get(T); if (!m) { m = new Map(); SIMS.set(T, m); } let s = m.get(key);
   if (!s) { s = simulate(T, lp.a, lp.b, P.anchorBeat, P.cycleBeats, I); if (m.size > 12) m.clear(); m.set(key, s); } return s;
 }

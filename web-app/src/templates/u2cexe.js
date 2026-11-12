@@ -16,7 +16,7 @@ const LAYOUT = {
     beat: [60, 96, 470, 200], tempo: [60, 322, 470, 140], eleph: [1420, 96, 440, 430], chains: [580, 96, 800, 590],
     scope: [60, 490, 470, 230], meter: [1420, 556, 440, 200], spec: [580, 716, 390, 270], log: [990, 716, 390, 270] } },
 };
-const ORDER = ['beat', 'tempo', 'scope', 'meter', 'spec', 'log'];
+const ORDER = ['beat', 'tempo', 'scope', 'meter', 'spec', 'log'], FOLD = ['scope', 'meter', 'spec', 'log']; // only the secondary windows fold
 const TITLES = { beat: 'u2c_beat.exe', tempo: 'tempo.cfg', eleph: 'elephant.sys', chains: 'chains.dll', scope: 'scope.exe', meter: 'meter.exe', spec: 'spectrum.vst', log: 'events.log' };
 const CABLES = [['beat', 'chains'], ['tempo', 'chains'], ['eleph', 'chains'], ['scope', 'chains'], ['meter', 'chains'], ['spec', 'scope'], ['log', 'meter']];
 function rects(P, fs) {
@@ -46,7 +46,7 @@ export default {
     ctx.fillStyle = rgba(fg, .06); ctx.fillRect(0, 0, W, 44 * u); ctx.fillStyle = rgba(fg, .25); ctx.fillRect(0, 44 * u, W, 1 * u);
     txt(ctx, '✦ U2C OS', 24 * u, 29 * u, mono(15 * u, 700), hi); txt(ctx, 'FILE   EDIT   VIEW   WINDOW', 150 * u, 29 * u, mono(13 * u), rgba(fg, .6));
     txt(ctx, timecode(fs) + '  ●  ' + Math.round(fs.bpm) + ' BPM', W - 24 * u, 29 * u, mono(13 * u, 700), rgba(fg, .85), 'right');
-    const R = rects(P, fs), O = {}; ORDER.forEach((id, i) => { O[id] = openAmount(ph, i); }); O.eleph = 1; O.chains = 1;
+    const R = rects(P, fs), O = {}; ORDER.forEach(id => { O[id] = FOLD.includes(id) ? openAmount(ph, FOLD.indexOf(id)) : 1; }); O.eleph = 1; O.chains = 1;
     // cables first (under the windows), with beat-grid signal dots
     CABLES.forEach(([a, b], i) => { const [p0, p1, dir] = port(R[a], R[b]), vis = Math.min(O[a], O[b]); if (vis <= .02) return;
       const pts = dir === 'v' ? [p0, { x: p0.x, y: (p0.y + p1.y) / 2 }, { x: p1.x, y: (p0.y + p1.y) / 2 }, p1] : cablePath(p0, p1, u);

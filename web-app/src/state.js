@@ -8,7 +8,7 @@ export const DEFAULT_PROJECT = {
   tpl: 'u2cexe', pal: 'charcoal', aspect: '916',
   custom: { bg: '#161616', main: '#c8c8c8', accent: '#f2c14e' },
   chains: { on: true, x: .5, y: .5, s: .8, cycle: 'auto' },
-  eleph: { on: true, x: .5, y: 0, s: .6, len: 0 },
+  eleph: { on: true, x: .5, y: 0, s: .6, len: 0, swing: .4 },
   finish: { grain: .22, intensity: 1, zoom: true },
   params: {},
   // amount = master FX intensity. Glitch (slices + RGB split) and shockwave are opt-in: 0 by default.

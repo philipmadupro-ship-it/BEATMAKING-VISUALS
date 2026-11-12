@@ -126,9 +126,10 @@ const rope = await page.evaluate(async () => {
   const p = app.store.snapshot(), P = makeParams(p, tr), at = t => ropeNodes(getFrameState(tr, t, { loop: P.loop }), P), d = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
   const t1 = p.inT + 1.234, a = Array.from(at(t1)), b = Array.from(at(t1)), first = Array.from(at(p.inT)), last = Array.from(at(p.outT)), mid = Array.from(at(p.inT + (p.outT - p.inT) / 2));
   const step = Array.from(at(p.inT + 1 / 30));
-  return { repeat: d(a, b), seam: d(first, last), step: d(first, step), swing: Math.abs(mid[mid.length - 2]) };
+  let maxDeg = 0; for (let k = 0; k < 160; k++) { const n = at(p.inT + (p.outT - p.inT) * k / 160), e = n.length - 2; maxDeg = Math.max(maxDeg, Math.abs(Math.atan2(n[e], n[e + 1])) * 180 / Math.PI); }
+  return { repeat: d(a, b), seam: d(first, last), step: d(first, step), swing: Math.abs(mid[mid.length - 2]), maxDeg };
 });
-ok('rope physics deterministic + seamless', rope.repeat === 0 && rope.seam < 1e-3 && rope.swing > .005, `repeat diff ${rope.repeat} · out→in diff ${rope.seam.toExponential(1)} (one frame of motion ${rope.step.toExponential(1)}) · end-mass x ${rope.swing.toFixed(3)} rope lengths`);
+ok('rope physics: gentle, deterministic, seamless', rope.repeat === 0 && rope.seam < 1e-3 && rope.maxDeg > .5 && rope.maxDeg <= 8.5, `max swing ${rope.maxDeg.toFixed(1)}° · repeat diff ${rope.repeat} · out→in diff ${rope.seam.toExponential(1)} (one frame of motion ${rope.step.toExponential(1)})`);
 
 // ---- 4-bar loop + seam check
 await page.click('.tabs [data-tab="export"]');
