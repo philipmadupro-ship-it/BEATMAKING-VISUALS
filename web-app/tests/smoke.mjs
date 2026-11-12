@@ -21,7 +21,7 @@ const AUDIO = process.argv[2] || '';
 fs.mkdirSync(SHOTS, { recursive: true });
 const errors = [], results = [];
 const ok = (name, pass, info = '') => { results.push({ name, pass, info }); console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${info ? '  ' + info : ''}`); };
-const EXPECT = ['lab', 'handset', 'exe', 'bloom', 'orbit', 'halo', 'scope', 'poster', 'slicer'];
+const EXPECT = ['u2cexe', 'lab', 'handset', 'exe', 'bloom', 'orbit', 'halo', 'scope', 'poster', 'slicer'];
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1, colorScheme: process.env.SCHEME || 'dark' });
@@ -52,7 +52,7 @@ await page.screenshot({ path: path.join(SHOTS, 'grid-916.png'), fullPage: true }
 const cards = await page.$$('#grid .card canvas');
 let nonBlank = 0; for (const c of cards) { const r = await c.evaluate(cv => { const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let mn = 765, mx = 0; for (let i = 0; i < d.length; i += 400) { const v = d[i] + d[i + 1] + d[i + 2]; mn = Math.min(mn, v); mx = Math.max(mx, v); } return mx - mn; }); if (r > 30) nonBlank++; }
 const ids = await page.$$eval('#grid .card', els => els.map(e => e.dataset.tpl));
-ok('grid: 9 looks in order', ids.join() === EXPECT.join() && nonBlank === cards.length, `${ids.join(', ')} · ${nonBlank}/${cards.length} drawn`);
+ok('grid: 10 looks in order (U2C.EXE first)', ids.join() === EXPECT.join() && nonBlank === cards.length, `${ids.join(', ')} · ${nonBlank}/${cards.length} drawn`);
 await page.click('#gridAspect button[data-a="169"]'); await page.waitForTimeout(1200);
 await page.screenshot({ path: path.join(SHOTS, 'grid-169.png'), fullPage: true });
 await page.click('#gridAspect button[data-a="916"]'); await page.waitForTimeout(500);
@@ -94,9 +94,10 @@ ok('variant sheets', fs.existsSync(path.join(SHOTS, 'variants-916.png')), '9 loo
 
 // ---- glitch slider: UI sets the store; slices only on a strong-kick frame and gone within 80 ms
 await page.click('.tabs [data-tab="fx"]');
-await page.$eval('#fxGlitch', el => { el.value = '0'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+// glitch is opt-in: default 0; the slider turns it on (kick trigger chosen explicitly for the test)
 const g0 = await page.evaluate(() => window.u2c.store.project.fx.glitch);
 await page.$eval('#fxGlitch', el => { el.value = '30'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+await page.selectOption('#fxGlitchOn', 'kicks');
 const g30 = await page.evaluate(() => window.u2c.store.project.fx.glitch);
 const gl = await page.evaluate(async () => {
   const app = window.u2c, tr = app.store.session.track, { makeSurface } = await import('/src/engine/render.js');
@@ -107,7 +108,27 @@ const gl = await page.evaluate(async () => {
   const changed = (a, b) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 24) n++; return n / (a.length / 4) * 100; };
   return { kick: k, onHit: changed(shot(k + .015, 1), shot(k + .015, 0)), after: changed(shot(k + .12, 1), shot(k + .12, 0)) };
 });
-ok('glitch slider', g0 === 0 && Math.abs(g30 - .3) < 1e-6 && gl.onHit > .2 && gl.onHit < 15 && gl.after < .01, `store 0→${g0}, 30→${g30} · strong kick @${gl.kick.toFixed(2)} s: ${gl.onHit.toFixed(2)} % of pixels moved by glitch 100 on the hit, ${gl.after.toFixed(3)} % 120 ms later`);
+ok('glitch: off by default, slider opt-in', g0 === 0 && Math.abs(g30 - .3) < 1e-6 && gl.onHit > .2 && gl.onHit < 15 && gl.after < .01, `default ${g0}, slider 30→${g30} · strong kick @${gl.kick.toFixed(2)} s: ${gl.onHit.toFixed(2)} % of pixels moved by glitch 100 on the hit, ${gl.after.toFixed(3)} % 120 ms later`);
+
+// ---- U2C.EXE across one phrase (rebuild → full → mid-dissolve → end), rope determinism + rope seam
+for (const asp of ['916', '169']) {
+  const url = await page.evaluate(async asp => {
+    const app = window.u2c, tr = app.store.session.track, { applyDefaults } = await import('/src/templates/index.js'), { makeSurface } = await import('/src/engine/render.js'), { makeParams } = await import('/src/engine/layout.js');
+    const p = app.store.snapshot(); p.tpl = 'u2cexe'; p.aspect = asp; p.pal = 'charcoal'; applyDefaults(p, 'u2cexe'); const C = makeParams(p, tr).cycleBeats, beats = [.7, C * .4, C - 1.6, C - .25];
+    const tw = asp === '916' ? 540 : 960, th = asp === '916' ? 960 : 540, sheet = document.createElement('canvas'); sheet.width = tw * 4; sheet.height = th; const g = sheet.getContext('2d'), surf = makeSurface(tw * 2, th * 2), tmp = document.createElement('canvas'); tmp.width = tw; tmp.height = th;
+    beats.forEach((b, i) => { app.renderFrame(p.inT + b * tr.spb, surf, p, tr, { target: tmp.getContext('2d') }); g.drawImage(tmp, i * tw, 0); });
+    return sheet.toDataURL('image/png');
+  }, asp);
+  fs.writeFileSync(path.join(SHOTS, `u2cexe-phrase-${asp}.png`), Buffer.from(url.split(',')[1], 'base64'));
+}
+const rope = await page.evaluate(async () => {
+  const app = window.u2c, tr = app.store.session.track, { makeParams } = await import('/src/engine/layout.js'), { getFrameState } = await import('/src/engine/frame.js'), { ropeNodes } = await import('/src/overlays/elephant.js');
+  const p = app.store.snapshot(), P = makeParams(p, tr), at = t => ropeNodes(getFrameState(tr, t, { loop: P.loop }), P), d = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+  const t1 = p.inT + 1.234, a = Array.from(at(t1)), b = Array.from(at(t1)), first = Array.from(at(p.inT)), last = Array.from(at(p.outT)), mid = Array.from(at(p.inT + (p.outT - p.inT) / 2));
+  const step = Array.from(at(p.inT + 1 / 30));
+  return { repeat: d(a, b), seam: d(first, last), step: d(first, step), swing: Math.abs(mid[mid.length - 2]) };
+});
+ok('rope physics deterministic + seamless', rope.repeat === 0 && rope.seam < 1e-3 && rope.swing > .005, `repeat diff ${rope.repeat} · out→in diff ${rope.seam.toExponential(1)} (one frame of motion ${rope.step.toExponential(1)}) · end-mass x ${rope.swing.toFixed(3)} rope lengths`);
 
 // ---- 4-bar loop + seam check
 await page.click('.tabs [data-tab="export"]');

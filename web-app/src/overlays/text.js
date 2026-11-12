@@ -36,7 +36,7 @@ function items(ctx, P, fs, tpl) {
   const u = P.u, out = [];
   for (const id of LINE_IDS) { const l = rawLine(P, id); if (!l || !l.on || owns(P, tpl, id)) continue; const s = lineText(P, id, fs); if (!s) continue;
     const px = BASE[id] * u, f = lineFont(P, id, px, id === 'title' ? 700 : 500); ctx.font = f; const w = ctx.measureText(s).width, sz = px * (l.size || 1);
-    let pos = l.pos || 'auto'; if (pos === 'auto') pos = tpl.textPos || 'bottom';
+    const pos = l.pos || 'auto';
     out.push({ id, s, f, w, h: sz * 1.35, sz, pos, l, mono: (l.font || 'mono') === 'mono' }); }
   return out;
 }
@@ -66,7 +66,8 @@ export function textBoxes(ctx, P, fs, tpl, assets) {
     const h = blockH(au), w = blockW(au), res = reservedRects(P, tpl, assets).map(r => ({ x: r.x - 14 * u, y: r.y - 14 * u, w: r.w + 28 * u, h: r.h + 28 * u })), pref = tpl.textPos || 'bottom';
     const py = pref === 'top' ? sb.y0 + 20 * u : pref === 'centre' ? P.H / 2 - h / 2 : sb.y1 - 10 * u - h;
     let best = null;
-    for (let y = sb.y0 + 10 * u; y <= sb.y1 - h; y += 12 * u) for (const [ax, x] of [['center', P.W / 2 - w / 2], ['left', sb.x0], ['right', sb.x1 - w]]) {
+    const yMax = P.V ? P.safe.relaxed.y1 : sb.y1; // 9:16: may drop into the relaxed band above the caption area
+    for (let y = sb.y0 + 10 * u; y <= yMax - h; y += 12 * u) for (const [ax, x] of [['center', P.W / 2 - w / 2], ['left', sb.x0], ['right', sb.x1 - w]]) {
       const box = { x, y, w, h }, ov = res.reduce((a, r) => a + overlap(box, r), 0), score = ov * 4 + Math.abs(y - py) * w * .02 + (ax === 'center' ? 0 : w * h * .01);
       if (!best || score < best.score) best = { score, x, y, ax }; }
     if (best) stack(au, best.ax === 'left' ? best.x : best.ax === 'right' ? best.x + w : P.W / 2, best.y, best.ax);

@@ -8,7 +8,7 @@ export default {
   textPos: 'top',
   reserved(P) { const V = P.V, cx = V ? P.W / 2 : P.W * .42, cy = V ? P.H * .4 : P.H * .5, R = Math.min(P.W, P.H) * (V ? .23 : .21) * 1.9; return [{ x: cx - R, y: cy - R, w: 2 * R, h: 2 * R }]; },
   params: [{ id: 'spokes', label: 'Spokes', min: 12, max: 48, step: 2, def: 28 }],
-  defaults: a => a === '916' ? { chains: { x: .5, y: .78, s: .6 }, eleph: { x: .5, y: 0, s: .62, len: .373 } } : { chains: { x: .84, y: .76, s: .5 }, eleph: { x: .42, y: 0, s: .64, len: .45 } },
+  defaults: a => a === '916' ? { chains: { x: .5, y: .84, s: .58 }, eleph: { x: .5, y: 0, s: .62, len: .373 } } : { chains: { x: .84, y: .76, s: .5 }, eleph: { x: .42, y: 0, s: .64, len: .45 } },
   draw(ctx, fs, P, p, assets) {
     const { W, H, u, V } = P, a2 = accentOn(p), n = (P.params && P.params.spokes) || 28, TAU = Math.PI * 2, gold = p.gold || p.spark;
     const cx = V ? W / 2 : W * .42, cy = V ? H * .4 : H * .5, R = Math.min(W, H) * (V ? .23 : .21) * (1 + .04 * fs.kick);

@@ -6,13 +6,13 @@ import { lineText, lineFont, lineColor } from '../overlays/text.js';
 export default {
   id: 'bloom', name: 'Pendant Bloom', category: 'Bloom', pal: 'amethyst', surface: 'dark', chainStyle: 'solid',
   owns: ['bpm'], textPos: 'top',
-  reserved(P) { const V = P.V, cx = P.W / 2, cy = V ? P.H * .42 : P.H * .56, R = Math.min(P.W, P.H) * .3 * 1.45; return [{ x: cx - R, y: cy - R, w: 2 * R, h: 2 * R }]; },
+  reserved(P) { const V = P.V, cx = P.W / 2, cy = V ? P.H * .4 : P.H * .56, R = Math.min(P.W, P.H) * (V ? .27 : .3) * 1.45; return [{ x: cx - R, y: cy - R, w: 2 * R, h: 2 * R }]; },
   params: [{ id: 'spokes', label: 'Spokes', min: 32, max: 160, step: 8, def: 96 }],
-  defaults: a => a === '916' ? { chains: { x: .5, y: .79, s: .66 }, eleph: { x: .5, y: 0, s: .8, len: .375 } } : { chains: { x: .83, y: .7, s: .62 }, eleph: { x: .5, y: 0, s: .85, len: .48 } },
+  defaults: a => a === '916' ? { chains: { x: .5, y: .84, s: .6 }, eleph: { x: .5, y: 0, s: .8, len: .365 } } : { chains: { x: .83, y: .7, s: .62 }, eleph: { x: .5, y: 0, s: .85, len: .48 } },
   draw(ctx, fs, P, p) {
-    const { W, H, u, V } = P, cx = W / 2, cy = V ? H * .42 : H * .56, n = (P.params && P.params.spokes) || 96, a2 = accentOn(p), TAU = Math.PI * 2;
+    const { W, H, u, V } = P, cx = W / 2, cy = V ? H * .4 : H * .56, n = (P.params && P.params.spokes) || 96, a2 = accentOn(p), TAU = Math.PI * 2;
     const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * .7); gr.addColorStop(0, p.bg2); gr.addColorStop(1, p.bg); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
-    const R = Math.min(W, H) * (.3 + .05 * fs.kick), rot = fs.cyc(.02) * TAU + Math.sin(fs.cyc(.11) * TAU) * .15 * fs.mid;
+    const R = Math.min(W, H) * ((V ? .27 : .3) + .05 * fs.kick), rot = fs.cyc(.02) * TAU + Math.sin(fs.cyc(.11) * TAU) * .15 * fs.mid;
     ctx.save(); ctx.translate(cx, cy); ctx.globalCompositeOperation = glowOp(p);
     for (let pass = 0; pass < 2; pass++) { ctx.lineWidth = (pass ? 3 : 9) * u; for (let i = 0; i < n; i++) { const k = Math.floor((i < n / 2 ? i : n - 1 - i) / (n / 2) * 48), v = fs.specAt(Math.min(47, k)), a = rot + i / n * TAU, l = R * .05 + v * R * .7;
       ctx.strokeStyle = rgba(i % 2 ? p.main : a2, pass ? .9 : .18); ctx.beginPath(); ctx.moveTo(Math.cos(a) * R, Math.sin(a) * R); ctx.lineTo(Math.cos(a) * (R + l), Math.sin(a) * (R + l)); ctx.stroke(); } }

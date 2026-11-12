@@ -13,12 +13,12 @@ function halftone(assets, p, w) {
 export default {
   id: 'slicer', name: 'Slicer', category: 'Grid', pal: 'rust', surface: 'dark', chainStyle: 'solid', selfChains: true, selfEleph: true,
   owns: ['bpm'], textPos: 'bottom',
-  reserved(P) { const sb = P.safe.hard, u = P.u, G0 = P.V ? { x: sb.x0 - 90 * u, y: sb.y0 + 70 * u, w: sb.x1 - sb.x0 + 180 * u, h: 880 * u } : { x: P.W * .25, y: P.H * .09, w: P.W * .5, h: P.H * .8 }; return [{ x: G0.x - 20 * u, y: G0.y - 60 * u, w: G0.w + 40 * u, h: G0.h + 100 * u }]; },
+  reserved(P) { const sb = P.safe.hard, u = P.u, G0 = P.V ? { x: sb.x0 - 90 * u, y: sb.y0 + 70 * u, w: sb.x1 - sb.x0 + 180 * u, h: 800 * u } : { x: P.W * .25, y: P.H * .09, w: P.W * .5, h: P.H * .8 }; return [{ x: G0.x - 20 * u, y: G0.y - 60 * u, w: G0.w + 40 * u, h: G0.h + 100 * u }]; },
   params: [{ id: 'grid', label: 'Grid', min: 4, max: 12, step: 1, def: 8 }],
   defaults: a => a === '916' ? { chains: { x: .5, y: .5, s: .8 }, eleph: { x: .5, y: 0, s: .6, len: .03 } } : { chains: { x: .5, y: .5, s: .8 }, eleph: { x: .5, y: 0, s: .6, len: .03 } },
   draw(ctx, fs, P, p, assets) {
     const { W, H, u, V } = P, n = (P.params && P.params.grid) || 8; ctx.fillStyle = p.bg; ctx.fillRect(0, 0, W, H);
-    const sb = P.safe.hard, G0 = V ? { x: sb.x0 - 90 * u, y: sb.y0 + 70 * u, w: sb.x1 - sb.x0 + 180 * u, h: 880 * u } : { x: W * .25, y: H * .09, w: W * .5, h: H * .8 };
+    const sb = P.safe.hard, G0 = V ? { x: sb.x0 - 90 * u, y: sb.y0 + 70 * u, w: sb.x1 - sb.x0 + 180 * u, h: 800 * u } : { x: W * .25, y: H * .09, w: W * .5, h: H * .8 };
     // live source: bg, swinging halftone elephant, U2C chains (half resolution)
     const ow = Math.round(G0.w * .5), oh = Math.round(G0.h * .5), src = cached(`slsrc|${ow}x${oh}`, ow, oh, () => {}), g = src.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.fillStyle = p.bg2; g.fillRect(0, 0, ow, oh);
