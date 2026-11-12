@@ -18,9 +18,11 @@ export function mix(a, b, t) { const x = hex3(a), y = hex3(b); return '#' + [0, 
 export function fmtTC(s) { s = Math.max(0, s); const m = Math.floor(s / 60), r = s - m * 60; return String(m).padStart(2, '0') + ':' + r.toFixed(3).padStart(6, '0'); }
 export function tc2(s) { s = Math.max(0, s); const m = Math.floor(s / 60), r = s - m * 60; return String(m).padStart(2, '0') + ':' + r.toFixed(2).padStart(5, '0'); }
 export function slug(t) { return (t || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 22) || 'untitled'; }
-const CACHE = new Map();
-export function cached(key, w, h, fn) { let c = CACHE.get(key); if (c) return c; if (CACHE.size > 140) CACHE.clear(); c = mk(w, h); fn(c.getContext('2d'), c.width, c.height); CACHE.set(key, c); return c; }
-export function memo(key, fn) { let v = CACHE.get(key); if (!v) { v = fn(); CACHE.set(key, v); } return v; }
+const CACHE = new Map(), CACHE_MAX = 180;
+// LRU: a hit moves the entry to the back; only the oldest entry is evicted (expensive sprites survive busy frames)
+function touch(key, v) { CACHE.delete(key); CACHE.set(key, v); if (CACHE.size > CACHE_MAX) CACHE.delete(CACHE.keys().next().value); return v; }
+export function cached(key, w, h, fn) { let c = CACHE.get(key); if (c) return touch(key, c); c = mk(w, h); fn(c.getContext('2d'), c.width, c.height); return touch(key, c); }
+export function memo(key, fn) { let v = CACHE.get(key); if (!v) v = fn(); return touch(key, v); }
 export function sparkle(ctx, x, y, r, col, rot = 0) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.beginPath(); ctx.moveTo(0, -r);
   ctx.quadraticCurveTo(r * .12, -r * .12, r, 0); ctx.quadraticCurveTo(r * .12, r * .12, 0, r);

@@ -153,3 +153,22 @@ kbd{font:500 10px var(--mono);border:1px solid var(--line-2);border-radius:4px;p
   .checks{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* v2: variant chips row, custom colour pickers, text line editor, seam check */
+.variant + .variant{padding-top:0}
+.chip.small{padding:4px 8px;font-size:12px}
+.pick{display:inline-flex;align-items:center;gap:6px;font:400 11px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.08em;cursor:pointer}
+.pick input{width:30px;height:24px;padding:0;border:1px solid var(--line-2);border-radius:4px;background:none;cursor:pointer}
+.tline{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.tline:first-child{border-top:0;padding-top:0}
+.tstyle{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) 70px;gap:6px;align-items:center}
+.tstyle select{font-size:11px;padding:4px 6px;min-width:0}
+.tstyle input[type=range]{width:100%;accent-color:var(--accent)}
+.seambox{position:absolute;inset:auto 12px 12px auto;z-index:3;background:var(--panel);border:1px solid var(--line-2);border-radius:var(--radius);padding:12px;max-width:min(560px,calc(100% - 24px));display:flex;flex-direction:column;gap:8px}
+.seampair{display:flex;align-items:center;gap:10px}
+.seampair figure{margin:0;flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.seampair canvas{max-width:100%;max-height:34vh;width:auto;height:auto;border:1px solid var(--line);border-radius:4px;background:var(--stage)}
+.seampair figcaption{font:400 10px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+.seampair .arrow{font:400 18px var(--mono);color:var(--muted)}
+#seamBtn[aria-pressed="true"]{border-color:var(--accent);background:var(--tint)}
+#exRate{min-height:16px}
+@media (max-width:720px){.tstyle{grid-template-columns:repeat(2,minmax(0,1fr))}.seambox{position:static;max-width:none}}

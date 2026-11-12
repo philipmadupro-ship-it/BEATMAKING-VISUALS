@@ -34,7 +34,7 @@ export function createGrid(app) {
     setTrack(tr) { const b = Math.max(1, Math.min(tr.bars.length, 8)); const w = app.hook(tr, b * tr.barDur); loop = [w[0], w[1]]; t0 = performance.now(); build(); return loop; },
     setAspect(a) { aspect = a; build(); },
     get aspect() { return aspect; },
-    refreshText() { const T = app.store.project.text; cards.forEach(c => Object.assign(c.p.text, { title: T.title, key: T.key, tag: T.tag, handle: T.handle, showTitle: T.showTitle, showBpm: T.showBpm, showTag: T.showTag, showHandle: T.showHandle, preset: T.preset, artistA: T.artistA, artistB: T.artistB, price: T.price, link: T.link })); },
+    refreshText() { const T = app.store.project.text, F = app.store.project.fx, C = app.store.project.custom; cards.forEach(c => { c.p.text = JSON.parse(JSON.stringify(T)); c.p.fx = { ...F }; c.p.custom = { ...C }; }); },
     get loop() { return loop; },
   };
 }

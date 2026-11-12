@@ -9,7 +9,10 @@ import { useGsap as chainsGsap } from './overlays/chains.js';
 import { useGsap as elephGsap } from './overlays/elephant.js';
 import { analyzeBuffer, decodeFile, metaFromFilename, synthDemo, regrid } from './analysis/index.js';
 import { TEMPLATES, applyDefaults } from './templates/index.js';
-import { PALETTES } from './brand/palettes.js';
+import { PALETTES, resolvePalette } from './brand/palettes.js';
+import { phraseBars } from './engine/layout.js';
+import { loopBuffer } from './export/audio.js';
+import { createSeam } from './ui/seam.js';
 import { createMotion } from './ui/motion.js';
 import { createTimeline } from './ui/timeline.js';
 import { createGrid } from './ui/grid.js';
@@ -21,10 +24,10 @@ const $ = s => document.querySelector(s);
 const all = s => [...document.querySelectorAll(s)];
 const status = html => { $('#status').innerHTML = html; };
 
-/** Most energetic section of `sec` seconds, starting on a downbeat (bars weighted by beat-1 transients). */
+/** Most energetic section of ~`sec` seconds, snapped to a whole phrase (2/4/8/16/32 bars) starting on a downbeat. */
 function hook(track, sec) {
   if (sec === 'full' || sec >= track.duration) return [0, track.duration];
-  const n = Math.max(1, Math.min(track.bars.length, Math.round(sec / track.barDur)));
+  const n = phraseBars(track, sec);
   let bk = 0, bs = -1;
   for (let k = 0; k + n <= track.bars.length; k++) {
     let s = 0; for (let j = k; j < k + n; j++) s += track.energyCurve[j];
@@ -45,21 +48,24 @@ async function boot() {
 
   const clock = createClock(), motion = createMotion(libs.gsap), renderFrame = createRenderer({ assets, postfx });
   const app = { store, clock, libs, assets, postfx, renderFrame, motion, hook, actions: {} };
-  const A = app.actions;
-  app.timeline = createTimeline(app); app.grid = createGrid(app); app.studio = createStudio(app); app.panels = createPanels(app); app.exporter = createExporter(app);
+  const A = app.actions; window.u2c = app; // handle for tests / console debugging
+  app.seam = createSeam(app); app.timeline = createTimeline(app); app.grid = createGrid(app); app.studio = createStudio(app); app.panels = createPanels(app); app.exporter = createExporter(app);
   motion.press(document.body);
   $('#fxStatus').textContent = postfx.status;
   $('#fxBadge').textContent = 'FX · ' + postfx.status + (libs.gsap ? ' · GSAP' : '') + (libs.WaveSurfer ? ' · wavesurfer' : '') + (libs.mediabunny ? ' · mediabunny' : '');
   let userClip = false;
 
-  A.setPaletteVars = () => { const p = PALETTES[store.project.pal]; const r = document.documentElement.style;
-    r.setProperty('--pal-main', p.main); r.setProperty('--pal-dark', p.id === 'charcoal' ? '#161616' : p.id === 'rust' ? '#6e4433' : '#5a3d78'); app.timeline.recolor(); };
-  A.seek = t => { clock.seek(t); app.studio.markDirty(); };
-  A.togglePlay = () => { if (clock.playing) clock.pause(); else { const p = store.project; let t = clock.time(); if (t >= p.outT - .05 || (p.loop && t < p.inT - .01)) t = p.inT; clock.play(t); } };
-  A.setClip = (a, b, why) => { userClip = true; store.set({ project: { inT: a, outT: b } }, why); app.timeline.setClip(a, b); app.studio.readouts(); };
+  A.setPaletteVars = () => { const p = resolvePalette(store.project); const r = document.documentElement.style;
+    r.setProperty('--pal-main', p.light ? p.bg : p.main); r.setProperty('--pal-dark', p.light ? p.main : (PALETTES[p.fam] || p).bg); app.timeline.recolor(); };
+  // preview loops on the same cross-faded buffer the export uses (sample-accurate, no restart gap)
+  A.loopBuf = () => { const p = store.project, tr = store.session.track; return loopBuffer(store.session.buffer, p.inT, p.outT, tr ? Math.min(tr.spb, (p.outT - p.inT) / 4) : .02, p.export.loopSafe); };
+  A.playLoop = t => { const p = store.project; app.seam.stop(); clock.playBuffer(A.loopBuf(), { offset: Math.max(0, t - p.inT), map: x => p.inT + x, kind: 'loop' }); };
+  A.seek = t => { const p = store.project; if (clock.playing && p.loop && t >= p.inT && t < p.outT) A.playLoop(t); else clock.seek(t); app.studio.markDirty(); };
+  A.togglePlay = () => { if (clock.playing) { clock.pause(); app.seam.stop(); } else { const p = store.project; let t = clock.time(); if (t >= p.outT - .05 || (p.loop && t < p.inT - .01)) t = p.inT; if (p.loop) A.playLoop(t); else clock.play(t); } };
+  A.setClip = (a, b, why) => { userClip = true; store.set({ project: { inT: a, outT: b } }, why); app.timeline.setClip(a, b); app.studio.readouts(); if (clock.playing && clock.mode === 'loop') A.playLoop(clock.time()); };
   A.applyHook = sec => { const tr = store.session.track; if (!tr) return; const [a, b] = hook(tr, sec);
     store.set({ project: { inT: a, outT: b, clipLen: sec } }); app.timeline.setClip(a, b); app.studio.readouts(); A.seek(a); app.exporter.info(); };
-  const placeFor = (changes) => { const p = app.store.snapshot(); Object.assign(p, changes); applyDefaults(p, p.tpl); return { ...changes, chains: p.chains, eleph: p.eleph, text: { tx: p.text.tx, ty: p.text.ty } }; };
+  const placeFor = (changes) => { const p = app.store.snapshot(); Object.assign(p, changes); applyDefaults(p, p.tpl); return { ...changes, chains: p.chains, eleph: p.eleph }; };
   A.setTemplate = id => { store.set({ project: placeFor({ tpl: id }) });
     all('#lookGrid .lk').forEach(x => x.setAttribute('aria-pressed', x.dataset.tpl === id)); app.studio.paramsUI(); app.panels.sync(); app.exporter.info(); };
   A.setPalette = id => { store.set({ project: { pal: id } }); A.setPaletteVars(); app.studio.chips(); app.studio.thumbs(); app.exporter.info(); };
@@ -69,7 +75,7 @@ async function boot() {
   A.setBpm = bpm => { if (store.session.track && bpm >= 40 && bpm <= 250) A.regrid(bpm); };
   A.regrid = (bpm, t0) => { const tr = regrid(store.session.track, bpm, t0); store.set({ session: { track: tr } });
     if (!userClip) A.applyHook(store.project.clipLen || 15); app.panels.sync(); if (!$('#studio').hidden) app.timeline.build(tr); app.grid.setTrack(tr); app.studio.readouts(); };
-  A.openStudio = (id, aspect) => { clock.pause(); store.set({ project: placeFor({ tpl: id, pal: TEMPLATES[id].pal, aspect }) });
+  A.openStudio = (id, aspect) => { clock.pause(); const cur = store.project.pal, keep = cur === 'custom' || (PALETTES[cur] && PALETTES[cur].fam === TEMPLATES[id].pal && cur !== TEMPLATES[id].pal); store.set({ project: placeFor({ tpl: id, pal: keep ? cur : TEMPLATES[id].pal, aspect }) });
     $('#home').hidden = true; $('#studio').hidden = false; $('#backBtn').hidden = false; $('#exportTop').hidden = false; A.setPaletteVars();
     app.studio.chips(); app.studio.setAspectUI(); app.studio.layout(); app.timeline.build(store.session.track); app.studio.thumbs(); app.studio.readouts();
     app.panels.sync(); app.exporter.syncBatch(); app.exporter.info(); motion.viewIn($('#studio')); clock.seek(store.project.inT); app.studio.markDirty(); window.scrollTo(0, 0); };
@@ -78,11 +84,13 @@ async function boot() {
   $('#exportTop').onclick = () => $('.tabs [data-tab="export"]').click();
   all('#gridAspect button').forEach(b => b.onclick = () => { all('#gridAspect button').forEach(x => x.setAttribute('aria-pressed', x === b)); app.grid.setAspect(b.dataset.a); });
 
+  let loadId = 0;
   async function load(buffer, meta) {
-    clock.stop(); clock.setBuffer(buffer); store.set({ session: { buffer, track: null } }); userClip = false;
+    const id = ++loadId; clock.stop(); clock.setBuffer(buffer); store.set({ session: { buffer, track: null } }); userClip = false;
     $('#anaProg').style.width = '0%'; status(`Analysing <b>${meta.name}</b>…`);
     const setTrack = (tr, quick) => {
-      store.set({ session: { track: tr }, project: { text: { title: meta.title, key: tr.key } } });
+      if (id !== loadId) return; // a newer file was dropped while this one was analysing
+      store.set({ session: { track: tr }, project: { text: { lines: { title: { text: meta.title }, key: { text: tr.key } } } } });
       if (!userClip) { const cl = store.project.clipLen; A.applyHook(cl === 'full' ? 'full' : (+cl || 15)); }
       const loop = app.grid.setTrack(tr); app.panels.sync();
       $('#loopNote').textContent = `Previews loop the loudest 8 bars (${loop[0].toFixed(1)} s → ${loop[1].toFixed(1)} s), muted. Hover a card to hear it, click to open it.`;
@@ -92,7 +100,7 @@ async function boot() {
     };
     const t0 = performance.now();
     const full = await analyzeBuffer(buffer, meta, { onQuick: tr => setTrack(tr, true), onProgress: p => { $('#anaProg').style.width = (p * 100).toFixed(0) + '%'; } });
-    $('#anaProg').style.width = '100%'; setTrack(full, false);
+    if (id !== loadId) return; $('#anaProg').style.width = '100%'; setTrack(full, false);
     console.info('[u2c] analysis ' + ((performance.now() - t0) / 1000).toFixed(2) + ' s');
   }
   async function loadFile(file) {

@@ -1,4 +1,6 @@
-import { mk, hash, hex3, rgba, mix, rrect, txt, mono, tc2, fitFont, sparkle, hud, wavebars, memo, cached, FONT_SERIF } from '../util/draw.js';
+import { mk, hash, hex3, rgba, mix, rrect, txt, mono, tc2, sparkle, hud, memo, cached } from '../util/draw.js';
+import { logoImage, chainsBounds } from '../overlays/chains.js';
+import { lineText, lineFont, lineColor, fitLine } from '../overlays/text.js';
 // HANDSET: off-white newsprint collage. Dithered phone + cassette + CD + pager, photocopy grain; screen flickers on snares.
 function dither(drawFn, w, h, dot, ink, paper, seed) {
   const c = mk(w / dot, h / dot), g = c.getContext('2d'); g.scale(1 / dot, 1 / dot); drawFn(g);
@@ -27,45 +29,66 @@ function drawCD(g) { const gr = g.createRadialGradient(150, 150, 20, 150, 150, 1
 function drawPager(g) { g.fillStyle = G(.32); rrect(g, 0, 0, 220, 280, 28); g.fill(); g.fillStyle = G(.12); g.fillRect(24, 30, 172, 120); g.fillStyle = G(.9); g.fillRect(30, 36, 160, 108);
   g.fillStyle = G(.75); for (let j = 0; j < 3; j++) { g.beginPath(); g.arc(56 + j * 54, 200, 20, 0, 7); g.fill(); } g.fillStyle = G(.55); rrect(g, 40, 236, 140, 18, 9); g.fill();
   for (let j = 0; j < 90; j++) { g.fillStyle = G(hash(j, 15) * .3); g.fillRect(hash(j, 16) * 220, hash(j, 17) * 280, 3, 3); } }
-const sprites = p => memo('hs-sprites-' + p.id, () => ({ phone: dither(drawPhone, 400, 760, 3, p.ink, p.paper, 1), cas: dither(drawCassette, 360, 230, 3, p.ink, p.paper, 2), cd: dither(drawCD, 300, 300, 3, p.ink, p.paper, 3), pager: dither(drawPager, 220, 280, 3, p.ink, p.paper, 4) }));
+const sprites = (p, assets) => memo('hs-sprites-' + p.id, () => ({ phone: dither(drawPhone, 400, 760, 3, p.ink, p.paper, 1), cas: dither(drawCassette, 360, 230, 3, p.ink, p.paper, 2), cd: dither(drawCD, 300, 300, 3, p.ink, p.paper, 3), pager: dither(drawPager, 220, 280, 3, p.ink, p.paper, 4),
+  eleph: sticker(dither(g => { g.filter = 'grayscale(1) contrast(1.15) brightness(1.05)'; g.drawImage(assets.eleph, 20, 20, 420, 397); g.filter = 'none'; }, 460, 437, 3, p.ink, p.paper, 5), mix(p.paper, '#ffffff', .55), p.ink) }));
+// die-cut sticker: a light border around the silhouette + a hairline outline
+function sticker(src, border, ink) {
+  const w = src.width + 16, h = src.height + 16, c = mk(w, h), g = c.getContext('2d'), sil = mk(w, h), sg = sil.getContext('2d');
+  sg.drawImage(src, 8, 8); sg.globalCompositeOperation = 'source-in'; sg.fillStyle = border; sg.fillRect(0, 0, w, h);
+  for (let a = 0; a < 16; a++) g.drawImage(sil, Math.cos(a / 16 * 6.283) * 6, Math.sin(a / 16 * 6.283) * 6);
+  g.drawImage(src, 8, 8); void ink; return c;
+}
 export default {
-  id: 'handset', name: 'HANDSET', category: 'Print', pal: 'rust', surface: 'paper', chainStyle: 'solid', ownText: true, grainBoost: 1.3, glitchBoost: .7,
+  id: 'handset', name: 'HANDSET', category: 'Print', pal: 'rust', surface: 'paper', chainStyle: 'solid', grainBoost: 1.3, glitchBoost: .7,
+  owns: ['title', 'bpm', 'key', 'tag'], textPos: 'bottom',
   params: [{ id: 'bump', label: 'Kick bump', min: 0, max: 2, step: .05, def: 1 }],
-  defaults: a => a === '916' ? { chains: { x: .25, y: .5, s: .26 }, eleph: { x: .84, s: .3, len: .03 }, text: { tx: .15, ty: .65 } } : { chains: { x: .2, y: .72, s: .26 }, eleph: { x: .9, s: .42, len: .03 }, text: { tx: .05, ty: .83 } },
-  draw(ctx, fs, P, p) {
-    const { W, H, u, V } = P, T = P.text, bump = (P.params && P.params.bump != null ? P.params.bump : 1);
+  defaults: a => a === '916' ? { chains: { x: .6, y: .545, s: .64 }, eleph: { x: .66, y: 0, s: .3, len: .015 } } : { chains: { x: .66, y: .52, s: .78 }, eleph: { x: .55, y: 0, s: .38, len: .02 } },
+  draw(ctx, fs, P, p, assets) {
+    const { W, H, u, V } = P, bump = (P.params && P.params.bump != null ? P.params.bump : 1);
     ctx.fillStyle = p.paper; ctx.fillRect(0, 0, W, H);
     const v = ((Math.floor(fs.beat) % 3) + 3) % 3;
     ctx.drawImage(cached(`toner|${v}|${p.id}|${W}`, W / 3, H / 3, (g, w, h) => { for (let j = 0; j < 380; j++) { g.fillStyle = rgba(p.ink, .12 + hash(j, v * 3 + 1) * .5); const r = hash(j, v * 3 + 2) < .9 ? .6 + hash(j, v) * 1.4 : 2 + hash(j, v) * 4; g.beginPath(); g.arc(hash(j, v * 3 + 3) * w, hash(j, v * 3 + 4) * h, r, 0, 7); g.fill(); }
       g.strokeStyle = rgba(p.ink, .08); for (let j = 0; j < 6; j++) { g.beginPath(); const y = hash(j, v + 40) * h; g.moveTo(0, y); g.lineTo(w, y + (hash(j, v + 41) - .5) * 20); g.stroke(); } }), 0, 0, W, H);
-    const sp = sprites(p); ctx.imageSmoothingEnabled = false;
+    const sp = sprites(p, assets); ctx.imageSmoothingEnabled = false;
     const kb = i => fs.kick * (10 + 12 * hash(i, fs.kickIdx)) * u * bump;
     const obj = (img, cx, cy, sc, r, i) => { const rr = r + (hash(i, fs.kickIdx + 7) - .5) * .06 * fs.kick * bump; ctx.save(); ctx.translate(cx, cy - kb(i)); ctx.rotate(rr); ctx.scale(sc, sc); ctx.drawImage(img, -img.width * 1.5, -img.height * 1.5, img.width * 3, img.height * 3); ctx.restore(); };
-    const L = V ? { ph: [.5, .35, W * .38 / 400], cas: [.23, .2, W * .28 / 360, -.14], cd: [.8, .45, W * .24 / 300], pg: [.79, .19, W * .19 / 220, .1], ty: 1130 * u }
-                : { ph: [.5, .42, H * .62 / 760], cas: [.2, .3, W * .17 / 360, -.12], cd: [.8, .62, W * .14 / 300], pg: [.8, .26, W * .11 / 220, .1], ty: H * .875 };
+    const L = V ? { ph: [.4, .33, W * .37 / 400], cas: [.17, .16, W * .27 / 360, -.14], cd: [.83, .4, W * .23 / 300], pg: [.84, .2, W * .18 / 220, .1], el: [.2, .63, W * .3 / 460, -.12], ty: 1372 * u }
+                : { ph: [.33, .45, H * .64 / 760], cas: [.11, .24, W * .15 / 360, -.12], cd: [.91, .74, W * .13 / 300], pg: [.9, .22, W * .1 / 220, .1], el: [.12, .7, W * .16 / 460, -.1], ty: H * .9 };
     obj(sp.cas, L.cas[0] * W, L.cas[1] * H, L.cas[2], L.cas[3], 1);
-    ctx.save(); ctx.translate(L.cd[0] * W, L.cd[1] * H - fs.kick * 14 * u * bump); ctx.rotate(fs.beat * Math.PI / 8); ctx.scale(L.cd[2], L.cd[2]); ctx.drawImage(sp.cd, -150, -150, 300, 300); ctx.restore();
+    ctx.save(); ctx.translate(L.cd[0] * W, L.cd[1] * H - fs.kick * 14 * u * bump); ctx.rotate(fs.cyc(.15) * Math.PI * 2); ctx.scale(L.cd[2], L.cd[2]); ctx.drawImage(sp.cd, -150, -150, 300, 300); ctx.restore();
     obj(sp.pager, L.pg[0] * W, L.pg[1] * H, L.pg[2], L.pg[3], 3);
     ctx.save(); ctx.translate(L.pg[0] * W, L.pg[1] * H - kb(3)); ctx.rotate(L.pg[3]); ctx.scale(L.pg[2], L.pg[2]); ctx.translate(-110, -140);
     for (let j = 0; j < 8; j++) { const vv = fs.specAt(4 + j * 5); ctx.fillStyle = p.ink; for (let q = 0; q < Math.round(vv * 6); q++) ctx.fillRect(40 + j * 18, 128 - q * 14, 12, 10); } ctx.restore();
-    const pc = L.ph; ctx.save(); ctx.translate(pc[0] * W, pc[1] * H - fs.kick * 16 * u * bump); ctx.rotate((hash(0, fs.kickIdx) - .5) * .03 * fs.kick * bump); ctx.scale(pc[2], pc[2]);
+    // elephant sticker in the collage
+    obj(sp.eleph, L.el[0] * W, L.el[1] * H, L.el[2], L.el[3] + .04 * Math.sin(fs.cyc(.25) * Math.PI * 2), 5);
+    // phone
+    const pc = L.ph, pcy = pc[1] * H - fs.kick * 16 * u * bump, prot = (hash(0, fs.kickIdx) - .5) * .03 * fs.kick * bump;
+    ctx.save(); ctx.translate(pc[0] * W, pcy); ctx.rotate(prot); ctx.scale(pc[2], pc[2]);
     ctx.drawImage(sp.phone, -200, -380, 400, 760); ctx.translate(-200, -380); ctx.imageSmoothingEnabled = true;
     const inv = fs.snareAge < .07 && fs.snare > .3, lite = mix(p.paper, '#ffffff', .35), sb = inv ? p.ink : lite, sf = inv ? lite : p.ink;
     ctx.fillStyle = sb; ctx.fillRect(52, 120, 296, 236);
     if (!(fs.snareAge < .04 && fs.snare > .5)) {
-      txt(ctx, 'U2C ✦', 64, 146, mono(16, 700), sf); txt(ctx, tc2(fs.t - P.inT), 336, 146, mono(14, 500), sf, 'right');
-      wavebars(ctx, fs, 64, 160, 272, 80, fs.t - 3, fs.t + 3, 40, rgba(sf, .45), sf, fs.t, 'rms'); ctx.fillStyle = sf; ctx.fillRect(199, 158, 2, 84);
-      txt(ctx, Math.round(fs.bpm * 10) / 10 + ' BPM', 64, 296, mono(40, 700), sf); txt(ctx, (T.key || '').toUpperCase(), 336, 296, mono(18, 500), sf, 'right');
-      ctx.fillStyle = rgba(sf, .3); ctx.fillRect(64, 316, 272, 10); ctx.fillStyle = sf; ctx.fillRect(64, 316, 272 * Math.min(1, Math.max(0, (fs.t - P.inT) / Math.max(.1, P.outT - P.inT))), 10);
-      txt(ctx, 'BAR ' + (fs.bar + 1), 64, 346, mono(14), sf); txt(ctx, '▶ PLAY', 336, 346, mono(14), sf, 'right'); }
+      txt(ctx, 'U2C ✦', 64, 144, mono(16, 700), sf); txt(ctx, tc2(fs.lt), 336, 144, mono(14, 500), sf, 'right');
+      const lg = logoImage(assets, sf), lw = 196, lh = lw * lg.height / lg.width, k = 1 + .06 * fs.kick; ctx.drawImage(lg, 200 - lw * k / 2, 222 - lh * k / 2, lw * k, lh * k);
+      const bpm = lineText(P, 'bpm', fs), key = lineText(P, 'key', fs);
+      if (bpm) txt(ctx, bpm, 64, 322, lineFont(P, 'bpm', 26, 700), sf); if (key) txt(ctx, key, 336, 322, lineFont(P, 'key', 18), sf, 'right');
+      ctx.fillStyle = rgba(sf, .3); ctx.fillRect(64, 334, 272, 6); ctx.fillStyle = sf; ctx.fillRect(64, 334, 272 * fs.barP, 6);
+      txt(ctx, 'BAR ' + (fs.bar + 1), 64, 352, mono(12), sf); txt(ctx, '▶ PLAY', 336, 352, mono(12), sf, 'right'); }
     ctx.fillStyle = rgba(p.ink, .12); for (let y = 120; y < 356; y += 4) ctx.fillRect(52, y, 296, 1.5);
     ctx.restore(); ctx.imageSmoothingEnabled = true;
-    const tline = ((T.showTitle ? T.title : '') + '  ' + (T.handle || '')).trim();
-    const fsz = fitFont(ctx, tline, V ? (P.safe.hard.x1 - P.safe.hard.x0) : W * .7, 70 * u, FONT_SERIF, 'italic 400');
-    txt(ctx, tline, W / 2, L.ty, `italic 400 ${fsz}px ${FONT_SERIF}`, p.ink, 'center');
-    if (T.showBpm) txt(ctx, `${Math.round(fs.bpm * 10) / 10} bpm ${(T.key || '').toLowerCase()}`, W / 2, L.ty + 52 * u, `italic 400 ${42 * u}px ${FONT_SERIF}`, rgba(p.ink, .8), 'center');
-    if (T.showTag) txt(ctx, '— ' + T.tag + ' —', W / 2, V ? L.ty + 100 * u : H * .95, mono(18 * u), rgba(p.ink, .7), 'center');
-    sparkle(ctx, W * .88, V ? H * .6 : H * .88, 22 * u + 14 * u * fs.hat, p.ink); sparkle(ctx, W * .12, V ? H * .12 : H * .1, 14 * u, p.ink);
+    // lanyard: from the phone's strap tab to the big U2C chain charm
+    const c = Math.cos(prot), s = Math.sin(prot), sx = pc[0] * W + ((320 - 200) * c - (20 - 380) * s) * pc[2], sy = pcy + ((320 - 200) * s + (20 - 380) * c) * pc[2];
+    const cb = chainsBounds(P, assets), ex = cb.x + cb.w * .12, ey = cb.y + cb.h * .08, sag = 120 * u + 30 * u * fs.lowSlow;
+    ctx.strokeStyle = p.ink; ctx.lineCap = 'round'; ctx.lineWidth = 7 * u; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.bezierCurveTo(sx + 160 * u, sy - 60 * u, ex + 40 * u, ey - sag * 2, ex, ey); ctx.stroke();
+    ctx.strokeStyle = mix(p.paper, '#ffffff', .5); ctx.lineWidth = 2 * u; ctx.setLineDash([10 * u, 10 * u]); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = 'butt';
+    ctx.lineWidth = 6 * u; ctx.strokeStyle = p.ink; ctx.beginPath(); ctx.arc(ex, ey, 16 * u, 0, 7); ctx.stroke();
+    // printed text from the Text panel
+    const title = lineText(P, 'title', fs), tw = V ? (P.safe.relaxed.x1 - P.safe.relaxed.x0) : W * .7;
+    if (title) txt(ctx, title, W / 2, L.ty, fitLine(ctx, P, 'title', title, tw, 76 * u, 600), lineColor(P, 'title', p, true), 'center');
+    const bk = [lineText(P, 'bpm', fs), lineText(P, 'key', fs)].filter(Boolean).join(' · ');
+    if (bk) txt(ctx, bk, W / 2, L.ty + 52 * u, lineFont(P, 'bpm', 30 * u), lineColor(P, 'bpm', p, true), 'center');
+    const tag = lineText(P, 'tag', fs); if (tag) txt(ctx, '— ' + tag + ' —', W / 2, V ? L.ty + 98 * u : H * .965, lineFont(P, 'tag', 22 * u), lineColor(P, 'tag', p, true), 'center');
+    sparkle(ctx, W * .9, V ? H * .58 : H * .9, 22 * u + 14 * u * fs.hat, p.ink); sparkle(ctx, W * .08, V ? H * .09 : H * .08, 14 * u, p.ink);
     hud(ctx, 30 * u, 30 * u, W - 60 * u, H - 60 * u, 36 * u, rgba(p.ink, .5), 2 * u);
   },
 };

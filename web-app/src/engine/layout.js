@@ -20,11 +20,19 @@ export function makeParams(project, track) {
   const A = ASPECTS[project.aspect], W = A.W, H = A.H;
   return { W, H, u: Math.min(W, H) / 1080, V: H > W, aspect: project.aspect, safe: SAFE[project.aspect], text: project.text, inT: project.inT, outT: project.outT,
     anchorBeat: Math.round((project.inT - track.t0) / track.spb), cycleBeats: cycleBeats(project, track), chains: project.chains, eleph: project.eleph,
-    finish: project.finish, fx: project.fx, pal: project.pal, tpl: project.tpl };
+    finish: project.finish, fx: project.fx, pal: project.pal, tpl: project.tpl, loop: project.export && project.export.loopSafe === false ? null : { a: project.inT, b: project.outT } };
 }
-// Transition timeline position tt in [0,6]: [0,2.5) shatter, [2.5,4) fly-in landing on the downbeat, [4,6) impact, 6 = hold.
+/**
+ * Chain cycle position tt in [0,6]: [0,2.5) shatter, [2.5,4) fly-in landing on the phrase downbeat, [4,6) impact, 6 = hold.
+ * The shatter + fly-in is squeezed into the last S beats of the cycle (S = 2 for 2-bar cycles, 3 for 4-bar, 4 for longer),
+ * so the logo is fully assembled for >= 75 % of the clip and only breaks right before the phrase turns over.
+ */
 export function phrase(fs, P) {
-  const b = fs.beat - P.anchorBeat, C = P.cycleBeats, k = Math.floor(b / C), lb = b - k * C;
-  const tt = lb >= C - 4 ? lb - (C - 4) : lb < 2 ? lb + 4 : 6;
-  return { b, k, lb, C, tt, impactAge: tt >= 4 && tt < 6 ? (tt - 4) * fs.spb : 99, shatterQ: tt < 2.5 ? tt / 2.5 : 0, flyQ: tt >= 2.5 && tt < 4 ? (tt - 2.5) / 1.5 : 0 };
+  const b = fs.beat - P.anchorBeat, C = P.cycleBeats, k = Math.floor(b / C), lb = b - k * C, S = C >= 32 ? 4 : C >= 16 ? 3 : 2;
+  const tt = lb >= C - S ? (lb - (C - S)) * 4 / S : lb < 2 ? lb + 4 : 6;
+  return { b, k, lb, C, S, tt, impactAge: tt >= 4 && tt < 6 ? (tt - 4) * fs.spb : 99, shatterQ: tt < 2.5 ? tt / 2.5 : 0, flyQ: tt >= 2.5 && tt < 4 ? (tt - 2.5) / 1.5 : 0,
+    // 0..1 how much of the logo is readable (1 = assembled)
+    vis: tt >= 4 ? 1 : tt < 2.5 ? 1 - tt / 2.5 : (tt - 2.5) / 1.5 };
 }
+/** Whole-phrase clip (2/4/8/16/32 bars) nearest to `sec`, as a bar count. */
+export function phraseBars(track, sec) { const want = sec / track.barDur; let best = 2; for (const n of [2, 4, 8, 16, 32, 64]) if (n <= track.bars.length && Math.abs(Math.log(n / want)) < Math.abs(Math.log(best / want))) best = n; return Math.min(best, Math.max(1, track.bars.length)); }

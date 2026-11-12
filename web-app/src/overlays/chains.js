@@ -9,7 +9,8 @@ const easeElastic = (x, p = .4) => x <= 0 ? 0 : x >= 1 ? 1 : Math.pow(2, -10 * x
 function pieceSpec(L, i) {
   const P = L.pieces, N = P.length, pc = P[i], pcx = pc.x + pc.w / 2 - L.w / 2, pcy = pc.y + pc.h / 2 - L.h / 2, dl = Math.hypot(pcx, pcy) || 1;
   const h1 = hash(i, 11), h2 = hash(i, 12), h3 = hash(i, 13);
-  const st = h1 * .35, land = 2.75 + Math.round(i / (N - 1) * 5) / 4;
+  // fly-in starts after the shatter has finished (2.5): links launch in logo order, so the word assembles left to right
+  const st = h1 * .35, land = 3.25 + Math.round(i / (N - 1) * 6) / 8;
   return { st, land, start: land - .75, sx: pcx / dl * 1500 + (h2 - .5) * 900, up: -(250 + 320 * h3), r1: (h1 - .5) * 10, jx: (h2 - .5) * 300, drop: -2600 - h3 * 600, r0: (h1 - .5) * 1.6 };
 }
 function build(L) {
@@ -51,29 +52,48 @@ const neonAtlas = (A, col, glow) => cached('na|' + col + glow, A.edge.width, A.e
   g.drawImage(c, 0, 0); g.drawImage(c, 0, 0); });
 export function chainsScale(P, L) { return Math.min(P.W * .84 / L.w, P.H * .46 / L.h) * P.chains.s; }
 export function chainsBounds(P, assets) { const L = assets.links, sc = chainsScale(P, L); return { x: P.chains.x * P.W - L.w * sc / 2, y: P.chains.y * P.H - L.h * sc / 2, w: L.w * sc, h: L.h * sc }; }
+/** Seek the chain timeline for this frame. Returns the logo transform and each link's pose in canvas pixels. */
+export function chainPose(fs, P, assets, place) {
+  const L = assets.links, N = L.pieces.length; if (!built) built = build(L);
+  const pl = place || { x: P.chains.x * P.W, y: P.chains.y * P.H, sc: chainsScale(P, L) }, ph = phrase(fs, P), I = fs.I, hold = ph.tt >= 4 ? 1 : 0;
+  if (built.tl) built.tl.time(ph.tt, true);
+  const pieces = [];
+  for (let i = 0; i < N; i++) { const pc = L.pieces[i], o = built.tl ? built.objs[i] : analytic(L, i, ph.tt, built.objs[i]), h2 = hash(i, 12), h3 = hash(i, 13);
+    const lx = pc.x + pc.w / 2 - L.w / 2 + o.x, ly = pc.y + pc.h / 2 - L.h / 2 + o.y - hold * fs.kick * 10 * h3;
+    pieces.push({ i, pc, lx, ly, x: pl.x + lx * pl.sc, y: pl.y + ly * pl.sc, a: o.a, s: o.s * (1 + hold * .045 * fs.kick),
+      r: o.r + hold * ((h2 - .5) * 2 * .085 * fs.kick * I + Math.sin(fs.beat * Math.PI + i) * .012), hx: pl.x + (pc.x + pc.w / 2 - L.w / 2) * pl.sc, hy: pl.y + (pc.y + pc.h / 2 - L.h / 2) * pl.sc }); }
+  return { ph, place: pl, pieces, impact: ph.impactAge < .25 ? 1 - ph.impactAge / .25 : 0 };
+}
+/** Atlas images for a style: 'neon' (outline + glow) or 'solid'; colours from the palette unless given. */
+export function chainImages(assets, pal, style, surfacePaper, col) {
+  const neon = style === 'neon';
+  const img = neon ? (surfacePaper ? neonAtlas(assets, col || pal.ink, pal.pacc) : neonAtlas(assets, col || pal.hi, pal.main)) : solidAtlas(assets, col || (surfacePaper ? pal.ink : pal.chain));
+  const flash = neon ? neonAtlas(assets, pal.light || surfacePaper ? pal.ink : '#ffffff', pal.main) : flatAtlas(assets, surfacePaper ? pal.pacc : pal.hi);
+  return { img, flash, pad: neon ? 16 : 0 };
+}
+/** The assembled logo as one cached image (for static prints: phone screen, app icon, stickers). */
+export function logoImage(assets, col, style = 'solid') {
+  const L = assets.links;
+  return cached('logo|' + col + style, L.w + 40, L.h + 40, (g) => { const A = style === 'neon' ? neonAtlas(assets, col, col) : flatAtlas(assets, col), pad = style === 'neon' ? 16 : 0;
+    for (const pc of L.pieces) g.drawImage(A, pc.ax - pad, pc.ay - pad, pc.w + 2 * pad, pc.h + 2 * pad, 20 + pc.x - pad, 20 + pc.y - pad, pc.w + 2 * pad, pc.h + 2 * pad); });
+}
+/** Draw the animated logo from a pose. */
+export function drawChains(ctx, pose, imgs, alpha = 1) {
+  const { img, flash, pad } = imgs, sc = pose.place.sc;
+  for (const q of pose.pieces) { if (q.a <= .01) continue; const pc = q.pc;
+    ctx.save(); ctx.globalAlpha = q.a * alpha; ctx.translate(q.x, q.y); ctx.scale(sc, sc); ctx.rotate(q.r); ctx.scale(q.s, q.s);
+    const sx = pc.ax - pad, sy = pc.ay - pad, sw = pc.w + 2 * pad, sh = pc.h + 2 * pad;
+    ctx.drawImage(img, sx, sy, sw, sh, -pc.w / 2 - pad, -pc.h / 2 - pad, sw, sh);
+    ctx.restore(); }
+  const fl = pose.flash || 0; if (fl > .05) for (const q of pose.pieces) { if (q.a <= .01) continue; const pc = q.pc;
+    ctx.save(); ctx.globalAlpha = q.a * alpha * fl * .8; ctx.translate(q.x, q.y); ctx.scale(sc, sc); ctx.rotate(q.r); ctx.scale(q.s, q.s);
+    ctx.drawImage(flash, pc.ax - pad, pc.ay - pad, pc.w + 2 * pad, pc.h + 2 * pad, -pc.w / 2 - pad, -pc.h / 2 - pad, pc.w + 2 * pad, pc.h + 2 * pad); ctx.restore(); }
+}
 export const chains = {
   id: 'chains', name: 'U2C chains',
   draw(ctx, fs, P, pal, assets, tpl) {
-    const L = assets.links, N = L.pieces.length; if (!built) built = build(L);
-    const surf = tpl.surface === 'paper', neon = tpl.chainStyle === 'neon';
-    const img = neon ? (surf ? neonAtlas(assets, pal.ink, pal.pacc) : neonAtlas(assets, pal.hi, pal.main)) : solidAtlas(assets, surf ? pal.ink : pal.chain);
-    const flash = neon ? neonAtlas(assets, '#ffffff', pal.main) : flatAtlas(assets, surf ? pal.pacc : pal.hi);
-    const pad = neon ? 16 : 0, sc = chainsScale(P, L), ph = phrase(fs, P), I = fs.I;
-    if (built.tl) built.tl.time(ph.tt, true);
-    const impact = ph.impactAge < .25 ? 1 - ph.impactAge / .25 : 0;
-    ctx.save(); ctx.translate(P.chains.x * P.W, P.chains.y * P.H); ctx.scale(sc, sc);
-    for (let i = 0; i < N; i++) {
-      const pc = L.pieces[i], o = built.tl ? built.objs[i] : analytic(L, i, ph.tt, built.objs[i]); if (o.a <= .01) continue;
-      const h1 = hash(i, 11), h2 = hash(i, 12), h3 = hash(i, 13);
-      const hold = ph.tt >= 4 ? 1 : 0;
-      const rot = o.r + hold * ((h2 - .5) * 2 * .085 * fs.kick * I + Math.sin(fs.beat * Math.PI + i) * .012);
-      const oy = o.y - hold * fs.kick * 10 * h3, s = o.s * (1 + hold * .045 * fs.kick);
-      ctx.save(); ctx.globalAlpha = o.a; ctx.translate(pc.x + pc.w / 2 - L.w / 2 + o.x, pc.y + pc.h / 2 - L.h / 2 + oy); ctx.rotate(rot); ctx.scale(s, s);
-      const sx = pc.ax - pad, sy = pc.ay - pad, sw = pc.w + 2 * pad, sh = pc.h + 2 * pad;
-      ctx.drawImage(img, sx, sy, sw, sh, -pc.w / 2 - pad, -pc.h / 2 - pad, sw, sh);
-      const fl = Math.max(hold * fs.snare, impact); if (fl > .05) { ctx.globalAlpha = o.a * fl * .8; ctx.drawImage(flash, sx, sy, sw, sh, -pc.w / 2 - pad, -pc.h / 2 - pad, sw, sh); }
-      ctx.restore(); void h1;
-    }
-    ctx.restore();
+    const pose = chainPose(fs, P, assets), hold = pose.ph.tt >= 4 ? 1 : 0;
+    pose.flash = Math.max(hold * fs.snare, pose.impact);
+    drawChains(ctx, pose, chainImages(assets, pal, tpl.chainStyle, tpl.surface === 'paper'));
   },
 };

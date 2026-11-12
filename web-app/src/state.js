@@ -1,31 +1,51 @@
 // Tiny store: one serialisable `project` (autosaved), a remembered producer `profile`, and a non-serialised `session`
 // (track, audio buffer, libs). This is the only shared mutable state in the app.
-const PROJECT_KEY = 'u2c.project.v1', PROFILE_KEY = 'u2c.profile.v1';
+const PROJECT_KEY = 'u2c.project.v2', PROFILE_KEY = 'u2c.profile.v2', OLD_PROFILE_KEY = 'u2c.profile.v1';
+const line = (on, text, o = {}) => ({ on, text, font: 'mono', size: 1, pos: 'auto', x: .5, y: .5, case: 'upper', color: 'main', ...o });
+export const LINE_IDS = ['title', 'bpm', 'key', 'tag', 'handle', 'cta', 'c1', 'c2', 'c3'];
+export const LINE_LABELS = { title: 'Title', bpm: 'BPM', key: 'Key', tag: 'Producer tag', handle: '@handle', cta: 'Price / CTA', c1: 'Custom 1', c2: 'Custom 2', c3: 'Custom 3' };
 export const DEFAULT_PROJECT = {
   tpl: 'lab', pal: 'charcoal', aspect: '916',
-  chains: { on: true, x: .5, y: .5, s: .5, cycle: 'auto' },
-  eleph: { on: true, x: .5, s: .5, len: 0 },
-  finish: { grain: .45, intensity: 1, zoom: true },
+  custom: { bg: '#161616', main: '#c8c8c8', accent: '#f2c14e' },
+  chains: { on: true, x: .5, y: .5, s: .8, cycle: 'auto' },
+  eleph: { on: true, x: .5, y: 0, s: .6, len: 0 },
+  finish: { grain: .4, intensity: 1, zoom: true },
   params: {},
-  fx: { on: true, crt: .45, rgb: .45, glitch: .5, bloom: .5, shock: .7, shatter: .6 },
-  text: { title: 'Night Shift', key: 'F# min', tag: 'prod. U2C', handle: '@uche2crazy', showTitle: true, showBpm: true, showTag: true, showHandle: false,
-    preset: 'auto', artistA: 'Travis Scott', artistB: 'Future', price: '$29', link: 'link in bio', tx: .15, ty: .62 },
-  inT: 0, outT: 15, loop: true, clipLen: 15,
-  export: { fps: 30, mbps: 11, loudness: -14, loopSafe: true, voiceTag: false, voiceEvery: 25, batch: ['lab', 'handset', 'exe'], batchLens: [15] },
+  // amount = master FX intensity; glitch has its own amount + trigger
+  fx: { on: true, amount: .35, crt: .5, rgb: .6, glitch: .3, glitchOn: 'kicks', bloom: .6, shock: .6, shatter: .6 },
+  text: {
+    lines: {
+      title: line(true, 'Night Shift', { font: 'sans', size: 1.2 }),
+      bpm: line(true, '{bpm} BPM'), key: line(true, 'F# min'), tag: line(true, 'prod. U2C', { font: 'serif', case: 'as', color: 'hi' }),
+      handle: line(false, '@uche2crazy', { case: 'as' }), cta: line(false, 'Lease $29 — link in bio', { color: 'accent' }),
+      c1: line(false, '[FREE] Travis Scott x Future type beat'), c2: line(false, ''), c3: line(false, ''),
+    },
+    artistA: 'Travis Scott', artistB: 'Future', price: '$29', link: 'link in bio',
+  },
+  inT: 0, outT: 13.7, loop: true, clipLen: 15,
+  export: { fps: 30, mbps: 11, loudness: -14, loopSafe: true, draft: false, voiceTag: false, voiceEvery: 25, batch: ['lab', 'handset', 'exe'], batchLens: [15] },
 };
 const clone = o => JSON.parse(JSON.stringify(o));
 function deepMerge(a, b) { for (const k in b) { const v = b[k]; if (v && typeof v === 'object' && !Array.isArray(v) && a[k] && typeof a[k] === 'object' && !Array.isArray(a[k])) deepMerge(a[k], v); else a[k] = v; } return a; }
 function read(key) { try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : null; } catch (_) { return null; } }
 function write(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (_) {} }
+/** v1 profile ({tag, handle, artistA, ...}) → v2 shape. */
+function migrateProfile(p) {
+  if (!p || p.text) return p; const t = {};
+  for (const k of ['artistA', 'artistB', 'price', 'link', 'titleFormat']) if (p[k] != null) t[k] = p[k];
+  t.lines = {}; if (p.tag) t.lines.tag = { text: p.tag }; if (p.handle) t.lines.handle = { text: p.handle };
+  return { text: t };
+}
 export function createStore() {
   const project = deepMerge(clone(DEFAULT_PROJECT), read(PROJECT_KEY) || {});
-  const profile = read(PROFILE_KEY);
-  if (profile) deepMerge(project.text, profile);
+  const profile = migrateProfile(read(PROFILE_KEY) || read(OLD_PROFILE_KEY));
+  if (profile) { if (profile.text) deepMerge(project.text, profile.text); if (profile.custom) deepMerge(project.custom, profile.custom); }
   const state = { project, session: { track: null, buffer: null, libs: {}, assets: null, playing: false, time: 0, exporting: false, voiceTag: null } };
   const subs = new Set(); let saveT = 0;
   const save = () => { clearTimeout(saveT); saveT = setTimeout(() => {
     write(PROJECT_KEY, state.project);
-    const t = state.project.text; write(PROFILE_KEY, { tag: t.tag, handle: t.handle, artistA: t.artistA, artistB: t.artistB, price: t.price, link: t.link, preset: t.preset });
+    // the producer profile: every text line (style + wording), caption fields and the custom colours
+    const t = clone(state.project.text); write(PROFILE_KEY, { text: t, custom: state.project.custom });
   }, 300); };
   return {
     get: () => state,

@@ -16,16 +16,21 @@ export function analyzeBuffer(buffer, meta, { onQuick, onProgress } = {}) {
   const w = getWorker();
   if (!w) return new Promise(res => setTimeout(() => { const a = analyzeMono(mono, sr, duration, {}); res(makeTrack(a, meta, meta.bpm)); }, 0));
   const id = ++jobId;
-  return new Promise((res, rej) => {
+  return new Promise((resolve, reject) => {
+    let res = resolve, rej = reject;
     const on = e => { const d = e.data; if (d.id !== id) return;
       if (d.stage === 'progress') onProgress && onProgress(d.p);
       else if (d.stage === 'quick') onQuick && onQuick(makeTrack(d.a, { ...meta, quick: true }, meta.bpm));
       else if (d.stage === 'full') { w.removeEventListener('message', on); res(makeTrack(d.a, meta, meta.bpm)); }
       else if (d.stage === 'error') { w.removeEventListener('message', on); rej(new Error(d.message)); } };
     w.addEventListener('message', on);
-    w.onerror = err => { console.warn('[u2c] worker error, falling back', err); w.removeEventListener('message', on); worker = false;
+    // a worker-level error fails this job once: drop the worker for later jobs and analyse on the main thread
+    const onErr = err => { console.warn('[u2c] worker error, falling back', err && err.message); w.removeEventListener('message', on); w.removeEventListener('error', onErr); if (worker === w) { try { w.terminate(); } catch (_) {} worker = false; }
       res(makeTrack(analyzeMono(mono, sr, duration, {}), meta, meta.bpm)); };
-    w.postMessage({ mono, sr, duration, id }, [mono.buffer]);
+    const done = () => { w.removeEventListener('error', onErr); };
+    w.addEventListener('error', onErr);
+    const res0 = res; res = v => { done(); res0(v); }; const rej0 = rej; rej = e => { done(); rej0(e); };
+    w.postMessage({ mono, sr, duration, id }); // copied, not transferred: kept for the main-thread fallback
   });
 }
 export async function decodeFile(file, ac) { const ab = await file.arrayBuffer(); return await ac.decodeAudioData(ab); }

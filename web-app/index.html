@@ -59,7 +59,7 @@ body{background:var(--bg);color:var(--fg)}
    <div class="drop" id="drop">
      <div>
        <h1>Your beat, <em>in chains.</em></h1>
-       <p>Drop a beat and U2C Studio renders it into twelve branded, beat‑reactive looks for Reels, TikTok and Shorts (9:16) or YouTube (16:9). Everything runs in this tab.</p>
+       <p>Drop a beat and U2C Studio renders it into nine branded, beat‑reactive looks for Reels, TikTok and Shorts (9:16) or YouTube (16:9). Everything runs in this tab.</p>
      </div>
      <div class="row">
        <label class="btn primary" for="file">Choose audio</label>
@@ -97,12 +97,19 @@ body{background:var(--bg);color:var(--fg)}
     <div class="ctrls">
       <div class="seg" id="aspectSeg"><button data-a="916" aria-pressed="true">9:16</button><button data-a="169" aria-pressed="false">16:9</button></div>
       <div class="seg" id="zoomSeg"><button data-z="fit" aria-pressed="true">Fit</button><button data-z="100" aria-pressed="false">100%</button></div>
+      <button class="btn small" id="seamBtn" aria-pressed="false" title="Play the last 2 s into the first 2 s on repeat">Seam check</button>
       <button class="btn small" id="safeBtn" aria-pressed="false">Safe area</button>
       <button class="btn small" id="fsBtn">Fullscreen</button>
     </div>
   </div>
-  <div class="stage" id="stage"><div class="cwrap" id="cwrap"><canvas id="view" width="540" height="960" aria-label="Video preview. Drag the chains, elephant or text to move them."></canvas><div class="safe" id="safe" hidden></div></div></div>
-  <div class="variant"><span class="lbl">Variant</span><div class="inrow" id="palChips"></div></div>
+  <div class="stage" id="stage"><div class="cwrap" id="cwrap"><canvas id="view" width="540" height="960" aria-label="Video preview. Drag the chains, elephant or text to move them."></canvas><div class="safe" id="safe" hidden></div></div>
+    <div class="seambox" id="seamBox" hidden>
+      <div class="group-h"><span class="lbl">Seam check · last frame → first frame</span><button class="btn small" id="seamClose">Close</button></div>
+      <div class="seampair"><figure><canvas id="seamLast" width="270" height="480"></canvas><figcaption>last frame</figcaption></figure><span class="arrow">→</span><figure><canvas id="seamFirst" width="270" height="480"></canvas><figcaption>frame 0</figcaption></figure></div>
+      <p class="hint" id="seamInfo"></p>
+    </div></div>
+  <div class="variant"><span class="lbl">Palette</span><div class="inrow" id="palChips"></div></div>
+  <div class="variant"><span class="lbl">Variant</span><div class="inrow" id="varChips"></div></div>
   <div class="transport">
     <button class="play" id="playBtn" aria-label="Play"><svg id="playIco" width="16" height="16" viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z" fill="currentColor"/></svg></button>
     <button class="ib" id="restartBtn" aria-label="Back to in point"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 2v10M12 2L5 7l7 5z" stroke="currentColor" fill="currentColor" stroke-width="1.5"/></svg></button>
@@ -173,28 +180,29 @@ body{background:var(--bg);color:var(--fg)}
     <h3>Post FX</h3>
     <div class="group">
       <div class="group-h"><label class="tog"><input type="checkbox" id="fxOn" checked> Audio-driven FX</label><span class="hint" id="fxStatus"></span></div>
+      <div class="ctl"><label class="lbl" for="fxAmt">FX amount</label><input type="range" id="fxAmt" min="0" max="1" step="0.01"><output for="fxAmt"></output></div>
       <div class="ctl"><label class="lbl" for="fxCrt">CRT · scan</label><input type="range" id="fxCrt" min="0" max="1" step="0.01"><output for="fxCrt"></output></div>
       <div class="ctl"><label class="lbl" for="fxRgb">RGB split</label><input type="range" id="fxRgb" min="0" max="1" step="0.01"><output for="fxRgb"></output></div>
-      <div class="ctl"><label class="lbl" for="fxGlitch">Glitch</label><input type="range" id="fxGlitch" min="0" max="1" step="0.01"><output for="fxGlitch"></output></div>
+
       <div class="ctl"><label class="lbl" for="fxBloom">Bloom</label><input type="range" id="fxBloom" min="0" max="1.5" step="0.01"><output for="fxBloom"></output></div>
       <div class="ctl"><label class="lbl" for="fxShock">Shockwave</label><input type="range" id="fxShock" min="0" max="1.5" step="0.01"><output for="fxShock"></output></div>
       <div class="ctl"><label class="lbl" for="fxShatter">Twist · zoom</label><input type="range" id="fxShatter" min="0" max="1.5" step="0.01"><output for="fxShatter"></output></div>
     </div>
-    <dl class="kv"><dt>RGB split</dt><dd>snares</dd><dt>Glitch slices</dt><dd>kicks</dd><dt>Bloom</dt><dd>low band</dd><dt>Shockwave</dt><dd>phrase downbeat + drops</dd><dt>Twist · zoom blur</dt><dd>chain shatter</dd><dt>CRT</dt><dd>always</dd></dl>
+    <div class="group">
+      <div class="group-h"><span class="lbl">Glitch</span><span class="hint">thin slices · ≤ 80 ms · ease-out</span></div>
+      <div class="ctl"><label class="lbl" for="fxGlitch">Glitch amount</label><input type="range" id="fxGlitch" min="0" max="100" step="1"><output for="fxGlitch"></output></div>
+      <div class="ctl"><label class="lbl" for="fxGlitchOn">Glitch on</label><select class="inp mono" id="fxGlitchOn"><option value="kicks">strong kicks + phrase bar 1</option><option value="bars">every bar</option><option value="phrases">phrases only</option></select><span></span></div>
+    </div>
+    <dl class="kv"><dt>RGB split</dt><dd>strong kicks · snares (≤ 3.5 px)</dd><dt>Glitch slices</dt><dd>per “Glitch on”</dd><dt>Bloom</dt><dd>low band</dd><dt>Shockwave</dt><dd>phrase downbeat + drops</dd><dt>Twist · zoom blur</dt><dd>chain shatter</dd><dt>CRT</dt><dd>always, subtle</dd></dl>
   </div>
   <div class="pane" data-pane="text" hidden>
-    <h3>Text</h3>
+    <h3>Printed text</h3>
+    <p class="hint">Every line a look prints. "auto" lets the look place it inside its design; top / centre / bottom stack it in the safe area; drag a line on the preview to place it freely. Remembered in your producer profile.</p>
+    <div class="group" id="textLines"></div>
     <div class="group">
-      <div class="field"><div class="group-h"><label class="lbl" for="wTitle">Beat name</label><label class="tog"><input type="checkbox" id="wTitleOn" checked> show</label></div><input class="inp" id="wTitle"></div>
-      <div class="group-h"><span class="lbl">BPM + key</span><label class="tog"><input type="checkbox" id="wBpmOn" checked> show</label></div>
-      <div class="field"><div class="group-h"><label class="lbl" for="wTag">Producer tag</label><label class="tog"><input type="checkbox" id="wTagOn" checked> show</label></div><input class="inp" id="wTag"></div>
-      <div class="field"><div class="group-h"><label class="lbl" for="wHandle">Handle</label><label class="tog"><input type="checkbox" id="wHandleOn"> show</label></div><input class="inp mono" id="wHandle"></div>
-    </div>
-    <div class="group">
-      <div class="field"><label class="lbl" for="wPreset">Overlay preset</label><select class="inp mono" id="wPreset"></select></div>
+      <div class="lbl">Caption fields</div>
       <div class="inrow"><div class="field" style="flex:1"><label class="lbl" for="wA">Artist A</label><input class="inp" id="wA"></div><div class="field" style="flex:1"><label class="lbl" for="wB">Artist B</label><input class="inp" id="wB"></div></div>
       <div class="inrow"><div class="field" style="flex:1"><label class="lbl" for="wPrice">Lease price</label><input class="inp mono" id="wPrice"></div><div class="field" style="flex:2"><label class="lbl" for="wLink">Store link / CTA</label><input class="inp mono" id="wLink"></div></div>
-      <p class="hint">Preset text sits inside the safe box (x162–918, y288–1248 on 9:16). Drag it on the preview to move it.</p>
     </div>
     <div class="group">
       <div class="group-h"><span class="lbl">Caption builder</span><button class="btn small" id="capCopy">Copy all</button></div>
@@ -210,9 +218,11 @@ body{background:var(--bg);color:var(--fg)}
       <div class="inrow"><span class="lbl" style="width:70px">Frame rate</span><div class="seg" id="exFps"><button data-v="30" aria-pressed="true">30</button><button data-v="60" aria-pressed="false">60</button></div></div>
       <div class="inrow"><span class="lbl" style="width:70px">Bitrate</span><div class="seg" id="exMbps"><button data-v="10">10</button><button data-v="11">11</button><button data-v="12">12 Mbps</button></div></div>
       <div class="inrow"><span class="lbl" style="width:70px">Loudness</span><div class="seg" id="exLufs"><button data-v="-14">−14 LUFS</button><button data-v="-12">−12</button><button data-v="off">off</button></div></div>
-      <label class="tog"><input type="checkbox" id="exLoop" checked> Loop-safe (bar-aligned end, 20 ms audio crossfade)</label>
+      <label class="tog"><input type="checkbox" id="exLoop" checked> Seamless loop (phrase-length clip, 1-beat equal-power crossfade, loop-phase visuals)</label>
+      <label class="tog"><input type="checkbox" id="exDraft"> Draft (720p, fast)</label>
       <div class="exfoot inrow"><button class="btn primary" id="exBtn">Export MP4</button><button class="btn" id="exCancel" hidden>Cancel</button><button class="btn small" id="ytBtn">YouTube full-length</button></div>
       <div class="prog"><i id="exProg"></i></div>
+      <div class="hint mono" id="exRate" aria-live="polite"></div>
       <div class="status" id="exStatus">Frame-exact offline render (WebCodecs). Falls back to real-time recording if the browser cannot encode.</div>
       <dl class="kv" id="loudKv"></dl>
     </div>

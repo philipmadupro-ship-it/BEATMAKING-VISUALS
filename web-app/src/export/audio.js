@@ -16,12 +16,32 @@ export function measure(buf) {
   const rel = lk(g1.reduce((a, b) => a + b, 0) / g1.length) - 10, g2 = g1.filter(z => lk(z) > rel);
   return { lufs: lk(g2.reduce((a, b) => a + b, 0) / Math.max(1, g2.length)), peakDb: 20 * Math.log10(peak || 1e-9) };
 }
-export async function prepareAudio(buffer, project, opts = {}) {
-  const sr = buffer.sampleRate, nc = Math.min(2, buffer.numberOfChannels), a = Math.round(project.inT * sr), b = Math.round(project.outT * sr), n = Math.max(1, b - a);
-  const out = new AudioBuffer({ length: n, numberOfChannels: 2, sampleRate: sr });
+/**
+ * The clip [inT, outT) as a loop: the last ~beat is equal-power cross-faded with the audio just BEFORE the in point,
+ * so when the clip repeats, the tail already sounds like the lead-in to bar 1 and the seam is inaudible.
+ * Preview playback, the Seam check and the export all use this same buffer.
+ */
+const loopCache = new WeakMap();
+export function loopBuffer(buffer, inT, outT, xfSec, loopSafe = true) {
+  const key = [inT, outT, xfSec, loopSafe].join('|'); let m = loopCache.get(buffer); if (!m) { m = new Map(); loopCache.set(buffer, m); } if (m.has(key)) return m.get(key);
+  const sr = buffer.sampleRate, nc = Math.min(2, buffer.numberOfChannels), a = Math.round(inT * sr), b = Math.min(buffer.length, Math.round(outT * sr)), n = Math.max(1, b - a);
+  const out = new AudioBuffer({ length: n, numberOfChannels: 2, sampleRate: sr }), xf = Math.min(Math.round(xfSec * sr), a, Math.floor(n / 4));
   for (let c = 0; c < 2; c++) { const src = buffer.getChannelData(Math.min(c, nc - 1)), dst = out.getChannelData(c); dst.set(src.subarray(a, b));
-    if (opts.loopSafe) { const xf = Math.round(.02 * sr); if (a >= xf && n > 2 * xf) for (let i = 0; i < xf; i++) { const k = i / xf; dst[n - xf + i] = dst[n - xf + i] * (1 - k) + src[a - xf + i] * k; } } }
-  if (opts.voiceTag) { const vt = opts.voiceTag, every = Math.max(5, opts.voiceEvery || 25); for (let t0 = 1.5; t0 < n / sr; t0 += every) { const o = Math.round(t0 * sr);
+    if (loopSafe && xf > 16) for (let i = 0; i < xf; i++) { const k = (i + .5) / xf * Math.PI / 2; dst[n - xf + i] = dst[n - xf + i] * Math.cos(k) + src[a - xf + i] * Math.sin(k); } }
+  if (m.size > 8) m.clear(); m.set(key, out); return out;
+}
+const prepCache = new WeakMap();
+/** Export audio (loop buffer → voice tag → 48 kHz → loudness). Cached per source buffer + options, so batch jobs reuse it. */
+export async function prepareAudio(buffer, project, opts = {}) {
+  const key = [project.inT, project.outT, opts.xf, !!opts.loopSafe, opts.loudness, opts.voiceTag ? opts.voiceEvery : 'clean'].join('|');
+  let m = prepCache.get(buffer); if (!m) { m = new Map(); prepCache.set(buffer, m); }
+  if (m.has(key)) return m.get(key);
+  const res = await prepareAudioUncached(buffer, project, opts); if (m.size > 6) m.clear(); m.set(key, res); return res;
+}
+async function prepareAudioUncached(buffer, project, opts) {
+  const sr = buffer.sampleRate, lb = loopBuffer(buffer, project.inT, project.outT, opts.xf || .02, !!opts.loopSafe), n = lb.length;
+  let out = lb;
+  if (opts.voiceTag) { out = new AudioBuffer({ length: n, numberOfChannels: 2, sampleRate: sr }); for (let c = 0; c < 2; c++) out.getChannelData(c).set(lb.getChannelData(c)); const vt = opts.voiceTag, every = Math.max(5, opts.voiceEvery || 25); for (let t0 = 1.5; t0 < n / sr; t0 += every) { const o = Math.round(t0 * sr);
     for (let c = 0; c < 2; c++) { const s = vt.getChannelData(Math.min(c, vt.numberOfChannels - 1)), d = out.getChannelData(c), ratio = vt.sampleRate / sr; for (let i = 0; o + i < n; i++) { const j = Math.floor(i * ratio); if (j >= s.length) break; d[o + i] += s[j] * .8; } } } }
   // resample to 48 kHz
   const oc = new OfflineAudioContext(2, Math.max(1, Math.round(n / sr * 48000)), 48000), node = oc.createBufferSource(); node.buffer = out; node.connect(oc.destination); node.start();
