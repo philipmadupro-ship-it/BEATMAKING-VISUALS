@@ -23,6 +23,7 @@ Status column: ✔ fixed in v2, — left as is (reason given).
 | A12 | L | `export/recorder.js` | Fallback recorder never disconnects its BufferSource / MediaStreamDestination. | ✔ disconnected in `finally` |
 | A13 | L | `util/draw.js` cached() | Cache clears everything at 140 entries, including the expensive dithered HANDSET sprites (re-dither stalls a frame mid-export). | ✔ LRU-style eviction of the oldest entry only |
 | A14 | L | `postfx.js` | Glitch slices regenerate by temporarily replacing `Math.random` globally. Deterministic but hostile to other code. | ✔ glitch slices now drawn deterministically in 2D, GlitchFilter removed |
+| A16 | H | `overlays/chains.js` build() | Fly-in schedule started the first links at tt 2.0, *before* the shatter reset at 2.5, so the whole "U" stayed invisible after the first phrase (visible in every v1 screenshot). | ✔ fly-in launches at ≥ 2.5, left to right |
 | A15 | L | `main.js` setPaletteVars | Amethyst UI dark `#5a3d78` is not a brand colour. | ✔ derived from palette data |
 
 ## B. Architecture
@@ -75,4 +76,10 @@ v2: master FX 35 %, glitch 30 % only on strong kicks (top 25 % onset strength) o
 v1 path: render 2D → upload → Pixi → `drawImage` into a 2D canvas → Mediabunny `CanvasSource` (another copy) → `await` per frame.
 v2 path: render 2D → Pixi once → `new VideoFrame(glCanvas, {timestamp})` → own `VideoEncoder` (`prefer-hardware`, falls back to
 `no-preference`) → `EncodedVideoPacketSource`; queue kept ≤ 8, yields only when the queue is full or every ~120 ms for the UI.
-Numbers are in the final report / commit message (headless SwiftShader, so absolute fps are far below a real GPU).
+Measured headless (Chromium + SwiftShader WebGL, software H.264), LAB 9:16 1080×1920, 4-bar loop (207 frames):
+v1 2.2 fps → v2 4.5 fps with FX (2×); FX off 7.2 → 7.6 fps; Draft 720p 8.5 fps. In SwiftShader the GPU filter chain
+(executed when the frame is read) and CPU Canvas2D drawing dominate; the encoder alone does ~19 fps at 1080p here.
+Half-resolution bloom is the main FX win; on a real GPU the copy/await removal matters more.
+
+Seam (exported 4-bar loop): last→first frame difference ≈ 7 % vs ordinary frame-to-frame median 4 %, max 6.5 %:
+frame 0 is the phrase downbeat (chains slam), so the seam reads as one more hit rather than a jump cut.

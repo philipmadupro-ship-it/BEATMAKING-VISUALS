@@ -7,7 +7,7 @@ export default {
   id: 'bloom', name: 'Pendant Bloom', category: 'Bloom', pal: 'amethyst', surface: 'dark', chainStyle: 'solid',
   owns: ['bpm'], textPos: 'top',
   params: [{ id: 'spokes', label: 'Spokes', min: 32, max: 160, step: 8, def: 96 }],
-  defaults: a => a === '916' ? { chains: { x: .5, y: .79, s: .66 }, eleph: { x: .5, y: 0, s: .9, len: .26 } } : { chains: { x: .83, y: .7, s: .62 }, eleph: { x: .5, y: 0, s: 1, len: .3 } },
+  defaults: a => a === '916' ? { chains: { x: .5, y: .79, s: .66 }, eleph: { x: .5, y: 0, s: .8, len: .375 } } : { chains: { x: .83, y: .7, s: .62 }, eleph: { x: .5, y: 0, s: .85, len: .48 } },
   draw(ctx, fs, P, p) {
     const { W, H, u, V } = P, cx = W / 2, cy = V ? H * .42 : H * .56, n = (P.params && P.params.spokes) || 96, a2 = accentOn(p), TAU = Math.PI * 2;
     const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * .7); gr.addColorStop(0, p.bg2); gr.addColorStop(1, p.bg); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
