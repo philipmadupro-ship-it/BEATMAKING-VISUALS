@@ -50,15 +50,17 @@
     const push = (bar, len, kind, cut = true) => shots.push({ bar, len, kind, cut });
     push(0, 1, 'boot');
     let i = 1; const end = NB - (NB >= 16 ? 2 : 1);
-    const dropPool = ['wide', 'spec', 'elephant', 'meters', 'logo', 'detail', 'clock', 'elephant', 'all', 'meters', 'spec'];
+    // drop: a new framing every bar (no repeat within 8 bars); the full desktop only as punctuation
+    const dropPool = ['spec', 'elephant', 'lufs', 'logo', 'detail', 'gonioC', 'clock', 'meters', 'bal', 'spec', 'body', 'lufs', 'logo', 'detail', 'gonioC', 'elephant', 'clock', 'meters', 'bal', 'body'];
     const calmPool = ['elephant', 'logo', 'detail', 'notes'];
     let dp = 0, cp = 0;
+    const lastDropBar = (() => { let lb = -1; for (let q = 1; q < end; q++) if (isDrop(q)) lb = q; return lb; })();
     while (i < end) {
       const drop = isDrop(i);
-      let kind = drop ? dropPool[dp++ % dropPool.length] : calmPool[cp++ % calmPool.length];
-      if (S.embodied && (kind === 'clock' || kind === 'all') && i > 2) kind = 'elephant';      // RUBEDO: proximity, the body
+      let kind = i === 1 ? 'wide' : i === lastDropBar && drop ? 'all' : drop ? dropPool[dp++ % dropPool.length] : calmPool[cp++ % calmPool.length];
+      if (S.embodied && (kind === 'clock' || kind === 'bal') && i > 2) kind = 'body';      // RUBEDO: proximity, the body
       if (S.exposed && kind === 'detail') kind = 'all';                                       // ALBEDO: show the construction
-      let len = kind === 'logo' || kind === 'wide' ? 1 : 2;
+      let len = kind === 'logo' || kind === 'wide' || kind === 'all' ? 1 : 2;
       if (S.obstruct) len = Math.min(len, 1) || 1;                                           // NIGREDO: compressed, one bar per shot
       if (i + len > end) len = end - i;
       push(i, len, kind, drop || i === 1); i += len;
@@ -73,11 +75,15 @@
   function frame(ids, pad = 24, z = 1, dx = 0, dy = 0) { const [x, y, w, h] = ids === 'all' ? [0, 0, W, H] : rectOf(ids); return { x: x + w / 2 + dx, y: y + h / 2 + dy, z: Math.min(W / (w + 2 * pad), H / (h + 2 * pad)) * z }; }
   const port = ASPECT === '916';
   const TARGET = {
-    boot: () => frame(['chains'], 0, port ? 1.18 : 0.95, 0, port ? 70 : 40),
+    boot: () => (port ? frame(['chains'], 6, 1.0 / S.zoom, 0, 40) : frame(['chains', 'clock', 'balance'], 16, 1.0 / S.zoom)),
     wide: () => (port ? frame('all', 0, 1) : frame(['session', 'chains'], 20, 1)),
     spec: () => frame(['spectrum', 'spectro'], 22, 1),
     elephant: () => frame(['elephant'], port ? 20 : 30, 1, 0, 20),
-    meters: () => frame(['levels', 'gonio', 'bands'], 20, 1),
+    meters: () => (port ? frame(['levels', 'gonio'], 14, 1) : frame(['levels', 'gonio', 'bands'], 20, 1)),
+    lufs: () => frame(['levels'], 10, 1),
+    gonioC: () => frame(['gonio'], 10, 1),
+    bal: () => (port ? frame(['balance'], 14, 1) : frame(['balance', 'bands'], 14, 1)),
+    body: () => frame(['elephant'], 0, 1.35, 30, 90),
     logo: () => frame(['chains'], 0, port ? 1.12 : 1, 0, 0),
     detail: () => frame(['session'], 0, port ? 1.55 : 1.25, port ? -150 : -200, 40),
     clock: () => frame(['clock', 'balance'], 18, 1),
@@ -194,7 +200,7 @@
   BOOT.forEach((l, i) => { if (i) ev(bootAt(i), `boot line ${i + 1}`); });
   function boot(t) {
     if (t >= BAR) return;       // hard cut at bar 2
-    const bw = port ? 760 : 700, bh = BOOT.length * (port ? 40 : 34) + 50, x = (W - bw) / 2, y = port ? H * 0.64 : H * 0.62;
+    const bw = port ? 760 : 700, bh = BOOT.length * (port ? 40 : 34) + 50, x = port ? (W - bw) / 2 : W * 0.6, y = port ? H * 0.56 : H * 0.3;
     c.fillStyle = rgba(S.bg, 0.94); c.fillRect(x, y, bw, bh); c.strokeStyle = rgba(S.ink, 0.6); c.strokeRect(x + 0.5, y + 0.5, bw - 1, bh - 1);
     lab.stencil(c, 'TERMINAL · EXP-03', x + 14, y + 18, 13, S.ink);
     BOOT.forEach((line, i) => {

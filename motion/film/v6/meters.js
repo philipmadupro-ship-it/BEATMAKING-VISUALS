@@ -157,9 +157,11 @@
     });
     const rx = gx + 2 * bw + 18;
     const rows = [['M', F.M[f], 'LUFS'], ['S', F.S[f], 'LUFS'], ['LRA', F.LRA[f], 'LU'], ['TP', F.TP[f], 'dBTP']];
-    rows.forEach(([nm, v, u], i) => { const yy = my + 10 + i * 24; lbl(ctx, S, nm, rx, yy, { size: 10, w: 700, a: 0.65 }); text(ctx, nm === 'LRA' ? v.toFixed(1) : fmt(v), x + w - 30, yy + 1, { size: 15, w: 500, col: S.ink, align: 'right' }); lbl(ctx, S, u, x + w - 2, yy + 1, { size: 8, align: 'right', a: 0.45 }); });
-    lbl(ctx, S, 'INTEGRATED', rx, my + mh - 40, { size: 9, w: 700, a: 0.65 });
-    text(ctx, fmt(F.I[f]), rx - 2, my + mh - 8, { size: Math.min(40, (x + w - rx) * 0.3), w: 500, col: S.ink, base: 'alphabetic' });
+    const rs = Math.min(24, (mh - 56) / 4);
+    rows.forEach(([nm, v, u], i) => { const yy = my + 10 + i * rs; lbl(ctx, S, nm, rx, yy, { size: 10, w: 700, a: 0.65 }); text(ctx, nm === 'LRA' ? v.toFixed(1) : fmt(v), x + w - 30, yy + 1, { size: 15, w: 500, col: S.ink, align: 'right' }); lbl(ctx, S, u, x + w - 2, yy + 1, { size: 8, align: 'right', a: 0.45 }); });
+    const isz = Math.min(40, (x + w - rx) * 0.3, mh - 4 * rs - 30);
+    lbl(ctx, S, 'INTEGRATED', rx, my + mh - isz - 6, { size: 9, w: 700, a: 0.65 });
+    text(ctx, fmt(F.I[f]), rx - 2, my + mh - 2, { size: isz, w: 500, col: S.ink, base: 'alphabetic' });
     lbl(ctx, S, 'LUFS', x + w - 2, my + mh - 14, { size: 9, align: 'right', a: 0.5 });
     lbl(ctx, S, `TARGET −14.0 · ffmpeg I ${fmt(D.summary.ffmpeg.I)} · LRA ${D.summary.ffmpeg.LRA.toFixed(1)}`, x, y + h - 4, { size: 8, a: 0.5 });
     ctx.restore();
