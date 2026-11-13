@@ -4,7 +4,7 @@ import { phrase } from '../engine/layout.js';
 import { chainPose } from '../overlays/chains.js';
 import { lineText, lineFont, lineColor, fitLine } from '../overlays/text.js';
 import { win, openAmount, pulse, cablePath, drawCable, cableDots, timecode, ease, eqView, specAnalyzer, proMeter, goniometer, wavePro, tempoPro, lanesView, hitLog } from './kit.js';
-import { ropeNodes } from '../overlays/elephant.js';
+import { ropeNodes, linkCount } from '../overlays/elephant.js';
 import { snareBorder, kickCable } from '../engine/react.js';
 // U2C.EXE (hero): a cyberpunk desktop of floating hairline .exe windows wired together. chains.dll is the centrepiece
 // (the U2C logo dissolves/rebuilds letter by letter inside it), elephant.sys holds the swinging rope pendant, and the
@@ -88,7 +88,7 @@ export default {
         const ten = Math.hypot(ax, ay - 13) / 13, ry = I.y + I.h - 4 * u;
         ctx.fillStyle = rgba(bg, .85); ctx.fillRect(I.x - 2 * u, ry - 30 * u, I.w + 4 * u, 34 * u); ctx.fillStyle = rgba(fg, .25); ctx.fillRect(I.x, ry - 30 * u, I.w, 1 * u);
         const cell = (k, v, x) => { txt(ctx, k, x, ry - 16 * u, mono(9 * u, 500), rgba(fg, .55)); txt(ctx, v, x, ry, mono(13 * u, 700), hi); };
-        cell('ANGLE', (ang >= 0 ? '+' : '') + ang.toFixed(1) + '°', I.x); cell('TENSION', ten.toFixed(2) + ' g', I.x + I.w * .34); cell('LINKS', '9 SEG', I.x + I.w * .7);
+        cell('ANGLE', (ang >= 0 ? '+' : '') + ang.toFixed(1) + '°', I.x); cell('TENSION', ten.toFixed(2) + ' g', I.x + I.w * .34); cell('LINKS', linkCount(P, assets) + ' PCS', I.x + I.w * .7);
         // angle gauge arc at the pivot
         const gx = I.x + I.w / 2, gy = I.y + 4 * u; ctx.strokeStyle = rgba(fg, .3); ctx.lineWidth = 1 * u; ctx.beginPath(); ctx.arc(gx, gy, 46 * u, Math.PI / 2 - .35, Math.PI / 2 + .35); ctx.stroke();
         for (let d = -15; d <= 15; d += 5) { const a = Math.PI / 2 + d * Math.PI / 180; ctx.beginPath(); ctx.moveTo(gx + Math.cos(a) * 42 * u, gy + Math.sin(a) * 42 * u); ctx.lineTo(gx + Math.cos(a) * 50 * u, gy + Math.sin(a) * 50 * u); ctx.stroke(); }

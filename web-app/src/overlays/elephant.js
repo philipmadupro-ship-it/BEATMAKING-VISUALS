@@ -5,7 +5,7 @@
 // Deterministic for export: the rope is simulated at a fixed 120 Hz step over the loop, starting from loop phase 0
 // with two warm-up loops (same audio), and the last beat of the loop is blended into the state one loop earlier,
 // so the last frame flows into frame 0. One simulation per (track, loop, phrase grid), memoised.
-import { cached, clamp, hex3, rrect } from '../util/draw.js';
+import { cached, clamp, hex3, mix } from '../util/draw.js';
 export function elephFor(assets, pal, surface) {
   const img = assets.eleph;
   return cached('el|' + pal.id + surface, img.width, img.height, (g, w, h) => { g.drawImage(img, 0, 0);
@@ -57,18 +57,79 @@ export function elephantBounds(P, assets) { const img = assets.eleph, { sc, len,
 /** Area the pendant can sweep (for text layout): anchor ± swing, down to the elephant's feet. */
 export function elephantSweep(P, assets) { const img = assets.eleph, { sc, len, px, py } = geo(P, img), rl = Math.max(len, 90 * sc), w = img.width * sc, reach = rl * .34 + w * .5;
   return { x: px - reach, y: py + rl - img.height * sc * .35, w: reach * 2, h: img.height * sc * 1.1 }; } // the body's zone (the rope itself is a hairline)
+// Where the elephant art's own chain meets its head: the bail knot on top of the head (image pixels, found on the
+// 2x zoom of assets/elephant.png). The rope's last joint lands exactly here, so the pendant hangs from its own bail.
+export const BAIL = Object.freeze({ x: 343, y: 197 });
+/** Chain metal colours for a palette: body, highlight and the ink outline (the elephant art's chain has dark ink edges). */
+export function chainColours(pal, tpl) {
+  const light = pal.light, body = light ? mix(pal.main, pal.dark, .25) : mix(pal.dark, pal.main, .68);
+  return { body, hi: light ? pal.main : pal.hi, ink: light ? pal.main : mix(pal.dark, '#000000', .35), shade: light ? mix(pal.main, pal.dark, .55) : mix(pal.dark, pal.main, .38) };
+}
+/** Smooth path through the rope nodes (centripetal-ish Catmull-Rom, 8 samples per segment) with cumulative arc length. */
+function ropePath(n, X, Y) {
+  const P = [], S = [0], K = 8;
+  for (let i = 0; i < N; i++) { const i0 = Math.max(0, i - 1), i3 = Math.min(N, i + 2);
+    for (let j = 0; j < K; j++) { const t = j / K, t2 = t * t, t3 = t2 * t, c = (a, b, c2, d) => .5 * (2 * b + (-a + c2) * t + (2 * a - 5 * b + 4 * c2 - d) * t2 + (-a + 3 * b - 3 * c2 + d) * t3);
+      P.push([c(X(i0), X(i), X(i + 1), X(i3)), c(Y(i0), Y(i), Y(i + 1), Y(i3))]); } }
+  P.push([X(N), Y(N)]);
+  for (let i = 1; i < P.length; i++) S.push(S[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
+  const at = d => { d = clamp(d, 0, S[S.length - 1]); let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m] <= d) lo = m; else hi = m; }
+    const u = (d - S[lo]) / ((S[hi] - S[lo]) || 1); return [P[lo][0] + (P[hi][0] - P[lo][0]) * u, P[lo][1] + (P[hi][1] - P[lo][1]) * u]; };
+  return { at, len: S[S.length - 1] };
+}
+/**
+ * Real chain: a fixed number of rigid links of constant pitch laid along the rope (joint i at arc length i·pitch from
+ * the anchor; the last joint is the elephant's bail). Links alternate face-on (a ring: you see the aperture) and edge-on
+ * (a bar: the same link turned 90° about the rope axis), each rotated to its own joint-to-joint direction, so the chain
+ * bends link by link as the verlet rope swings. Edge-on links are drawn first; face-on rings overlap their ends, and
+ * the top end of every bar is redrawn over the rail of the ring above it, so each pair reads as interlocked.
+ */
+const rr = (ctx, x, y, w, h, r) => { r = Math.min(r, w / 2, h / 2); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); };
+export function drawChainLinks(ctx, J, Lk, col) {
+  const n = J.length - 1, t = Lk * .19, w = Lk * .58, r = Lk * .24;
+  const ring = (i, pass) => { const [x0, y0] = J[i], [x1, y1] = J[i + 1], cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, a = Math.atan2(y1 - y0, x1 - x0), L = Math.hypot(x1 - x0, y1 - y0) + 2 * t;
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(a);
+    if (i % 2 === 0) { // face-on: rounded ring (aperture left open, so the bars show through it), ink edge, metal body, lit upper rail
+      const iw = L - 2 * t, ih = w - 2 * t, ir = Math.max(1, r - t), e = .7;
+      ctx.beginPath(); rr(ctx, -L / 2 - e, -w / 2 - e, L + 2 * e, w + 2 * e, r + e); rr(ctx, -iw / 2 + e, -ih / 2 + e, iw - 2 * e, ih - 2 * e, ir); ctx.fillStyle = col.ink; ctx.fill('evenodd');
+      ctx.beginPath(); rr(ctx, -L / 2, -w / 2, L, w, r); rr(ctx, -iw / 2, -ih / 2, iw, ih, ir); ctx.fillStyle = col.body; ctx.fill('evenodd');
+      ctx.lineWidth = Math.max(1, t * .28); ctx.strokeStyle = col.hi; ctx.globalAlpha *= .85; ctx.beginPath(); ctx.moveTo(-L / 2 + r, -w / 2 + t * .4); ctx.lineTo(L / 2 - r, -w / 2 + t * .4); ctx.stroke();
+      ctx.strokeStyle = col.shade; ctx.beginPath(); ctx.moveTo(-L / 2 + r, w / 2 - t * .4); ctx.lineTo(L / 2 - r, w / 2 - t * .4); ctx.stroke();
+    } else if (pass === 0 || pass === 2) { // edge-on: a bar, ink edge, centre highlight
+      if (pass === 2) { ctx.beginPath(); ctx.rect(-L / 2 - t, -w, t * 2.2, 2 * w); ctx.clip(); } // only its top end, over the ring above
+      const h = t * 1.15; ctx.beginPath(); rr(ctx, -L / 2 - .6, -h / 2 - .6, L + 1.2, h + 1.2, h / 2 + .6); ctx.fillStyle = col.ink; ctx.fill();
+      ctx.beginPath(); rr(ctx, -L / 2, -h / 2, L, h, h / 2); ctx.fillStyle = col.body; ctx.fill();
+      ctx.strokeStyle = col.hi; ctx.lineWidth = Math.max(1, h * .22); ctx.beginPath(); ctx.moveTo(-L / 2 + h * .6, -h * .12); ctx.lineTo(L / 2 - h * .6, -h * .12); ctx.stroke();
+    }
+    ctx.restore(); };
+  for (let i = 1; i < n; i += 2) ring(i, 0);
+  for (let i = 0; i < n; i += 2) ring(i, 1);
+  for (let i = 1; i < n; i += 2) ring(i, 2);
+}
+const linkSize = sc => Math.max(12, 58 * sc);
+/** Number of links in the pendant chain (fixed by the rope's rest length; shown in U2C.EXE's readout). */
+export function linkCount(P, assets) { const { sc, len } = geo(P, assets.eleph), rl = Math.max(len, 90 * sc); return Math.max(2, Math.round(rl / (linkSize(sc) * .74))); }
+/** Joints of a chain with constant pitch along the rope path (count fixed by the rest length, never pops). */
+export function chainJoints(n, X, Y, rl, Lk) {
+  const path = ropePath(n, X, Y), pitch0 = Lk * .74, cnt = Math.max(2, Math.round(rl / pitch0)), pitch = path.len / cnt, J = [];
+  for (let i = 0; i <= cnt; i++) J.push(path.at(i * pitch));
+  return J;
+}
 /** Draw the pendant hanging from (px, py) with rope length len px and elephant scale sc. Returns the elephant centre. */
 export function drawPendant(ctx, fs, P, pal, assets, tpl, px, py, len, sc, opt = {}) {
   const img = opt.img || elephFor(assets, pal, tpl.surface), n = ropeNodes(fs, P), rl = Math.max(len, 90 * sc);
-  const col = opt.chainCol || (tpl.surface === 'paper' ? pal.ink : (tpl.chainStyle === 'neon' ? pal.main : (pal.id === 'rust' ? pal.dark : pal.main)));
-  const X = i => px + n[2 * i] * rl, Y = i => py + n[2 * i + 1] * rl;
-  // links along each rope segment, alternating flat / edge-on, each rotated to its segment
-  const Lk = Math.max(12, 44 * sc); ctx.strokeStyle = col; ctx.fillStyle = col;
-  for (let i = 0; i < N; i++) { const x0 = X(i), y0 = Y(i), x1 = X(i + 1), y1 = Y(i + 1), ang = Math.atan2(y1 - y0, x1 - x0), d = Math.hypot(x1 - x0, y1 - y0), cnt = Math.max(1, Math.round(d / (Lk * .9)));
-    for (let j = 0; j < cnt; j++) { const q = (j + .5) / cnt, cx = x0 + (x1 - x0) * q, cy = y0 + (y1 - y0) * q, flat = (i * 7 + j) % 2 === 0;
-      ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang); if (flat) { ctx.lineWidth = Lk * .16; rrect(ctx, -Lk * .55, -Lk * .26, Lk * 1.1, Lk * .52, Lk * .2); ctx.stroke(); } else ctx.fillRect(-Lk * .6, -Lk * .07, Lk * 1.2, Lk * .14); ctx.restore(); } }
-  const ex = X(N), ey = Y(N), a2 = Math.atan2(X(N) - X(N - 2), Y(N) - Y(N - 2)), k = 1; // no kick scale: the elephant reacts to bass through the rope only
-  ctx.save(); ctx.translate(ex, ey); ctx.rotate(-a2); ctx.scale(sc * k, sc * k); ctx.drawImage(img, -img.width * .5, -img.height * .30); ctx.restore();
+  const X = i => px + n[2 * i] * rl, Y = i => py + n[2 * i + 1] * rl, Lk = linkSize(sc), col = chainColours(pal, tpl);
+  const J = chainJoints(n, X, Y, rl, Lk), m = ctx.getTransform(), dev = Math.hypot(m.a, m.b);
+  // chain on its own layer (the rings' apertures are punched out), at device resolution
+  const x0 = Math.min(...J.map(j => j[0])) - Lk, y0 = Math.min(...J.map(j => j[1])) - Lk, x1 = Math.max(...J.map(j => j[0])) + Lk, y1 = Math.max(...J.map(j => j[1])) + Lk;
+  const lw = Math.ceil((x1 - x0) * dev), lh = Math.ceil((y1 - y0) * dev), layer = cached('chainlayer|' + lw + 'x' + lh, lw, lh, () => {}), g = layer.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, lw, lh); g.globalAlpha = 1; g.setTransform(dev, 0, 0, dev, -x0 * dev, -y0 * dev);
+  // eyelet at the anchor
+  g.strokeStyle = col.body; g.lineWidth = Lk * .14; g.beginPath(); g.arc(px, py - Lk * .1, Lk * .26, 0, Math.PI * 2); g.stroke();
+  drawChainLinks(g, J, Lk, col);
+  ctx.drawImage(layer, x0, y0, lw / dev, lh / dev);
+  const [ex, ey] = J[J.length - 1], [qx, qy] = J[J.length - 2], a2 = Math.atan2(ex - qx, ey - qy); // the bail follows the last link
+  ctx.save(); ctx.translate(ex, ey); ctx.rotate(-a2); ctx.scale(sc, sc); ctx.drawImage(img, -BAIL.x, -BAIL.y); ctx.restore();
   return { x: ex, y: ey + img.height * sc * .2, th: a2 };
 }
 export const elephant = {
