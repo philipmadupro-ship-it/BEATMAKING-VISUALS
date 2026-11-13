@@ -8,3 +8,6 @@ film/.hyperframes/
 __pycache__/
 tools/whisper-test/err.txt
 .cache/
+audio/stems/
+audio/*-premaster.wav
+audio/clip-15s-raw.wav
