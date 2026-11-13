@@ -95,7 +95,7 @@
   // representative still per storyboard scene (scene list mirrors STORYBOARDS.md)
   const SCENES = {
     A: [['Boot · ghost logo', 0.9], ['Drop · U-2-C rebuild', DROP + 0.9], ['Push in on the elephant', B(5) + 0.6], ['Break · letters dissolve', BREAK + 1.2], ['Re-drop · full desktop', REDROP + 0.9], ['End card', 14.3]],
-    B: [['Source · playhead macro', 1.0], ['Signal → EQ', DROP + 1.2], ['Analyse · spectrum', B(3) + 0.9], ['Measure · meter row', B(4) + 1.6], ['Pendant push-in', BREAK + 1.2], ['Pull back · graph', REDROP + 2.4], ['End card', 14.3]],
+    B: [['Source · playhead macro', 1.0], ['Signal to EQ', DROP + 1.2], ['Analyse · spectrum', B(3) + 0.9], ['Measure · meter row', B(4) + 1.6], ['Pendant push-in', BREAK + 1.2], ['Pull back · graph', REDROP + 2.4], ['End card', 14.3]],
     C: [['Surface macro', 1.0], ['Drop · surface erupts', DROP + 1.3], ['Spectrum + spectrogram', B(4) + 1.2], ['Scope · meters · EQ', B(5) + 1.3], ['Break · pendant', BREAK + 1.1], ['Full deck', REDROP + 1.2], ['End card', 14.3]],
   };
 

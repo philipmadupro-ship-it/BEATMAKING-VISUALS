@@ -20,7 +20,7 @@
     rust: { bg: HEX.ink, panel: HEX.rust, line: HEX.tan, accent: HEX.tan, hot: HEX.chain, peak: HEX.chain,
       over: HEX.ruby, warm: HEX.rust, cool: HEX.tan, logoTint: HEX.tan, surf: [HEX.ink, HEX.rust, HEX.tan] },
     amethyst: { bg: HEX.ame, panel: HEX.ame, line: HEX.lilac, accent: HEX.magenta, hot: HEX.gold, peak: HEX.gold,
-      over: HEX.ruby, warm: HEX.magenta, cool: HEX.lilac, logoTint: HEX.lilac, surf: [HEX.ame, HEX.lilac, HEX.magenta, HEX.gold] },
+      over: HEX.ruby, warm: HEX.magenta, cool: HEX.lilac, logoTint: HEX.lilac, surf: [HEX.ame, HEX.lilac, HEX.magenta, HEX.chain] },
   };
 
   // ------------------------------------------------------------------ math utils
@@ -408,12 +408,12 @@
     const f = fidx(t), ROWS = opt.rows || 34, STRIDE = 2, COLS = 64, bins = D.spectrum.bins;
     const yaw = (opt.yaw != null ? opt.yaw : -0.5 + 0.18 * Math.sin(t * 0.35)), pitch = opt.pitch != null ? opt.pitch : 0.62;
     const cy_ = Math.cos(yaw), sy_ = Math.sin(yaw), cp = Math.cos(pitch), spn = Math.sin(pitch);
-    const sc = Math.min(w, h * 1.6) * (opt.scale || 0.62), ox = x + w / 2, oy = y + h * (opt.oy || 0.6);
+    const sc = Math.min(w * 0.62, h * 0.95) * (opt.scale || 0.62), ox = x + w / 2, oy = y + h * (opt.oy || 0.66);
     const proj = (u, v, hgt) => {  // u: -1..1 freq, v: 0 (now, front) .. 1 (past, back), hgt 0..1
       const X = u * 1.25, Z = (v - 0.5) * 1.6, Y = hgt * 0.9;
       const xr = X * cy_ - Z * sy_, zr = X * sy_ + Z * cy_;
       const yr = Y * cp - zr * spn, zz = Y * spn + zr * cp;
-      const p = 3.2 / (3.2 + zz);
+      const p = 4 / (4 + zz);
       return [ox + xr * sc * p, oy - yr * sc * p, zz];
     };
     const H = [];
@@ -435,15 +435,14 @@
         const lit = clamp(0.5 + 0.5 * (nx * L[0] + ny * L[1] + nz * L[2]) / nl);
         const hv = (h00 + h10) / 2, k = clamp(hv * 0.85 + lit * 0.45 - 0.1);
         const xk = k * (stops.length - 1), i0 = Math.min(stops.length - 2, Math.floor(xk));
-        ctx.fillStyle = mixA(stops[i0], stops[i0 + 1], xk - i0, (0.25 + 0.75 * fade) * a * (0.35 + 0.65 * clamp(hv * 3)));
+        // folded light: the fill stays translucent (pearl), brightness comes from the slope facing the light
+        ctx.fillStyle = mixA(stops[i0], stops[i0 + 1], xk - i0, (0.10 + 0.55 * lit * lit) * fade * a * clamp(0.25 + hv * 2.2));
         const p1 = P[rI][c], p2 = P[rI][c + 1], p3 = P[rI + 1][c + 1], p4 = P[rI + 1][c];
         ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.lineTo(p3[0], p3[1]); ctx.lineTo(p4[0], p4[1]); ctx.closePath(); ctx.fill();
       }
-      // ridge hairline on every 3rd row (the folded edge catching light)
-      if (rI % 3 === 0) {
-        ctx.beginPath(); P[rI].forEach((p, c) => (c ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
-        ctx.strokeStyle = rgba(T.line, (rI === 0 ? 0.9 : 0.22) * fade * a); ctx.lineWidth = rI === 0 ? 1.4 : 1; ctx.stroke(); ctx.lineWidth = 1;
-      }
+      // every row is a hairline ridge; the front row is the live spectrum, brightest
+      ctx.beginPath(); P[rI].forEach((p, c) => (c ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+      ctx.strokeStyle = rgba(rI === 0 ? T.line : T.cool, (rI === 0 ? 0.95 : 0.10 + 0.25 * fade) * a); ctx.lineWidth = rI === 0 ? 1.5 : 0.8; ctx.stroke(); ctx.lineWidth = 1;
     }
     if (!opt.bare) label(ctx, T, `WATERFALL · ${ROWS * STRIDE / FPS * 1000 | 0} ms · 64 BANDS`, x + w, y + 4, 0.45 * a, 10, 'right');
   };

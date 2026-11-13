@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" data-aspect="169" data-resolution="landscape"
+  data-composition-variables='[{"id":"variant","type":"enum","label":"Storyboard variant","default":"A","options":[{"value":"A","label":"A BOOT.SEQ"},{"value":"B","label":"B SIGNAL.PATH"},{"value":"C","label":"C AURORA.DECK"}]}]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>U2C.EXE beat preview</title>
+    <style>
+      @font-face { font-family: "Instrument Sans"; font-weight: 500; src: url("assets/fonts/instrument-sans-latin-500-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Instrument Sans"; font-weight: 600; src: url("assets/fonts/instrument-sans-latin-600-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Instrument Sans"; font-weight: 700; src: url("assets/fonts/instrument-sans-latin-700-normal.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url("assets/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 500; src: url("assets/fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 700; src: url("assets/fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Instrument Serif"; font-style: italic; font-weight: 400; src: url("assets/fonts/instrument-serif-latin-400-italic.woff2") format("woff2"); }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: #161616; }
+      #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+      /* warm the font cache so canvas text uses the brand faces */
+      .fontwarm { position: absolute; left: -9999px; font-family: "Instrument Sans","JetBrains Mono"; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="15" data-width="1920" data-height="1080" data-fps="30">
+      <canvas id="stage" class="clip" data-start="0" data-duration="15" data-track-index="0" width="1920" height="1080"></canvas>
+      <audio id="music" class="clip" src="assets/clip.wav" data-start="0" data-duration="15" data-track-index="1"></audio>
+    </div>
+    <span class="fontwarm">U2C <i style="font-family:'Instrument Serif'">Pendant</i></span>
+    <script src="lib/gsap.min.js"></script>
+    <script src="assets/analysis.js"></script>
+    <script src="assets/brand/links.js"></script>
+    <script src="assets/elephant-loop.js"></script>
+    <script src="src/engine.js"></script>
+    <script src="src/variants.js"></script>
+    <script src="src/main.js"></script>
+  </body>
+</html>
