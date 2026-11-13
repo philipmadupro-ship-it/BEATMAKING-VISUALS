@@ -90,11 +90,11 @@
     const ph = port ? H * (k === 'loud' || k === 'stereo' ? 0.5 : 0.42) : H * 0.62, py = port ? H * 0.47 - ph / 2 + 60 : H * 0.3;
     const r = [SX0, py, SW, ph];
     // hero word above the panel (55-70 % of the width)
-    const wordY = port ? py - 40 * ui : H * 0.22, wsize = port ? 170 : 150;
-    const ww = K.word(c, S, METER_WORD[k], port ? W / 2 : SX0, wordY, wsize, t, b0, { width: 0.82, surgery: true, hollow: k === 'spectro', align: port ? 'center' : 'left', rate: 0.5 });
+    const wordY = port ? py - 40 * ui : H * 0.22, wsize = port ? 235 : 190;
+    const ww = K.word(c, S, METER_WORD[k], port ? W / 2 : SX0, wordY, wsize * (METER_WORD[k].length <= 3 ? 1.25 : 1), t, b0, { width: METER_WORD[k].length <= 3 ? 1.1 : 0.9, surgery: true, hollow: k === 'spectro', align: port ? 'center' : 'left', rate: 0.5 });
     if (steps(t, b0, 2, U.t32) >= 2) {
       c.save(); c.beginPath(); c.rect(r[0] - 4, r[1] - 4, r[2] + 8, r[3] + 8); c.clip();
-      if (LOOK === 'lab') { c.fillStyle = S.card; c.fillRect(r[0] - 10, r[1] - 10, r[2] + 20, r[3] + 20); }
+      if (LOOK === 'lab') specimenCard(r, k);
       fn(c, S, r, t, { ui: ui * 0.92 });
       c.restore();
       c.strokeStyle = rgba(S.ink, 0.28); c.strokeRect(Math.round(r[0] - 10) + 0.5, Math.round(r[1] - 12) + 0.5, Math.round(r[2] + 20), Math.round(r[3] + 22));
@@ -104,6 +104,37 @@
     const by = r[1] + r[3] + 34 * ui;
     micro(t, b0, [[`> ${(notes[k] || '').toLowerCase()}`, SX0, by], [`${tag('experiment').toLowerCase()} // ${S.name.toLowerCase()}`, SX1, by, 'right']]);
     if (LOOK === 'lab' && k === 'loud') { lab.crossed(c, tag('notes.loud_old'), SX0, by + 40 * ui, S, 14 * ui); }
+  }
+  // LAB: specimen card behind a meter (stencil title, code, tape at two corners)
+  function specimenCard(r, k) {
+    const [x, y, w, h] = [r[0] - 18, r[1] - 52 * ui, r[2] + 36, r[3] + 70 * ui], seed = k.length * 13.1;
+    c.fillStyle = S.card; c.fillRect(x, y, w, h); c.strokeStyle = rgba(S.ink, 0.5); c.strokeRect(Math.round(x) + 0.5, Math.round(y) + 0.5, Math.round(w), Math.round(h));
+    lab.stencil(c, (tag('windows.' + k) || k).toUpperCase(), x + 12 * ui, y + 18 * ui, Math.round(13 * ui), S.ink);
+    text(c, `${tag('codes.prefix')}-${String(3 + METERS.indexOf(k)).padStart(2, '0')} · ${tag('codes.trial')}`, x + w - 12 * ui, y + 18 * ui, { size: 10 * ui, col: rgba(S.ink, 0.6), align: 'right', ls: 1 });
+    lab.tape(c, x + 30, y, 90, 26, -0.45, S, seed); lab.tape(c, x + w - 30, y + h, 90, 26, -0.5, S, seed + 3);
+  }
+  // LAB home: a patch bay. The logo is the hero; two small node windows plug hairline cables into chain links,
+  // one square signal dot steps along each cable on 16ths.
+  function patchBay(t, b0) {
+    const lw = SW, lh = port ? H * 0.32 : H * 0.48, lx = SX0, ly = port ? H * 0.33 : H * 0.22;
+    BR.logo(c, S, [lx, ly, lw, lh], t);
+    const LW = 887, LH = 647, sc = Math.min((lw - 30) / LW, (lh - 40) / LH), ox = lx + lw / 2 - LW * sc / 2, oy = ly + lh / 2 - 8 - LH * sc / 2;
+    const anc = window.U2C_LINKS.anchors, A = (i) => [ox + anc[i][1] * sc, oy + anc[i][2] * sc];
+    const n1 = port ? [SX0, H * 0.19, W * 0.34, H * 0.1] : [W * 0.06, H * 0.12, W * 0.2, H * 0.22];
+    const n2 = port ? [SX1 - W * 0.34, H * 0.68, W * 0.34, H * 0.08] : [W * 0.74, H * 0.66, W * 0.2, H * 0.2];
+    const i1 = K.window(c, S, n1, 'in.wav', ui * 0.8, { noQR: true });
+    c.save(); c.beginPath(); c.rect(i1[0], i1[1], i1[2], i1[3]); c.clip(); M7.wave(c, S, [i1[0], i1[1] - 18 * ui, i1[2], i1[3] + 18 * ui], t, { ui: ui * 0.6, header: false, span: BAR }); c.restore();
+    const i2 = K.window(c, S, n2, 'out.lufs', ui * 0.8, { noQR: true }), tf = M7.tickF(t);
+    M7.cells(c, S, i2[0], i2[1], i2[2], i2[3], ui * 0.75, [['lufs', fmt(F.I[tf])], ['tp', fmt(F.TP[tf])]], 0);
+    const cab = [[[n1[0] + n1[2] * 0.5, n1[1] + n1[3]], A(2)], [[n2[0] + n2[2] * 0.5, n2[1]], A(40)]];
+    cab.forEach(([a, b], i) => {
+      K.wire(c, S, a, b, steps(t, b0 + i * 0.125, 3, U.t32), true);
+      const u = (Math.floor(t / (BEAT / 4)) % 8) / 8, m = [a[0], b[1]], L1 = Math.abs(m[1] - a[1]), L2 = Math.abs(b[0] - m[0]), d = u * (L1 + L2);
+      const p = d < L1 ? [a[0], a[1] + Math.sign(m[1] - a[1]) * d] : [m[0] + Math.sign(b[0] - m[0]) * (d - L1), m[1]];
+      c.fillStyle = S.hot; c.fillRect(Math.round(p[0]) - 4, Math.round(p[1]) - 4, 8, 8);
+    });
+    micro(t, b0, [[`> lab.patch // ${tag('experiment').toLowerCase()}`, SX0, ly + lh + 26 * ui]]);
+    handNote('U → 2 → C, on the beat', SX1, port ? n1[1] + n1[3] * 0.6 : n2[1] - 30, t, 41, 'right');
   }
   function pendant(t, b0) {
     const size = port ? W * 0.86 : H * 0.8, ax = W * 0.52, ay = port ? H * 0.16 : H * 0.04;
@@ -172,7 +203,7 @@
     else cells.forEach((cl, i) => M7.cells(c, S, cr[0], cr[1] + i * (64 * ui), cr[2], 52 * ui, ui, [cl], i === 0 ? 0 : -1));
     K.word(c, S, D.title.split(' ')[0], port ? W / 2 : W * 0.1, port ? H * 0.16 : H * 0.08, port ? 120 : 70, t, 0, { static: true, width: 0.8, align: port ? 'center' : 'left' });
     if (k === 'boot' || k === 'mirror') { const lines = tag('boot'); lines.forEach((ln, i) => { const lb = (k === 'mirror' ? b0 : 0) + (i === 0 && k === 'boot' ? -1 : i * 0.75); if (t < T(lb)) return; const nch = Math.min(ln.length, Math.floor((t - T(lb)) / T(1 / 16)) + 1); K.micro(c, S, ln.slice(0, nch).toLowerCase(), port ? x : W * 0.1, (port ? y + h + 130 * ui : H * 0.86) + i * 26 * ui, ui, { size: MS }); }); }
-    else micro(t, b0, [[`> ${k} // ${S.name.toLowerCase()}`, port ? x : W * 0.1, port ? y + h + 140 * ui : H * 0.9]]);
+    else micro(t, b0, [[k.startsWith('home') ? `> u2c.exe // chain ${(Math.floor(t / BEAT) + 4) % 8 < 4 ? 'in' : 'out'}` : `> ${tag('windows.' + k) || k} // ${S.name.toLowerCase()}`, port ? x : W * 0.1, port ? y + h + 140 * ui : H * 0.9]]);
   }
 
   function compose(shot, t) {
@@ -181,7 +212,7 @@
     if (k === 'boot') return boot(t, b0, false);
     if (k === 'mirror') return boot(t, b0, true);
     if (k === 'result') return result(t, b0);
-    if (k === 'home' || k === 'homeWave') return home(t, b0, k);
+    if (k === 'home' || k === 'homeWave') return LOOK === 'lab' ? patchBay(t, b0) : home(t, b0, k);
     if (k === 'elephant') return pendant(t, b0);
     return meter(k, t, b0);
   }
