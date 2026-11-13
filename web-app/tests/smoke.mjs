@@ -43,8 +43,11 @@ await page.reload();
 await page.waitForFunction(() => document.documentElement.dataset.track === '1', null, { timeout: 90000 });
 ok('boot + demo analysis', true, ((Date.now() - t0) / 1000).toFixed(1) + ' s · ' + (await page.textContent('#fxBadge')));
 if (AUDIO) {
+  await page.evaluate(() => { delete document.documentElement.dataset.quickPreview; });
   await page.setInputFiles('#file', AUDIO);
   await page.waitForFunction(() => /Hz/.test(document.querySelector('#trackInfo').textContent) && !/refining/.test(document.querySelector('#status').textContent) && !/demo/.test(document.querySelector('#status').textContent), null, { timeout: 90000 });
+  const qp = await page.evaluate(() => document.documentElement.dataset.quickPreview || '');
+  ok('R29 fast first preview (quick pass, then refined)', !!qp && !/refining/.test(await page.textContent('#status')), 'quick-pass track shown first, then replaced by the full analysis');
   ok('upload + analysis', true, (await page.textContent('#status')).replace(/\s+/g, ' ').slice(0, 160));
 }
 await page.waitForTimeout(1500);
@@ -52,6 +55,10 @@ await page.screenshot({ path: path.join(SHOTS, 'grid-916.png'), fullPage: true }
 const cards = await page.$$('#grid .card canvas');
 let nonBlank = 0; for (const c of cards) { const r = await c.evaluate(cv => { const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let mn = 765, mx = 0; for (let i = 0; i < d.length; i += 400) { const v = d[i] + d[i + 1] + d[i + 2]; mn = Math.min(mn, v); mx = Math.max(mx, v); } return mx - mn; }); if (r > 30) nonBlank++; }
 const ids = await page.$$eval('#grid .card', els => els.map(e => e.dataset.tpl));
+await page.click('#gridAspect button[data-a="916"]'); await page.hover('#grid .card >> nth=1'); await page.waitForTimeout(400);
+const hoverPlay = await page.evaluate(() => window.u2c.clock.playing); await page.mouse.move(2, 2); await page.waitForTimeout(200);
+const hoverStop = await page.evaluate(() => !window.u2c.clock.playing);
+ok('R28 grid hover-to-hear', hoverPlay && hoverStop, `hover → playing ${hoverPlay}, leave → stopped ${hoverStop}`);
 ok('grid: 10 looks in order (U2C.EXE first)', ids.join() === EXPECT.join() && nonBlank === cards.length, `${ids.join(', ')} · ${nonBlank}/${cards.length} drawn`);
 await page.click('#gridAspect button[data-a="169"]'); await page.waitForTimeout(1200);
 await page.screenshot({ path: path.join(SHOTS, 'grid-169.png'), fullPage: true });
@@ -91,6 +98,64 @@ for (const asp of ['916', '169']) {
   fs.writeFileSync(path.join(SHOTS, `variants-${asp}.png`), Buffer.from(url.split(',')[1], 'base64'));
 }
 ok('variant sheets', fs.existsSync(path.join(SHOTS, 'variants-916.png')), '9 looks × 10 palettes, both aspects');
+
+// ---- V2 sync: the frame with the maximum kick envelope is within ±1 frame of each detected onset (30 fps)
+const sync = await page.evaluate(async () => {
+  const app = window.u2c, tr = app.store.session.track, p = app.store.snapshot(), { getFrameState } = await import('/src/engine/frame.js'), { makeParams } = await import('/src/engine/layout.js'), P = makeParams(p, tr), fps = 30, errs = [];
+  for (const k of tr.kicks.t) { if (k < p.inT + .3 || k > p.outT - .3) continue; const f0 = Math.round((k - p.inT) * fps); let best = -1, bv = -1;
+    for (let f = f0 - 4; f <= f0 + 4; f++) { const v = getFrameState(tr, p.inT + f / fps, { loop: P.loop }).kick; if (v > bv) { bv = v; best = f; } } errs.push(best - f0); }
+  return { n: errs.length, worst: Math.max(...errs.map(Math.abs)) };
+});
+ok('V2 kick sync ±1 frame', sync.n > 3 && sync.worst <= 1, `${sync.n} kicks in the clip, worst offset ${sync.worst} frame(s)`);
+// ---- meters + elephant size + no overlaps (text vs reserved rects, and U2C.EXE windows vs each other)
+const geo = await page.evaluate(async () => {
+  const app = window.u2c, tr = app.store.session.track, { TEMPLATE_LIST, applyDefaults } = await import('/src/templates/index.js'), { makeParams } = await import('/src/engine/layout.js'), { getFrameState } = await import('/src/engine/frame.js');
+  const { textBoxes, reservedRects } = await import('/src/overlays/text.js'), { elephantBounds } = await import('/src/overlays/elephant.js'), c = document.createElement('canvas').getContext('2d');
+  const ov = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y)), out = { worst: 0, where: '', eleph: {}, win: 0, meters: null };
+  for (const asp of ['916', '169']) for (const t of TEMPLATE_LIST) { const p = app.store.snapshot(); p.tpl = t.id; p.aspect = asp; applyDefaults(p, t.id); const P = makeParams(p, tr), fs = getFrameState(tr, p.inT + 2, { loop: P.loop });
+    const res = reservedRects(P, t, app.assets); for (const b of textBoxes(c, P, fs, t, app.assets)) { const box = { x: b.x, y: b.y, w: b.bw, h: b.bh }, f = res.reduce((a, r) => a + ov(box, r), 0) / (box.w * box.h); if (f > out.worst) { out.worst = f; out.where = t.id + ' ' + asp + ' ' + b.id; } }
+    if (t.id === 'u2cexe') { const { rects } = await import('/src/templates/u2cexe.js'), Rw = rects(P, null); out.eleph[asp] = { win: Rw.eleph.w / P.W, img: elephantBounds(P, app.assets).w / Rw.eleph.w }; const R = t.reserved(P); for (let i = 0; i < R.length; i++) for (let j = i + 1; j < R.length; j++) out.win = Math.max(out.win, ov(R[i], R[j])); } }
+  const p = app.store.snapshot(), fs = getFrameState(tr, p.inT + 2, {}), M = fs.m; out.meters = { M: M.lufsM(fs.t), S: M.lufsS(fs.t), I: M.lufsI(p.inT, p.outT), TP: M.truePeak(fs.t), pk: M.peakBar(0, fs.t), hold: M.holdDb(0, fs.t), corr: M.corr(fs.t), mono: M.mono, swing: M.groove.swing };
+  return out;
+});
+const mt = geo.meters, finite = Object.values(mt).every(v => typeof v !== 'number' || Number.isFinite(v));
+ok('V3 meters compute', finite && mt.hold >= mt.pk - .01 && mt.I < 0 && mt.TP <= .5, `M ${mt.M.toFixed(1)} · S ${mt.S.toFixed(1)} · I ${mt.I.toFixed(1)} LUFS · TP ${mt.TP.toFixed(1)} dBTP · peak ${mt.pk.toFixed(1)} / hold ${mt.hold.toFixed(1)} dB · corr ${mt.corr.toFixed(2)} · ${mt.mono ? 'MONO' : 'stereo'} · swing ${mt.swing}%`);
+ok('V1 elephant size in U2C.EXE', geo.eleph['916'].win >= .35 && geo.eleph['916'].win <= .45 && geo.eleph['916'].img >= .7, `elephant.sys ${(geo.eleph['916'].win * 100).toFixed(0)} % of the width on 9:16 (elephant fills ${(geo.eleph['916'].img * 100).toFixed(0)} % of it) · 16:9 column ${(geo.eleph['169'].win * 100).toFixed(0)} %, filled ${(geo.eleph['169'].img * 100).toFixed(0)} %`);
+ok('R13 no text overlaps (reserved-rect check)', geo.worst < .08 && geo.win === 0, `worst text/reserved overlap ${(geo.worst * 100).toFixed(1)} % (${geo.where || '-'}) · U2C.EXE window overlap ${geo.win}px²`);
+// ---- keyboard shortcuts, BPM edit, presets, safe area, canvas drag, region drag
+await page.click('#lookGrid .lk[data-tpl="u2cexe"]'); await page.click('#view', { position: { x: 5, y: 5 } }).catch(() => {});
+const k0 = await page.evaluate(() => window.u2c.clock.time());
+await page.keyboard.press('ArrowRight'); const k1 = await page.evaluate(() => window.u2c.clock.time());
+await page.keyboard.press('2'); const kTpl = await page.evaluate(() => window.u2c.store.project.tpl);
+await page.keyboard.press('1'); await page.keyboard.press('Space'); await page.waitForTimeout(300); const kPlay = await page.evaluate(() => window.u2c.clock.playing); await page.keyboard.press('Space');
+ok('R28 keyboard shortcuts', k1 > k0 && kTpl === 'lab' && kPlay, `→ ${k0.toFixed(2)}→${k1.toFixed(2)} s · "2" selects ${kTpl} · space plays ${kPlay}`);
+await page.click('.tabs [data-tab="beat"]'); await page.fill('#sBpm', '141'); await page.dispatchEvent('#sBpm', 'change'); await page.waitForTimeout(300);
+const bpm1 = await page.evaluate(() => window.u2c.store.session.track.bpm); await page.fill('#sBpm', '140'); await page.dispatchEvent('#sBpm', 'change'); await page.waitForTimeout(300);
+ok('R17 BPM editable', Math.abs(bpm1 - 141) < .01, `set 141 → track ${bpm1}`);
+const hooks = {}; for (const L of ['7', '15', '30', 'full']) { await page.evaluate(L => document.querySelector(`[data-len="${L}"]`).click(), L); await page.waitForTimeout(150);
+  hooks[L] = await page.evaluate(() => { const p = window.u2c.store.project, tr = window.u2c.store.session.track; return { bars: +((p.outT - p.inT) / tr.barDur).toFixed(2), onBar: Math.abs(((p.inT - tr.t0) / tr.barDur) - Math.round((p.inT - tr.t0) / tr.barDur)) < 1e-3 || p.inT === 0 }; }); }
+ok('R19 hook presets snap to phrases on a downbeat', hooks['7'].bars === 4 && hooks['15'].bars === 8 && hooks['30'].bars === 16 && hooks['7'].onBar && hooks['15'].onBar, Object.entries(hooks).map(([k, v]) => `${k}:${v.bars} bars${v.onBar ? '' : ' (off-grid!)'}`).join(' · '));
+await page.evaluate(() => document.querySelector('[data-len="15"]').click());
+await page.click('#safeBtn'); const safe = await page.$$eval('#safe i', els => els.map(e => e.textContent)); await page.click('#safeBtn');
+ok('R21 safe-area overlay', safe.length >= 3 && safe.some(s => /caption/.test(s)), safe.join(' | '));
+const lines = await page.evaluate(() => { const L = window.u2c.store.project.text.lines; return [L.c1.text, L.cta.text, L.handle.text]; });
+ok('R22 text presets available as lines', /type beat/i.test(lines[0]) && /lease/i.test(lines[1]) && /@/.test(lines[2]), lines.join(' · '));
+// canvas drag: drag the logo by 120 px on the 100 % stage
+await page.evaluate(() => window.u2c.actions.setTemplate('poster')); await page.waitForTimeout(300);
+const vb = await page.$eval('#view', c => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
+const c0 = await page.evaluate(() => ({ ...window.u2c.store.project.chains }));
+await page.mouse.move(vb.x + vb.w * c0.x, vb.y + vb.h * c0.y); await page.mouse.down(); await page.mouse.move(vb.x + vb.w * c0.x + 60, vb.y + vb.h * c0.y + 30, { steps: 6 }); await page.mouse.up();
+const c1 = await page.evaluate(() => ({ ...window.u2c.store.project.chains }));
+ok('R28 drag overlays on the canvas', Math.abs(c1.x - c0.x) > .02 && Math.abs(c1.y - c0.y) > .005, `chains ${c0.x.toFixed(3)},${c0.y.toFixed(3)} → ${c1.x.toFixed(3)},${c1.y.toFixed(3)}`);
+// timeline region drag (wavesurfer regions; snaps to bars)
+const reg = await page.evaluate(() => { const host = document.querySelector('#wave'), all = []; const walk = n => { if (!n) return; if (n.getAttribute && /region/.test(n.getAttribute('part') || '') && n.style && n.style.width && parseFloat(n.style.width) > 1) all.push(n); (n.shadowRoot ? [...n.shadowRoot.children] : []).concat([...(n.children || [])]).forEach(walk); }; walk(host);
+  const el = all.sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width)[0]; if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
+let regOk = false, regInfo = 'no region element found';
+if (reg) { const before = await page.evaluate(() => window.u2c.store.project.inT); await page.mouse.move(reg.x + reg.w / 2, reg.y + reg.h / 2); await page.mouse.down(); await page.mouse.move(reg.x + reg.w / 2 + 80, reg.y + reg.h / 2, { steps: 8 }); await page.mouse.up(); await page.waitForTimeout(300);
+  const after = await page.evaluate(() => { const p = window.u2c.store.project, tr = window.u2c.store.session.track; return { inT: p.inT, onBar: Math.abs((p.inT - tr.t0) / tr.barDur - Math.round((p.inT - tr.t0) / tr.barDur)) < 1e-3 }; });
+  regOk = after.inT !== before && after.onBar; regInfo = `in ${before.toFixed(3)} → ${after.inT.toFixed(3)} s, on a bar line ${after.onBar}`; }
+ok('R28 timeline region drag (bar-snapped)', regOk, regInfo);
+await page.evaluate(() => { document.querySelector('[data-len="15"]').click(); window.u2c.actions.setTemplate('u2cexe'); }); await page.click('.tabs [data-tab="look"]');
 
 // ---- glitch slider: UI sets the store; slices only on a strong-kick frame and gone within 80 ms
 await page.click('.tabs [data-tab="fx"]');
@@ -168,6 +233,24 @@ if (!process.env.NOEXPORT) {
   await page.click('#thumbBtn'); await page.waitForFunction(() => document.querySelectorAll('#thumbs img').length === 3, null, { timeout: 60000 });
   const th = await page.$$eval('#thumbs img', ims => ims.map(i => i.naturalWidth + 'x' + i.naturalHeight));
   ok('youtube thumbnails', th.length === 3 && th.every(s => s === '1280x720'), th.join(', '));
+  ok('R25 loudness measured + shown', /LUFS/.test(await page.textContent('#loudKv')), (await page.textContent('#loudKv')).replace(/\s+/g, ' '));
+  // R26 voice tag: upload a 1 s tag, check it is mixed in (tagged export audio differs from clean)
+  const wav = path.join(SHOTS, '_tag.wav'); { const sr = 44100, n = sr, b = Buffer.alloc(44 + n * 2); b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(sr, 24); b.writeUInt32LE(sr * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40);
+    for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin(i / sr * 2 * Math.PI * (300 + 600 * i / n)) * 12000 * Math.min(1, (n - i) / 2000)), 44 + i * 2); fs.writeFileSync(wav, b); }
+  await page.setInputFiles('#vtFile', wav); await page.waitForFunction(() => /_tag\.wav/.test(document.querySelector('#vtInfo').textContent), null, { timeout: 10000 });
+  const vt = await page.evaluate(async () => { const app = window.u2c, { prepareAudio } = await import('/src/export/audio.js'), p = app.store.snapshot(), buf = app.store.session.buffer, tr = app.store.session.track;
+    const o = { loopSafe: true, xf: tr.spb, loudness: 'off', voiceEvery: 25 }; const clean = await prepareAudio(buf, p, o), tagged = await prepareAudio(buf, p, { ...o, voiceTag: app.store.session.voiceTag });
+    const a = clean.buffer.getChannelData(0), b = tagged.buffer.getChannelData(0), s0 = Math.round(1.6 * 48000); let d = 0; for (let i = s0; i < s0 + 24000; i++) d += Math.abs(a[i] - b[i]); return { on: app.store.project.export.voiceTag, diff: d / 24000 }; });
+  ok('R26 voice tag mixed into the tagged export', vt.on && vt.diff > .005, `toggle ${vt.on} · mean |tagged − clean| at 1.5 s = ${vt.diff.toFixed(4)}`);
+  await page.uncheck('#vtOn');
+  // R27 batch: 2 looks × 7 s, draft
+  await page.check('#exDraft'); await page.evaluate(() => { document.querySelectorAll('[data-btpl]').forEach(c => { c.checked = ['u2cexe', 'scope'].includes(c.dataset.btpl); }); document.querySelector('#batchTpl').dispatchEvent(new Event('change'));
+    document.querySelectorAll('[data-blen]').forEach(c => { c.checked = c.dataset.blen === '7'; c.dispatchEvent(new Event('change')); }); });
+  const nRes = await page.$$eval('#results .res', e => e.length); const tb = Date.now(); await page.click('#batchBtn');
+  await page.waitForFunction(n => document.querySelectorAll('#results .res').length >= n + 2 && !document.querySelector('#exBtn').disabled, nRes, { timeout: 600000 });
+  const bnames = await page.$$eval('#results .res b', e => e.slice(0, 2).map(x => x.textContent));
+  ok('R27 batch export', bnames.length === 2 && bnames.some(n => /u2cexe/.test(n)) && bnames.some(n => /scope/.test(n)), bnames.join(', ') + ` · ${((Date.now() - tb) / 1000).toFixed(0)} s (draft)`);
+  await page.uncheck('#exDraft');
 }
 // ---- text panel: edit the key with the picker and a custom line; it reaches the frame model and the caption
 await page.click('.tabs [data-tab="text"]'); await page.waitForTimeout(300);

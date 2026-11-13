@@ -22,7 +22,8 @@ const LAYOUT = {
 const ORDER = ['beat', 'tempo', 'eq', 'meter', 'phase', 'spec', 'lanes', 'log'], FOLD = ['meter', 'phase', 'spec', 'lanes', 'log']; // only the secondary windows fold
 const TITLES = { beat: 'u2c_beat.exe', tempo: 'tempo.cfg', eq: 'eq.vst', eleph: 'elephant.sys', chains: 'chains.dll', meter: 'meter.exe', phase: 'phase.scope', spec: 'spectrum.vst', lanes: 'transport.lanes', log: 'events.log' };
 const CABLES = [['beat', 'chains'], ['eq', 'chains'], ['eleph', 'chains'], ['meter', 'chains'], ['phase', 'meter'], ['spec', 'chains'], ['lanes', 'beat'], ['log', 'lanes']];
-function rects(P, fs) {
+/** Window rects in frame pixels (fs = null: without the gentle float). */
+export function rects(P, fs) {
   const Lw = LAYOUT[P.aspect] || LAYOUT['916'], out = {}, TAU = Math.PI * 2;
   for (const id in Lw.w) { const [x, y, w, h] = Lw.w[id], k = Object.keys(Lw.w).indexOf(id), f = id === 'chains' ? 0 : 3 * P.u;
     const dx = fs ? Math.sin(fs.cyc(.06) * TAU + k * 1.7) * f : 0, dy = fs ? Math.cos(fs.cyc(.05) * TAU + k * 2.3) * f : 0;
