@@ -42,7 +42,7 @@ export default {
   owns: ['title', 'bpm', 'key', 'tag'], textPos: 'bottom',
   params: [{ id: 'cables', label: 'Cable glow', min: 0, max: 1, step: .05, def: .5 }],
   // chains centred in chains.dll; the elephant hangs from elephant.sys's title bar
-  defaults: a => a === '916' ? { chains: { x: .5, y: 1140 / 1920, s: .54 }, eleph: { x: 812 / 1080, y: 120 / 1920, s: .78, len: .255 } }
+  defaults: a => a === '916' ? { chains: { x: .5, y: 1140 / 1920, s: .54 }, eleph: { x: 812 / 1080, y: 120 / 1920, s: .7, len: .27 } }
     : { chains: { x: 1044 / 1920, y: .3, s: .7 }, eleph: { x: 1690 / 1920, y: 102 / 1080, s: .62, len: .62 } },
   reserved(P) { return Object.values(rects(P, null)); },
   draw(ctx, fs, P, p, assets) {
