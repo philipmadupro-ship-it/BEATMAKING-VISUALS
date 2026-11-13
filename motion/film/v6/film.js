@@ -52,16 +52,19 @@
     let i = 1; const end = NB - (NB >= 16 ? 2 : 1);
     // drop: a new framing every bar (no repeat within 8 bars); the full desktop only as punctuation
     const dropPool = ['spec', 'elephant', 'lufs', 'logo', 'detail', 'gonioC', 'clock', 'meters', 'bal', 'spec', 'body', 'lufs', 'logo', 'detail', 'gonioC', 'elephant', 'clock', 'meters', 'bal', 'body'];
-    const calmPool = ['elephant', 'logo', 'detail', 'notes'];
+    const calmPool = ['elephant', 'notes', 'detail', 'gonioC', 'logo', 'spec', 'clock', 'lufs', 'bal', 'meters'];
     let dp = 0, cp = 0;
     const lastDropBar = (() => { let lb = -1; for (let q = 1; q < end; q++) if (isDrop(q)) lb = q; return lb; })();
+    const recent = (k) => shots.some((s) => s.kind === k && s.bar > i - 8);   // no framing repeats within 8 bars
     while (i < end) {
       const drop = isDrop(i);
-      let kind = i === 1 ? 'wide' : i === lastDropBar && drop ? 'all' : drop ? dropPool[dp++ % dropPool.length] : calmPool[cp++ % calmPool.length];
+      const pool = drop ? dropPool : calmPool;
+      let kind = i === 1 ? 'wide' : i === lastDropBar && drop ? 'all' : null;
+      for (let tries = 0; !kind && tries < pool.length; tries++) { const kk = drop ? pool[dp++ % pool.length] : pool[cp++ % pool.length]; if (!recent(kk) || tries === pool.length - 1) kind = kk; }
       if (S.embodied && (kind === 'clock' || kind === 'bal') && i > 2) kind = 'body';      // RUBEDO: proximity, the body
       if (S.exposed && kind === 'detail') kind = 'all';                                       // ALBEDO: show the construction
       let len = kind === 'logo' || kind === 'wide' || kind === 'all' ? 1 : 2;
-      if (S.obstruct) len = Math.min(len, 1) || 1;                                           // NIGREDO: compressed, one bar per shot
+      if (S.obstruct && drop) len = 1;                                                       // NIGREDO: compressed, one bar per shot in the drops
       if (i + len > end) len = end - i;
       push(i, len, kind, drop || i === 1); i += len;
     }

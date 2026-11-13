@@ -191,3 +191,11 @@ Filmstrips are in `out/v6/filmstrips/`. The CLI is documented in README.md.
 - `review/v6-director-notes-pass2.md` covered: terminal placement, balance framing, the elephant body push-in.
 - Pass renders: `out/v6/passes/nigredo-916-30s-pass{1,2}.mp4` with filmstrips. The fixes apply to every stage and length through the shared plan logic.
 - After pass 2, the 16:9 check fixed the boot (terminal beside the logo) and the loudness card layout.
+- `review/v6-director-notes-pass3-60s.md` covered the 60 s loop of calm framings. Every plan now enforces no repeated framing within 8 bars, and all four 60 s files were re-rendered.
+- **Sync test** (`tests/sync_test.py`) over all 8 deliverable configurations: every scheduled event (cuts, glides, card-open steps, logo IN/OUT steps, boot lines, annotations; 168-480 events per video) lands within **0.5 frame** of its 32nd-note grid time. The mastered clips' on-beat transients sit within 0.10 ms of the grid. Reports: `out/v6/sync-report-*.txt`.
+
+## v6 caveats
+- **Key mode.** The analysis says the tonic is F; the mode leans major (0.71 vs 0.65), and C minor is clearly out (0.28). The screen shows F MIN per the brief.
+- **Hats.** The kick lane counts some 808 attacks (72 kicks detected over 64 beats). Hat detection is denser than the real hats. These lanes are display-only; visual triggers use the grid.
+- **AI elephant loop.** If one is swapped in, it swings rigidly: the rig deformation needs the still art.
+- **Albedo and Citrinitas** use new hexes (bone, limestone, ochre, brass, …), as the brief allows per stage. **Rubedo** adds a vibrant violet, magenta heat and oxblood.
