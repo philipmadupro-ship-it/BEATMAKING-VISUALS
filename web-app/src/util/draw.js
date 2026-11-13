@@ -36,10 +36,8 @@ export function hud(ctx, x, y, w, h, L, col, lw) {
   ctx.stroke(); ctx.restore();
 }
 export function txt(ctx, s, x, y, font, col, align = 'left', base = 'alphabetic') { ctx.font = font; ctx.fillStyle = col; ctx.textAlign = align; ctx.textBaseline = base; ctx.fillText(s, x, y); }
-export function fitFont(ctx, s, maxW, maxSize, family, weight = '') { ctx.font = `${weight} ${maxSize}px ${family}`; const w = ctx.measureText(s).width; return w > maxW ? maxSize * maxW / w : maxSize; }
 export function rrect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 export const mono = (px, w = 500) => `${w} ${px}px ${FONT_MONO}`;
-export function bez(p0, p1, p2, p3, t) { const u = 1 - t; return [u*u*u*p0[0] + 3*u*u*t*p1[0] + 3*u*t*t*p2[0] + t*t*t*p3[0], u*u*u*p0[1] + 3*u*u*t*p1[1] + 3*u*t*t*p2[1] + t*t*t*p3[1]]; }
 export function noiseTile(n) {
   return cached('noise' + n, 256, 256, (g, w, h) => { const d = g.createImageData(w, h), D = d.data;
     for (let i = 0; i < w * h; i++) { const r = hash(i, n * 7 + 1); if (r < .09) { const v = hash(i, n * 7 + 2) < .5 ? 0 : 255; D[i*4] = D[i*4+1] = D[i*4+2] = v; D[i*4+3] = 40 + hash(i, n * 7 + 3) * 120; } }
@@ -47,12 +45,3 @@ export function noiseTile(n) {
 }
 const PATS = new WeakMap();
 export function pat(ctx, name, make) { let m = PATS.get(ctx); if (!m) { m = {}; PATS.set(ctx, m); } if (!m[name]) m[name] = ctx.createPattern(make(), 'repeat'); return m[name]; }
-// Bar-style waveform strip. mode 'peak' uses the overview peaks, 'rms' the analysis frames.
-export function wavebars(ctx, fs, x, y, w, h, t0, t1, n, col, colPlayed, tp, mode) {
-  const bw = w / n;
-  for (let j = 0; j < n; j++) {
-    const a = t0 + (t1 - t0) * j / n, b = t0 + (t1 - t0) * (j + 1) / n;
-    const v = mode === 'peak' ? fs.peak(Math.max(0, a), Math.max(0, b)) : fs.level(Math.max(0, a), Math.max(0, b));
-    const hh = Math.max(1.5, v * h); ctx.fillStyle = (tp != null && a <= tp) ? colPlayed : col; ctx.fillRect(x + j * bw, y + (h - hh) / 2, Math.max(1, bw * .6), hh);
-  }
-}

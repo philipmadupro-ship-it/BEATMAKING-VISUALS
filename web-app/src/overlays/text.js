@@ -43,8 +43,8 @@ function items(ctx, P, fs, tpl) {
 /** Rects the auto text must avoid: the template's own (windows, rings, grids) + the logo + the pendant's sweep. */
 export function reservedRects(P, tpl, assets) {
   const r = tpl.reserved ? tpl.reserved(P, assets) : [];
-  if (assets && P.chains.on && !tpl.selfChains) r.push(chainsBounds(P, assets));
-  if (assets && P.eleph.on && !tpl.selfEleph) r.push(elephantSweep(P, assets));
+  if (assets && P.chains.on) r.push(chainsBounds(P, assets));
+  if (assets && P.eleph.on) r.push(elephantSweep(P, assets));
   return r;
 }
 const overlap = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));

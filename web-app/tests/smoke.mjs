@@ -21,7 +21,7 @@ const AUDIO = process.argv[2] || '';
 fs.mkdirSync(SHOTS, { recursive: true });
 const errors = [], results = [];
 const ok = (name, pass, info = '') => { results.push({ name, pass, info }); console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${info ? '  ' + info : ''}`); };
-const EXPECT = ['u2cexe', 'lab', 'handset', 'exe', 'bloom', 'orbit', 'halo', 'scope', 'poster', 'slicer'];
+const EXPECT = ['u2cexe', 'lab', 'scope'];
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1, colorScheme: process.env.SCHEME || 'dark' });
@@ -38,6 +38,12 @@ if (CACHE) {
 const saveCanvas = async (sel, file) => fs.writeFileSync(path.join(SHOTS, file), Buffer.from((await page.$eval(sel, c => c.toDataURL('image/png'))).split(',')[1], 'base64'));
 const t0 = Date.now();
 await page.goto(URL0);
+// v5 migration: a saved project that pointed at a deleted look falls back to U2C.EXE (and batch lists drop it)
+await page.evaluate(() => { localStorage.clear(); localStorage.setItem('u2c.project.v3', JSON.stringify({ tpl: 'poster', params: { bloom: { x: 1 } }, export: { batch: ['poster', 'lab', 'halo'] } })); });
+await page.reload();
+await page.waitForFunction(() => window.u2c && window.u2c.store, null, { timeout: 90000 });
+{ const m = await page.evaluate(() => { const p = window.u2c.store.project; return { tpl: p.tpl, batch: p.export.batch.join(), params: Object.keys(p.params || {}).join() }; });
+  ok('v5 state migration: deleted look → U2C.EXE', m.tpl === 'u2cexe' && m.batch === 'lab' && !/bloom/.test(m.params), `tpl ${m.tpl} · batch ${m.batch} · params [${m.params}]`); }
 await page.evaluate(() => { try { localStorage.clear(); } catch (_) {} });
 await page.reload();
 await page.waitForFunction(() => document.documentElement.dataset.track === '1', null, { timeout: 90000 });
@@ -59,7 +65,7 @@ await page.click('#gridAspect button[data-a="916"]'); await page.hover('#grid .c
 const hoverPlay = await page.evaluate(() => window.u2c.clock.playing); await page.mouse.move(2, 2); await page.waitForTimeout(200);
 const hoverStop = await page.evaluate(() => !window.u2c.clock.playing);
 ok('R28 grid hover-to-hear', hoverPlay && hoverStop, `hover → playing ${hoverPlay}, leave → stopped ${hoverStop}`);
-ok('grid: 10 looks in order (U2C.EXE first)', ids.join() === EXPECT.join() && nonBlank === cards.length, `${ids.join(', ')} · ${nonBlank}/${cards.length} drawn`);
+ok('grid: 3 looks in order (U2C.EXE, LAB, SCOPE)', ids.join() === EXPECT.join() && nonBlank === cards.length, `${ids.join(', ')} · ${nonBlank}/${cards.length} drawn`);
 await page.click('#gridAspect button[data-a="169"]'); await page.waitForTimeout(1200);
 await page.screenshot({ path: path.join(SHOTS, 'grid-169.png'), fullPage: true });
 await page.click('#gridAspect button[data-a="916"]'); await page.waitForTimeout(500);
@@ -81,7 +87,7 @@ for (const asp of ['916', '169']) {
     await saveCanvas('#view', `${id}-${asp}.png`);
   }
 }
-await page.click('#aspectSeg button[data-a="916"]'); await page.click('#zoomSeg button[data-z="fit"]'); await page.click('#lookGrid .lk[data-tpl="bloom"]'); await page.waitForTimeout(300);
+await page.click('#aspectSeg button[data-a="916"]'); await page.click('#zoomSeg button[data-z="fit"]'); await page.click('#lookGrid .lk[data-tpl="lab"]'); await page.waitForTimeout(300);
 await page.screenshot({ path: path.join(SHOTS, 'studio.png') });
 
 // ---- variant contact sheets: rows = looks, columns = 9 palette variants + Custom
@@ -97,7 +103,7 @@ for (const asp of ['916', '169']) {
   }, asp);
   fs.writeFileSync(path.join(SHOTS, `variants-${asp}.png`), Buffer.from(url.split(',')[1], 'base64'));
 }
-ok('variant sheets', fs.existsSync(path.join(SHOTS, 'variants-916.png')), '9 looks × 10 palettes, both aspects');
+ok('variant sheets', fs.existsSync(path.join(SHOTS, 'variants-916.png')), '3 looks × 10 palettes, both aspects');
 
 // ---- V2 sync: the frame with the maximum kick envelope is within ±1 frame of each detected onset (30 fps)
 const sync = await page.evaluate(async () => {
@@ -142,7 +148,7 @@ await page.click('.tabs [data-tab="text"]'); await page.click('#presetType'); aw
 const lines = await page.evaluate(() => { const L = window.u2c.store.project.text.lines; return L.c1.on && L.cta.on && L.handle.on ? [L.c1.text, L.cta.text, L.handle.text] : ['off']; }); await page.click('#presetMin');
 ok('R22 text presets available as lines', /type beat/i.test(lines[0]) && /lease/i.test(lines[1]) && /@/.test(lines[2]), lines.join(' · '));
 // canvas drag: drag the logo by 120 px on the 100 % stage
-await page.evaluate(() => window.u2c.actions.setTemplate('poster')); await page.waitForTimeout(300);
+await page.evaluate(() => window.u2c.actions.setTemplate('scope')); await page.waitForTimeout(300);
 const vb = await page.$eval('#view', c => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
 const c0 = await page.evaluate(() => ({ ...window.u2c.store.project.chains }));
 await page.mouse.move(vb.x + vb.w * c0.x, vb.y + vb.h * c0.y); await page.mouse.down(); await page.mouse.move(vb.x + vb.w * c0.x + 60, vb.y + vb.h * c0.y + 30, { steps: 6 }); await page.mouse.up();

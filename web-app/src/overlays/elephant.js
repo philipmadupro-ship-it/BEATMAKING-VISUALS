@@ -6,7 +6,6 @@
 // with two warm-up loops (same audio), and the last beat of the loop is blended into the state one loop earlier,
 // so the last frame flows into frame 0. One simulation per (track, loop, phrase grid), memoised.
 import { cached, clamp, hex3, rrect } from '../util/draw.js';
-export function useGsap() {}
 export function elephFor(assets, pal, surface) {
   const img = assets.eleph;
   return cached('el|' + pal.id + surface, img.width, img.height, (g, w, h) => { g.drawImage(img, 0, 0);
@@ -53,8 +52,6 @@ export function ropeNodes(fs, P) {
   sample(idx2, 1 - w); if (w > 0) sample(idx2 - S.steps, w);
   return out;
 }
-/** Approximate swing angle of the pendant (for simple consumers). */
-export function swingAngle(fs, P) { const n = ropeNodes(fs, P); return Math.atan2(n[2 * N], n[2 * N + 1]) * -1; }
 const geo = (P, img) => { const sc = Math.min(P.W, P.H) * .42 / img.width * P.eleph.s, len = P.eleph.len * P.H + 10; return { sc, len, px: P.eleph.x * P.W, py: (P.eleph.y || 0) * P.H - 12 }; };
 export function elephantBounds(P, assets) { const img = assets.eleph, { sc, len, px, py } = geo(P, img); return { x: px - img.width * sc / 2, y: py + len - img.height * sc * .3, w: img.width * sc, h: img.height * sc }; }
 /** Area the pendant can sweep (for text layout): anchor ± swing, down to the elephant's feet. */

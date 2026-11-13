@@ -36,8 +36,19 @@ function migrateProfile(p) {
   t.lines = {}; if (p.tag) t.lines.tag = { text: p.tag }; if (p.handle) t.lines.handle = { text: p.handle };
   return { text: t };
 }
+// Looks that exist (v5: U2C.EXE, LAB, SCOPE). Kept here, not imported from templates/, so the store stays UI-free.
+export const LOOK_IDS = ['u2cexe', 'lab', 'scope'];
+/** Saved project from an older version → current shape: a look that was deleted (handset, exe, bloom, orbit, halo,
+ *  poster, slicer, …) falls back to U2C.EXE, batch lists drop deleted looks, per-look params of deleted looks go. */
+export function migrateProject(p) {
+  if (!p || typeof p !== 'object') return p;
+  if (!LOOK_IDS.includes(p.tpl)) p.tpl = 'u2cexe';
+  if (p.export && Array.isArray(p.export.batch)) { const b = p.export.batch.filter(id => LOOK_IDS.includes(id)); p.export.batch = b.length ? b : [...DEFAULT_PROJECT.export.batch]; }
+  if (p.params && typeof p.params === 'object') for (const k of Object.keys(p.params)) if (!LOOK_IDS.includes(k)) delete p.params[k];
+  return p;
+}
 export function createStore() {
-  const project = deepMerge(clone(DEFAULT_PROJECT), read(PROJECT_KEY) || {});
+  const project = migrateProject(deepMerge(clone(DEFAULT_PROJECT), read(PROJECT_KEY) || {}));
   const profile = migrateProfile(read(PROFILE_KEY) || read(OLD_PROFILE_KEY));
   if (profile) { if (profile.text) deepMerge(project.text, profile.text); if (profile.custom) deepMerge(project.custom, profile.custom); }
   const state = { project, session: { track: null, buffer: null, libs: {}, assets: null, playing: false, time: 0, exporting: false, voiceTag: null } };

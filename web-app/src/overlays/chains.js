@@ -5,7 +5,6 @@
 import { cached, clamp, mk } from '../util/draw.js';
 import { phrase, letterState } from '../engine/layout.js';
 import { kickBreath, secondary } from '../engine/react.js';
-export function useGsap() {} // kept for API compatibility: the logo motion is analytic now
 /** Letter of each link: 0 = U, 1 = 2, 2 = C (by the link's centre x in logo space). */
 export const letterOf = pc => (pc.x + pc.w / 2 < 245 ? 0 : pc.x + pc.w / 2 < 540 ? 1 : 2);
 let LB = null;
@@ -38,12 +37,6 @@ export function chainImages(assets, pal, style, surfacePaper, col) {
   const neon = style === 'neon', c = col || (neon ? (surfacePaper ? pal.ink : pal.hi) : (surfacePaper ? pal.ink : pal.chain));
   const img = neon ? (surfacePaper ? neonAtlas(assets, c, pal.pacc) : neonAtlas(assets, c, pal.main)) : solidAtlas(assets, c);
   return { img, edge: edgeAtlas(assets, neon || surfacePaper ? c : (pal.light ? pal.main : pal.hi)), flash: flatAtlas(assets, surfacePaper ? pal.pacc : pal.hi), pad: neon ? 16 : 0 };
-}
-/** The assembled logo as one cached image (for static prints: phone screen, app icon, stickers). */
-export function logoImage(assets, col, style = 'solid') {
-  const L = assets.links;
-  return cached('logo|' + col + style, L.w + 40, L.h + 40, (g) => { const A = style === 'neon' ? neonAtlas(assets, col, col) : flatAtlas(assets, col), pad = style === 'neon' ? 16 : 0;
-    for (const pc of L.pieces) g.drawImage(A, pc.ax - pad, pc.ay - pad, pc.w + 2 * pad, pc.h + 2 * pad, 20 + pc.x - pad, 20 + pc.y - pad, pc.w + 2 * pad, pc.h + 2 * pad); });
 }
 function drawLetter(g, pose, k, A, pad) { for (const q of pose.pieces) if (q.k === k) { const pc = q.pc; g.drawImage(A, pc.ax - pad, pc.ay - pad, pc.w + 2 * pad, pc.h + 2 * pad, pc.x - pad, pc.y - pad, pc.w + 2 * pad, pc.h + 2 * pad); } }
 /** Draw the logo from a pose: full letters directly; dissolving / rebuilding letters through dither + wipe masks. */

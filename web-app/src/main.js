@@ -5,8 +5,6 @@ import { loadAssets } from './engine/assets.js';
 import { createClock } from './engine/clock.js';
 import { createRenderer } from './engine/render.js';
 import { createPostFX } from './fx/postfx.js';
-import { useGsap as chainsGsap } from './overlays/chains.js';
-import { useGsap as elephGsap } from './overlays/elephant.js';
 import { analyzeBuffer, decodeFile, metaFromFilename, synthDemo, regrid } from './analysis/index.js';
 import { TEMPLATES, applyDefaults } from './templates/index.js';
 import { PALETTES, resolvePalette } from './brand/palettes.js';
@@ -41,7 +39,7 @@ function hook(track, sec) {
 async function boot() {
   status('Loading libraries…');
   const [libs, assets] = await Promise.all([loadLibs(), loadAssets('assets/')]);
-  chainsGsap(libs.gsap); elephGsap(libs.gsap);
+
   const postfx = createPostFX(libs); await postfx.init();
   const fonts = ['700 20px "JetBrains Mono"', '500 20px "JetBrains Mono"', '600 20px "Instrument Sans"', 'italic 400 20px "Instrument Serif"', '20px Anton'];
   await Promise.race([Promise.all(fonts.map(f => document.fonts.load(f))), new Promise(r => setTimeout(r, 2500))]).catch(() => {});
