@@ -10,12 +10,14 @@ import { snareBorder, kickCable } from '../engine/react.js';
 // (the U2C logo dissolves/rebuilds letter by letter inside it), elephant.sys holds the swinging rope pendant, and the
 // small windows run live readouts. Small windows fold shut in the last beat of each phrase and unfold again on the
 // downbeat (line-draw, scale-from-titlebar, typewriter titles). Kicks: 1-3 % spring punch, border pulses, cable dots.
-// Window grid (1080-unit layout, multiples of 8). elephant.sys is a large window: 39 % of the width on 9:16,
-// a full-height side column on 16:9.
+// Window grid (1080-unit layout, 8 px grid, 16 px gutters, 56 px margins). elephant.sys is a large window: 39 % of the
+// width on 9:16, a full-height side column on 16:9. 9:16 respects the platform safe areas (TRENDS.md): the top 288 px
+// (status/top bar) only holds the spectrum and the elephant's rope; the title, BPM and key sit inside y 288-1248;
+// the logo is centred in the safe box; the caption zone (y > 1248) holds data windows only.
 const LAYOUT = {
   '916': { W: 1080, H: 1920, w: {
-    beat: [56, 120, 528, 208], tempo: [56, 344, 528, 136], eq: [56, 496, 528, 240], eleph: [600, 120, 424, 616], chains: [56, 752, 968, 464],
-    meter: [56, 1232, 344, 304], phase: [416, 1232, 296, 304], spec: [728, 1232, 296, 304], lanes: [56, 1552, 616, 224], log: [688, 1552, 336, 224] } },
+    spec: [56, 72, 528, 200], beat: [56, 288, 528, 208], tempo: [56, 512, 528, 136], eq: [56, 664, 528, 232], eleph: [600, 72, 424, 824],
+    chains: [56, 912, 968, 440], meter: [56, 1368, 344, 256], phase: [416, 1368, 296, 256], log: [728, 1368, 296, 256], lanes: [56, 1640, 968, 136] } },
   '169': { W: 1920, H: 1080, w: {
     beat: [40, 64, 560, 176], tempo: [40, 256, 560, 120], eq: [40, 392, 560, 216], lanes: [40, 624, 560, 200], log: [40, 840, 560, 176], chains: [616, 64, 856, 464],
     meter: [616, 544, 280, 472], phase: [912, 544, 264, 472], spec: [1192, 544, 280, 472], eleph: [1488, 64, 392, 952] } },
@@ -23,7 +25,8 @@ const LAYOUT = {
 const WIN_IDS = ['beat', 'tempo', 'eq', 'eleph', 'chains', 'meter', 'phase', 'spec', 'lanes', 'log'];
 const ORDER = ['beat', 'tempo', 'eq', 'meter', 'phase', 'spec', 'lanes', 'log'], FOLD = ['meter', 'phase', 'spec', 'lanes', 'log']; // only the secondary windows fold
 const TITLES = { beat: 'u2c_beat.exe', tempo: 'tempo.cfg', eq: 'eq.vst', eleph: 'elephant.sys', chains: 'chains.dll', meter: 'meter.exe', phase: 'phase.scope', spec: 'spectrum.vst', lanes: 'transport.lanes', log: 'events.log' };
-const CABLES = [['beat', 'chains'], ['eq', 'chains'], ['eleph', 'chains'], ['meter', 'chains'], ['phase', 'meter'], ['spec', 'chains'], ['lanes', 'beat'], ['log', 'lanes']];
+const CABLES = { '916': [['spec', 'beat'], ['beat', 'tempo'], ['eq', 'chains'], ['eleph', 'chains'], ['meter', 'chains'], ['phase', 'meter'], ['log', 'chains'], ['lanes', 'meter']],
+  '169': [['beat', 'chains'], ['eq', 'chains'], ['eleph', 'chains'], ['meter', 'chains'], ['phase', 'meter'], ['spec', 'chains'], ['lanes', 'beat'], ['log', 'lanes']] };
 /** Window rects in frame pixels (fs = null: without the gentle float). */
 export function rects(P, fs) {
   const Lw = LAYOUT[P.aspect] || LAYOUT['916'], out = {}, TAU = Math.PI * 2;
@@ -39,8 +42,8 @@ export default {
   owns: ['title', 'bpm', 'key', 'tag'], textPos: 'bottom',
   params: [{ id: 'cables', label: 'Cable glow', min: 0, max: 1, step: .05, def: .5 }],
   // chains centred in chains.dll; the elephant hangs from elephant.sys's title bar
-  defaults: a => a === '916' ? { chains: { x: .5, y: .518, s: .58 }, eleph: { x: 812 / 1080, y: 158 / 1920, s: .72, len: .165 } }
-    : { chains: { x: 1044 / 1920, y: .29, s: .78 }, eleph: { x: 1690 / 1920, y: 102 / 1080, s: .62, len: .62 } },
+  defaults: a => a === '916' ? { chains: { x: .5, y: 1140 / 1920, s: .54 }, eleph: { x: 812 / 1080, y: 120 / 1920, s: .78, len: .255 } }
+    : { chains: { x: 1044 / 1920, y: .3, s: .7 }, eleph: { x: 1690 / 1920, y: 102 / 1080, s: .62, len: .62 } },
   reserved(P) { return Object.values(rects(P, null)); },
   draw(ctx, fs, P, p, assets) {
     const { W, H, u } = P, fg = p.main, hi = p.hi, bg = p.dark, acc = accentOn(p), ph = phrase(fs, P), pl = pulse(fs), glow = P.params && P.params.cables != null ? P.params.cables : .5;
@@ -52,15 +55,12 @@ export default {
     // menu bar + dock
     ctx.fillStyle = rgba(fg, .06); ctx.fillRect(0, 0, W, 44 * u); ctx.fillStyle = rgba(fg, .25); ctx.fillRect(0, 44 * u, W, 1 * u);
     txt(ctx, '✦ U2C OS', 24 * u, 29 * u, mono(15 * u, 700), hi); txt(ctx, 'FILE   EDIT   VIEW   WINDOW', 150 * u, 29 * u, mono(13 * u), rgba(fg, .6));
-    if (P.V) { const ty = 52 * u; ctx.fillStyle = rgba(fg, .03); ctx.fillRect(0, ty, W, 52 * u); ctx.fillStyle = rgba(fg, .16); ctx.fillRect(0, ty + 52 * u, W, 1 * u);
-      ['beat', 'eq', 'eleph', 'chains', 'meter', 'phase', 'spec', 'lanes'].forEach((id, j) => { const x = 56 * u + j * 64 * u; ctx.strokeStyle = rgba(fg, .45); ctx.lineWidth = 1 * u; ctx.strokeRect(x, ty + 12 * u, 28 * u, 28 * u); txt(ctx, TITLES[id].split(/[._]/)[0].slice(0, 4), x + 34 * u, ty + 30 * u, mono(10 * u), rgba(fg, .45)); });
-      txt(ctx, 'CPU 12 %  ·  48 kHz  ·  BUF 256', W - 56 * u, ty + 30 * u, mono(10 * u), rgba(fg, .45), 'right'); }
     txt(ctx, timecode(fs) + '  ●  ' + Math.round(fs.bpm) + ' BPM', W - 24 * u, 29 * u, mono(13 * u, 700), rgba(fg, .85), 'right');
     const R = rects(P, fs), O = {}; ORDER.forEach(id => { O[id] = FOLD.includes(id) ? openAmount(ph, FOLD.indexOf(id), false, fs.spb) : 1; }); O.eleph = 1; O.chains = 1;
     // cables first (under the windows), with beat-grid signal dots
-    CABLES.forEach(([a, b], i) => { const [p0, p1, dir] = port(R[a], R[b]), vis = Math.min(O[a], O[b]); if (vis <= .02) return;
+    const CB = CABLES[P.aspect] || CABLES['916']; CB.forEach(([a, b], i) => { const [p0, p1, dir] = port(R[a], R[b]), vis = Math.min(O[a], O[b]); if (vis <= .02) return;
       const pts = dir === 'v' ? [p0, { x: p0.x, y: (p0.y + p1.y) / 2 }, { x: p1.x, y: (p0.y + p1.y) / 2 }, p1] : cablePath(p0, p1, u);
-      ctx.save(); ctx.globalAlpha = ease(vis); drawCable(ctx, pts, S, .25 + .35 * glow); cableDots(ctx, pts, fs, S, 0, { beat: ((Math.floor(fs.beat) % CABLES.length) + CABLES.length) % CABLES.length === i, kick: kickCable(fs, CABLES.length) === i }); ctx.restore(); });
+      ctx.save(); ctx.globalAlpha = ease(vis); drawCable(ctx, pts, S, .25 + .35 * glow); cableDots(ctx, pts, fs, S, 0, { beat: ((Math.floor(fs.beat) % CB.length) + CB.length) % CB.length === i, kick: kickCable(fs, CB.length) === i }); ctx.restore(); });
     // windows
     const title = lineText(P, 'title', fs), bpm = lineText(P, 'bpm', fs), key = lineText(P, 'key', fs), tag = lineText(P, 'tag', fs);
     for (const id of ['chains', 'eleph', ...ORDER]) {
@@ -95,9 +95,9 @@ export default {
         const a0 = Math.PI / 2 - ang * Math.PI / 180; ctx.fillStyle = acc; ctx.beginPath(); ctx.arc(gx + Math.cos(a0) * 46 * u, gy + Math.sin(a0) * 46 * u, 3 * u, 0, 7); ctx.fill(); }
       ctx.restore();
     }
-    { const sy = (P.V ? 112 : 52) * u + fs.barP * (H - (P.V ? 112 : 52) * u), g2 = ctx.createLinearGradient(0, sy - 60 * u, 0, sy); g2.addColorStop(0, rgba(fg, 0)); g2.addColorStop(1, rgba(fg, .035)); ctx.fillStyle = g2; ctx.fillRect(0, sy - 60 * u, W, 60 * u); ctx.fillStyle = rgba(fg, .07); ctx.fillRect(0, sy, W, 1 * u); }
+    { const sy = 52 * u + fs.barP * (H - 52 * u), g2 = ctx.createLinearGradient(0, sy - 60 * u, 0, sy); g2.addColorStop(0, rgba(fg, 0)); g2.addColorStop(1, rgba(fg, .035)); ctx.fillStyle = g2; ctx.fillRect(0, sy - 60 * u, W, 60 * u); ctx.fillStyle = rgba(fg, .07); ctx.fillRect(0, sy, W, 1 * u); }
     // footer status
-    const fy = (P.V ? 1792 : 1040) * u; ctx.fillStyle = rgba(fg, .2); ctx.fillRect(70 * u, fy, W - 140 * u, 1 * u);
+    const fy = (P.V ? 1808 : 1040) * u; ctx.fillStyle = rgba(fg, .2); ctx.fillRect(70 * u, fy, W - 140 * u, 1 * u);
     txt(ctx, 'u2c.exe  ·  ' + (tag || 'prod. U2C') + '  ·  ' + (ph.lbL < ph.R * 1.25 ? 'build' : ph.lbL >= ph.C - ph.D ? 'release' : 'run'), 70 * u, fy + 24 * u, mono(13 * u), rgba(fg, .55));
     for (let j = 0; j < 48; j++) { ctx.fillStyle = rgba(fg, j % 4 ? .15 : .3); ctx.fillRect(W - 140 * u - j * 8 * u, fy - 6 * u, 1 * u, (j % 4 ? 3 : 6) * u); } // hat-driven tick shimmer
     sparkle(ctx, W - 80 * u, fy + 16 * u, 10 * u, p.spark);

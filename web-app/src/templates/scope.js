@@ -19,8 +19,8 @@ export default {
   id: 'scope', name: 'SCOPE', category: 'Spectrum', pal: 'charcoal', surface: 'dark', chainStyle: 'neon', glitchBoost: 1,
   owns: ['bpm', 'key'], textPos: 'top',
   params: [{ id: 'span', label: 'Time / div', min: .01, max: .12, step: .005, def: .05 }],
-  defaults: a => a === '916' ? { chains: { x: .5, y: .526, s: .74 }, eleph: { x: .5, y: 0, s: .4, len: .045 } } : { chains: { x: .42, y: .62, s: .74 }, eleph: { x: .42, y: 0, s: .4, len: .04 } },
-  reserved(P) { const S = screen(P), u = P.u; return [{ x: S.x, y: S.y - 40 * u, w: S.w, h: S.h + 40 * u }, P.V ? { x: S.x, y: S.y + S.h + 20 * u, w: 260 * u, h: 260 * u } : { x: P.W * .8, y: P.H * .3, w: P.W * .17, h: P.H * .5 }]; },
+  defaults: a => a === '916' ? { chains: { x: .5, y: .526, s: .74 }, eleph: { x: .8, y: 0, s: .6, len: .075 } } : { chains: { x: .42, y: .62, s: .74 }, eleph: { x: .42, y: 0, s: .4, len: .04 } },
+  reserved(P) { const S = screen(P), u = P.u; return [{ x: S.x, y: S.y - 40 * u, w: S.w, h: S.h + 40 * u }, P.V ? { x: S.x, y: S.y + S.h + 20 * u, w: S.w, h: 270 * u } : { x: P.W * .8, y: P.H * .3, w: P.W * .17, h: P.H * .5 }]; },
   draw(ctx, fs, P, p, assets) {
     const { W, H, u, V } = P, a2 = accentOn(p), span = (P.params && P.params.span) || .05, sb = P.safe.hard; ctx.fillStyle = p.dark; ctx.fillRect(0, 0, W, H);
     const S = screen(P);
@@ -49,6 +49,13 @@ export default {
     if (bk) txt(ctx, bk, S.x + S.w, S.y - 18 * u, lineFont(P, 'bpm', 17 * u, 700), lineColor(P, 'bpm', p), 'right');
     txt(ctx, 'CH2 ▼', S.x + 10 * u, S.y + S.h - 12 * u, mono(14 * u), rgba(a2, .9));
     if (!V) { const hz = Math.round(fs.centroid * 6000 + 200); txt(ctx, 'CENTROID', X.x, X.y + X.h + 34 * u, mono(14 * u), rgba(p.main, .7)); txt(ctx, hz + ' Hz', X.x, X.y + X.h + 64 * u, mono(26 * u, 700), p.main); }
+    else { // measurement column beside the XY figure: a 2 × 2 grid of real readouts on the 8 px grid
+      const M = fs.m, G = M.exportGain(P), lu = M.lufsS(fs.t), c = M.corr(fs.t), tp = M.truePeak(fs.t), ph = phrase(fs, P), x0 = X.x + X.w + 48 * u, cw = (S.x + S.w - x0) / 2;
+      const cell = (k, v, i) => { const x = x0 + (i % 2) * cw, y = X.y + (i < 2 ? 0 : 120 * u); ctx.fillStyle = rgba(p.main, .28); ctx.fillRect(x, y, cw - 24 * u, 1 * u);
+        txt(ctx, k, x, y + 28 * u, mono(13 * u, 500), rgba(p.main, .6)); txt(ctx, v, x, y + 72 * u, mono(32 * u, 700), p.main); };
+      cell('LUFS-S', lu <= -70 ? '−∞' : (lu + G).toFixed(1), 0); cell('TRUE PEAK', tp <= -99 ? '−∞' : (tp + G).toFixed(1), 1);
+      cell('CORR', (c >= 0 ? '+' : '') + c.toFixed(2), 2); cell('PHRASE', `${ph.k + 1}·${String(Math.floor(ph.lb) + 1).padStart(2, '0')}`, 3);
+      txt(ctx, 'CENTROID ' + Math.round(fs.centroid * 6000 + 200) + ' Hz', X.x, X.y + X.h + 28 * u, mono(13 * u, 500), rgba(p.main, .6)); }
     hud(ctx, 28 * u, 28 * u, W - 56 * u, H - 56 * u, 44 * u, rgba(p.main, .5), 2 * u); sparkle(ctx, V ? S.x + S.w - 10 * u : W * .94, V ? S.y + S.h + 40 * u : H * .08, 16 * u, p.spark);
   },
 };

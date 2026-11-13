@@ -91,8 +91,9 @@ function freqGrid(ctx, r, S, dbs, dbMin, dbMax, unit) {
 /** EQ analyser: the measured spectral envelope (1 s power mean) relative to a pink reference (equal power per octave,
  *  the 0 dB line), with five band nodes sitting at the real band levels (±1/3 octave around 80 / 250 / 1k / 4k / 11k)
  *  and the overall tilt in dB/octave. A pink-balanced mix reads flat; nothing here is decorative. */
-export function eqView(ctx, r, fs, S) {
-  const { u, fg, hi, acc } = S, M = fs.m, DBR = 12, yOf = d => r.y + (DBR + 3 - clamp(d, -DBR - 3, DBR + 3)) / (2 * DBR + 6) * r.h, xs = f => r.x + LOGF(f) * r.w;
+export function eqView(ctx, r0, fs, S) {
+  const r = { x: r0.x, y: r0.y + 16 * S.u, w: r0.w, h: r0.h - 16 * S.u }; // header line above the plot
+  const { u, fg, hi, acc } = S, M = fs.m, DBR = 15, yOf = d => r.y + (DBR + 3 - clamp(d, -DBR - 3, DBR + 3)) / (2 * DBR + 6) * r.h, xs = f => r.x + LOGF(f) * r.w;
   freqGrid(ctx, r, S, [12, 6, 0, -6, -12], -DBR - 3, DBR + 3, ' dB');
   if (!M.pinkRel) return;
   const { rel, silent } = M.pinkRel(fs.t, 1), NS = rel.length, sm = new Float32Array(NS);
@@ -113,11 +114,12 @@ export function eqView(ctx, r, fs, S) {
   // tilt: least-squares slope of the envelope vs octave (60 Hz-12 kHz)
   let sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0; for (let k = 0; k < NS; k++) { const f = M.binHz(k); if (f < 60 || f > 12000) continue; const x = Math.log2(f / 1000); sx += x; sy += sm[k]; sxx += x * x; sxy += x * sm[k]; n++; }
   const tilt = n > 2 && !silent ? (n * sxy - sx * sy) / (n * sxx - sx * sx) : 0;
-  lab(ctx, `VS PINK · 1 S · TILT ${tilt >= 0 ? '+' : ''}${tilt.toFixed(1)} dB/OCT`, r.x + 2 * u, r.y + 9 * u, S, .7);
+  lab(ctx, `VS PINK · 1 S · TILT ${tilt >= 0 ? '+' : ''}${tilt.toFixed(1)} dB/OCT`, r0.x + 2 * u, r0.y + 9 * u, S, .7);
 }
 /** Log-frequency spectrum analyser: calibrated dBFS per log bin (a full-scale sine = 0 dB), -84…-12 dBFS, filled area,
  *  12 dB/s peak-hold line. */
-export function specAnalyzer(ctx, r, fs, S) {
+export function specAnalyzer(ctx, r0, fs, S) {
+  const r = { x: r0.x, y: r0.y + 16 * S.u, w: r0.w, h: r0.h - 16 * S.u };
   const { u, hi } = S, M = fs.m, sd = M.specDb(fs.i), hold = M.specHold(fs.t), TOP = -12, BOT = -84, yOf = d => r.y + clamp((TOP - d) / (TOP - BOT)) * r.h, xs = k => r.x + LOGF(M.binHz(k)) * r.w;
   freqGrid(ctx, r, S, [-12, -24, -36, -48, -60, -72], BOT, TOP, '');
   ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
@@ -125,7 +127,7 @@ export function specAnalyzer(ctx, r, fs, S) {
   path(sd); ctx.lineTo(r.x + r.w, r.y + r.h); ctx.lineTo(r.x, r.y + r.h); ctx.closePath(); const gr = ctx.createLinearGradient(0, r.y, 0, r.y + r.h); gr.addColorStop(0, rgba(hi, .34)); gr.addColorStop(1, rgba(hi, .03)); ctx.fillStyle = gr; ctx.fill();
   path(sd); ctx.strokeStyle = hi; ctx.lineWidth = 1.4 * u; ctx.stroke();
   path(hold); ctx.strokeStyle = rgba(S.acc, .85); ctx.lineWidth = 1 * u; ctx.setLineDash([2 * u, 2 * u]); ctx.stroke(); ctx.setLineDash([]);
-  ctx.restore(); lab(ctx, 'dBFS · LOG BINS · HOLD −12 dB/s', r.x + 2 * u, r.y + 9 * u, S, .7);
+  ctx.restore(); lab(ctx, 'dBFS · LOG BINS · HOLD −12 dB/s', r0.x + 2 * u, r0.y + 9 * u, S, .7);
 }
 /** L/R peak + RMS meter with dB scale, 1.5 s peak hold, clip LEDs and LUFS M/S/I + true-peak readouts. */
 export function proMeter(ctx, r, fs, S, P) {

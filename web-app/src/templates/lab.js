@@ -19,7 +19,7 @@ export default {
   id: 'lab', name: 'LAB', category: 'Interface', pal: 'charcoal', surface: 'dark', chainStyle: 'neon', glitchBoost: 1,
   owns: ['title', 'bpm', 'key', 'tag'], textPos: 'bottom',
   params: [{ id: 'pulse', label: 'Cable glow', min: 0, max: 1, step: .05, def: .5 }],
-  defaults: a => a === '916' ? { chains: { x: .5, y: .565, s: .6 }, eleph: { x: .74, y: .31, s: .36, len: .03 } } : { chains: { x: .47, y: .6, s: .78 }, eleph: { x: .79, y: .3, s: .42, len: .03 } },
+  defaults: a => a === '916' ? { chains: { x: .5, y: .565, s: .5 }, eleph: { x: .74, y: .31, s: .36, len: .03 } } : { chains: { x: .47, y: .6, s: .78 }, eleph: { x: .79, y: .3, s: .42, len: .03 } },
   reserved(P, assets) { const B = panel(P); return [B, { x: B.x, y: B.y - 210 * P.u, w: B.w, h: 200 * P.u }, { x: B.x, y: B.y + B.h + 20 * P.u, w: B.w, h: 150 * P.u }]; },
   draw(ctx, fs, P, p, assets) {
     const { W, H, u, V } = P, fg = p.main, hi = p.hi, bg = p.dark, acc = accentOn(p), ph = phrase(fs, P), glow = P.params && P.params.pulse != null ? P.params.pulse : .5;

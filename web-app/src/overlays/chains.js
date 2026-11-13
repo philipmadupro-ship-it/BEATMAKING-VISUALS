@@ -18,7 +18,10 @@ const neonAtlas = (A, col, glow) => cached('na|' + col + glow, A.edge.width, A.e
   const e = tint(glow), c = tint(col);
   const S = A.links.scale || 1;
   try { g.filter = `blur(${7 * S}px)`; g.drawImage(e, 0, 0); g.drawImage(e, 0, 0); g.filter = `blur(${2 * S}px)`; g.drawImage(e, 0, 0); g.filter = 'none'; } catch (_) {}
-  g.drawImage(c, 0, 0); g.drawImage(c, 0, 0); });
+  g.drawImage(c, 0, 0); g.drawImage(c, 0, 0);
+  // faint metal body under the neon edge: the links read as solid chain, not wireframe scribbles
+  const f = mk(w, h), fg = f.getContext('2d'); fg.drawImage(A.atlas, 0, 0); fg.globalCompositeOperation = 'multiply'; fg.fillStyle = col; fg.fillRect(0, 0, w, h); fg.globalCompositeOperation = 'destination-in'; fg.drawImage(A.atlas, 0, 0);
+  g.globalCompositeOperation = 'destination-over'; g.globalAlpha = .26; g.drawImage(f, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; });
 // 4x4 Bayer dither masks: level q in 0..16 → that many cells of every 4x4 block kept (cell = `px` canvas pixels)
 const B4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 function ditherTile(q, px) { return cached(`dt|${q}|${px}`, 4 * px, 4 * px, g => { g.fillStyle = '#fff'; for (let i = 0; i < 16; i++) if (B4[i] < q) g.fillRect((i % 4) * px, Math.floor(i / 4) * px, px, px); }); }
