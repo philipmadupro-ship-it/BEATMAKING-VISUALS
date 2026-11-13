@@ -6,9 +6,10 @@
 // with two warm-up loops (same audio), and the last beat of the loop is blended into the state one loop earlier,
 // so the last frame flows into frame 0. One simulation per (track, loop, phrase grid), memoised.
 import { cached, clamp, hex3, mix } from '../util/draw.js';
-export function elephFor(assets, pal, surface) {
-  const img = assets.eleph;
-  return cached('el|' + pal.id + surface, img.width, img.height, (g, w, h) => { g.drawImage(img, 0, 0);
+export function elephFor(assets, pal, surface) { return tinted(assets.eleph, pal, 'el|' + surface); }
+/** Palette duotone of any elephant image (the sprite, its limb layer, or a frame of the optional sprite loop). */
+export function tinted(img, pal, key) {
+  return cached(key + '|' + pal.id + '|' + img.width + 'x' + img.height + (img.src ? '|' + img.src.slice(-40) : ''), img.width, img.height, (g, w, h) => { g.drawImage(img, 0, 0);
     const duo = pal.duo; if (!duo) return; const d = g.getImageData(0, 0, w, h), D = d.data, c0 = hex3(duo[0]), c1 = hex3(duo[1]);
     for (let i = 0; i < D.length; i += 4) { if (!D[i + 3]) continue; const l = clamp(((.3 * D[i] + .59 * D[i + 1] + .11 * D[i + 2]) / 255 - .18) * 1.45); for (let k = 0; k < 3; k++) D[i + k] = c0[k] + (c1[k] - c0[k]) * l; }
     g.putImageData(d, 0, 0); });
@@ -35,23 +36,33 @@ function simulate(T, a, b, anchorBeat, C, I) {
       x[i] += dx * k * wa; y[i] += dy * k * wa; x[i + 1] -= dx * k * wb; y[i + 1] -= dy * k * wb; }
   }
   for (let i = 0; i <= N; i++) { rec[r++] = x[i]; rec[r++] = y[i]; } // state at the very end
-  return { rec, steps, L, a, b };
+  // secondary motion: a lagged, slightly underdamped spring follows the pendant's angle; the difference (lag) is how
+  // far the legs and trunk trail the body. Run over both recorded loops so the second one is periodic.
+  const stride = (N + 1) * 2, K = 2 * steps + 1, lag = new Float32Array(K), W0 = 2 * Math.PI * 1.35, Z = .42;
+  const ang = k => Math.atan2(rec[k * stride + 2 * N] - rec[k * stride + 2 * N - 4], rec[k * stride + 2 * N + 1] - rec[k * stride + 2 * N - 3]);
+  let sy = ang(0), sv = 0;
+  for (let k = 0; k < K; k++) { const g = ang(k); sv += (W0 * W0 * (g - sy) - 2 * Z * W0 * sv) * dt; sy += sv * dt; lag[k] = sy - g; }
+  return { rec, lag, steps, L, a, b };
 }
 function sim(T, P, I0) {
   const I = I0 * (P.eleph.swing ?? .4) / .4, lp = P.loop || { a: 0, b: T.duration }, key = [lp.a.toFixed(4), lp.b.toFixed(4), P.anchorBeat, P.cycleBeats, I.toFixed(3)].join('|');
   let m = SIMS.get(T); if (!m) { m = new Map(); SIMS.set(T, m); } let s = m.get(key);
   if (!s) { s = simulate(T, lp.a, lp.b, P.anchorBeat, P.cycleBeats, I); if (m.size > 12) m.clear(); m.set(key, s); } return s;
 }
-/** Rope node positions (normalised) for time t: loop-periodic, seam-blended. Returns Float32Array [x0,y0,...]. */
-export function ropeNodes(fs, P) {
-  const T = fs.track, S = sim(T, P, fs.I), stride = (N + 1) * 2, out = new Float32Array(stride);
+/** Sample a recorded per-step array (stride values per step) at time t: loop-periodic, seam-blended. */
+function sampleRec(fs, S, arr, stride) {
+  const T = fs.track, out = new Float32Array(stride);
   const at = idx => { const f = clamp(idx, 0, 2 * S.steps), i = Math.min(2 * S.steps - 1, f | 0), u = f - i; return [i, u]; };
-  const sample = (idx, w) => { const [i, u] = at(idx); for (let k = 0; k < stride; k++) out[k] += w * (S.rec[i * stride + k] * (1 - u) + S.rec[(i + 1) * stride + k] * u); };
+  const sample = (idx, w) => { const [i, u] = at(idx); for (let k = 0; k < stride; k++) out[k] += w * (arr[i * stride + k] * (1 - u) + arr[(i + 1) * stride + k] * u); };
   let lt = ((fs.t - S.a) % S.L + S.L) % S.L; if (fs.t >= S.b - 1e-6 && fs.t <= S.b + 1e-6) lt = S.L; // the out point itself
   const idx2 = S.steps + lt * HZ, xf = Math.min(T.spb, S.L / 4), w0 = (lt - (S.L - xf)) / xf, w = w0 <= 0 ? 0 : w0 >= 1 ? 1 : w0 * w0 * (3 - 2 * w0);
   sample(idx2, 1 - w); if (w > 0) sample(idx2 - S.steps, w);
   return out;
 }
+/** Rope node positions (normalised) for time t: loop-periodic, seam-blended. Returns Float32Array [x0,y0,...]. */
+export function ropeNodes(fs, P) { const S = sim(fs.track, P, fs.I); return sampleRec(fs, S, S.rec, (N + 1) * 2); }
+/** How far (radians) the limbs trail the body: lagged spring of the rope angle, loop-periodic and seam-blended. */
+export function limbLag(fs, P) { const S = sim(fs.track, P, fs.I); return sampleRec(fs, S, S.lag, 1)[0]; }
 const geo = (P, img) => { const sc = Math.min(P.W, P.H) * .42 / img.width * P.eleph.s, len = P.eleph.len * P.H + 10; return { sc, len, px: P.eleph.x * P.W, py: (P.eleph.y || 0) * P.H - 12 }; };
 export function elephantBounds(P, assets) { const img = assets.eleph, { sc, len, px, py } = geo(P, img); return { x: px - img.width * sc / 2, y: py + len - img.height * sc * .3, w: img.width * sc, h: img.height * sc }; }
 /** Area the pendant can sweep (for text layout): anchor ± swing, down to the elephant's feet. */
@@ -129,8 +140,81 @@ export function drawPendant(ctx, fs, P, pal, assets, tpl, px, py, len, sc, opt =
   drawChainLinks(g, J, Lk, col);
   ctx.drawImage(layer, x0, y0, lw / dev, lh / dev);
   const [ex, ey] = J[J.length - 1], [qx, qy] = J[J.length - 2], a2 = Math.atan2(ex - qx, ey - qy); // the bail follows the last link
-  ctx.save(); ctx.translate(ex, ey); ctx.rotate(-a2); ctx.scale(sc, sc); ctx.drawImage(img, -BAIL.x, -BAIL.y); ctx.restore();
+  const anim = assets.elephAnim;
+  ctx.save(); ctx.translate(ex, ey); ctx.rotate(-a2);
+  if (anim && anim.frames.length && !opt.img) { // optional sprite loop (assets/elephant-anim): replaces the warp
+    const fr = tinted(animFrame(anim, fs), pal, 'ea|' + tpl.surface), k = (anim.scale || 1) * sc, b = anim.bail;
+    ctx.scale(k, k); ctx.drawImage(fr, -b.x, -b.y);
+  } else {
+    ctx.scale(sc, sc);
+    const W = assets.warp && assets.elephLimbs ? warped(assets, pal, tpl, img, fs, P, sc * dev) : null;
+    ctx.drawImage(W || img, -BAIL.x, -BAIL.y);
+    if (assets.warp) glints(ctx, fs, P, pal, assets.warp);
+  }
+  ctx.restore();
   return { x: ex, y: ey + img.height * sc * .2, th: a2 };
+}
+// ---- secondary motion: triangle-mesh warp of the sprite (Canvas2D, one affine map per triangle)
+// The 16×16 mesh carries per-vertex weights from tools/elephant_mask.py: 0 on the shield body and head, rising along
+// the legs and trunk. Rigid pixels are drawn once (no seams); only the limb layer is drawn through the mesh, and only
+// triangles that actually move. Each triangle's clip is grown by ~0.75 device px so neighbours overlap (no hairlines).
+const BEND = 1.25, SPLAY = 4.5, LIFT = 2;
+export function vertexOffsets(warp, fs, P) {
+  const G = warp.grid, lag = limbLag(fs, P), I = Math.min(1.5, (P.eleph.swing ?? .4) / .4), bass = Math.min(1, fs.bassE || 0), [pcx, pcy] = warp.bodyCentroid;
+  const piv = { x: pcx, y: pcy + 120 }, phi = -BEND * lag, out = new Float32Array((G + 1) * (G + 1) * 2); let any = false;
+  for (let j = 0; j <= G; j++) for (let i = 0; i <= G; i++) { const k = j * (G + 1) + i, w = warp.weights[k]; if (w <= .005) continue;
+    const x = i * (warp.w - 1) / G, y = j * (warp.h - 1) / G, f = w * phi, rx = x - piv.x, ry = y - piv.y;
+    // limbs swing about a pivot under the body (small rotation), splay outward and lift a touch with the bass
+    let dx = rx * (Math.cos(f) - 1) - ry * Math.sin(f), dy = rx * Math.sin(f) + ry * (Math.cos(f) - 1);
+    const side = clamp((x - pcx - 30) / 120, -1, 1); dx += w * bass * SPLAY * I * side; dy -= w * bass * LIFT * I;
+    out[2 * k] = dx; out[2 * k + 1] = dy; if (Math.abs(dx) + Math.abs(dy) > .05) any = true; }
+  return any ? out : null;
+}
+function warped(assets, pal, tpl, img, fs, P, dev) {
+  const warp = assets.warp, off = vertexOffsets(warp, fs, P); if (!off) return null;
+  const w = img.width, h = img.height, G = warp.grid, key = pal.id + tpl.surface;
+  const rigid = cached('elrig|' + key, w, h, g => { g.drawImage(img, 0, 0); g.globalCompositeOperation = 'destination-out'; g.drawImage(assets.elephLimbs, 0, 0, w, h); });
+  const limb = cached('ellimb|' + key, w, h, g => { g.drawImage(img, 0, 0); g.globalCompositeOperation = 'destination-in'; g.drawImage(assets.elephLimbs, 0, 0, w, h); });
+  const out = cached('elwarp|' + w + 'x' + h, w, h, () => {}), g = out.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.clearRect(0, 0, w, h); g.drawImage(rigid, 0, 0);
+  const vx = (i, j) => i * (w - 1) / G + off[2 * (j * (G + 1) + i)], vy = (i, j) => j * (h - 1) / G + off[2 * (j * (G + 1) + i) + 1];
+  const sx = i => i * (w - 1) / G, sy = j => j * (h - 1) / G, grow = .75 / Math.max(.25, dev);
+  const tri = (a, b, c) => { // a, b, c = [i, j] vertex indices; affine map source triangle -> displaced triangle
+    const moved = [a, b, c].some(([i, j]) => off[2 * (j * (G + 1) + i)] || off[2 * (j * (G + 1) + i) + 1]); if (!moved) return false;
+    const x0 = sx(a[0]), y0 = sy(a[1]), x1 = sx(b[0]), y1 = sy(b[1]), x2 = sx(c[0]), y2 = sy(c[1]);
+    const u0 = vx(...a), v0 = vy(...a), u1 = vx(...b), v1 = vy(...b), u2 = vx(...c), v2 = vy(...c);
+    const den = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0); if (Math.abs(den) < 1e-9) return false;
+    const A = ((u1 - u0) * (y2 - y0) - (u2 - u0) * (y1 - y0)) / den, C = ((u2 - u0) * (x1 - x0) - (u1 - u0) * (x2 - x0)) / den;
+    const B = ((v1 - v0) * (y2 - y0) - (v2 - v0) * (y1 - y0)) / den, D = ((v2 - v0) * (x1 - x0) - (v1 - v0) * (x2 - x0)) / den;
+    const E = u0 - A * x0 - C * y0, F = v0 - B * x0 - D * y0, cx = (u0 + u1 + u2) / 3, cy = (v0 + v1 + v2) / 3;
+    const gr = (x, y) => { const dx = x - cx, dy = y - cy, l = Math.hypot(dx, dy) || 1; return [x + dx / l * grow, y + dy / l * grow]; };
+    g.save(); g.beginPath(); g.moveTo(...gr(u0, v0)); g.lineTo(...gr(u1, v1)); g.lineTo(...gr(u2, v2)); g.closePath(); g.clip();
+    g.setTransform(A, B, C, D, E, F);
+    const bx = Math.max(0, Math.floor(Math.min(x0, x1, x2)) - 2), by = Math.max(0, Math.floor(Math.min(y0, y1, y2)) - 2), bw = Math.min(w, Math.ceil(Math.max(x0, x1, x2)) + 2) - bx, bh = Math.min(h, Math.ceil(Math.max(y0, y1, y2)) + 2) - by;
+    g.drawImage(limb, bx, by, bw, bh, bx, by, bw, bh); g.restore(); return true; };
+  for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) { // alternate the diagonal (seam-free, no directional bias)
+    if ((i + j) % 2) { tri([i, j], [i + 1, j], [i + 1, j + 1]); tri([i, j], [i + 1, j + 1], [i, j + 1]); }
+    else { tri([i, j], [i + 1, j], [i, j + 1]); tri([i + 1, j], [i + 1, j + 1], [i, j + 1]); } }
+  // limb pixels in cells that did not move still need drawing (they were cut from the rigid layer)
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'destination-over';
+  for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) { const ks = [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]];
+    if (ks.some(([a, b]) => off[2 * (b * (G + 1) + a)] || off[2 * (b * (G + 1) + a) + 1])) continue;
+    const x = Math.floor(sx(i)), y = Math.floor(sy(j)), x2 = Math.ceil(sx(i + 1)), y2 = Math.ceil(sy(j + 1)); g.drawImage(limb, x, y, x2 - x, y2 - y, x, y, x2 - x, y2 - y); }
+  g.globalCompositeOperation = 'source-over';
+  return out;
+}
+/** Snare glints: a small ✦ blooms on one of the art's own sparkle spots per snare (rotating), then fades. */
+function glints(ctx, fs, P, pal, warp) {
+  if (fs.snareIdx < 0 || !(fs.snareC > .02)) return; const n = warp.glints.length, [x, y] = warp.glints[((fs.snareIdx % n) + n) % n], e = Math.min(1, fs.snareC);
+  const r = 16 + 10 * e; ctx.save(); ctx.globalAlpha = .9 * e; ctx.globalCompositeOperation = pal.light ? 'source-over' : 'lighter';
+  ctx.translate(x, y); ctx.beginPath(); ctx.moveTo(0, -r); ctx.quadraticCurveTo(r * .1, -r * .1, r, 0); ctx.quadraticCurveTo(r * .1, r * .1, 0, r); ctx.quadraticCurveTo(-r * .1, r * .1, -r, 0); ctx.quadraticCurveTo(-r * .1, -r * .1, 0, -r);
+  ctx.fillStyle = pal.spark || pal.hi; ctx.fill(); ctx.restore();
+}
+// ---- optional sprite loop (assets/elephant-anim/manifest.json): frame = loop phase × whole number of cycles
+export function animFrame(anim, fs) {
+  const n = anim.frames.length, dur = n / anim.fps, Lp = fs.loop ? fs.loop.b - fs.loop.a : 0;
+  const ph = Lp > 0 ? (fs.lp * Math.max(1, Math.round(Lp / dur))) % 1 : ((fs.t / dur) % 1 + 1) % 1;
+  return anim.frames[Math.min(n - 1, Math.floor(ph * n))];
 }
 export const elephant = {
   id: 'elephant', name: 'Elephant pendant',

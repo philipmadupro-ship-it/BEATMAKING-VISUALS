@@ -213,6 +213,16 @@ const rope = await page.evaluate(async () => {
   return { repeat: d(a, b), seam: d(first, last), step: d(first, step), swing: Math.abs(mid[mid.length - 2]), maxDeg };
 });
 ok('rope physics: gentle, deterministic, seamless', rope.repeat === 0 && rope.seam < 1e-3 && rope.maxDeg > .5 && rope.maxDeg <= 8.5, `max swing ${rope.maxDeg.toFixed(1)}° · repeat diff ${rope.repeat} · out→in diff ${rope.seam.toExponential(1)} (one frame of motion ${rope.step.toExponential(1)})`);
+// v5 item 4: elephant secondary motion = triangle-mesh warp; shield rigid, legs/trunk move a little, loop-seamless
+const warp = await page.evaluate(async () => {
+  const app = window.u2c, tr = app.store.session.track, p = app.store.snapshot(), { makeParams } = await import('/src/engine/layout.js'), { getFrameState } = await import('/src/engine/frame.js');
+  const E = await import('/src/overlays/elephant.js'), A = app.assets || (await (await import('/src/engine/assets.js')).loadAssets('assets/')), W = A.warp, P = makeParams(p, tr), G = W.grid;
+  let maxLimb = 0, maxBody = 0; const at = t => E.vertexOffsets(W, getFrameState(tr, t, { loop: P.loop }), P);
+  for (let t = p.inT; t < p.outT; t += 1 / 15) { const o = at(t); if (!o) continue; for (let k = 0; k < (G + 1) * (G + 1); k++) { const d = Math.hypot(o[2 * k], o[2 * k + 1]); if (W.weights[k] <= .005) maxBody = Math.max(maxBody, d); else maxLimb = Math.max(maxLimb, d); } }
+  const a = at(p.inT), b = at(p.outT), seam = a && b ? Math.max(...Array.from(a, (v, k) => Math.abs(v - b[k]))) : 0;
+  return { maxLimb, maxBody, seam, anim: !!A.elephAnim };
+});
+ok('elephant mesh warp: body rigid, limbs subtle, seamless', warp.maxBody === 0 && warp.maxLimb > 1 && warp.maxLimb < 24 && warp.seam < .5, `limb max ${warp.maxLimb.toFixed(1)} px (sprite units) · body ${warp.maxBody} · in/out diff ${warp.seam.toFixed(2)} px · sprite loop ${warp.anim ? 'on' : 'off (warp)'}`);
 
 // ---- 4-bar loop + seam check
 await page.click('.tabs [data-tab="export"]');
