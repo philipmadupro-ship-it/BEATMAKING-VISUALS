@@ -1,5 +1,9 @@
+<!doctype html>
+<html lang="en">
 <meta charset="utf-8">
 <title>U2C Studio</title>
+<meta name="description" content="Upload a beat and render branded, beat-reactive U2C preview videos for Reels, TikTok, Shorts and YouTube.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%23161616%22/%3E%3Crect x=%227%22 y=%2211%22 width=%2212%22 height=%2210%22 rx=%224%22 fill=%22none%22 stroke=%22%23c8c8c8%22 stroke-width=%222.4%22/%3E%3Crect x=%2213%22 y=%2211%22 width=%2212%22 height=%2210%22 rx=%224%22 fill=%22none%22 stroke=%22%23c8c8c8%22 stroke-width=%222.4%22/%3E%3C/svg%3E">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -9,7 +13,7 @@
 :root{
   --pal-main:#c8c8c8; --pal-dark:#161616;
   --bg:#121212; --bg-2:#181818; --panel:#1a1a1a; --stage:#0b0b0b;
-  --fg:#e6e6e6; --muted:#8b8b8b; --faint:#5e5e5e;
+  --fg:#e6e6e6; --muted:#8b8b8b; --faint:#808080;
   --line:rgba(200,200,200,.10); --line-2:rgba(200,200,200,.18);
   --accent:var(--pal-main); --on-accent:#161616; --tint:rgba(200,200,200,.07);
   --sans:"Instrument Sans",ui-sans-serif,system-ui,sans-serif;
@@ -21,7 +25,7 @@
 @media (prefers-color-scheme: light){
   :root:not([data-theme="dark"]){
     --bg:#e8e7e4; --bg-2:#efeeeb; --panel:#f4f3f0; --stage:#161616;
-    --fg:#161616; --muted:#5a5a5a; --faint:#8c8c8c;
+    --fg:#161616; --muted:#5a5a5a; --faint:#666666;
     --line:rgba(22,22,22,.12); --line-2:rgba(22,22,22,.22);
     --accent:var(--pal-dark); --on-accent:#f4f3f0; --tint:rgba(22,22,22,.06);
     color-scheme:light;
@@ -29,7 +33,7 @@
 }
 :root[data-theme="light"]{
   --bg:#e8e7e4; --bg-2:#efeeeb; --panel:#f4f3f0; --stage:#161616;
-  --fg:#161616; --muted:#5a5a5a; --faint:#8c8c8c;
+  --fg:#161616; --muted:#5a5a5a; --faint:#666666;
   --line:rgba(22,22,22,.12); --line-2:rgba(22,22,22,.22);
   --accent:var(--pal-dark); --on-accent:#f4f3f0; --tint:rgba(22,22,22,.06);
   color-scheme:light;
@@ -52,7 +56,8 @@ body{background:var(--bg);color:var(--fg)}
   </div>
 </header>
 
-<main>
+<a class="skip" href="#main">Skip to content</a>
+<main id="main" tabindex="-1">
 <section id="home">
  <div class="home-in">
   <div class="hero">
@@ -125,20 +130,20 @@ body{background:var(--bg);color:var(--fg)}
       <div class="inrow"><span class="lbl">Auto hook</span><button class="btn small" data-len="7">7s loop</button><button class="btn small" data-len="15">15s</button><button class="btn small" data-len="30">30s</button><button class="btn small" data-len="60">60s</button><button class="btn small" data-len="full">Full</button></div>
       <div class="inrow"><span class="lbl">Zoom</span><input type="range" id="wsZoom" min="0" max="200" step="1" value="0" aria-label="Timeline zoom" style="width:110px;accent-color:var(--accent)"></div>
     </div>
-    <div class="legend"><span>drag the clip region · snaps to bars · <kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> beat · <kbd>I</kbd><kbd>O</kbd> in/out · <kbd>1</kbd>–<kbd>9</kbd> looks</span><span id="lgCounts"></span></div>
+    <div class="legend"><span>drag the clip region · snaps to bars · <kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> beat · <kbd>I</kbd><kbd>O</kbd> in/out · <kbd>1</kbd>-<kbd>9</kbd> looks</span><span id="lgCounts"></span></div>
   </div>
  </div>
  <aside class="panel">
   <div class="tabs" role="tablist">
-    <button role="tab" data-tab="beat" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 9h2M6 5v8M9 3v12M12 6v6M15 8v2"/></svg>Beat</button>
-    <button role="tab" data-tab="look" aria-selected="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="10" y="2" width="6" height="6" rx="1"/><rect x="2" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/></svg>Look</button>
-    <button role="tab" data-tab="style" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9 1.5Q9 9 16.5 9Q9 9 9 16.5Q9 9 1.5 9Q9 9 9 1.5z"/></svg>Style</button>
-    <button role="tab" data-tab="fx" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 5h14M2 9h9M2 13h14M13 7l3 2-3 2"/></svg>FX</button>
-    <button role="tab" data-tab="text" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 15L8 3l5 12M5 11h6M14 7v8"/></svg>Text</button>
-    <button role="tab" data-tab="export" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9 2v9M5 7l4 4 4-4M3 13v3h12v-3"/></svg>Export</button>
+    <button role="tab" id="tab-beat" aria-controls="pane-beat" data-tab="beat" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 9h2M6 5v8M9 3v12M12 6v6M15 8v2"/></svg>Beat</button>
+    <button role="tab" id="tab-look" aria-controls="pane-look" data-tab="look" aria-selected="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="10" y="2" width="6" height="6" rx="1"/><rect x="2" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/></svg>Look</button>
+    <button role="tab" id="tab-style" aria-controls="pane-style" data-tab="style" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9 1.5Q9 9 16.5 9Q9 9 9 16.5Q9 9 1.5 9Q9 9 9 1.5z"/></svg>Style</button>
+    <button role="tab" id="tab-fx" aria-controls="pane-fx" data-tab="fx" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 5h14M2 9h9M2 13h14M13 7l3 2-3 2"/></svg>FX</button>
+    <button role="tab" id="tab-text" aria-controls="pane-text" data-tab="text" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 15L8 3l5 12M5 11h6M14 7v8"/></svg>Text</button>
+    <button role="tab" id="tab-export" aria-controls="pane-export" data-tab="export" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9 2v9M5 7l4 4 4-4M3 13v3h12v-3"/></svg>Export</button>
     <i class="ul" id="tabUl"></i>
   </div>
-  <div class="pane" data-pane="beat" hidden>
+  <div class="pane" role="tabpanel" id="pane-beat" aria-labelledby="tab-beat" data-pane="beat" hidden>
     <h3>Beat grid</h3>
     <div class="group">
       <div class="field"><label class="lbl" for="sBpm">BPM</label><div class="inrow"><input class="inp mono" id="sBpm" type="number" min="40" max="250" step="0.1" style="width:96px"><button class="btn small" data-bpm="0.5">÷2</button><button class="btn small" data-bpm="2">×2</button><button class="btn small" id="tapBtn">Tap</button></div></div>
@@ -148,12 +153,12 @@ body{background:var(--bg);color:var(--fg)}
     </div>
     <div class="group"><div class="lbl">Analysis</div><dl class="kv" id="anaKv"></dl></div>
   </div>
-  <div class="pane" data-pane="look">
+  <div class="pane" role="tabpanel" id="pane-look" aria-labelledby="tab-look" data-pane="look">
     <h3>Looks</h3>
     <div class="lookgrid" id="lookGrid"></div>
     <div class="group" id="tplParams"></div>
   </div>
-  <div class="pane" data-pane="style" hidden>
+  <div class="pane" role="tabpanel" id="pane-style" aria-labelledby="tab-style" data-pane="style" hidden>
     <h3>Overlays <em>&amp; finish</em></h3>
     <div class="group">
       <div class="group-h"><label class="tog"><input type="checkbox" id="chOn" checked> U2C chains</label><span class="hint">fly in · pulse · shatter</span></div>
@@ -177,7 +182,7 @@ body{background:var(--bg);color:var(--fg)}
       <label class="tog"><input type="checkbox" id="fZoom" checked> Slow zoom (always-on motion)</label>
     </div>
   </div>
-  <div class="pane" data-pane="fx" hidden>
+  <div class="pane" role="tabpanel" id="pane-fx" aria-labelledby="tab-fx" data-pane="fx" hidden>
     <h3>Post FX</h3>
     <div class="group">
       <div class="group-h"><label class="tog"><input type="checkbox" id="fxOn" checked> Audio-driven FX</label><span class="hint" id="fxStatus"></span></div>
@@ -196,7 +201,7 @@ body{background:var(--bg);color:var(--fg)}
     </div>
     <dl class="kv"><dt>RGB split</dt><dd>only with glitch (opt-in)</dd><dt>Glitch slices</dt><dd>per “Glitch on”</dd><dt>Bloom</dt><dd>low band</dd><dt>Shockwave</dt><dd>phrase downbeat + drops</dd><dt>Kicks</dt><dd>1-3 % spring punch · edge pulse · meters</dd><dt>CRT</dt><dd>always, subtle</dd></dl>
   </div>
-  <div class="pane" data-pane="text" hidden>
+  <div class="pane" role="tabpanel" id="pane-text" aria-labelledby="tab-text" data-pane="text" hidden>
     <h3>Printed text</h3>
     <p class="hint">Every line a look prints. "auto" lets the look place it inside its design; top / centre / bottom stack it in the safe area; drag a line on the preview to place it freely. Remembered in your producer profile.</p>
     <div class="group" id="textLines"></div>
@@ -212,7 +217,7 @@ body{background:var(--bg);color:var(--fg)}
       <div class="inrow"><button class="btn small" id="capSave">Save .txt</button><span class="hint" id="capInfo"></span></div>
     </div>
   </div>
-  <div class="pane" data-pane="export" hidden>
+  <div class="pane" role="tabpanel" id="pane-export" aria-labelledby="tab-export" data-pane="export" hidden>
     <h3>Export</h3>
     <div class="group">
       <dl class="kv" id="exKv"></dl>

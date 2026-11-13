@@ -7,7 +7,11 @@ body{background:var(--bg);color:var(--fg);font:400 13px/1.45 var(--sans);display
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));overflow-x:hidden}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
-:focus-visible{outline:1px solid var(--accent);outline-offset:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.skip{position:absolute;left:8px;top:-48px;z-index:20;background:var(--panel);color:var(--fg);border:1px solid var(--accent);border-radius:var(--radius);padding:8px 12px;font:600 13px var(--sans)}
+.skip:focus{top:8px}
+.btn:active,.chip:active,.seg button:active{transform:translateY(1px)}
+@media (prefers-reduced-motion: reduce){.btn:active,.chip:active,.seg button:active{transform:none}}
 .mono{font-family:var(--mono)}
 .lbl{font:500 11px/1.2 var(--mono);text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
 .hint{font:400 11px/1.4 var(--mono);color:var(--faint)}

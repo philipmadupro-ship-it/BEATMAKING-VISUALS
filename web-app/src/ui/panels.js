@@ -59,6 +59,11 @@ export function createPanels(app) {
   const tabs = $$('.tabs [role=tab]'); tabs.forEach((b, i) => b.addEventListener('click', () => { tabs.forEach(x => x.setAttribute('aria-selected', x === b)); $$('.pane').forEach(p => p.hidden = p.dataset.pane !== b.dataset.tab);
     app.motion.underline($('#tabUl'), i); app.motion.paneIn($(`.pane[data-pane="${b.dataset.tab}"]`)); if (b.dataset.tab === 'text') { captions(); syncText(); } if (b.dataset.tab === 'export') app.actions.exportInfo(); if (b.dataset.tab === 'look') app.studio.thumbs(); }));
   app.motion.underline($('#tabUl'), 1);
+  // WAI-ARIA tabs: roving tabindex, ←/→/Home/End move between tabs
+  const rove = () => tabs.forEach(t => t.tabIndex = t.getAttribute('aria-selected') === 'true' ? 0 : -1); rove(); tabs.forEach(t => t.addEventListener('click', rove));
+  $('.tabs').addEventListener('keydown', e => { const i = tabs.indexOf(document.activeElement); if (i < 0) return; let j = null;
+    if (e.key === 'ArrowRight') j = (i + 1) % tabs.length; else if (e.key === 'ArrowLeft') j = (i - 1 + tabs.length) % tabs.length; else if (e.key === 'Home') j = 0; else if (e.key === 'End') j = tabs.length - 1;
+    if (j != null) { e.preventDefault(); tabs[j].click(); tabs[j].focus(); } });
   // credits
   $('#creditList').innerHTML = CREDITS.map(c => `<li><b>${c.name}</b><span>${c.use} · ${c.licence} · <a href="${c.url}" target="_blank" rel="noopener">source</a></span></li>`).join('');
   $('#creditsBtn').addEventListener('click', e => { const pop = $('#credits'), open = pop.hidden; pop.hidden = !open; e.currentTarget.setAttribute('aria-expanded', open); if (open) app.motion.viewIn(pop); });
