@@ -155,7 +155,7 @@ export function goniometer(ctx, r, fs, S) {
 /** Clip waveform: peak + RMS layers, played part brighter, bar/beat ticks, playhead. */
 export function wavePro(ctx, r, fs, P, S) {
   const { u, fg, hi } = S, T = fs.track, L = Math.max(.1, P.outT - P.inT), q = clamp(fs.lt / L), n = Math.max(24, Math.round(r.w / (3 * u))), bw = r.w / n, mid = r.y + r.h / 2;
-  for (let j = 0; j < n; j++) { const a = P.inT + L * j / n, pk = fs.peak(a, a + L / n), rm = fs.level(a, a + L / n) * pk * .75, on = j / n <= q, x = r.x + j * bw;
+  for (let j = 0; j < n; j++) { const a = P.inT + L * j / n, pk = fs.peak(a, a + L / n), rm = fs.level(a, a + L / n) * pk * .75, on = (((q - j / n) % 1) + 1) % 1 < Math.min(.5, 4 * T.spb / L), x = r.x + j * bw;
     ctx.fillStyle = on ? rgba(hi, .45) : rgba(fg, .2); ctx.fillRect(x, mid - pk * r.h * .46, Math.max(1, bw - .6 * u), pk * r.h * .92);
     ctx.fillStyle = on ? hi : rgba(fg, .45); ctx.fillRect(x, mid - rm * r.h * .46, Math.max(1, bw - .6 * u), rm * r.h * .92); }
   for (let b = Math.ceil((P.inT - T.t0) / T.spb); T.t0 + b * T.spb <= P.outT; b++) { const x = r.x + (T.t0 + b * T.spb - P.inT) / L * r.w, bar = b % 4 === 0; ctx.fillStyle = rgba(fg, bar ? .6 : .25); ctx.fillRect(x, r.y, 1 * u, bar ? 6 * u : 3 * u); if (bar) lab(ctx, String(Math.floor(b / 4) + 1), x + 2 * u, r.y + 8 * u, S, .5); }

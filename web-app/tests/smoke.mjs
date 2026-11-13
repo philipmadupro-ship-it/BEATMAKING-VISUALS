@@ -45,7 +45,7 @@ ok('boot + demo analysis', true, ((Date.now() - t0) / 1000).toFixed(1) + ' s · 
 if (AUDIO) {
   await page.evaluate(() => { window.u2c.store.session.quickAt = 0; });
   await page.setInputFiles('#file', AUDIO);
-  await page.waitForFunction(() => /Hz/.test(document.querySelector('#trackInfo').textContent) && !/refining/.test(document.querySelector('#status').textContent) && !/demo/.test(document.querySelector('#status').textContent), null, { timeout: 90000 });
+  await page.waitForFunction(() => { const tr = window.u2c.store.session.track; return tr && !tr.meta.quick && /beat|\.(mp3|wav)/i.test(tr.meta.name || '') && !/demo/.test(tr.meta.name || ''); }, null, { timeout: 90000 });
   const qp = await page.evaluate(() => window.u2c.store.session.quickAt || 0);
   ok('R29 fast first preview (quick pass, then refined)', !!qp && !/refining/.test(await page.textContent('#status')), 'quick-pass track shown first, then replaced by the full analysis');
   ok('upload + analysis', true, (await page.textContent('#status')).replace(/\s+/g, ' ').slice(0, 160));
@@ -176,6 +176,17 @@ const gl = await page.evaluate(async () => {
 });
 ok('glitch: off by default, slider opt-in', g0 === 0 && Math.abs(g30 - .3) < 1e-6 && gl.onHit > .2 && gl.onHit < 15 && gl.after < .01, `default ${g0}, slider 30→${g30} · strong kick @${gl.kick.toFixed(2)} s: ${gl.onHit.toFixed(2)} % of pixels moved by glitch 100 on the hit, ${gl.after.toFixed(3)} % 120 ms later`);
 
+// ---- Reactivity: Feel preset + slider reach the store; frame 0 opens with the logo fully lit in every look
+await page.selectOption('#fxReactPre', 'calm'); const rCalm = await page.evaluate(() => window.u2c.store.project.fx.react);
+await page.$eval('#fxReact', el => { el.value = '60'; el.dispatchEvent(new Event('input', { bubbles: true })); }); const r60 = await page.evaluate(() => window.u2c.store.project.fx.react);
+await page.selectOption('#fxReactPre', 'balanced'); const rBal = await page.evaluate(() => window.u2c.store.project.fx.react);
+ok('Reactivity slider + Feel presets', Math.abs(rCalm - .25) < 1e-6 && Math.abs(r60 - .6) < 1e-6 && Math.abs(rBal - .45) < 1e-6, `calm ${rCalm} · slider 60 → ${r60} · balanced ${rBal}`);
+const f0 = await page.evaluate(async () => { const app = window.u2c, tr = app.store.session.track, { TEMPLATE_LIST, applyDefaults } = await import('/src/templates/index.js'), { makeParams, phrase, letterState } = await import('/src/engine/layout.js'), { getFrameState } = await import('/src/engine/frame.js');
+  let worst = 1, where = ''; for (const L of [7, 15, 30]) { const w = app.hook(tr, L); for (const t of TEMPLATE_LIST) { const p = app.store.snapshot(); p.tpl = t.id; applyDefaults(p, t.id); p.inT = w[0]; p.outT = w[1]; const P = makeParams(p, tr);
+    for (const tt of [p.inT, p.outT - 1 / 30]) { const ph = phrase(getFrameState(tr, tt, { loop: P.loop }), P), v = Math.min(...[0, 1, 2].map(k => letterState(ph, k).fill)); if (v < worst) { worst = v; where = `${t.id} ${L}s @${(tt - p.inT).toFixed(2)}s`; } } } }
+  return { worst, where }; });
+ok('frame 0 (and last frame): logo fully lit', f0.worst >= .9, `min letter alpha ${f0.worst.toFixed(2)}${f0.where ? ' (' + f0.where + ')' : ''} across all looks, 7/15/30 s hooks`);
+
 // ---- U2C.EXE across one phrase (rebuild → full → mid-dissolve → end), rope determinism + rope seam
 for (const asp of ['916', '169']) {
   const url = await page.evaluate(async asp => {
@@ -228,6 +239,10 @@ if (!process.env.NOEXPORT) {
     const rank = sorted.filter(x => x < seam).length / sorted.length;
     execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', mp4, '-vf', `select='eq(n\\,0)+eq(n\\,${n - 1})',scale=270:-2,tile=2x1`, '-frames:v', '1', path.join(SHOTS, 'seam-last-first.png')]);
     // frame 0 is the phrase downbeat (chains slam), so the seam should look like an ordinary hit, not a jump cut
+    // frame 0 of the export: the chains.dll region is as lit as on a fully loaded beat-4 frame (U2C.EXE 9:16)
+    const fpsE = 30, b4 = Math.round(4 * 60 / 140 * fpsE), lum = i => { const f = fr(i); let s0 = 0, m = 0; for (let y = Math.round(800 / 1920 * H); y < Math.round(1190 / 1920 * H); y++) for (let x = Math.round(80 / 1080 * W); x < Math.round(1000 / 1080 * W); x++) { s0 += f[y * W + x]; m++; } return s0 / m; };
+    const l0 = lum(0), l4 = lum(Math.min(n - 1, b4));
+    ok('export frame 0: logo lit', /u2cexe/.test(res.name) ? l0 / l4 >= .9 : true, `chains.dll brightness frame 0 / beat 4 = ${(l0 / l4).toFixed(2)}`);
     ok('exported loop seam', seam <= max * 1.25, `last→first ${seam.toFixed(2)} % vs frame-to-frame median ${med.toFixed(2)} %, max ${max.toFixed(2)} % (seam is at the ${Math.round(rank * 100)}th percentile)`);
   } catch (e) { ok('ffprobe / seam measurement', false, e.message.slice(0, 200)); }
   await page.screenshot({ path: path.join(SHOTS, 'export.png') });
