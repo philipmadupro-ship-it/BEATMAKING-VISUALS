@@ -23,7 +23,7 @@ export function createExporter(app) {
     const tr = app.store.session.track, buf = app.store.session.buffer, ex = project.export, { W, H, mbps } = dims(project);
     status(`Preparing audio for ${label}…`);
     const au = await prepareAudio(buf, project, { loopSafe: ex.loopSafe, xf: Math.min(tr.spb, (project.outT - project.inT) / 4), loudness: ex.loudness, voiceTag: ex.voiceTag ? app.store.session.voiceTag : null, voiceEvery: ex.voiceEvery });
-    $('#loudKv').innerHTML = `<dt>Measured in</dt><dd>${au.stats.inLufs.toFixed(1)} LUFS</dd><dt>Gain</dt><dd>${au.stats.gainDb >= 0 ? '+' : ''}${au.stats.gainDb.toFixed(1)} dB</dd><dt>Out</dt><dd>${au.stats.outLufs.toFixed(1)} LUFS · peak ${au.stats.peakDb.toFixed(1)} dBTP (approx.)</dd>`;
+    $('#loudKv').innerHTML = `<dt>Measured in</dt><dd>${au.stats.inLufs.toFixed(1)} LUFS</dd><dt>Gain</dt><dd>${au.stats.gainDb >= 0 ? '+' : ''}${au.stats.gainDb.toFixed(1)} dB</dd><dt>Out</dt><dd>${au.stats.outLufs.toFixed(1)} LUFS · peak ${au.stats.peakDb.toFixed(1)} dBTP (4× oversampled)</dd>`;
     // the renderer's own output canvas is handed to the encoder: one Pixi render per frame, no copies
     const work = makeSurface(W, H), render = t => app.renderFrame(t, work, project, tr);
     const rate = (q, s, n) => { const fps = n / Math.max(.001, s), eta = q >= 1 ? 0 : Math.max(0, Math.round((n / Math.max(q, 1e-6) - n) / Math.max(fps, .001))); $('#exRate').textContent = `${fps.toFixed(1)} fps · ETA ${eta} s`; };
