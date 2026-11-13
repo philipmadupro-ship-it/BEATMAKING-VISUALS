@@ -74,7 +74,7 @@ export function getFrameState(track, t, opts = {}) {
     bassE: F.fol[0], midE: F.fol[1], highE: F.fol[2], duck: 1 - .14 * Math.min(1, k.v * I), barAcc: (() => { const ab = ((beat / 4) % 1 + 1) % 1 * 4 * T.spb; return ab < .02 ? 1 : Math.exp(-(ab - .02) / .2); })(),
     beat, beatPhase: beat - Math.floor(beat), bp: beat - Math.floor(beat), bar: Math.floor(beat / 4), barPhase: beat / 4 - Math.floor(beat / 4), barP: beat / 4 - Math.floor(beat / 4),
     // loop phase: lt = seconds since the in point, lp = 0..1 through the loop
-    lt, lp: lph,
+    lt, lp: lph, wrapT: wrap,
     /** Phase in cycles of a motion at ~hz, quantised to a whole number of cycles per loop (seamless). */
     cyc: hz => (lp ? Math.max(1, Math.round(Math.abs(hz) * Lp)) * Math.sign(hz || 1) * lph : hz * t),
     /** Cumulative energy of band b (6 = rms) as cycles: speed follows the band, whole cycles per loop. */

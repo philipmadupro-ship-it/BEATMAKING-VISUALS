@@ -170,8 +170,10 @@ export function tempoPro(ctx, r, fs, S, bpmTxt, keyTxt, fonts) {
 export function lanesView(ctx, r, fs, S) {
   const { u, fg, hi, acc } = S, Ls = fs.m.lanes, keys = Object.keys(Ls), lh = r.h / keys.length, span = 3, t0 = fs.t - span * .7, lw = 34 * u, X = tt => r.x + lw + (tt - t0) / span * (r.w - lw);
   keys.forEach((k, i) => { const y = r.y + i * lh; ctx.fillStyle = rgba(fg, i % 2 ? .03 : .06); ctx.fillRect(r.x, y, r.w, lh); lab(ctx, k, r.x + 2 * u, y + lh / 2 + 3 * u, S, .7);
-    const T = Ls[k]; let lo = 0, hi2 = T.length; while (lo < hi2) { const m = (lo + hi2) >> 1; if (T[m] < t0) lo = m + 1; else hi2 = m; }
-    for (let j = lo; j < T.length && T[j] < t0 + span; j++) { const x = X(T[j]), past = T[j] <= fs.t, fresh = past && fs.t - T[j] < .15; ctx.fillStyle = fresh ? acc : past ? hi : rgba(fg, .45); ctx.fillRect(x - 1.5 * u, y + lh * .25, (fresh ? 5 : 3) * u, lh * .5); } });
+    // inside a loop the lanes are periodic too: notes come from the clip only, repeated every loop length
+    const T = Ls[k], lp = fs.loop, Lp = lp ? lp.b - lp.a : 0, offs = lp ? [-Lp, 0, Lp] : [0];
+    for (const off of offs) { const a = t0 - off, b = t0 + span - off; let lo = 0, hi2 = T.length; while (lo < hi2) { const m = (lo + hi2) >> 1; if (T[m] < a) lo = m + 1; else hi2 = m; }
+      for (let j = lo; j < T.length && T[j] < b; j++) { if (lp && (T[j] < lp.a - .06 || T[j] >= lp.b - .06)) continue; const tt = T[j] + off, x = X(tt), past = tt <= fs.t, fresh = past && fs.t - tt < .15; ctx.fillStyle = fresh ? acc : past ? hi : rgba(fg, .45); ctx.fillRect(x - 1.5 * u, y + lh * .25, (fresh ? 5 : 3) * u, lh * .5); } } });
   for (let b = Math.ceil((t0 - fs.track.t0) / fs.spb); fs.track.t0 + b * fs.spb < t0 + span; b++) { const x = X(fs.track.t0 + b * fs.spb); ctx.fillStyle = rgba(fg, b % 4 ? .1 : .3); ctx.fillRect(x, r.y, 1 * u, r.h); }
   const px = X(fs.t); ctx.fillStyle = hi; ctx.fillRect(px - .75 * u, r.y, 1.5 * u, r.h);
 }
