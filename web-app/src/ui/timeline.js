@@ -1,6 +1,8 @@
 // Timeline: wavesurfer.js (regions = bar-snapped clip, bar + drop markers; timeline ruler; minimap; hover).
 // Falls back to a Canvas2D strip if wavesurfer is unavailable. The audio clock stays the source of truth.
 import { fmtTC, clamp } from '../util/draw.js';
+// small mono marker labels (wavesurfer's default region content is 14px body text and collides with the ruler)
+const mkLabel = s => { const e = document.createElement('span'); e.textContent = s; e.style.cssText = 'font:500 9px/1 "JetBrains Mono",monospace;letter-spacing:.06em;padding:2px 3px;opacity:.8;text-transform:uppercase'; return e; };
 export function createTimeline(app) {
   const host = document.getElementById('wave'); let ws = null, regions = null, clip = null, fallback = null, track = null, lastSet = -1;
   const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -22,8 +24,8 @@ export function createTimeline(app) {
         ws.on('interaction', t => app.actions.seek(t));
         const me = ws; let added = false;
         const addRegions = () => { if (added || ws !== me) return; added = true; const p = app.store.project;
-          tr.bars.forEach((t, k) => { if (k % 4 === 0) regions.addRegion({ start: t, content: String(k + 1), color: 'rgba(200,200,200,.35)', drag: false, resize: false }); });
-          tr.drops.forEach(t => regions.addRegion({ start: t, content: 'DROP', color: 'rgba(224,122,208,.8)', drag: false, resize: false }));
+          tr.bars.forEach((t, k) => { if (k % 4 === 0) regions.addRegion({ start: t, content: mkLabel(String(k + 1)), color: 'rgba(200,200,200,.35)', drag: false, resize: false }); });
+          tr.drops.forEach(t => regions.addRegion({ start: t, content: mkLabel('drop'), color: 'rgba(224,122,208,.8)', drag: false, resize: false }));
           clip = regions.addRegion({ id: 'clip', start: p.inT, end: p.outT, color: 'rgba(200,200,200,.16)', drag: true, resize: true, minLength: tr.barDur * .99 });
           ws.setTime(app.clock.time()); };
         ws.once('ready', addRegions); ws.once('decode', addRegions); setTimeout(addRegions, 400);

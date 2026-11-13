@@ -52,7 +52,7 @@ async function boot() {
   app.seam = createSeam(app); app.timeline = createTimeline(app); app.grid = createGrid(app); app.studio = createStudio(app); app.panels = createPanels(app); app.exporter = createExporter(app);
   motion.press(document.body);
   $('#fxStatus').textContent = postfx.status;
-  $('#fxBadge').textContent = 'FX · ' + postfx.status + (libs.gsap ? ' · GSAP' : '') + (libs.WaveSurfer ? ' · wavesurfer' : '') + (libs.mediabunny ? ' · mediabunny' : '');
+  $('#fxBadge').textContent = postfx.gpu ? 'GPU FX' : 'CPU FX'; $('#fxBadge').title = 'FX · ' + postfx.status + (libs.gsap ? ' · GSAP' : '') + (libs.WaveSurfer ? ' · wavesurfer' : '') + (libs.mediabunny ? ' · mediabunny' : '');
   let userClip = false;
 
   A.setPaletteVars = () => { const p = resolvePalette(store.project); const r = document.documentElement.style;

@@ -13,7 +13,7 @@ export function createStudio(app) {
   const view = $('#view'), vctx = view.getContext('2d'), stage = $('#stage'); let surf = null, zoom = 'fit', dirty = true, drag = null;
   const S = () => app.store.project, track = () => app.store.session.track;
   const markDirty = () => { dirty = true; };
-  function layout() { const { W, H } = ASPECTS[S().aspect], bw = stage.clientWidth - 32, bh = stage.clientHeight - 32, dpr = Math.min(2, devicePixelRatio || 1);
+  function layout() { const { W, H } = ASPECTS[S().aspect], bw = stage.clientWidth - 32, bh = stage.clientHeight - 32, dpr = Math.max(2, Math.min(3, devicePixelRatio || 1)); // ≥2× so small meter labels stay legible at Fit
     const cssW = zoom === 'fit' ? W * Math.max(.05, Math.min(bw / W, bh / H)) : W, cssH = cssW * H / W; view.style.width = cssW + 'px'; view.style.height = cssH + 'px';
     const pw = zoom === 'fit' ? Math.min(W, Math.round(cssW * dpr)) : W; if (view.width !== pw) { view.width = pw; view.height = Math.round(pw * H / W); }
     if (!surf || surf.w !== view.width || surf.h !== view.height) surf = makeSurface(view.width, view.height);
@@ -27,7 +27,7 @@ export function createStudio(app) {
   function chips() { const box = $('#palChips'), vbox = $('#varChips'); box.innerHTML = ''; vbox.innerHTML = ''; const cur = S().pal, fam = cur === 'custom' ? 'custom' : (PALETTES[cur] || PALETTES.charcoal).fam;
     for (const k of PALETTE_ORDER) chip(box, PALETTES[k], fam === k, () => app.actions.setPalette(FAMILIES[k].includes(cur) ? cur : k));
     chip(box, resolvePalette({ pal: 'custom', custom: S().custom }), fam === 'custom', () => app.actions.setPalette('custom'), 'Custom');
-    if (fam !== 'custom') { for (const v of FAMILIES[fam]) chip(vbox, PALETTES[v], v === cur, () => app.actions.setPalette(v)).classList.add('small'); }
+    if (fam !== 'custom') { for (const v of FAMILIES[fam]) chip(vbox, PALETTES[v], v === cur, () => app.actions.setPalette(v), v === fam ? 'Original' : undefined).classList.add('small'); }
     else { const c = S().custom; for (const [k, lab] of [['bg', 'Background'], ['main', 'Main'], ['accent', 'Accent']]) { const l = document.createElement('label'); l.className = 'pick';
         l.innerHTML = `<input type="color" value="${c[k]}" data-ck="${k}" aria-label="Custom ${lab}"><span>${lab}</span>`; l.querySelector('input').addEventListener('input', e => { app.store.set({ project: { custom: { [k]: e.target.value } } }); app.actions.setPaletteVars(); }); vbox.appendChild(l); }
       const r = document.createElement('button'); r.className = 'btn small'; r.textContent = 'Brand defaults'; r.onclick = () => { app.store.set({ project: { custom: { ...DEFAULT_CUSTOM } } }); chips(); app.actions.setPaletteVars(); }; vbox.appendChild(r); } }

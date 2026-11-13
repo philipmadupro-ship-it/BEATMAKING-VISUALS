@@ -41,7 +41,7 @@ await page.goto(URL0);
 await page.evaluate(() => { try { localStorage.clear(); } catch (_) {} });
 await page.reload();
 await page.waitForFunction(() => document.documentElement.dataset.track === '1', null, { timeout: 90000 });
-ok('boot + demo analysis', true, ((Date.now() - t0) / 1000).toFixed(1) + ' s · ' + (await page.textContent('#fxBadge')));
+ok('boot + demo analysis', true, ((Date.now() - t0) / 1000).toFixed(1) + ' s · ' + (await page.getAttribute('#fxBadge', 'title')));
 if (AUDIO) {
   await page.evaluate(() => { window.u2c.store.session.quickAt = 0; });
   await page.setInputFiles('#file', AUDIO);
