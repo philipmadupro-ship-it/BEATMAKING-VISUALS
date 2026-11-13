@@ -5,8 +5,9 @@
 import { cached, clamp, mk } from '../util/draw.js';
 import { phrase, letterState } from '../engine/layout.js';
 import { kickBreath, secondary } from '../engine/react.js';
-/** Letter of each link: 0 = U, 1 = 2, 2 = C (by the link's centre x in logo space). */
-export const letterOf = pc => (pc.x + pc.w / 2 < 245 ? 0 : pc.x + pc.w / 2 < 540 ? 1 : 2);
+/** Letter of each link: 0 = U, 1 = 2, 2 = C. Set per pixel by tools/extract_logo.py from hand-traced letter strokes
+ *  (an x threshold is wrong: the U's right arm and the 2's first link overlap in x; the 2's base runs into the C). */
+export const letterOf = pc => pc.k;
 let LB = null;
 function letterBoxes(L) { return LB || (LB = [0, 1, 2].map(k => { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const pc of L.pieces) if (letterOf(pc) === k) { x0 = Math.min(x0, pc.x); y0 = Math.min(y0, pc.y); x1 = Math.max(x1, pc.x + pc.w); y1 = Math.max(y1, pc.y + pc.h); } return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }; })); }
 const solidAtlas = (A, col) => cached('sa|' + col, A.atlas.width, A.atlas.height, (g, w, h) => { g.drawImage(A.atlas, 0, 0); g.globalCompositeOperation = 'multiply'; g.fillStyle = col; g.fillRect(0, 0, w, h); g.globalCompositeOperation = 'destination-in'; g.drawImage(A.atlas, 0, 0); });
@@ -15,7 +16,8 @@ const edgeAtlas = (A, col) => cached('ea|' + col, A.edge.width, A.edge.height, (
 const neonAtlas = (A, col, glow) => cached('na|' + col + glow, A.edge.width, A.edge.height, (g, w, h) => {
   const tint = c => { const e = mk(w, h), eg = e.getContext('2d'); eg.drawImage(A.edge, 0, 0); eg.globalCompositeOperation = 'source-in'; eg.fillStyle = c; eg.fillRect(0, 0, w, h); return e; };
   const e = tint(glow), c = tint(col);
-  try { g.filter = 'blur(7px)'; g.drawImage(e, 0, 0); g.drawImage(e, 0, 0); g.filter = 'blur(2px)'; g.drawImage(e, 0, 0); g.filter = 'none'; } catch (_) {}
+  const S = A.links.scale || 1;
+  try { g.filter = `blur(${7 * S}px)`; g.drawImage(e, 0, 0); g.drawImage(e, 0, 0); g.filter = `blur(${2 * S}px)`; g.drawImage(e, 0, 0); g.filter = 'none'; } catch (_) {}
   g.drawImage(c, 0, 0); g.drawImage(c, 0, 0); });
 // 4x4 Bayer dither masks: level q in 0..16 → that many cells of every 4x4 block kept (cell = `px` canvas pixels)
 const B4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
@@ -30,7 +32,10 @@ export function chainPose(fs, P, assets, place) {
   const punch = kickBreath(fs, P), letters = [0, 1, 2].map(k => letterState(ph, k)), pieces = [];
   for (const pc of L.pieces) { const k = letterOf(pc), lx = (pc.x + pc.w / 2 - L.w / 2) * punch, ly = (pc.y + pc.h / 2 - L.h / 2) * punch, st = letters[k];
     pieces.push({ pc, k, x: pl.x + lx * pl.sc, y: pl.y + ly * pl.sc, hx: pl.x + lx * pl.sc, hy: pl.y + ly * pl.sc, a: Math.max(st.fill, st.outline * .6), s: punch, r: 0 }); }
-  return { ph, place: pl, pieces, letters, punch, pulse: secondary(fs, P, fs.kickC) * .5, impact: ph.impactAge < .25 ? 1 - ph.impactAge / .25 : 0, boxes: letterBoxes(L), lw: L.w, lh: L.h };
+  // anchors: points on the metal along each letter stroke (cable plugs); alpha follows the letter's state
+  const anchors = (L.anchors || []).map(([k, ax, ay]) => { const lx = (ax - L.w / 2) * punch, ly = (ay - L.h / 2) * punch, st = letters[k];
+    return { k, x: pl.x + lx * pl.sc, y: pl.y + ly * pl.sc, hx: pl.x + lx * pl.sc, hy: pl.y + ly * pl.sc, a: Math.max(st.fill, st.outline * .6) }; });
+  return { ph, place: pl, pieces, anchors, letters, punch, pulse: secondary(fs, P, fs.kickC) * .5, impact: ph.impactAge < .25 ? 1 - ph.impactAge / .25 : 0, boxes: letterBoxes(L), lw: L.w, lh: L.h, as: L.scale || 1 };
 }
 /** Atlas images for a style: 'neon' (outline + glow) or 'solid'; colours from the palette unless given. */
 export function chainImages(assets, pal, style, surfacePaper, col) {
@@ -38,7 +43,8 @@ export function chainImages(assets, pal, style, surfacePaper, col) {
   const img = neon ? (surfacePaper ? neonAtlas(assets, c, pal.pacc) : neonAtlas(assets, c, pal.main)) : solidAtlas(assets, c);
   return { img, edge: edgeAtlas(assets, neon || surfacePaper ? c : (pal.light ? pal.main : pal.hi)), flash: flatAtlas(assets, surfacePaper ? pal.pacc : pal.hi), pad: neon ? 16 : 0 };
 }
-function drawLetter(g, pose, k, A, pad) { for (const q of pose.pieces) if (q.k === k) { const pc = q.pc; g.drawImage(A, pc.ax - pad, pc.ay - pad, pc.w + 2 * pad, pc.h + 2 * pad, pc.x - pad, pc.y - pad, pc.w + 2 * pad, pc.h + 2 * pad); } }
+// atlas rects are in atlas pixels (scale × logo units: the atlas is 2× the source scan, crisp at 4K)
+function drawLetter(g, pose, k, A, pad) { const S = pose.as; for (const q of pose.pieces) if (q.k === k) { const pc = q.pc; g.drawImage(A, pc.ax - pad * S, pc.ay - pad * S, (pc.w + 2 * pad) * S, (pc.h + 2 * pad) * S, pc.x - pad, pc.y - pad, pc.w + 2 * pad, pc.h + 2 * pad); } }
 /** Draw the logo from a pose: full letters directly; dissolving / rebuilding letters through dither + wipe masks. */
 export function drawChains(ctx, pose, imgs, alpha = 1) {
   const { img, edge, pad } = imgs, sc = pose.place.sc * pose.punch, m = ctx.getTransform(), dev = Math.hypot(m.a, m.b) * sc, px = Math.max(1, Math.round(2.2 * Math.max(1, dev * 2)));

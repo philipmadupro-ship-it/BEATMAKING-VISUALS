@@ -8,7 +8,7 @@ import { lineText, lineFont, lineColor } from '../overlays/text.js';
 // swinging above the screen.
 function contour(L) { return memo('contour2', () => {
   const n = L.w, top = new Float32Array(n).fill(L.h / 2), bot = new Float32Array(n).fill(L.h / 2), has = new Uint8Array(n);
-  for (const pc of L.pieces) for (let x = Math.max(0, pc.x); x < Math.min(n, pc.x + pc.w); x++) { if (!has[x]) { top[x] = pc.y; bot[x] = pc.y + pc.h; has[x] = 1; } else { top[x] = Math.min(top[x], pc.y); bot[x] = Math.max(bot[x], pc.y + pc.h); } }
+  for (const pc of L.pieces) for (let x = Math.max(0, Math.floor(pc.x)); x < Math.min(n, Math.ceil(pc.x + pc.w)); x++) { if (!has[x]) { top[x] = pc.y; bot[x] = pc.y + pc.h; has[x] = 1; } else { top[x] = Math.min(top[x], pc.y); bot[x] = Math.max(bot[x], pc.y + pc.h); } }
   const R = 18, T = new Float32Array(n), B = new Float32Array(n);
   for (let x = 0; x < n; x++) { let a = 1e9, b = -1e9; for (let k = Math.max(0, x - R); k <= Math.min(n - 1, x + R); k++) { if (!has[k]) continue; a = Math.min(a, top[k]); b = Math.max(b, bot[k]); } T[x] = a < 1e9 ? a : L.h / 2; B[x] = b > -1e9 ? b : L.h / 2; }
   // soften the silhouette so the trace bends in smooth curves (two box-blur passes)

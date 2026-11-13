@@ -39,7 +39,7 @@ export default {
     txt(ctx, 'BAR ' + (fs.bar + 1) + '.' + ((Math.floor(fs.beat) % 4 + 4) % 4 + 1) + '   ROUTE → U2C', B.x + B.w - 70 * u, B.y + 17.5 * u, mono(12 * u), rgba(fg, .55), 'right');
     const IN = outer.inner, nw = (V ? 208 : 240) * u, nh = (V ? 136 : 152) * u, pos = id => { const n = NODES[id]; return { x: IN.x + n[0] * (IN.w - nw), y: IN.y + n[1] * (IN.h - nh), w: nw, h: nh }; };
     // chain plugs: each node's cable lands on the link nearest to it
-    const pose = chainPose(fs, P, assets), pcs = pose.pieces;
+    const pose = chainPose(fs, P, assets), pcs = pose.anchors.length ? pose.anchors : pose.pieces;
     const plugOf = (x, y) => { let b = pcs[0], bd = 1e18; for (const q of pcs) { const d = (q.hx - x) ** 2 + (q.hy - y) ** 2; if (d < bd) { bd = d; b = q; } } return b; };
     const ids = Object.keys(NODES), opens = ids.map((id, i) => openAmount(ph, i, false, fs.spb)), nC = ids.length + 1, beatC = ((Math.floor(fs.beat) % nC) + nC) % nC, kC = kickCable(fs, nC);
     ids.forEach((id, i) => { const r = pos(id), cx = r.x + r.w / 2, cy = r.y + r.h / 2, q = plugOf(cx, cy), o = opens[i]; if (o <= .02) return;
