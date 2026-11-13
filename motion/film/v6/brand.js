@@ -11,7 +11,7 @@
   function tinted(img, S, kind) {
     const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d');
     g.drawImage(img, 0, 0);
-    const col = kind === 'edge' ? S.sig1 : ({ NIGREDO: null, ALBEDO: '#1a1917', CITRINITAS: '#d79a35', RUBEDO: '#c08cf5' })[S.name];
+    const col = kind === 'edge' ? S.sig1 : ({ NIGREDO: '#d6d6d6', ALBEDO: '#1a1917', CITRINITAS: '#d79a35', RUBEDO: '#c08cf5' })[S.name];
     if (col) {
       if (S.name === 'ALBEDO' && kind !== 'edge') {          // ink drawing on paper: solid ink with the metal texture multiplied in
         g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, c.width, c.height);
@@ -25,9 +25,15 @@
     return c;
   }
 
+  function greyscale(img) {   // NIGREDO: luminance-only copy (Rec. 709 weights), alpha kept
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d');
+    g.drawImage(img, 0, 0); const im = g.getImageData(0, 0, c.width, c.height), d = im.data;
+    for (let i = 0; i < d.length; i += 4) { const y = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; const v = Math.min(255, y * 1.12); d[i] = d[i + 1] = d[i + 2] = v; }
+    g.putImageData(im, 0, 0); return c;
+  }
   B.load = async (S) => {
     const [logo, edge, eleph] = await Promise.all([loadImg('assets/brand/u2c-links.png'), loadImg('assets/brand/u2c-links-edge.png'), loadImg('assets/brand/elephant.png')]);
-    A.logo = tinted(logo, S, 'logo'); A.edge = tinted(edge, S, 'edge'); A.eleph = eleph; A.links = window.U2C_LINKS; A.rig = window.U2C_RIG;
+    A.logo = tinted(logo, S, 'logo'); A.edge = tinted(edge, S, 'edge'); A.eleph = S.grey ? greyscale(eleph) : eleph; A.links = window.U2C_LINKS; A.rig = window.U2C_RIG;
     const Lp = window.U2C_ELEPHANT_LOOP;
     if (Lp && Lp.frames && Lp.frames.length) A.loop = { ...Lp, imgs: await Promise.all(Lp.frames.map((f) => loadImg('assets/elephant-loop/' + f))) };
     // which rig quads carry pixels (skip empty ones)
