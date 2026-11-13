@@ -45,6 +45,10 @@ export function createPanels(app) {
     else set(`text.lines.${id}.${f}`, el.value);
     if (f === 'text' && id === 'key') row.querySelector('[data-f=keypick]').value = KEYS_24.includes(el.value) ? el.value : '';
     app.actions.textChanged(); });
+  // one-click presets (TRENDS.md §4): [FREE] A x B TYPE BEAT · "NAME" · BPM · KEY · LEASE $ - LINK IN BIO · PROD. @handle
+  const preset = on => { const T = P().text, L = { c1: { on: !!on.c1, text: `[FREE] ${T.artistA} x ${T.artistB} type beat` }, cta: { on: !!on.cta, text: `Lease ${T.price} - ${T.link}` }, handle: { on: !!on.handle }, tag: { on: !!on.tag }, title: { on: true }, bpm: { on: true }, key: { on: true } };
+    app.store.set({ project: { text: { lines: L } } }); syncText(); app.actions.textChanged(); };
+  $('#presetType').addEventListener('click', () => preset({ c1: 1, cta: 1, handle: 1 })); $('#presetLease').addEventListener('click', () => preset({ cta: 1, tag: 1 })); $('#presetMin').addEventListener('click', () => preset({ tag: 1 }));
   function syncText() { const L = P().text.lines;
     $$('.tline').forEach(row => { const l = L[row.dataset.line]; if (!l) return;
       for (const el of row.querySelectorAll('[data-f]')) { const f = el.dataset.f; if (document.activeElement === el) continue;

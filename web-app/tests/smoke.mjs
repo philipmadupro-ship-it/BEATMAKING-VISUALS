@@ -138,7 +138,8 @@ ok('R19 hook presets snap to phrases on a downbeat', hooks['7'].bars === 4 && ho
 await page.evaluate(() => document.querySelector('[data-len="15"]').click());
 await page.click('#safeBtn'); const safe = await page.$$eval('#safe i', els => els.map(e => e.textContent)); await page.click('#safeBtn');
 ok('R21 safe-area overlay', safe.length >= 3 && safe.some(s => /caption/.test(s)), safe.join(' | '));
-const lines = await page.evaluate(() => { const L = window.u2c.store.project.text.lines; return [L.c1.text, L.cta.text, L.handle.text]; });
+await page.click('.tabs [data-tab="text"]'); await page.click('#presetType'); await page.waitForTimeout(100);
+const lines = await page.evaluate(() => { const L = window.u2c.store.project.text.lines; return L.c1.on && L.cta.on && L.handle.on ? [L.c1.text, L.cta.text, L.handle.text] : ['off']; }); await page.click('#presetMin');
 ok('R22 text presets available as lines', /type beat/i.test(lines[0]) && /lease/i.test(lines[1]) && /@/.test(lines[2]), lines.join(' · '));
 // canvas drag: drag the logo by 120 px on the 100 % stage
 await page.evaluate(() => window.u2c.actions.setTemplate('poster')); await page.waitForTimeout(300);
