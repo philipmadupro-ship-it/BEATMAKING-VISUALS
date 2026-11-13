@@ -115,7 +115,7 @@ max event error: 16.67 ms = 0.500 frames  ->  PASS (limit 1 frame)
    6.680             13.02              0.08         0.393  logo IN C step 2
    6.797              3.12              0.08         0.096  logo IN C step 3
    6.914             14.06              0.00         0.422  logo IN C step 4
-   7.500              0.00              0.00         0.000  cut → meters
+   7.500              0.00              0.00         0.000  cut → lufs
    7.500              0.00              0.00         0.000  logo OUT U step 1
    7.617             16.15              0.00         0.484  logo OUT U step 2
    7.734              1.04              0.00         0.031  logo OUT U step 3
@@ -157,7 +157,7 @@ max event error: 16.67 ms = 0.500 frames  ->  PASS (limit 1 frame)
   12.305              4.69              0.10         0.144  logo OUT C step 2
   12.422             11.46              0.10         0.347  logo OUT C step 3
   12.539              5.73              0.00         0.172  logo OUT C step 4
-  13.125              8.33              0.00         0.250  cut → clock
+  13.125              8.33              0.00         0.250  cut → gonioC
   13.125              8.33              0.00         0.250  logo IN U step 1
   13.242              8.85              0.00         0.266  logo IN U step 2
   13.359              7.29              0.00         0.219  logo IN U step 3
@@ -171,7 +171,7 @@ max event error: 16.67 ms = 0.500 frames  ->  PASS (limit 1 frame)
   14.180             13.02              0.08         0.393  logo IN C step 2
   14.297              3.13              0.08         0.096  logo IN C step 3
   14.414             14.06              0.00         0.422  logo IN C step 4
-  15.000              0.00              0.00         0.000  cut → elephant
+  15.000              0.00              0.00         0.000  cut → clock
   15.000              0.00              0.00         0.000  logo OUT U step 1
   15.117             16.15              0.00         0.484  logo OUT U step 2
   15.234              1.04              0.00         0.031  logo OUT U step 3
@@ -184,7 +184,7 @@ max event error: 16.67 ms = 0.500 frames  ->  PASS (limit 1 frame)
   16.055             11.98              0.08         0.362  logo OUT C step 2
   16.172              5.21              0.08         0.159  logo OUT C step 3
   16.289             10.94              0.00         0.328  logo OUT C step 4
-  16.875              8.33              0.00         0.250  cut → all
+  16.875              8.33              0.00         0.250  cut → meters
   16.875              8.33              0.00         0.250  logo IN U step 1
   16.992              7.81              0.00         0.234  logo IN U step 2
   17.109              9.37              0.00         0.281  logo IN U step 3
@@ -197,7 +197,7 @@ max event error: 16.67 ms = 0.500 frames  ->  PASS (limit 1 frame)
   17.930              3.65              0.08         0.112  logo IN C step 2
   18.047             13.54              0.08         0.409  logo IN C step 3
   18.164              2.60              0.00         0.078  logo IN C step 4
-  18.750             16.67              0.00         0.500  cut → meters
+  18.750             16.67              0.00         0.500  cut → bal
   18.750             16.67              0.00         0.500  logo OUT U step 1
   18.867              0.52              0.00         0.016  logo OUT U step 2
   18.984             15.62              0.00         0.469  logo OUT U step 3
@@ -223,7 +223,7 @@ max event error: 16.67 ms = 0.500 frames  ->  PASS (limit 1 frame)
   21.680             13.02              0.08         0.393  logo IN C step 2
   21.797              3.13              0.08         0.096  logo IN C step 3
   21.914             14.06              0.00         0.422  logo IN C step 4
-  22.500              0.00              0.00         0.000  cut → wide
+  22.500              0.00              0.00         0.000  cut → all
   22.500              0.00              0.00         0.000  logo OUT U step 1
   22.617             16.15              0.00         0.484  logo OUT U step 2
   22.734              1.04              0.00         0.031  logo OUT U step 3

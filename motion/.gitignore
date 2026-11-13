@@ -15,3 +15,6 @@ out/passes/
 film/v6-*.html
 film/data/*.wav
 out/v6/stills/
+out/v6/*.mp4
+out/v6/passes/*.mp4
+film/renders/
