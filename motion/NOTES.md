@@ -65,3 +65,129 @@ Also used: **Aurora** (Joe Croskey) as the meter bar (panel grammar, Integrated 
 - The onset thresholds were tuned against the synth's ground truth, so check them on real mixes. Hat precision is 0.71.
 - Storyboard stills show the pre-review camera. The final A differs: see the review notes.
 - The 16:9 cut got one targeted pass, not two.
+
+---
+
+# v6: THE LABORATORY (brief: BRIEF-v6.md)
+
+## Added this round, and why
+| What | Licence | Why |
+|---|---|---|
+| **librosa 1.0.1** | ISC | Onset envelope, beat-track seed and CQT chroma for the key (`tools/beatgrid.py`). |
+| **pyloudnorm** | MIT | An independent BS.1770 reference in `tests/test_meters.py`. |
+| **HyperFrames skills** | Apache-2.0 | `hyperframes`, `hyperframes-registry`, `media-use`, used for the render contract, the registry search and seek-safe patterns. |
+| **Registry components `hw-arrow`, `hw-boil`, `hw-underline`** | Apache-2.0 | Installed in `film/compositions/components/`. They are DOM/SVG, so their mechanics are ported into canvas in `film/v6/lab.js`: the seeded-hash "boil" re-posed on a quantised clock (ours re-poses on the 16th-note grid), stepped pen draw-on, and wobbled strokes. |
+| **Caveat** | OFL | The handwriting face, shipped with those components. |
+
+Not used: madmom (its models are non-commercial). Registry blocks like `typewriter`, `grain-overlay` and `waveform` lost to hand-built canvas versions: they animate DOM with CSS, while ours must be grid-stepped and audio-driven.
+
+## 1. Analysis of ATELMANSION 3 (`audio/atelmansion-3c-fmin-128.grid.json`)
+- **Tempo: 128.00 BPM, confirmed.**
+  - librosa alone said 86.1 (a 2/3 metrical error).
+  - We score candidates on how strongly grid beats land on onsets: 64 BPM scored 17.9× the mean, 128 scored 12.5×, 86 scored 2.1×. A half-time winner yields to its double.
+  - The phase is refined sample-accurately on the on-beat high-band transient: 219 beats, residual RMS 3.9 ms, max 19.7 ms.
+- **Bar 1 = 0.00025 s.** The file starts on a downbeat.
+  - Sections start with a drop-out on the 1, for example beats 72-74 silent with a re-entry on the beat-4 pickup.
+  - Downbeat scores per offset: 0 → 58.3, 3 → 34.2.
+- **Key: F minor, by default.**
+  - F is unambiguous as the tonic, but the mode is not: Krumhansl F major 0.710 vs F minor 0.653, against C minor 0.283.
+  - So it is **not** C minor. Major vs minor is ambiguous, so we print F MIN per the brief and note it.
+- **Structure (4-bar phrases):**
+  - intro 1-16, groove 17-20, build 21-24
+  - **drop A 25-36**, break 37-40, groove 41-44, build 45-48
+  - **drop B 49-60**, outro 61-64.
+- **Sections chosen:** every length starts on song bar 24 (one bar before drop A, so the drop hits at 1.875 s).
+  - 15 s = bars 24-31
+  - 30 s = bars 24-39 (ends in the break; loops back into the build bar)
+  - 60 s = bars 24-55 (drop A → break → build → drop B).
+
+## 2. The elephant's own chain
+The separate hanging chain is gone. `tools/elephant_rig.py` paints soft masks on the art:
+- the hanger loop: from the bail (343,197) up to the chain's top (346,6), which is the **pivot**
+- the small top-left loop
+- the long bottom-left loop, pinned where it passes behind the shield.
+
+It samples them on a 26×26 vertex mesh. `film/v6/brand.js` rotates each vertex by weighted angles:
+- rope pendulum θ about the pivot
+- body lag about the bail
+- loop sway φ1 / φ2 about the crossing.
+
+It then draws the original art as ~900 textured triangles, so the chain bends while the art keeps its own pixels. The motion is on the grid:
+- θ = A·cos(π·beat/2), so the extremes land on beats 1 and 3.
+- The body lags ½ beat, the loops lag ¾ and 1 beat, and kicks add a jolt.
+- The amplitude follows the section.
+- RUBEDO swings over 2 bars (weight).
+
+## 3. No fades, everything on the grid
+Schedules are in beats (`L6.ev`, `steps()`). Nothing animates opacity:
+- **Cards** open in 6 counted steps on 32nds: outline, outline, header, then content in thirds.
+- **Text** types one character per 64th note.
+- **Annotations** draw on in 4 pen steps on 16ths; the handwriting boils on 16ths.
+- **Camera:** hard cuts on bar lines, glides from beat to beat.
+- **The logo cycle runs for the whole video** on a 2-bar loop:
+  - bar 1 (boot): OUT, so frame 0 shows the whole logo
+  - the drop bar: IN, with U, 2 and C on beats 1, 2 and 3, each letter block-resolving in 4 steps on 16ths
+  - then OUT on the next bar, and so on.
+  - The ghost outline never leaves and the pieces never move.
+- The engine samples each frame at its centre, so every event lands on its nearest frame.
+
+## 4–5. Waveform, meters, accuracy
+- **session.exe (Arrangement-inspired):**
+  - clip header bar
+  - a whole-song overview with section labels, the clip bracket and the playhead
+  - a bar/beat ruler with song bar numbers
+  - warp-marker ticks on the quantised kick and snare transients
+  - a 4-bar detail window with L/R lanes drawn as peak (light) + RMS (solid), coloured by spectral tone
+  - KICK / SNR / HAT lanes and the playhead with bars.beats.16ths.
+- **Meters:**
+  - 1/6-oct spectrum (61 bands) with 1 s peak hold
+  - a 4 s scrolling spectrogram (128 log bins)
+  - L/R peak (13.3 dB/s release, 2 s hold) and 300 ms RMS bars
+  - LUFS M/S/I + LRA + true peak
+  - a goniometer with 3-frame persistence + correlation + width
+  - octave balance vs pink + tilt
+  - 6 band levels, onset counters
+  - a BPM/phase clock whose hand steps on 16ths.
+- **`tests/test_meters.py`: all pass.** It uses six synthetic signals plus the real clip:
+  - integrated LUFS within 0.04 LU of ffmpeg ebur128 and pyloudnorm
+  - LRA within 0.13 LU of ffmpeg
+  - true peak within 0.05 dB of ffmpeg
+  - sample peak and RMS exact vs astats
+  - 1/6-oct sine peak at 1000 Hz / -18.00 dBFS
+  - correlation +1 / −1 / 0, pink balance within 0.4 dB, tilt within 0.04 dB/oct.
+  - On an fs/4 inter-sample-peak test ffmpeg reads +0.50 dBTP while the analytic truth is −0.09; ours reads +0.03.
+
+## 6. Stages (a condition, not a recolour; earlier residue stays)
+- **NIGREDO** (charcoal):
+  - compression: one-bar shots, shallow 3 % pushes, a tighter camera
+  - obstruction: black tape bars over the spectrogram / balance / gonio
+  - surfaces swallowing light: 72 % vignette
+  - black built by texture: grain plus gloss sheen bands.
+- **ALBEDO** (bone, limestone, cream, ash; new hexes):
+  - exposed construction: basting stitches around every card, crop marks, layer labels (L1 FRAME / L2 SIGNAL / L3 INK)
+  - a wider camera that shows the build
+  - the logo as black ink, with black thread residue.
+- **CITRINITAS** (tobacco, ochre, beeswax, brass, tan):
+  - a legible system: brass header rules, numbered index tabs on every card
+  - directional warmth: a warm light from the left, and every push pans left to right
+  - residue: ink lines and bone specimen tags.
+- **RUBEDO** (bruised violet + magenta heat + oxblood tape):
+  - embodiment and proximity: closer camera, shots swapped toward the body
+  - weight: a 7.5° swing over 2 bars
+  - resolved moves: power3.out landings on the beat
+  - all residues: ink, bone tags, brass rules.
+- **Anti-clichés:** no stars, serpents, smoke, Latin, occult symbols, gold gradients or flares. The elephant art's own sparkles are untouched.
+
+## 7. Renders (`tools/render_all_v6.sh`)
+In `out/v6/`:
+- `{nigredo,albedo,citrinitas,rubedo}-916-30s.mp4`
+- `{nigredo,rubedo}-{916,169}-60s.mp4`
+- `nigredo-916-15s.mp4`.
+
+Filmstrips are in `out/v6/filmstrips/`. The CLI is documented in README.md.
+
+## 8. Director passes
+- `review/v6-director-notes-pass1.md` covered: boot crop, repeated framings, new drop angles, break glide.
+- `review/v6-director-notes-pass2.md` covered: terminal placement, balance framing, the elephant body push-in.
+- Pass renders: `out/v6/passes/nigredo-916-30s-pass{1,2}.mp4` with filmstrips. The fixes apply to every stage and length through the shared plan logic.
+- After pass 2, the 16:9 check fixed the boot (terminal beside the logo) and the loudness card layout.
