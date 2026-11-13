@@ -88,40 +88,50 @@ function freqGrid(ctx, r, S, dbs, dbMin, dbMax, unit) {
   for (const d of dbs) { const y = r.y + (dbMax - d) / (dbMax - dbMin) * r.h; ctx.strokeStyle = rgba(fg, d === 0 ? .22 : .1); ctx.beginPath(); ctx.moveTo(r.x, y); ctx.lineTo(r.x + r.w, y); ctx.stroke(); lab(ctx, (d > 0 ? '+' : '') + d + (d === dbs[0] ? unit : ''), r.x + r.w - 2 * u, y - 2 * u, S, .45, 'right'); }
   ctx.restore();
 }
-/** Parametric EQ display: 5 bands whose gains follow the (smoothed) band energies, summed curve, live spectrum behind. */
+/** EQ analyser: the measured spectral envelope (1 s power mean) relative to a pink reference (equal power per octave,
+ *  the 0 dB line), with five band nodes sitting at the real band levels (±1/3 octave around 80 / 250 / 1k / 4k / 11k)
+ *  and the overall tilt in dB/octave. A pink-balanced mix reads flat; nothing here is decorative. */
 export function eqView(ctx, r, fs, S) {
-  const { u, fg, hi, acc } = S, M = fs.m, sd = M.specDb(fs.i);
-  freqGrid(ctx, r, S, [12, 6, 0, -6, -12], -15, 15, ' dB');
+  const { u, fg, hi, acc } = S, M = fs.m, DBR = 12, yOf = d => r.y + (DBR + 3 - clamp(d, -DBR - 3, DBR + 3)) / (2 * DBR + 6) * r.h, xs = f => r.x + LOGF(f) * r.w;
+  freqGrid(ctx, r, S, [12, 6, 0, -6, -12], -DBR - 3, DBR + 3, ' dB');
+  if (!M.pinkRel) return;
+  const { rel, silent } = M.pinkRel(fs.t, 1), NS = rel.length, sm = new Float32Array(NS);
+  for (let k = 0; k < NS; k++) { let p = 0, c = 0; for (let j = Math.max(0, k - 1); j <= Math.min(NS - 1, k + 1); j++) { p += Math.pow(10, rel[j] / 10) * (j === k ? 2 : 1); c += j === k ? 2 : 1; } sm[k] = 10 * Math.log10(Math.max(1e-9, p / c)); }
   ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
-  // spectrum, faint, behind
-  ctx.beginPath(); ctx.moveTo(r.x, r.y + r.h); for (let k = 0; k < sd.length; k++) { const x = r.x + LOGF(M.binHz(k)) * r.w, y = r.y + r.h - clamp((sd[k] + 60) / 60) * r.h * .9; ctx.lineTo(x, y); } ctx.lineTo(r.x + r.w, r.y + r.h); ctx.closePath(); ctx.fillStyle = rgba(fg, .08); ctx.fill();
-  const g = x => clamp((x - .42) * 26, -12, 12), B = fs.bands;
-  const bands = [{ f: 80, g: g(fs.bassE), q: 1.1, t: 'ls' }, { f: 250, g: g(B[2]), q: .9, t: 'pk' }, { f: 1000, g: g(fs.midE), q: .9, t: 'pk' }, { f: 4000, g: g(fs.highE), q: .9, t: 'pk' }, { f: 11000, g: g(B[5]), q: 1.1, t: 'hs' }];
-  const resp = f => bands.reduce((a, b) => { const o = Math.log2(f / b.f); return a + (b.t === 'pk' ? b.g * Math.exp(-o * o / (2 * b.q * b.q * .35)) : b.t === 'ls' ? b.g / (1 + Math.exp(o * 3)) : b.g / (1 + Math.exp(-o * 3))); }, 0);
-  const yOf = d => r.y + (15 - d) / 30 * r.h;
-  ctx.beginPath(); for (let j = 0; j <= 120; j++) { const f = 20 * Math.pow(1000, j / 120), x = r.x + j / 120 * r.w, y = yOf(resp(f)); j ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-  ctx.strokeStyle = hi; ctx.lineWidth = 1.8 * u; ctx.stroke(); ctx.lineTo(r.x + r.w, yOf(0)); ctx.lineTo(r.x, yOf(0)); ctx.closePath(); ctx.fillStyle = rgba(hi, .1); ctx.fill();
-  bands.forEach((b, i) => { const x = r.x + LOGF(b.f) * r.w, y = yOf(resp(b.f)), z = (5 + (i === 0 ? 2.5 * fs.bassE : 0)) * u; /* bass → EQ low node */ ctx.fillStyle = S.bg; ctx.strokeStyle = i === 0 ? acc : hi; ctx.lineWidth = 1.5 * u; ctx.beginPath(); ctx.arc(x, y, z, 0, 7); ctx.fill(); ctx.stroke();
-    lab(ctx, String(i + 1), x, y - z - 4 * u, S, .8, 'center'); });
+  // pink reference: the 0 dB line, dashed
+  ctx.strokeStyle = rgba(S.acc, .55); ctx.lineWidth = 1 * u; ctx.setLineDash([4 * u, 4 * u]); ctx.beginPath(); ctx.moveTo(r.x, yOf(0)); ctx.lineTo(r.x + r.w, yOf(0)); ctx.stroke(); ctx.setLineDash([]);
+  if (!silent) {
+    const pts = []; for (let k = 0; k < NS; k++) { const f = M.binHz(k); if (f < 25 || f > 16000) continue; pts.push([xs(f), yOf(sm[k])]); }
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.lineTo(pts[pts.length - 1][0], yOf(0)); ctx.lineTo(pts[0][0], yOf(0)); ctx.closePath(); ctx.fillStyle = rgba(hi, .1); ctx.fill();
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.strokeStyle = hi; ctx.lineWidth = 1.6 * u; ctx.stroke();
+  }
+  const bands = M.eqBands(fs.t);
+  bands.forEach((b, i) => { const x = xs(b.f), y = yOf(b.db), z = (4.5 + (i === 0 ? 2 * Math.min(1, fs.bassE) : 0)) * u; /* bass → EQ low node (the only reactor here) */
+    ctx.fillStyle = S.bg; ctx.strokeStyle = i === 0 ? acc : hi; ctx.lineWidth = 1.5 * u; ctx.beginPath(); ctx.arc(x, y, z, 0, 7); ctx.fill(); ctx.stroke();
+    lab(ctx, (b.db >= 0 ? '+' : '') + clamp(b.db, -99, 99).toFixed(1), x, y + (b.db >= 0 ? -z - 5 * u : z + 11 * u), S, .85, 'center'); });
   ctx.restore();
-  lab(ctx, `LS ${bands[0].g.toFixed(1)}  ·  HS ${bands[4].g.toFixed(1)} dB`, r.x + 2 * u, r.y + 9 * u, S, .7);
+  // tilt: least-squares slope of the envelope vs octave (60 Hz-12 kHz)
+  let sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0; for (let k = 0; k < NS; k++) { const f = M.binHz(k); if (f < 60 || f > 12000) continue; const x = Math.log2(f / 1000); sx += x; sy += sm[k]; sxx += x * x; sxy += x * sm[k]; n++; }
+  const tilt = n > 2 && !silent ? (n * sxy - sx * sy) / (n * sxx - sx * sx) : 0;
+  lab(ctx, `VS PINK · 1 S · TILT ${tilt >= 0 ? '+' : ''}${tilt.toFixed(1)} dB/OCT`, r.x + 2 * u, r.y + 9 * u, S, .7);
 }
-/** Log-frequency spectrum analyser: 1/6-oct smoothing, -60…0 dB, filled area, 12 dB/s peak-hold line. */
+/** Log-frequency spectrum analyser: calibrated dBFS per log bin (a full-scale sine = 0 dB), -84…-12 dBFS, filled area,
+ *  12 dB/s peak-hold line. */
 export function specAnalyzer(ctx, r, fs, S) {
-  const { u, hi } = S, M = fs.m, sd = M.specDb(fs.i), hold = M.specHold(fs.t), yOf = d => r.y + clamp((0 - d) / 60) * r.h, xs = k => r.x + LOGF(M.binHz(k)) * r.w;
-  freqGrid(ctx, r, S, [0, -12, -24, -36, -48], -60, 0, ' dB');
+  const { u, hi } = S, M = fs.m, sd = M.specDb(fs.i), hold = M.specHold(fs.t), TOP = -12, BOT = -84, yOf = d => r.y + clamp((TOP - d) / (TOP - BOT)) * r.h, xs = k => r.x + LOGF(M.binHz(k)) * r.w;
+  freqGrid(ctx, r, S, [-12, -24, -36, -48, -60, -72], BOT, TOP, '');
   ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
   const path = (arr) => { ctx.beginPath(); for (let k = 0; k < arr.length; k++) { const x = xs(k), y = yOf(arr[k]); if (!k) ctx.moveTo(r.x, y); ctx.lineTo(x, y); } ctx.lineTo(r.x + r.w, yOf(arr[arr.length - 1])); };
-  path(sd); ctx.lineTo(r.x + r.w, r.y + r.h); ctx.lineTo(r.x, r.y + r.h); ctx.closePath(); const gr = ctx.createLinearGradient(0, r.y, 0, r.y + r.h); gr.addColorStop(0, rgba(hi, .38)); gr.addColorStop(1, rgba(hi, .03)); ctx.fillStyle = gr; ctx.fill();
+  path(sd); ctx.lineTo(r.x + r.w, r.y + r.h); ctx.lineTo(r.x, r.y + r.h); ctx.closePath(); const gr = ctx.createLinearGradient(0, r.y, 0, r.y + r.h); gr.addColorStop(0, rgba(hi, .34)); gr.addColorStop(1, rgba(hi, .03)); ctx.fillStyle = gr; ctx.fill();
   path(sd); ctx.strokeStyle = hi; ctx.lineWidth = 1.4 * u; ctx.stroke();
   path(hold); ctx.strokeStyle = rgba(S.acc, .85); ctx.lineWidth = 1 * u; ctx.setLineDash([2 * u, 2 * u]); ctx.stroke(); ctx.setLineDash([]);
-  ctx.restore(); lab(ctx, '1/6 OCT · HOLD −12 dB/s', r.x + 2 * u, r.y + 9 * u, S, .7);
+  ctx.restore(); lab(ctx, 'dBFS · LOG BINS · HOLD −12 dB/s', r.x + 2 * u, r.y + 9 * u, S, .7);
 }
 /** L/R peak + RMS meter with dB scale, 1.5 s peak hold, clip LEDs and LUFS M/S/I + true-peak readouts. */
 export function proMeter(ctx, r, fs, S, P) {
   const { u, fg, hi, acc } = S, M = fs.m, t = fs.t, G = M.exportGain(P), bw = 18 * u, x0 = r.x + 26 * u, top = r.y + 16 * u, h = r.h - 22 * u, yOf = d => top + clamp(-d / 60) * h;
   for (const d of [0, -3, -6, -18, -60]) { const y = yOf(d); lab(ctx, String(d), r.x + 20 * u, y + 3 * u, S, .6, 'right'); ctx.fillStyle = rgba(fg, .3); ctx.fillRect(x0 - 3 * u, y, 2 * u, 1 * u); }
-  const clipped = M.truePeak(t) + G >= -.1;
+  const clipped = M.clip(t), dbs = v => (v <= -99 ? '−∞' : v.toFixed(1));
   [0, 1].forEach(ch => { const x = x0 + ch * (bw + 6 * u), pkb = M.peakBar(ch, t) + G, rms = M.rmsDb(ch, t) + G, hold = M.holdDb(ch, t) + G;
     ctx.fillStyle = rgba(fg, .08); ctx.fillRect(x, top, bw, h);
     // peak (thin, bright) over RMS (wide, dimmer); segmented hairlines every 3 dB
@@ -132,9 +142,9 @@ export function proMeter(ctx, r, fs, S, P) {
     ctx.fillStyle = clipped ? acc : rgba(fg, .15); ctx.fillRect(x, r.y + 2 * u, bw, 8 * u);
     lab(ctx, ch ? 'R' : 'L', x + bw / 2, top + h + 10 * u, S, .8, 'center'); });
   const rx = x0 + 2 * bw + 22 * u, line = (k, v, y, big) => { lab(ctx, k, rx, y, S, .55); txt(ctx, v, r.x + r.w, y + (big ? 2 : 0) * u, mono((big ? 17 : 12) * u, 700), big ? hi : rgba(fg, .9), 'right'); };
-  line('MOMENTARY', (M.lufsM(t) + G).toFixed(1), r.y + 22 * u, true); line('SHORT-TERM', (M.lufsS(t) + G).toFixed(1), r.y + 50 * u, false);
-  line('INTEGRATED', (M.lufsI(P.inT, P.outT) + G).toFixed(1), r.y + 72 * u, false); line('TRUE PEAK', (M.truePeak(t) + G).toFixed(1) + ' dBTP', r.y + 94 * u, false);
-  line('PEAK L/R', (M.peakBar(0, t) + G).toFixed(1) + ' / ' + (M.peakBar(1, t) + G).toFixed(1), r.y + 116 * u, false);
+  line('MOMENTARY', M.lufsM(t) <= -70 ? '−∞' : (M.lufsM(t) + G).toFixed(1), r.y + 22 * u, true); line('SHORT-TERM', M.lufsS(t) <= -70 ? '−∞' : (M.lufsS(t) + G).toFixed(1), r.y + 50 * u, false);
+  line('INTEGRATED', (M.lufsI(P.inT, P.outT) + G).toFixed(1), r.y + 72 * u, false); line('TRUE PEAK', dbs(M.truePeak(t) + G) + ' dBTP', r.y + 94 * u, false);
+  line('PEAK L/R', dbs(M.peakBar(0, t) + G) + ' / ' + dbs(M.peakBar(1, t) + G), r.y + 116 * u, false);
   lab(ctx, 'LUFS · BS.1770 · ' + (G ? 'POST-NORM ' + (G > 0 ? '+' : '') + G.toFixed(1) + ' dB' : 'UNNORMALISED') + (M.mono ? ' · MONO' : ''), rx, r.y + r.h - 2 * u, S, .6);
 }
 /** Goniometer (M up, S across) + correlation meter (−1 … +1). */

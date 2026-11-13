@@ -14,8 +14,9 @@ function getWorker() { if (worker !== null) return worker; try { worker = new Wo
 /** Analyse an AudioBuffer. Calls onQuick(track) after the fast pass; resolves with the full track. */
 export function analyzeBuffer(buffer, meta, { onQuick, onProgress } = {}) {
   const mono = mixdown(buffer), sr = buffer.sampleRate, duration = buffer.duration, st = stereoFeatures(buffer);
+  const LR = buffer.numberOfChannels > 1 ? { L: buffer.getChannelData(0), R: buffer.getChannelData(1) } : {};
   const w = getWorker();
-  if (!w) return new Promise(res => setTimeout(() => { const a = analyzeMono(mono, sr, duration, {}); res(makeTrack(a, meta, meta.bpm, undefined, st)); }, 0));
+  if (!w) return new Promise(res => setTimeout(() => { const a = analyzeMono(mono, sr, duration, { ...LR }); res(makeTrack(a, meta, meta.bpm, undefined, st)); }, 0));
   const id = ++jobId;
   return new Promise((resolve, reject) => {
     let res = resolve, rej = reject;
@@ -27,11 +28,11 @@ export function analyzeBuffer(buffer, meta, { onQuick, onProgress } = {}) {
     w.addEventListener('message', on);
     // a worker-level error fails this job once: drop the worker for later jobs and analyse on the main thread
     const onErr = err => { console.warn('[u2c] worker error, falling back', err && err.message); w.removeEventListener('message', on); w.removeEventListener('error', onErr); if (worker === w) { try { w.terminate(); } catch (_) {} worker = false; }
-      res(makeTrack(analyzeMono(mono, sr, duration, {}), meta, meta.bpm, undefined, st)); };
+      res(makeTrack(analyzeMono(mono, sr, duration, { ...LR }), meta, meta.bpm, undefined, st)); };
     const done = () => { w.removeEventListener('error', onErr); };
     w.addEventListener('error', onErr);
     const res0 = res; res = v => { done(); res0(v); }; const rej0 = rej; rej = e => { done(); rej0(e); };
-    w.postMessage({ mono, sr, duration, id }); // copied, not transferred: kept for the main-thread fallback
+    w.postMessage({ mono, sr, duration, id, ...LR }); // copied, not transferred: kept for the main-thread fallback
   });
 }
 export async function decodeFile(file, ac) { const ab = await file.arrayBuffer(); return await ac.decodeAudioData(ab); }

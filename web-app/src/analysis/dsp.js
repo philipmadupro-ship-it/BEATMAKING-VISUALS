@@ -34,23 +34,45 @@ export function analyzeMono(mono, sr, duration, opts = {}) {
   const nF = Math.max(2, Math.floor((len - N) / HOP) + 1), nb = N / 2, binHz = sr / N;
   const fft = makeFFT(N), win = new Float32Array(N); for (let i = 0; i < N; i++) win[i] = .5 - .5 * Math.cos(2 * Math.PI * i / (N - 1));
   const re = new Float32Array(N), im = new Float32Array(N);
+  // calibrated spectrum (dBFS, a full-scale sine = 0 dB): power per log bin, integrated over the FFT bins with fractional
+  // overlap weights (so narrow low bins and wide high bins both carry the true band power; pink noise reads flat).
+  // Stereo input (opts.L/R): the power is the mean of |L|² and |R|² (an out-of-phase signal still shows), and the mono
+  // features use (L+R)/2 from the same two FFTs.
+  const stereo = !!(opts.L && opts.R), reR = stereo ? new Float32Array(N) : null, imR = stereo ? new Float32Array(N) : null;
+  const sW = []; for (let s = 0; s < NS; s++) { const f0 = 30 * Math.pow(14000 / 30, s / NS), f1 = 30 * Math.pow(14000 / 30, (s + 1) / NS), ws = [];
+    for (let k = Math.max(1, Math.floor(f0 / binHz) - 1); k <= Math.min(nb - 1, Math.ceil(f1 / binHz) + 1); k++) { const ov = Math.min(f1, (k + .5) * binHz) - Math.max(f0, (k - .5) * binHz); if (ov > 0) ws.push(k, ov / binHz); }
+    sW.push(Float64Array.from(ws)); }
+  const specP = new Float32Array(nF * NS), pw = new Float64Array(nb), K2 = 1 / ((N / 4) * (N / 4) * 1.5);
   const BR = [[20,60],[60,200],[200,500],[500,2000],[2000,8000],[8000,16000]].map(([a, b]) => { const lo = Math.max(1, Math.round(a / binHz)); return [lo, Math.min(nb - 1, Math.max(lo + 1, Math.round(b / binHz)))]; });
   const bandsRaw = BR.map(() => new Float32Array(nF));
   const sEdge = []; for (let k = 0; k <= NS; k++) sEdge.push(Math.max(1, Math.min(nb - 1, Math.round(30 * Math.pow(14000 / 30, k / NS) / binHz))));
   const spec = new Float32Array(nF * NS), rms = new Float32Array(nF), fLo = new Float32Array(nF), fMid = new Float32Array(nF), fHi = new Float32Array(nF), cent = new Float32Array(nF);
+  const kLo0 = Math.max(1, Math.round(40 / binHz)), kLo1 = Math.max(kLo0 + 1, Math.round(140 / binHz)), eLow = new Float32Array(nF), kWin = Math.max(2, Math.round(.12 * fr));
   const lo0 = Math.max(1, Math.round(30 / binHz)), lo1 = Math.max(lo0 + 1, Math.round(150 / binHz)), mid1 = Math.round(2500 / binHz), hi1 = Math.min(nb, Math.round(16000 / binHz));
   const pc = new Int8Array(nb).fill(-1); for (let k = 1; k < nb; k++) { const f = k * binHz; if (f >= 380 && f <= 4000) pc[k] = ((Math.round(12 * Math.log2(f / 440)) + 69) % 12 + 12) % 12; }
   const chroma = new Float64Array(12); let prev = new Float32Array(nb), cur = new Float32Array(nb); const mag = new Float32Array(nb);
   for (let f = 0; f < nF; f++) {
     const off = f * HOP; let ss = 0;
-    for (let i = 0; i < N; i++) { const x = mono[off + i] || 0; ss += x * x; re[i] = x * win[i]; im[i] = 0; }
-    rms[f] = Math.sqrt(ss / N); fft(re, im);
+    if (stereo) {
+      for (let i = 0; i < N; i++) { const x = mono[off + i] || 0; ss += x * x; re[i] = (opts.L[off + i] || 0) * win[i]; im[i] = 0; reR[i] = (opts.R[off + i] || 0) * win[i]; imR[i] = 0; }
+      fft(re, im); fft(reR, imR);
+      for (let k = 0; k < nb; k++) { pw[k] = .5 * (re[k] * re[k] + im[k] * im[k] + reR[k] * reR[k] + imR[k] * imR[k]) * K2; re[k] = .5 * (re[k] + reR[k]); im[k] = .5 * (im[k] + imR[k]); }
+    } else {
+      for (let i = 0; i < N; i++) { const x = mono[off + i] || 0; ss += x * x; re[i] = x * win[i]; im[i] = 0; }
+      fft(re, im); for (let k = 0; k < nb; k++) pw[k] = (re[k] * re[k] + im[k] * im[k]) * K2;
+    }
+    rms[f] = Math.sqrt(ss / N);
+    for (let s = 0; s < NS; s++) { const ws = sW[s]; let e = 0; for (let j = 0; j < ws.length; j += 2) e += pw[ws[j]] * ws[j + 1]; specP[f * NS + s] = 10 * Math.log10(Math.max(1e-14, e)); }
     let cw = 0, cs = 0;
     for (let k = 0; k < nb; k++) { const m = Math.hypot(re[k], im[k]) / (N / 4); mag[k] = m; cur[k] = Math.log1p(m * 200); cw += m * k; cs += m; }
     cent[f] = cs > 0 ? (cw / cs) * binHz : 0;
     for (let b = 0; b < NB; b++) { const [a, c] = BR[b]; let e = 0; for (let k = a; k < c; k++) e += mag[k] * mag[k]; bandsRaw[b][f] = Math.sqrt(e / (c - a)); }
     let a = 0, b = 0, c = 0; for (let k = lo0; k < hi1; k++) { const d = cur[k] - prev[k]; if (d > 0) { if (k < lo1) a += d; else if (k < mid1) b += d; else c += d; } }
-    fLo[f] = a / (lo1 - lo0); fMid[f] = b / Math.max(1, mid1 - lo1); fHi[f] = c / Math.max(1, hi1 - mid1);
+    // kick: rise of the low-band energy (40-140 Hz) in dB vs the louder of the two previous frames; a sustained or
+    // decaying 808 / pad does not rise, a kick (or kick + 808 attack) jumps by 6-20 dB within a frame
+    let el = 0; for (let k = kLo0; k < kLo1; k++) el += mag[k] * mag[k]; eLow[f] = el;
+    let pm = 0; for (let j = Math.max(0, f - kWin); j < f; j++) if (eLow[j] > pm) pm = eLow[j];
+    fLo[f] = f >= 2 ? Math.sqrt(Math.max(0, el - 1.1 * pm)) : 0; fMid[f] = b / Math.max(1, mid1 - lo1); fHi[f] = c / Math.max(1, hi1 - mid1);
     for (let s = 0; s < NS; s++) { let m = 0; const e = Math.max(sEdge[s] + 1, sEdge[s + 1]); for (let k = sEdge[s]; k < e; k++) if (cur[k] > m) m = cur[k]; spec[f * NS + s] = m; }
     if ((f & 3) === 0) for (let k = 1; k < nb; k++) if (pc[k] >= 0) chroma[pc[k]] += mag[k];
     const t = prev; prev = cur; cur = t;
@@ -75,7 +97,7 @@ export function analyzeMono(mono, sr, duration, opts = {}) {
   const dec = Math.max(1, Math.round(sr / 4000)), scopeRate = sr / dec, scope = new Float32Array(Math.floor(len / dec));
   for (let i = 0; i < scope.length; i++) scope[i] = mono[i * dec] / gm;
   return { duration, sampleRate: sr, fps: fr, frames: nF, bandCount: NB, bandNames: BAND_NAMES, bands, specBins: NS, spec, rms: rmsN, rmsRaw: rms, rmsRef: rp, lowSlow, centroid,
-    kicks: K.list, snares: Sn.list, hats: Hh.list, kickEnv: K.norm, onsetEnv: env, bpmDetected: bpm, key, peaks: { cols, min: pkMin, max: pkMax }, scope, scopeRate };
+    kicks: K.list, snares: Sn.list, hats: Hh.list, kickEnv: K.norm, onsetEnv: env, bpmDetected: bpm, key, peaks: { cols, min: pkMin, max: pkMax }, scope, scopeRate, specP, specStereo: stereo };
 }
 export function detectBpm(env, fr) {
   const nF = env.length, nUse = Math.min(nF, Math.round(fr * 150)), minL = Math.max(1, Math.floor(60 * fr / 185)), maxL = Math.ceil(60 * fr / 68), acN = maxL * 4 + 4, ac = new Float64Array(acN);

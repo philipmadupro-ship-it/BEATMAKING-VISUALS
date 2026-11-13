@@ -108,8 +108,11 @@ ok('variant sheets', fs.existsSync(path.join(SHOTS, 'variants-916.png')), '3 loo
 // ---- V2 sync: the frame with the maximum kick envelope is within ±1 frame of each detected onset (30 fps)
 const sync = await page.evaluate(async () => {
   const app = window.u2c, tr = app.store.session.track, p = app.store.snapshot(), { getFrameState } = await import('/src/engine/frame.js'), { makeParams } = await import('/src/engine/layout.js'), P = makeParams(p, tr), fps = 30, errs = [];
-  for (const k of tr.kicks.t) { if (k < p.inT + .3 || k > p.outT - .3) continue; const f0 = Math.round((k - p.inT) * fps); let best = -1, bv = -1;
-    for (let f = f0 - 4; f <= f0 + 4; f++) { const v = getFrameState(tr, p.inT + f / fps, { loop: P.loop }).kick; if (v > bv) { bv = v; best = f; } } errs.push(best - f0); }
+  // search ±4 frames, but never past the midpoint to a neighbouring kick (16th-note kicks are only ~3 frames apart)
+  const K = tr.kicks.t;
+  for (let j = 0; j < K.length; j++) { const k = K[j]; if (k < p.inT + .3 || k > p.outT - .3) continue; const f0 = Math.round((k - p.inT) * fps); let best = -1, bv = -1;
+    const lo = j > 0 ? Math.max(f0 - 4, Math.ceil(((K[j - 1] + k) / 2 - p.inT) * fps)) : f0 - 4, hi = j + 1 < K.length ? Math.min(f0 + 4, Math.floor(((K[j + 1] + k) / 2 - p.inT) * fps)) : f0 + 4;
+    for (let f = lo; f <= hi; f++) { const v = getFrameState(tr, p.inT + f / fps, { loop: P.loop }).kick; if (v > bv) { bv = v; best = f; } } errs.push(best - f0); }
   return { n: errs.length, worst: Math.max(...errs.map(Math.abs)) };
 });
 ok('V2 kick sync ±1 frame', sync.n > 3 && sync.worst <= 1, `${sync.n} kicks in the clip, worst offset ${sync.worst} frame(s)`);

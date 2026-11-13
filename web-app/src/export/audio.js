@@ -1,5 +1,6 @@
 // Export audio: slice in->out, optional loop-seam crossfade, optional voice tag, resample to 48 kHz,
 // ITU-R BS.1770 loudness measurement and normalisation (target LUFS with a -1 dBTP ceiling).
+import { truePeakOf } from '../analysis/truepeak.js';
 function biquad(x, b0, b1, b2, a1, a2) { const y = new Float32Array(x.length); let x1 = 0, x2 = 0, y1 = 0, y2 = 0; for (let i = 0; i < x.length; i++) { const v = b0 * x[i] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = x[i]; y2 = y1; y1 = v; y[i] = v; } return y; }
 /** BS.1770 K-weighting coefficients (pre-filter shelf + RLB high-pass) for sample rate fs: [[b0,b1,b2,a1,a2], [...]]. */
 export function kCoeffs(fs) {
@@ -17,7 +18,7 @@ export function kWeight(x, fs) {
 export function measure(buf) {
   const fs = buf.sampleRate, chans = [...Array(buf.numberOfChannels)].map((_, c) => kWeight(buf.getChannelData(c), fs));
   const blk = Math.round(.4 * fs), hop = Math.round(.1 * fs), L = []; let peak = 0;
-  for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; if (i) { const m = Math.abs(.5 * (d[i] + d[i - 1])) * 1.06; if (m > peak) peak = m; } } }
+  for (let c = 0; c < buf.numberOfChannels; c++) peak = Math.max(peak, truePeakOf(buf.getChannelData(c))); // 4× oversampled true peak (BS.1770-4)
   for (let s = 0; s + blk <= chans[0].length; s += hop) { let z = 0; for (const ch of chans) { let a = 0; for (let i = s; i < s + blk; i++) a += ch[i] * ch[i]; z += a / blk; } L.push(z); }
   const lk = z => -.691 + 10 * Math.log10(z || 1e-12); const g1 = L.filter(z => lk(z) > -70); if (!g1.length) return { lufs: -70, peakDb: 20 * Math.log10(peak || 1e-9) };
   const rel = lk(g1.reduce((a, b) => a + b, 0) / g1.length) - 10, g2 = g1.filter(z => lk(z) > rel);
