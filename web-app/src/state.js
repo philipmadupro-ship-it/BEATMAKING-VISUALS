@@ -12,7 +12,7 @@ export const DEFAULT_PROJECT = {
   finish: { grain: .22, intensity: 1, zoom: true },
   params: {},
   // amount = master FX intensity. Glitch (slices + RGB split) and shockwave are opt-in: 0 by default.
-  fx: { on: true, amount: .35, crt: .35, rgb: .6, glitch: 0, glitchOn: 'phrases', bloom: .6, shock: 0, shatter: 0 },
+  fx: { on: true, react: .45, reactPreset: 'balanced', amount: .35, crt: .35, rgb: .6, glitch: 0, glitchOn: 'phrases', bloom: .6, shock: 0, shatter: 0 },
   text: {
     lines: {
       title: line(true, 'Night Shift', { font: 'sans', size: 1.2 }),

@@ -4,6 +4,7 @@
 // a brief edge-brightness pulse. Everything is a pure function of the phrase position (loop-safe).
 import { cached, clamp, mk } from '../util/draw.js';
 import { phrase, letterState } from '../engine/layout.js';
+import { kickBreath, secondary } from '../engine/react.js';
 export function useGsap() {} // kept for API compatibility: the logo motion is analytic now
 /** Letter of each link: 0 = U, 1 = 2, 2 = C (by the link's centre x in logo space). */
 export const letterOf = pc => (pc.x + pc.w / 2 < 245 ? 0 : pc.x + pc.w / 2 < 540 ? 1 : 2);
@@ -27,10 +28,10 @@ export const spring = age => (age < 0 || age > .6 ? 0 : Math.exp(-age / .085) * 
 /** Logo pose for this frame: place, per-link positions (assembled, never scattered), per-letter states. */
 export function chainPose(fs, P, assets, place) {
   const L = assets.links, pl = place || { x: P.chains.x * P.W, y: P.chains.y * P.H, sc: chainsScale(P, L) }, ph = phrase(fs, P);
-  const punch = 1 + .022 * spring(fs.kickAge) * Math.min(1, fs.kickS * 1.2) * fs.I, letters = [0, 1, 2].map(k => letterState(ph, k)), pieces = [];
+  const punch = kickBreath(fs, P), letters = [0, 1, 2].map(k => letterState(ph, k)), pieces = [];
   for (const pc of L.pieces) { const k = letterOf(pc), lx = (pc.x + pc.w / 2 - L.w / 2) * punch, ly = (pc.y + pc.h / 2 - L.h / 2) * punch, st = letters[k];
     pieces.push({ pc, k, x: pl.x + lx * pl.sc, y: pl.y + ly * pl.sc, hx: pl.x + lx * pl.sc, hy: pl.y + ly * pl.sc, a: Math.max(st.fill, st.outline * .6), s: punch, r: 0 }); }
-  return { ph, place: pl, pieces, letters, punch, pulse: Math.max(0, spring(fs.kickAge)) * fs.kickS, impact: ph.impactAge < .25 ? 1 - ph.impactAge / .25 : 0, boxes: letterBoxes(L), lw: L.w, lh: L.h };
+  return { ph, place: pl, pieces, letters, punch, pulse: secondary(fs, P, fs.kickC) * .5, impact: ph.impactAge < .25 ? 1 - ph.impactAge / .25 : 0, boxes: letterBoxes(L), lw: L.w, lh: L.h };
 }
 /** Atlas images for a style: 'neon' (outline + glow) or 'solid'; colours from the palette unless given. */
 export function chainImages(assets, pal, style, surfacePaper, col) {

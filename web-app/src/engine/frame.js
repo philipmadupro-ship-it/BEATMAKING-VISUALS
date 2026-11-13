@@ -27,6 +27,9 @@ const PRE = 1 / 30;
 function envAR(L, S, t, atk, rel, lp) { const h = hitsBack(L, t + PRE, lp, rel * 7 + PRE, 4); let v = 0, last = null;
   for (const x of h) { const age = x.age - PRE, s = S[x.idx]; const e = age < atk ? s * (1 - Math.pow(1 - Math.max(0, (age + PRE) / (atk + PRE)), 2)) : s * Math.exp(-(age - atk) / rel); if (e > v) v = e; if (!last && age >= 0) last = { ...x, age }; }
   return { v, age: last ? last.age : 99, idx: last ? last.idx : -1, s: last ? last.s : 0 }; }
+// Composition-layer envelope: a critically damped impulse response x·e^(1-x) (smooth rise, no overshoot, soft tail),
+// started PRE before the onset so it still peaks within a frame of the hit. Data meters use envAR; calm visuals use this.
+function envCD(L, S, t, T0, lp) { let v = 0; for (const x of hitsBack(L, t + PRE, lp, T0 * 7, 3)) { const q = (x.age) / T0; if (q > 0) v = Math.max(v, S[x.idx] * q * Math.exp(1 - q)); } return v; }
 function adaptive(L) { const n = L.t.length, o = new Float32Array(n); let b = 0; const dq = [];
   for (let i = 0; i < n; i++) { while (b < n && L.t[b] <= L.t[i] + 4) { while (dq.length && L.s[dq[dq.length - 1]] <= L.s[b]) dq.pop(); dq.push(b); b++; } while (L.t[dq[0]] < L.t[i] - 4) dq.shift(); o[i] = Math.min(1, .4 + .6 * L.s[i] / Math.max(1e-6, L.s[dq[0]])); }
   return o; }
@@ -59,7 +62,7 @@ export function getFrameState(track, t, opts = {}) {
   if (lp) { const xf = Math.min(T.spb, Lp / 4), w0 = (t - (lp.b - xf)) / xf;
     if (w0 > 0) { const w = w0 >= 1 ? 1 : w0 * w0 * (3 - 2 * w0), G = raw(T, t - Lp, I), m = (x, y) => x + (y - x) * w;
       F = { i: F.i, fol: F.fol.map((v, k) => m(v, G.fol[k])), bands: F.bands.map((v, k) => m(v, G.bands[k])), rms: m(F.rms, G.rms), lowSlow: m(F.lowSlow, G.lowSlow), centroid: m(F.centroid, G.centroid), spec: (fa => k => m(fa(k), G.spec(k)))(F.spec) }; } }
-  const k = envAR(T.kicks, D.ad.kicks, t, .005, .12, lp), s = envAR(T.snares, D.ad.snares, t, .005, .18, lp), h = envAR(T.hats, D.ad.hats, t, .002, .06, lp), beat = (t - T.t0) / T.spb;
+  const k = envAR(T.kicks, D.ad.kicks, t, .005, .22, lp), s = envAR(T.snares, D.ad.snares, t, .005, .26, lp), h = envAR(T.hats, D.ad.hats, t, .002, .06, lp), beat = (t - T.t0) / T.spb;
   const wrap = tt => (lp ? lp.a + ((((tt - lp.a) % Lp) + Lp) % Lp) : tt);
   const frameAt = tt => clamp(Math.round(wrap(tt) * T.fps), 0, T.frames - 1);
   const lt = lp ? t - lp.a : t, lph = lp ? lt / Lp : 0;
@@ -71,7 +74,7 @@ export function getFrameState(track, t, opts = {}) {
     kick: Math.min(1, k.v * I), kickAge: k.age, kickIdx: k.idx, kickS: k.s, kickStrong: k.idx >= 0 && k.s >= D.strongKick,
     snare: Math.min(1, s.v * I), snareAge: s.age, snareIdx: s.idx, hat: Math.min(1, h.v * I), hatAge: h.age, hatIdx: h.idx,
     // per-band followers + accents (V2): bass/mid/high envelopes, sidechain duck on kicks, downbeat accent
-    bassE: F.fol[0], midE: F.fol[1], highE: F.fol[2], duck: 1 - .14 * Math.min(1, k.v * I), barAcc: (() => { const ab = ((beat / 4) % 1 + 1) % 1 * 4 * T.spb; return ab < .02 ? 1 : Math.exp(-(ab - .02) / .2); })(),
+    bassE: F.fol[0], midE: F.fol[1], highE: F.fol[2], duck: 1 - .03 * Math.min(1, k.v * I), kickC: envCD(T.kicks, D.ad.kicks, t, .055, lp), snareC: envCD(T.snares, D.ad.snares, t, .06, lp), barAcc: (() => { const ab = ((beat / 4) % 1 + 1) % 1 * 4 * T.spb; return ab < .02 ? 1 : Math.exp(-(ab - .02) / .2); })(),
     beat, beatPhase: beat - Math.floor(beat), bp: beat - Math.floor(beat), bar: Math.floor(beat / 4), barPhase: beat / 4 - Math.floor(beat / 4), barP: beat / 4 - Math.floor(beat / 4),
     // loop phase: lt = seconds since the in point, lp = 0..1 through the loop
     lt, lp: lph, wrapT: wrap,

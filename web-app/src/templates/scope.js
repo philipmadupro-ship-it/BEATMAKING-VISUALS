@@ -28,7 +28,7 @@ export default {
     grid(S, 10, V ? 10 : 8);
     // traces around the logo silhouette
     const L = assets.links, sc = chainsScale(P, L), cx = P.chains.x * P.W, cy = P.chains.y * P.H, C = contour(L), vis = phrase(fs, P).vis, gap = 26 * u;
-    const n = 480, wv = fs.scopeAt(fs.t, n, span), wv2 = fs.scopeAt(fs.t - span * .5, n, span), g = 1.4 + 1.2 * fs.kick, amp = (V ? 120 : 110) * u;
+    const n = 480, wv = fs.scopeAt(fs.t, n, span), wv2 = fs.scopeAt(fs.t - span * .5, n, span), g = 1.5 + .3 * fs.kickC, amp = (V ? 120 : 110) * u;
     const base = (x, side) => { const lx = (x - cx) / sc + L.w / 2, inside = clamp(Math.min(lx + 60, L.w + 60 - lx) / 60), k = clamp(lx, 0, L.w - 1) | 0, c = side < 0 ? C.T[k] : C.B[k];
       return cy + ((L.h / 2 + (c - L.h / 2) * vis * inside) - L.h / 2) * sc + side * gap; };
     ctx.save(); ctx.beginPath(); ctx.rect(S.x, S.y, S.w, S.h); ctx.clip(); ctx.globalCompositeOperation = glowOp(p);
@@ -49,6 +49,6 @@ export default {
     if (bk) txt(ctx, bk, S.x + S.w, S.y - 18 * u, lineFont(P, 'bpm', 17 * u, 700), lineColor(P, 'bpm', p), 'right');
     txt(ctx, 'CH2 ▼', S.x + 10 * u, S.y + S.h - 12 * u, mono(14 * u), rgba(a2, .9));
     if (!V) { const hz = Math.round(fs.centroid * 6000 + 200); txt(ctx, 'CENTROID', X.x, X.y + X.h + 34 * u, mono(14 * u), rgba(p.main, .7)); txt(ctx, hz + ' Hz', X.x, X.y + X.h + 64 * u, mono(26 * u, 700), p.main); }
-    hud(ctx, 28 * u, 28 * u, W - 56 * u, H - 56 * u, 44 * u, rgba(p.main, .5), 2 * u); sparkle(ctx, V ? S.x + S.w - 10 * u : W * .94, V ? S.y + S.h + 40 * u : H * .08, 16 * u + 10 * u * fs.hat, p.spark);
+    hud(ctx, 28 * u, 28 * u, W - 56 * u, H - 56 * u, 44 * u, rgba(p.main, .5), 2 * u); sparkle(ctx, V ? S.x + S.w - 10 * u : W * .94, V ? S.y + S.h + 40 * u : H * .08, 16 * u, p.spark);
   },
 };

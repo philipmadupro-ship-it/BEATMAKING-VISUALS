@@ -70,7 +70,7 @@ export function drawPendant(ctx, fs, P, pal, assets, tpl, px, py, len, sc, opt =
   for (let i = 0; i < N; i++) { const x0 = X(i), y0 = Y(i), x1 = X(i + 1), y1 = Y(i + 1), ang = Math.atan2(y1 - y0, x1 - x0), d = Math.hypot(x1 - x0, y1 - y0), cnt = Math.max(1, Math.round(d / (Lk * .9)));
     for (let j = 0; j < cnt; j++) { const q = (j + .5) / cnt, cx = x0 + (x1 - x0) * q, cy = y0 + (y1 - y0) * q, flat = (i * 7 + j) % 2 === 0;
       ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang); if (flat) { ctx.lineWidth = Lk * .16; rrect(ctx, -Lk * .55, -Lk * .26, Lk * 1.1, Lk * .52, Lk * .2); ctx.stroke(); } else ctx.fillRect(-Lk * .6, -Lk * .07, Lk * 1.2, Lk * .14); ctx.restore(); } }
-  const ex = X(N), ey = Y(N), a2 = Math.atan2(X(N) - X(N - 2), Y(N) - Y(N - 2)), k = 1 + .015 * Math.max(0, fs.kick);
+  const ex = X(N), ey = Y(N), a2 = Math.atan2(X(N) - X(N - 2), Y(N) - Y(N - 2)), k = 1; // no kick scale: the elephant reacts to bass through the rope only
   ctx.save(); ctx.translate(ex, ey); ctx.rotate(-a2); ctx.scale(sc * k, sc * k); ctx.drawImage(img, -img.width * .5, -img.height * .30); ctx.restore();
   return { x: ex, y: ey + img.height * sc * .2, th: a2 };
 }

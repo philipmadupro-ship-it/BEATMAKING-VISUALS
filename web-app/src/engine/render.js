@@ -48,7 +48,7 @@ export function createRenderer({ assets, postfx }) {
     const s = surf.w / P.W, fs = getFrameState(track, t, { intensity: project.finish.intensity, loop: P.loop }), ph = phrase(fs, P), ctx = surf.ctx;
     ctx.setTransform(s, 0, 0, s, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.imageSmoothingEnabled = true;
     ctx.save();
-    if (P.finish.zoom) { const z = 1 + .018 * (.5 - .5 * Math.cos(2 * Math.PI * ph.lb / ph.C)); ctx.translate(P.W / 2, P.H / 2); ctx.scale(z, z); ctx.translate(-P.W / 2, -P.H / 2); }
+    if (P.finish.zoom) { const z = 1 + .005 * (.5 - .5 * Math.cos(2 * Math.PI * ph.lb / ph.C)); /* 0.5 % camera push across each phrase (seamless) */ ctx.translate(P.W / 2, P.H / 2); ctx.scale(z, z); ctx.translate(-P.W / 2, -P.H / 2); }
     ctx.save(); tpl.draw(ctx, fs, P, pal, assets); ctx.restore();
     if (P.eleph.on && !tpl.selfEleph && !opt.noOverlays) { ctx.save(); elephant.draw(ctx, fs, P, pal, assets, tpl); ctx.restore(); }
     if (P.chains.on && !tpl.selfChains && !opt.noOverlays) { ctx.save(); chains.draw(ctx, fs, P, pal, assets, tpl); ctx.restore(); }

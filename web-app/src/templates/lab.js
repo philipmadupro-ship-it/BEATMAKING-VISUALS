@@ -3,7 +3,8 @@ import { chainPose } from '../overlays/chains.js';
 import { phrase } from '../engine/layout.js';
 import { lineText, lineFont, lineColor } from '../overlays/text.js';
 import { accentOn } from '../brand/palettes.js';
-import { win, openAmount, pulse, drawCable, cableDots, scopeView, meterView, ease, wavePro, specAnalyzer, eqView, goniometer } from './kit.js';
+import { snareBorder, kickCable } from '../engine/react.js';
+import { win, openAmount, drawCable, cableDots, scopeView, meterView, ease, wavePro, specAnalyzer, eqView, goniometer } from './kit.js';
 // LAB: a patch-bay in nested windows. The outer lab.patch window holds small .exe node windows with live readouts
 // (input waveform, kick/sub meters, snare scope, hat spectrum, bus/out meters); each node's cable plugs into a link of
 // the U2C chains in the middle, with signal dots on the beat grid. The elephant swings inside monitor.sys.
@@ -21,7 +22,7 @@ export default {
   defaults: a => a === '916' ? { chains: { x: .5, y: .565, s: .6 }, eleph: { x: .74, y: .31, s: .36, len: .03 } } : { chains: { x: .47, y: .6, s: .78 }, eleph: { x: .79, y: .3, s: .42, len: .03 } },
   reserved(P, assets) { const B = panel(P); return [B, { x: B.x, y: B.y - 210 * P.u, w: B.w, h: 200 * P.u }, { x: B.x, y: B.y + B.h + 20 * P.u, w: B.w, h: 150 * P.u }]; },
   draw(ctx, fs, P, p, assets) {
-    const { W, H, u, V } = P, fg = p.main, hi = p.hi, bg = p.dark, acc = accentOn(p), ph = phrase(fs, P), pl = pulse(fs), glow = P.params && P.params.pulse != null ? P.params.pulse : .5;
+    const { W, H, u, V } = P, fg = p.main, hi = p.hi, bg = p.dark, acc = accentOn(p), ph = phrase(fs, P), glow = P.params && P.params.pulse != null ? P.params.pulse : .5;
     const S = { u, fg, hi, bg, acc, pl: 0, P };
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = fs.duck;
@@ -30,30 +31,30 @@ export default {
     // header: LAB 001 / TITLE.WAV · timecode · bpm/key
     txt(ctx, 'LAB', mx, top + 40 * u, mono(40 * u, 700), fg); txt(ctx, '001', mx + 104 * u, top + 40 * u, mono(40 * u, 700), rgba(fg, .45));
     const title = lineText(P, 'title', fs); if (title) { const nm = title.replace(/\s+/g, '_').slice(0, 16); txt(ctx, nm, mx, top + 92 * u, lineFont(P, 'title', 42 * u, 700), lineColor(P, 'title', p)); txt(ctx, '.WAV', mx + ctx.measureText(nm).width + 10 * u, top + 92 * u, mono(26 * u, 700), rgba(fg, .4)); }
-    const bw = 240 * u, bh = 64 * u, bx = B.x + B.w - bw, by = top; ctx.strokeStyle = rgba(fg, .55 + .45 * pl); ctx.lineWidth = 1.5 * u; ctx.strokeRect(bx, by, bw, bh);
+    const bw = 240 * u, bh = 64 * u, bx = B.x + B.w - bw, by = top; ctx.strokeStyle = rgba(fg, .55); ctx.lineWidth = 1.5 * u; ctx.strokeRect(bx, by, bw, bh);
     txt(ctx, tc2(fs.lt), bx + bw / 2, by + bh / 2 + 2 * u, mono(36 * u, 500), hi, 'center', 'middle');
     const bk = [lineText(P, 'bpm', fs), lineText(P, 'key', fs)].filter(Boolean).join(' · '); if (bk) txt(ctx, bk, bx + bw, by + bh + 32 * u, lineFont(P, 'bpm', 20 * u), lineColor(P, 'bpm', p), 'right');
     // outer window (nested): lab.patch
-    S.pl = pl * .5; const outer = win(ctx, B, `lab.patch  ·  /u2c/${slug(lineText(P, 'title', fs, { ignoreOn: true }))}`, 1, S);
+    S.pl = 0; const outer = win(ctx, B, `lab.patch  ·  /u2c/${slug(lineText(P, 'title', fs, { ignoreOn: true }))}`, 1, S);
     txt(ctx, 'BAR ' + (fs.bar + 1) + '.' + ((Math.floor(fs.beat) % 4 + 4) % 4 + 1) + '   ROUTE → U2C', B.x + B.w - 70 * u, B.y + 17.5 * u, mono(12 * u), rgba(fg, .55), 'right');
     const IN = outer.inner, nw = (V ? 208 : 240) * u, nh = (V ? 136 : 152) * u, pos = id => { const n = NODES[id]; return { x: IN.x + n[0] * (IN.w - nw), y: IN.y + n[1] * (IN.h - nh), w: nw, h: nh }; };
     // chain plugs: each node's cable lands on the link nearest to it
     const pose = chainPose(fs, P, assets), pcs = pose.pieces;
     const plugOf = (x, y) => { let b = pcs[0], bd = 1e18; for (const q of pcs) { const d = (q.hx - x) ** 2 + (q.hy - y) ** 2; if (d < bd) { bd = d; b = q; } } return b; };
-    const ids = Object.keys(NODES), opens = ids.map((id, i) => openAmount(ph, i));
+    const ids = Object.keys(NODES), opens = ids.map((id, i) => openAmount(ph, i, false, fs.spb)), nC = ids.length + 1, beatC = ((Math.floor(fs.beat) % nC) + nC) % nC, kC = kickCable(fs, nC);
     ids.forEach((id, i) => { const r = pos(id), cx = r.x + r.w / 2, cy = r.y + r.h / 2, q = plugOf(cx, cy), o = opens[i]; if (o <= .02) return;
       const fromRight = q.x > cx, a = { x: fromRight ? r.x + r.w : r.x, y: cy }, horiz = Math.abs(q.x - a.x) > Math.abs(q.y - a.y) * .3;
       const pts = horiz ? [a, { x: (a.x + q.x) / 2, y: a.y }, { x: (a.x + q.x) / 2, y: q.y }, { x: q.x, y: q.y }] : [{ x: cx, y: q.y < cy ? r.y : r.y + r.h }, { x: cx, y: (cy + q.y) / 2 }, { x: q.x, y: (cy + q.y) / 2 }, { x: q.x, y: q.y }];
-      ctx.save(); ctx.globalAlpha = ease(o) * Math.max(.3, q.a); drawCable(ctx, pts, S, .22 + .35 * glow); cableDots(ctx, pts, fs, S, i * .11); ctx.restore(); });
+      ctx.save(); ctx.globalAlpha = ease(o) * Math.max(.3, q.a); drawCable(ctx, pts, S, .22 + .35 * glow); cableDots(ctx, pts, fs, S, 0, { beat: beatC === i, kick: kC === i }); ctx.restore(); });
     const M = monitorRect(P, assets), mq = plugOf(M.x + M.w / 2, M.y + M.h);
-    { const a = { x: M.x + M.w / 2, y: M.y + M.h }, pts = [a, { x: a.x, y: (a.y + mq.y) / 2 }, { x: mq.x, y: (a.y + mq.y) / 2 }, { x: mq.x, y: mq.y }]; drawCable(ctx, pts, S, .3 + .3 * glow); cableDots(ctx, pts, fs, S, .5); }
-    ids.forEach((id, i) => { const r = pos(id), n = NODES[id]; S.pl = Math.max(pl * (n[3] === 'meter' ? 1 : .5), id === 'snr' ? fs.snare : 0); const { inner: I, alpha } = win(ctx, r, n[2], opens[i], S); if (!I || alpha <= 0) return;
+    { const a = { x: M.x + M.w / 2, y: M.y + M.h }, pts = [a, { x: a.x, y: (a.y + mq.y) / 2 }, { x: mq.x, y: (a.y + mq.y) / 2 }, { x: mq.x, y: mq.y }]; drawCable(ctx, pts, S, .3 + .3 * glow); cableDots(ctx, pts, fs, S, 0, { beat: beatC === nC - 1, kick: kC === nC - 1 }); }
+    ids.forEach((id, i) => { const r = pos(id), n = NODES[id]; S.pl = snareBorder(fs, P, i, ids.length + 1); const { inner: I, alpha } = win(ctx, r, n[2], opens[i], S); if (!I || alpha <= 0) return;
       ctx.save(); ctx.globalAlpha = alpha; if (n[3] === 'wave') wavePro(ctx, I, fs, P, S); else if (n[3] === 'meter') meterView(ctx, I, fs, S); else if (n[3] === 'scope') scopeView(ctx, I, fs, S, .02); else if (n[3] === 'eq') eqView(ctx, I, fs, S); else if (n[3] === 'gonio') goniometer(ctx, I, fs, S); else specAnalyzer(ctx, I, fs, S); ctx.restore(); });
-    S.pl = pl * .4; win(ctx, M, 'monitor.sys  ·  eleph', 1, S);
+    S.pl = snareBorder(fs, P, ids.length, ids.length + 1); win(ctx, M, 'monitor.sys  ·  eleph', 1, S);
     // footer: bus waveform strip + tag
     const sw = { x: B.x, y: B.y + B.h + 30 * u, w: B.w * .6, h: (V ? 110 : 60) * u };
     if (V || sw.y + sw.h < H - 20 * u) { ctx.strokeStyle = rgba(fg, .5); ctx.lineWidth = 1.5 * u; ctx.strokeRect(sw.x, sw.y, sw.w, sw.h); wavePro(ctx, { x: sw.x + 10 * u, y: sw.y + 10 * u, w: sw.w - 20 * u, h: sw.h - 20 * u }, fs, P, S); }
     const tag = lineText(P, 'tag', fs); if (tag) txt(ctx, tag, V ? B.x + B.w : W / 2, V ? sw.y + sw.h / 2 + 12 * u : top + 60 * u, lineFont(P, 'tag', 38 * u), lineColor(P, 'tag', p), V ? 'right' : 'center');
-    sparkle(ctx, B.x + B.w - 24 * u, B.y + B.h - 24 * u, 12 * u + 8 * u * pl, p.spark);
+    sparkle(ctx, B.x + B.w - 24 * u, B.y + B.h - 24 * u, 12 * u, p.spark);
   },
 };

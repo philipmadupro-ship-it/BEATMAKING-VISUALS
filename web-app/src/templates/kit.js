@@ -11,10 +11,13 @@ export const easeIO = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
  * (-0.6, -0.2, +0.2, +0.6 … beats from the downbeat), so the folds ripple across the turn and at most two windows
  * are shut at any instant; the screen is never empty.
  */
-export function openAmount(ph, i, keep = false) {
+export function openAmount(ph, i, keep = false, spb = .43) {
   if (keep) return 1;
-  let rel = ph.lb - (-.6 + i * .4); rel = ((rel % ph.C) + ph.C * 1.5) % ph.C - ph.C / 2;
-  return easeIO((Math.abs(rel) - .15) / .35);
+  // choreography at the logo's rebuild moment (mid-loop, so frame 0 is a complete, calm frame): each secondary window
+  // folds in 120 ms (ease-in), stays shut briefly, then re-opens with ease-out-expo over 450 ms; 40 ms stagger
+  let rel = ((ph.lbL % ph.C) + ph.C * 1.5) % ph.C - ph.C / 2; const s = rel * spb, c0 = -.2 + i * .04, o0 = .06 + i * .04;
+  if (s < c0) return 1; if (s < c0 + .12) { const q = (s - c0) / .12; return 1 - q * q * q; } if (s < o0) return 0;
+  const q = Math.min(1, (s - o0) / .45); return q >= 1 ? 1 : 1 - Math.pow(2, -10 * q);
 }
 /** Kick pulse 0..1 (fast ease-out) for border brightness / punches. */
 export const pulse = fs => Math.max(0, spring(fs.kickAge)) * Math.min(1, fs.kickS * 1.3);
@@ -24,7 +27,7 @@ export const pulse = fs => Math.max(0, spring(fs.kickAge)) * Math.min(1, fs.kick
  */
 export function win(ctx, r, title, o, S) {
   const { u, fg, bg, hi, pl = 0 } = S, tb = 26 * u; if (o <= 0) return { inner: null, alpha: 0 };
-  const a = ease(o / .3), b = ease((o - .3) / .7), h = tb + (r.h - tb) * b, lw = 1.5 * u, bri = .55 + .45 * pl;
+  const a = ease(o / .3), b = ease((o - .3) / .7), h = tb + (r.h - tb) * b, lw = 1.5 * u, bri = .55 * (1 + Math.min(.15, pl)); // snare: ≤ 15 % hairline brighten on one window
   ctx.save();
   if (b > 0) { ctx.fillStyle = rgba(bg, .9); ctx.fillRect(r.x, r.y, r.w, h); }
   ctx.strokeStyle = rgba(fg, bri); ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x + r.w * a, r.y); ctx.stroke();
@@ -51,11 +54,13 @@ export function drawCable(ctx, pts, S, alpha = .4) {
 function along(pts, q) { let tot = 0; const seg = []; for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); seg.push(d); tot += d; }
   let d = q * tot; for (let i = 1; i < pts.length; i++) { if (d <= seg[i - 1] || i === pts.length - 1) { const k = seg[i - 1] ? clamp(d / seg[i - 1]) : 0; return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * k, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * k }; } d -= seg[i - 1]; } return pts[pts.length - 1]; }
 /** Signal dots on the beat grid: one dot per beat zips along the cable (eased), kicks add a bright dot with a short trail. */
-export function cableDots(ctx, pts, fs, S, offset = 0) {
-  const { u, hi, acc } = S, bp = ((fs.beat + offset) % 1 + 1) % 1, q = ease(bp / .7);
-  if (bp < .7) { const p = along(pts, q); ctx.fillStyle = rgba(hi, .9 * (1 - bp)); ctx.fillRect(p.x - 3 * u, p.y - 3 * u, 6 * u, 6 * u); }
-  for (const r of fs.recent('kicks', .5, 2)) { const qq = ease((r.age - offset * .05) / .45); if (qq <= 0 || qq >= 1) continue;
-    for (let k = 0; k < 5; k++) { const p = along(pts, Math.max(0, qq - k * .025)), z = (5 - k * .8) * u; ctx.fillStyle = rgba(k ? acc : hi, (1 - k / 5) * (1 - qq * .5)); ctx.fillRect(p.x - z, p.y - z, 2 * z, 2 * z); } }
+/** Calm signal dots: an ambient dot travels the cable whose turn it is on the beat grid (opt.beat), and only the cable
+ *  chosen for this kick (opt.kick) carries the kick's signal. */
+export function cableDots(ctx, pts, fs, S, offset = 0, opt = { beat: true, kick: true }) {
+  const { u, hi, acc } = S, bp = ((fs.beat + offset) % 1 + 1) % 1, q = ease(bp / .9);
+  if (opt.beat && bp < .9) { const p = along(pts, q); ctx.fillStyle = rgba(hi, .45 * (1 - bp)); ctx.fillRect(p.x - 2 * u, p.y - 2 * u, 4 * u, 4 * u); }
+  if (opt.kick) for (const r of fs.recent('kicks', .7, 1)) { const qq = ease(r.age / .65); if (qq <= 0 || qq >= 1) continue;
+    for (let k = 0; k < 5; k++) { const p = along(pts, Math.max(0, qq - k * .025)), z = (5 - k * .8) * u; ctx.fillStyle = rgba(k ? acc : hi, (1 - k / 5) * (1 - qq) * .8); ctx.fillRect(p.x - z * .8, p.y - z * .8, 1.6 * z, 1.6 * z); } }
 }
 // ---- live readouts (all draw inside r)
 export function scopeView(ctx, r, fs, S, span = .04) {
@@ -96,7 +101,7 @@ export function eqView(ctx, r, fs, S) {
   const yOf = d => r.y + (15 - d) / 30 * r.h;
   ctx.beginPath(); for (let j = 0; j <= 120; j++) { const f = 20 * Math.pow(1000, j / 120), x = r.x + j / 120 * r.w, y = yOf(resp(f)); j ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
   ctx.strokeStyle = hi; ctx.lineWidth = 1.8 * u; ctx.stroke(); ctx.lineTo(r.x + r.w, yOf(0)); ctx.lineTo(r.x, yOf(0)); ctx.closePath(); ctx.fillStyle = rgba(hi, .1); ctx.fill();
-  bands.forEach((b, i) => { const x = r.x + LOGF(b.f) * r.w, y = yOf(resp(b.f)), z = (5 + (i === 0 ? 3 * pulse(fs) : 0)) * u; ctx.fillStyle = S.bg; ctx.strokeStyle = i === 0 ? acc : hi; ctx.lineWidth = 1.5 * u; ctx.beginPath(); ctx.arc(x, y, z, 0, 7); ctx.fill(); ctx.stroke();
+  bands.forEach((b, i) => { const x = r.x + LOGF(b.f) * r.w, y = yOf(resp(b.f)), z = (5 + (i === 0 ? 2.5 * fs.bassE : 0)) * u; /* bass → EQ low node */ ctx.fillStyle = S.bg; ctx.strokeStyle = i === 0 ? acc : hi; ctx.lineWidth = 1.5 * u; ctx.beginPath(); ctx.arc(x, y, z, 0, 7); ctx.fill(); ctx.stroke();
     lab(ctx, String(i + 1), x, y - z - 4 * u, S, .8, 'center'); });
   ctx.restore();
   lab(ctx, `LS ${bands[0].g.toFixed(1)}  ·  HS ${bands[4].g.toFixed(1)} dB`, r.x + 2 * u, r.y + 9 * u, S, .7);
@@ -184,7 +189,7 @@ export function hitLog(ctx, r, fs, S, tag) {
   ev.sort((a, b) => b.age - a.age); const rows = ev.slice(-n);
   ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
   rows.forEach((e, i) => { const tt = fs.lt - e.age, s = `${tc2(Math.max(0, tt))}  ${e.name}  0x${((e.idx * 2654435761) >>> 0 & 0xffffff).toString(16).toUpperCase().padStart(6, '0')}  ${e.s.toFixed(2)}`, last = i === rows.length - 1;
-    txt(ctx, last ? s.slice(0, Math.ceil(s.length * ease(e.age / .12))) : s, r.x, r.y + (i + 1) * lh - 3 * u, mono(11 * u, last ? 700 : 400), last ? hi : rgba(fg, .35 + .5 * i / n)); });
+    txt(ctx, last ? s.slice(0, Math.ceil(s.length * ease(e.age / .12))) + (Math.floor(fs.beat * 2) % 2 ? '' : ' ▌') : s, r.x, r.y + (i + 1) * lh - 3 * u, mono(11 * u, last ? 700 : 400), last ? hi : rgba(fg, .35 + .5 * i / n)); });
   if (tag) txt(ctx, '> ' + tag, r.x, r.y + r.h - 2 * u, mono(11 * u, 700), hi);
   ctx.restore();
 }

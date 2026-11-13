@@ -29,14 +29,17 @@ export function makeParams(project, track) {
  */
 export function phrase(fs, P) {
   const b = fs.beat - P.anchorBeat, C = P.cycleBeats, k = Math.floor(b / C), lb = b - k * C, D = C >= 32 ? 4 : C >= 16 ? 3 : 2, R = C >= 16 ? 2 : 1.5;
-  const ph = { b, k, lb, C, D, R, impactAge: lb * fs.spb, endIn: (C - lb) * fs.spb, tt: 6, shatterQ: 0, flyQ: 0 };
+  // the logo cycle is offset by half a phrase: it dissolves/rebuilds mid-loop, so the in-point (frame 0) and the
+  // out-point both land on a fully lit, readable logo ("loaded 100 %") and the seam stays clean
+  const lbL = (lb + C / 2) % C;
+  const ph = { b, k, lb, lbL, C, D, R, impactAge: lb * fs.spb, endIn: (C - lb) * fs.spb, tt: 6, shatterQ: 0, flyQ: 0 };
   ph.vis = (letterState(ph, 0).fill + letterState(ph, 1).fill + letterState(ph, 2).fill) / 3;
   return ph;
 }
 const ease = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 /** {mode, outline 0..1, fill 0..1} for letter i (0 U, 1 2, 2 C). */
 export function letterState(ph, i) {
-  const { lb, C, D, R } = ph;
+  const { C, D, R } = ph, lb = ph.lbL;
   if (lb < R * 1.25) { const s0 = i * R / 4; return { mode: 'rebuild', outline: ease((lb - s0) / (R * .45)), fill: ease((lb - s0 - R * .25) / (R * .5)) }; }
   if (lb >= C - D) { const d0 = C - D + i * D / 4, q = ease((lb - d0) / (D / 2)); return { mode: 'dissolve', outline: 1 - q, fill: 1 - q }; }
   return { mode: 'full', outline: 1, fill: 1 };

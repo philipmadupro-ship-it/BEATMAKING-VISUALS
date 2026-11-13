@@ -23,6 +23,10 @@ export function createPanels(app) {
   // glitch: its own 0-100 amount and trigger, separate from the master FX amount
   const gl = $('#fxGlitch'); gl.addEventListener('input', () => { set('fx.glitch', +gl.value / 100); gl.nextElementSibling.textContent = gl.value; });
   $('#fxGlitchOn').addEventListener('change', e => set('fx.glitchOn', e.target.value));
+  // Reactivity (0-100, default 45) scales every composition-layer reaction; Feel presets set it
+  const rx = $('#fxReact'), PRE = { calm: .25, balanced: .45, punchy: .75 };
+  rx.addEventListener('input', () => { set('fx.react', +rx.value / 100); rx.nextElementSibling.textContent = rx.value; const k = Object.keys(PRE).find(k => Math.abs(PRE[k] - rx.value / 100) < .005); set('fx.reactPreset', k || 'custom'); $('#fxReactPre').value = k || ''; });
+  $('#fxReactPre').addEventListener('change', e => { const v = PRE[e.target.value]; if (v == null) return; app.store.set({ project: { fx: { react: v, reactPreset: e.target.value } } }); rx.value = Math.round(v * 100); rx.nextElementSibling.textContent = rx.value; });
   $('#chC').addEventListener('change', e => set('chains.cycle', e.target.value === 'auto' ? 'auto' : +e.target.value));
   const segs = [['exFps', 'export.fps', Number], ['exMbps', 'export.mbps', Number], ['exLufs', 'export.loudness', v => v === 'off' ? 'off' : +v]];
   segs.forEach(([id, path, parse]) => $$('#' + id + ' button').forEach(b => b.addEventListener('click', () => { set(path, parse(b.dataset.v)); sync(); app.actions.exportInfo(); })));
@@ -78,7 +82,7 @@ export function createPanels(app) {
   $('#capSave').addEventListener('click', async () => { const c = captions(); if (c) { const r = await saveFile(new Blob([c.txt], { type: 'text/plain' }), slug(P().text.lines.title.text) + '_captions.txt'); $('#capInfo').textContent = r === 'declined' ? 'Save cancelled.' : 'Saved captions .txt'; } });
   function sync() { const p = P();
     ranges.forEach(([id, path, f]) => { const el = $('#' + id), v = getp(p, path); if (v != null) { el.value = v; el.nextElementSibling.textContent = fmt[f](v); } });
-    gl.value = Math.round(p.fx.glitch * 100); gl.nextElementSibling.textContent = gl.value; $('#fxGlitchOn').value = p.fx.glitchOn || 'kicks';
+    gl.value = Math.round(p.fx.glitch * 100); gl.nextElementSibling.textContent = gl.value; rx.value = Math.round((p.fx.react ?? .45) * 100); rx.nextElementSibling.textContent = rx.value; $('#fxReactPre').value = p.fx.reactPreset in PRE ? p.fx.reactPreset : ''; $('#fxGlitchOn').value = p.fx.glitchOn || 'kicks';
     checks.forEach(([id, path]) => { $('#' + id).checked = !!getp(p, path); });
     texts.forEach(([id, path]) => { const el = $('#' + id); if (document.activeElement !== el) el.value = getp(p, path) ?? (path === 'text.titleFormat' ? DEFAULT_FORMAT : ''); });
     $('#chC').value = String(p.chains.cycle); syncText();

@@ -186,6 +186,8 @@ body{background:var(--bg);color:var(--fg)}
     <h3>Post FX</h3>
     <div class="group">
       <div class="group-h"><label class="tog"><input type="checkbox" id="fxOn" checked> Audio-driven FX</label><span class="hint" id="fxStatus"></span></div>
+      <div class="ctl"><label class="lbl" for="fxReactPre">Feel</label><select class="inp mono" id="fxReactPre"><option value="calm">Calm</option><option value="balanced">Balanced</option><option value="punchy">Punchy</option></select><span></span></div>
+      <div class="ctl"><label class="lbl" for="fxReact">Reactivity</label><input type="range" id="fxReact" min="0" max="100" step="1"><output for="fxReact"></output></div>
       <div class="ctl"><label class="lbl" for="fxAmt">FX amount</label><input type="range" id="fxAmt" min="0" max="1" step="0.01"><output for="fxAmt"></output></div>
       <div class="ctl"><label class="lbl" for="fxCrt">CRT · scan</label><input type="range" id="fxCrt" min="0" max="1" step="0.01"><output for="fxCrt"></output></div>
       <div class="ctl"><label class="lbl" for="fxRgb">RGB split</label><input type="range" id="fxRgb" min="0" max="1" step="0.01"><output for="fxRgb"></output></div>

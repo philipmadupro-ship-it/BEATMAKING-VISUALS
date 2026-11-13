@@ -1,7 +1,8 @@
 import { rgba, txt, mono, hud, sparkle, clamp, rrect } from '../util/draw.js';
 import { accentOn, glowOp } from '../brand/palettes.js';
-import { chainsScale, chainImages, letterOf, spring } from '../overlays/chains.js';
+import { chainsScale, chainImages, letterOf } from '../overlays/chains.js';
 import { phrase } from '../engine/layout.js';
+import { kickBreath } from '../engine/react.js';
 // BLOOM ORBIT: the elephant hangs in the centre. The three letters of the logo (U, 2, C) orbit it as whole, upright
 // letters on the middle ring, between two clean chain necklaces (inner + outer) whose radius follows the bass / highs.
 // Orbit speed is the band energy integrated over the loop (whole turns per loop: seamless). On each phrase start the
@@ -26,7 +27,7 @@ function necklace(ctx, cx, cy, r, ry, rot, Lk, col, al, u) {
 }
 function letterPoses(fs, P, assets) {
   const L = assets.links, G = geom(fs, P), m = snapAmount(fs, P), sc = chainsScale(P, L), lx = P.chains.x * P.W, ly = P.chains.y * P.H, Lp = Math.max(1, P.outT - P.inT);
-  const so = sc * .62, turn = fs.flow(3, Math.max(1, Math.round(Lp * .05))), punch = 1 + .02 * Math.max(0, spring(fs.kickAge)) * fs.kickS;
+  const so = sc * .62, turn = fs.flow(3, Math.max(1, Math.round(Lp * .05))), punch = kickBreath(fs, P);
   return letters(L).map((lt, k) => { const me = ease(m * 1.3 - k * .15), a = (k / 3 + turn) * Math.PI * 2 - Math.PI / 2, ox = G.cx + Math.cos(a) * G.rMid, oy = G.cy + Math.sin(a) * G.rMid * G.ry;
     const hx = lx + (lt.cx - L.w / 2) * sc, hy = ly + (lt.cy - L.h / 2) * sc; return { lt, x: ox + (hx - ox) * me, y: oy + (hy - oy) * me, s: (so + (sc - so) * me) * punch, front: me > .5 || Math.sin(a) > 0, me }; });
 }
@@ -52,11 +53,11 @@ export default {
     necklace(ctx, G.cx, G.cy, G.rIn, G.ry, -fs.flow(1, Math.max(1, Math.round((P.outT - P.inT) * .04))) * TAU, 30 * u, a2, (.55 + .35 * glow) * (1 - m * .5), u);
     necklace(ctx, G.cx, G.cy, G.rOut, G.ry, fs.flow(4, Math.max(1, Math.round((P.outT - P.inT) * .03))) * TAU, 38 * u, p.main, (.5 + .35 * glow) * (1 - m * .5), u);
     ctx.restore();
-    for (const r of fs.recent('snares', .5, 2)) { const q = r.age / .5; ctx.strokeStyle = rgba(p.spark, (1 - q) * .7 * r.s); ctx.lineWidth = 2 * u * (1 - q) + 1; ctx.beginPath(); ctx.ellipse(G.cx, G.cy, G.rIn * (.6 + q * .5), G.rIn * (.6 + q * .5) * G.ry, 0, 0, TAU); ctx.stroke(); }
+    for (const r of fs.recent('snares', .5, 2)) { const q = r.age / .5; ctx.strokeStyle = rgba(p.spark, (1 - q) * .3 * r.s); ctx.lineWidth = 2 * u * (1 - q) + 1; ctx.beginPath(); ctx.ellipse(G.cx, G.cy, G.rIn * (.6 + q * .5), G.rIn * (.6 + q * .5) * G.ry, 0, 0, TAU); ctx.stroke(); }
     if (P.chains.on) drawLetters(ctx, letterPoses(fs, P, assets), chainImages(assets, p, 'solid', false), false);
     const mx = V ? 70 * u : W * .04, ty = V ? 100 * u : H * .08;
     txt(ctx, 'ORBIT.SYS', mx, ty, mono(22 * u, 700), p.main); txt(ctx, m > .5 ? 'LOCKED · U2C' : 'ORBIT · U / 2 / C', mx, ty + 30 * u, mono(16 * u), rgba(p.main, .65));
-    sparkle(ctx, W - mx, ty, 14 * u + 6 * u * fs.hat, p.spark);
+    sparkle(ctx, W - mx, ty, 14 * u, p.spark);
     hud(ctx, 28 * u, 28 * u, W - 56 * u, H - 56 * u, 44 * u, rgba(p.main, .5), 2 * u);
   },
   // letters on the near side of the ring (and locked letters) pass in front of the elephant
