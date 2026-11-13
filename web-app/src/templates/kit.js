@@ -102,3 +102,116 @@ export function logView(ctx, r, fs, S, tag) {
   ctx.restore();
 }
 export const timecode = (fs) => tc2(fs.lt);
+// ======================= pro meters (V3) =======================
+const LOGF = f => Math.log(f / 20) / Math.log(1000); // 20 Hz … 20 kHz → 0 … 1
+const FTICKS = [[50, '50'], [100, '100'], [200, '200'], [500, '500'], [1000, '1k'], [2000, '2k'], [5000, '5k'], [10000, '10k']];
+const lab = (ctx, s, x, y, S, al = .55, align = 'left') => txt(ctx, s, x, y, mono(9 * S.u, 500), rgba(S.fg, al), align);
+function freqGrid(ctx, r, S, dbs, dbMin, dbMax, unit) {
+  const { u, fg } = S; ctx.save(); ctx.lineWidth = 1 * u;
+  for (const [f, l] of FTICKS) { const x = r.x + LOGF(f) * r.w; ctx.strokeStyle = rgba(fg, f === 1000 ? .22 : .1); ctx.beginPath(); ctx.moveTo(x, r.y); ctx.lineTo(x, r.y + r.h); ctx.stroke(); lab(ctx, l, x + 2 * u, r.y + r.h - 2 * u, S, .45); }
+  for (const d of dbs) { const y = r.y + (dbMax - d) / (dbMax - dbMin) * r.h; ctx.strokeStyle = rgba(fg, d === 0 ? .22 : .1); ctx.beginPath(); ctx.moveTo(r.x, y); ctx.lineTo(r.x + r.w, y); ctx.stroke(); lab(ctx, (d > 0 ? '+' : '') + d + (d === dbs[0] ? unit : ''), r.x + r.w - 2 * u, y - 2 * u, S, .45, 'right'); }
+  ctx.restore();
+}
+/** Parametric EQ display: 5 bands whose gains follow the (smoothed) band energies, summed curve, live spectrum behind. */
+export function eqView(ctx, r, fs, S) {
+  const { u, fg, hi, acc } = S, M = fs.m, sd = M.specDb(fs.i);
+  freqGrid(ctx, r, S, [12, 6, 0, -6, -12], -15, 15, ' dB');
+  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  // spectrum, faint, behind
+  ctx.beginPath(); ctx.moveTo(r.x, r.y + r.h); for (let k = 0; k < sd.length; k++) { const x = r.x + LOGF(M.binHz(k)) * r.w, y = r.y + r.h - clamp((sd[k] + 60) / 60) * r.h * .9; ctx.lineTo(x, y); } ctx.lineTo(r.x + r.w, r.y + r.h); ctx.closePath(); ctx.fillStyle = rgba(fg, .08); ctx.fill();
+  const g = x => clamp((x - .42) * 26, -12, 12), B = fs.bands;
+  const bands = [{ f: 80, g: g(fs.bassE), q: 1.1, t: 'ls' }, { f: 250, g: g(B[2]), q: .9, t: 'pk' }, { f: 1000, g: g(fs.midE), q: .9, t: 'pk' }, { f: 4000, g: g(fs.highE), q: .9, t: 'pk' }, { f: 11000, g: g(B[5]), q: 1.1, t: 'hs' }];
+  const resp = f => bands.reduce((a, b) => { const o = Math.log2(f / b.f); return a + (b.t === 'pk' ? b.g * Math.exp(-o * o / (2 * b.q * b.q * .35)) : b.t === 'ls' ? b.g / (1 + Math.exp(o * 3)) : b.g / (1 + Math.exp(-o * 3))); }, 0);
+  const yOf = d => r.y + (15 - d) / 30 * r.h;
+  ctx.beginPath(); for (let j = 0; j <= 120; j++) { const f = 20 * Math.pow(1000, j / 120), x = r.x + j / 120 * r.w, y = yOf(resp(f)); j ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.strokeStyle = hi; ctx.lineWidth = 1.8 * u; ctx.stroke(); ctx.lineTo(r.x + r.w, yOf(0)); ctx.lineTo(r.x, yOf(0)); ctx.closePath(); ctx.fillStyle = rgba(hi, .1); ctx.fill();
+  bands.forEach((b, i) => { const x = r.x + LOGF(b.f) * r.w, y = yOf(resp(b.f)), z = (5 + (i === 0 ? 3 * pulse(fs) : 0)) * u; ctx.fillStyle = S.bg; ctx.strokeStyle = i === 0 ? acc : hi; ctx.lineWidth = 1.5 * u; ctx.beginPath(); ctx.arc(x, y, z, 0, 7); ctx.fill(); ctx.stroke();
+    lab(ctx, String(i + 1), x, y - z - 4 * u, S, .8, 'center'); });
+  ctx.restore();
+  lab(ctx, `LS ${bands[0].g.toFixed(1)}  ·  HS ${bands[4].g.toFixed(1)} dB`, r.x + 2 * u, r.y + 9 * u, S, .7);
+}
+/** Log-frequency spectrum analyser: 1/6-oct smoothing, -60…0 dB, filled area, 12 dB/s peak-hold line. */
+export function specAnalyzer(ctx, r, fs, S) {
+  const { u, hi } = S, M = fs.m, sd = M.specDb(fs.i), hold = M.specHold(fs.t), yOf = d => r.y + clamp((0 - d) / 60) * r.h, xs = k => r.x + LOGF(M.binHz(k)) * r.w;
+  freqGrid(ctx, r, S, [0, -12, -24, -36, -48], -60, 0, ' dB');
+  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  const path = (arr) => { ctx.beginPath(); for (let k = 0; k < arr.length; k++) { const x = xs(k), y = yOf(arr[k]); if (!k) ctx.moveTo(r.x, y); ctx.lineTo(x, y); } ctx.lineTo(r.x + r.w, yOf(arr[arr.length - 1])); };
+  path(sd); ctx.lineTo(r.x + r.w, r.y + r.h); ctx.lineTo(r.x, r.y + r.h); ctx.closePath(); const gr = ctx.createLinearGradient(0, r.y, 0, r.y + r.h); gr.addColorStop(0, rgba(hi, .38)); gr.addColorStop(1, rgba(hi, .03)); ctx.fillStyle = gr; ctx.fill();
+  path(sd); ctx.strokeStyle = hi; ctx.lineWidth = 1.4 * u; ctx.stroke();
+  path(hold); ctx.strokeStyle = rgba(S.acc, .85); ctx.lineWidth = 1 * u; ctx.setLineDash([2 * u, 2 * u]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore(); lab(ctx, '1/6 OCT · HOLD −12 dB/s', r.x + 2 * u, r.y + 9 * u, S, .7);
+}
+/** L/R peak + RMS meter with dB scale, 1.5 s peak hold, clip LEDs and LUFS M/S/I + true-peak readouts. */
+export function proMeter(ctx, r, fs, S, P) {
+  const { u, fg, hi, acc } = S, M = fs.m, t = fs.t, bw = 18 * u, x0 = r.x + 26 * u, top = r.y + 16 * u, h = r.h - 22 * u, yOf = d => top + clamp(-d / 60) * h;
+  for (const d of [0, -3, -6, -18, -60]) { const y = yOf(d); lab(ctx, String(d), r.x + 20 * u, y + 3 * u, S, .6, 'right'); ctx.fillStyle = rgba(fg, .3); ctx.fillRect(x0 - 3 * u, y, 2 * u, 1 * u); }
+  const clipped = M.clip(t);
+  [0, 1].forEach(ch => { const x = x0 + ch * (bw + 6 * u), pkb = M.peakBar(ch, t), rms = M.rmsDb(ch, t), hold = M.holdDb(ch, t);
+    ctx.fillStyle = rgba(fg, .08); ctx.fillRect(x, top, bw, h);
+    // peak (thin, bright) over RMS (wide, dimmer); segmented hairlines every 3 dB
+    const yp = yOf(pkb), yr = yOf(rms); ctx.fillStyle = rgba(hi, .35); ctx.fillRect(x, yr, bw, top + h - yr);
+    const grd = ctx.createLinearGradient(0, top, 0, top + h); grd.addColorStop(0, acc); grd.addColorStop(.1, hi); grd.addColorStop(1, rgba(hi, .7)); ctx.fillStyle = grd; ctx.fillRect(x + bw * .3, yp, bw * .4, top + h - yp);
+    ctx.fillStyle = S.bg; for (let d = -3; d > -60; d -= 3) ctx.fillRect(x, yOf(d), bw, .8 * u);
+    ctx.fillStyle = hi; ctx.fillRect(x, yOf(hold) - 1 * u, bw, 2 * u);
+    ctx.fillStyle = clipped ? acc : rgba(fg, .15); ctx.fillRect(x, r.y + 2 * u, bw, 8 * u);
+    lab(ctx, ch ? 'R' : 'L', x + bw / 2, top + h + 10 * u, S, .8, 'center'); });
+  const rx = x0 + 2 * bw + 22 * u, line = (k, v, y, big) => { lab(ctx, k, rx, y, S, .55); txt(ctx, v, r.x + r.w, y + (big ? 2 : 0) * u, mono((big ? 17 : 12) * u, 700), big ? hi : rgba(fg, .9), 'right'); };
+  line('MOMENTARY', M.lufsM(t).toFixed(1), r.y + 22 * u, true); line('SHORT-TERM', M.lufsS(t).toFixed(1), r.y + 50 * u, false);
+  line('INTEGRATED', M.lufsI(P.inT, P.outT).toFixed(1), r.y + 72 * u, false); line('TRUE PEAK', M.truePeak(t).toFixed(1) + ' dBTP', r.y + 94 * u, false);
+  line('PEAK L/R', M.peakBar(0, t).toFixed(1) + ' / ' + M.peakBar(1, t).toFixed(1), r.y + 116 * u, false);
+  lab(ctx, 'LUFS · BS.1770' + (M.mono ? '  ·  MONO' : '  ·  STEREO'), rx, r.y + r.h - 2 * u, S, .6);
+}
+/** Goniometer (M up, S across) + correlation meter (−1 … +1). */
+export function goniometer(ctx, r, fs, S) {
+  const { u, fg, hi, acc } = S, M = fs.m, sz = Math.min(r.w, r.h - 28 * u), cx = r.x + r.w / 2, cy = r.y + sz / 2, R = sz / 2;
+  ctx.save(); ctx.strokeStyle = rgba(fg, .14); ctx.lineWidth = 1 * u; ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R);
+  ctx.moveTo(cx - R * .707, cy - R * .707); ctx.lineTo(cx + R * .707, cy + R * .707); ctx.moveTo(cx + R * .707, cy - R * .707); ctx.lineTo(cx - R * .707, cy + R * .707); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke();
+  lab(ctx, 'M', cx + 3 * u, cy - R + 10 * u, S); lab(ctx, 'L', cx - R * .707 - 8 * u, cy - R * .707 + 4 * u, S); lab(ctx, 'R', cx + R * .707 + 3 * u, cy - R * .707 + 4 * u, S); lab(ctx, '+S', cx + R - 14 * u, cy - 3 * u, S); lab(ctx, '−S', cx - R + 2 * u, cy - 3 * u, S);
+  const s = M.lr(fs.t, 360, .045); let pk = 1e-3; for (let i = 0; i < s.l.length; i++) pk = Math.max(pk, Math.abs(s.l[i]) + Math.abs(s.r[i])); const k = R * .92 / Math.max(.25, pk);
+  ctx.beginPath(); ctx.rect(cx - R, cy - R, 2 * R, 2 * R); ctx.clip(); ctx.fillStyle = rgba(hi, .55);
+  for (let i = 0; i < s.l.length; i++) { const x = cx + (s.r[i] - s.l[i]) * .707 * k, y = cy - (s.l[i] + s.r[i]) * .707 * k; ctx.fillRect(x - .9 * u, y - .9 * u, 1.8 * u, 1.8 * u); }
+  ctx.restore();
+  const c = M.corr(fs.t), by = r.y + r.h - 12 * u, bx = r.x + 16 * u, bw = r.w - 32 * u; ctx.fillStyle = rgba(fg, .15); ctx.fillRect(bx, by, bw, 3 * u);
+  ctx.fillStyle = c < 0 ? acc : hi; ctx.fillRect(bx + bw / 2 + Math.min(0, c) * bw / 2, by - 1 * u, Math.abs(c) * bw / 2, 5 * u); ctx.fillRect(bx + (c + 1) / 2 * bw - 1 * u, by - 4 * u, 2 * u, 11 * u);
+  lab(ctx, '−1', bx - 2 * u, by + 4 * u, S, .6, 'right'); lab(ctx, '+1', bx + bw + 2 * u, by + 4 * u, S, .6); lab(ctx, 'CORR ' + c.toFixed(2), bx + bw / 2, by - 6 * u, S, .85, 'center');
+}
+/** Clip waveform: peak + RMS layers, played part brighter, bar/beat ticks, playhead. */
+export function wavePro(ctx, r, fs, P, S) {
+  const { u, fg, hi } = S, T = fs.track, L = Math.max(.1, P.outT - P.inT), q = clamp(fs.lt / L), n = Math.max(24, Math.round(r.w / (3 * u))), bw = r.w / n, mid = r.y + r.h / 2;
+  for (let j = 0; j < n; j++) { const a = P.inT + L * j / n, pk = fs.peak(a, a + L / n), rm = fs.level(a, a + L / n) * pk * .75, on = j / n <= q, x = r.x + j * bw;
+    ctx.fillStyle = on ? rgba(hi, .45) : rgba(fg, .2); ctx.fillRect(x, mid - pk * r.h * .46, Math.max(1, bw - .6 * u), pk * r.h * .92);
+    ctx.fillStyle = on ? hi : rgba(fg, .45); ctx.fillRect(x, mid - rm * r.h * .46, Math.max(1, bw - .6 * u), rm * r.h * .92); }
+  for (let b = Math.ceil((P.inT - T.t0) / T.spb); T.t0 + b * T.spb <= P.outT; b++) { const x = r.x + (T.t0 + b * T.spb - P.inT) / L * r.w, bar = b % 4 === 0; ctx.fillStyle = rgba(fg, bar ? .6 : .25); ctx.fillRect(x, r.y, 1 * u, bar ? 6 * u : 3 * u); if (bar) lab(ctx, String(Math.floor(b / 4) + 1), x + 2 * u, r.y + 8 * u, S, .5); }
+  const x = r.x + q * r.w; ctx.fillStyle = hi; ctx.fillRect(x - .75 * u, r.y, 1.5 * u, r.h); ctx.beginPath(); ctx.moveTo(x - 5 * u, r.y); ctx.lineTo(x + 5 * u, r.y); ctx.lineTo(x, r.y + 6 * u); ctx.fill();
+}
+/** Tempo panel: BPM, key, bar.beat.tick, 4-step metronome, swing/groove readout. */
+export function tempoPro(ctx, r, fs, S, bpmTxt, keyTxt, fonts) {
+  const { u, fg, hi } = S, beatIn = ((Math.floor(fs.beat) % 4) + 4) % 4, tick = Math.floor(fs.bp * 960), G = fs.m.groove;
+  txt(ctx, bpmTxt || Math.round(fs.bpm) + ' BPM', r.x, r.y + 30 * u, fonts.bpm || mono(30 * u, 700), hi);
+  if (keyTxt) txt(ctx, keyTxt, r.x + r.w, r.y + 30 * u, fonts.key || mono(20 * u, 700), fg, 'right');
+  txt(ctx, `${String(fs.bar + 1).padStart(3, '0')}.${beatIn + 1}.${String(tick).padStart(3, '0')}`, r.x, r.y + r.h - 6 * u, mono(20 * u, 500), rgba(fg, .9));
+  lab(ctx, `SWING ${G.swing}%  ·  GROOVE ±${G.tightMs} ms  ·  4/4`, r.x, r.y + r.h - 32 * u, S, .6);
+  for (let j = 0; j < 4; j++) { const on = j === beatIn, k = on ? 1 - ease(fs.bp) * .7 : 0, x = r.x + r.w - (4 - j) * 24 * u; ctx.strokeStyle = rgba(fg, .5); ctx.lineWidth = 1 * u; ctx.strokeRect(x, r.y + r.h - 22 * u, 16 * u, 16 * u);
+    if (on) { ctx.fillStyle = rgba(j === 0 ? S.acc : hi, .35 + .65 * k); ctx.fillRect(x + 2 * u, r.y + r.h - 20 * u, 12 * u, 12 * u); } }
+}
+/** Scrolling note lanes (drums / bass / mid / high onsets), like a DAW timeline, playhead at 70 %. */
+export function lanesView(ctx, r, fs, S) {
+  const { u, fg, hi, acc } = S, Ls = fs.m.lanes, keys = Object.keys(Ls), lh = r.h / keys.length, span = 3, t0 = fs.t - span * .7, lw = 34 * u, X = tt => r.x + lw + (tt - t0) / span * (r.w - lw);
+  keys.forEach((k, i) => { const y = r.y + i * lh; ctx.fillStyle = rgba(fg, i % 2 ? .03 : .06); ctx.fillRect(r.x, y, r.w, lh); lab(ctx, k, r.x + 2 * u, y + lh / 2 + 3 * u, S, .7);
+    const T = Ls[k]; let lo = 0, hi2 = T.length; while (lo < hi2) { const m = (lo + hi2) >> 1; if (T[m] < t0) lo = m + 1; else hi2 = m; }
+    for (let j = lo; j < T.length && T[j] < t0 + span; j++) { const x = X(T[j]), past = T[j] <= fs.t, fresh = past && fs.t - T[j] < .15; ctx.fillStyle = fresh ? acc : past ? hi : rgba(fg, .45); ctx.fillRect(x - 1.5 * u, y + lh * .25, (fresh ? 5 : 3) * u, lh * .5); } });
+  for (let b = Math.ceil((t0 - fs.track.t0) / fs.spb); fs.track.t0 + b * fs.spb < t0 + span; b++) { const x = X(fs.track.t0 + b * fs.spb); ctx.fillStyle = rgba(fg, b % 4 ? .1 : .3); ctx.fillRect(x, r.y, 1 * u, r.h); }
+  const px = X(fs.t); ctx.fillStyle = hi; ctx.fillRect(px - .75 * u, r.y, 1.5 * u, r.h);
+}
+/** Hex event log of the actual hits (kick/snare/hat), newest last, typed in as it arrives. */
+export function hitLog(ctx, r, fs, S, tag) {
+  const { u, fg, hi } = S, lh = 15 * u, n = Math.max(2, Math.floor((r.h - (tag ? lh : 0)) / lh)), ev = [];
+  for (const [name, L] of [['KICK', 'kicks'], ['SNR ', 'snares'], ['HAT ', 'hats']]) for (const h of fs.recent(L, 4, n)) ev.push({ ...h, name });
+  ev.sort((a, b) => b.age - a.age); const rows = ev.slice(-n);
+  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  rows.forEach((e, i) => { const tt = fs.lt - e.age, s = `${tc2(Math.max(0, tt))}  ${e.name}  0x${((e.idx * 2654435761) >>> 0 & 0xffffff).toString(16).toUpperCase().padStart(6, '0')}  ${e.s.toFixed(2)}`, last = i === rows.length - 1;
+    txt(ctx, last ? s.slice(0, Math.ceil(s.length * ease(e.age / .12))) : s, r.x, r.y + (i + 1) * lh - 3 * u, mono(11 * u, last ? 700 : 400), last ? hi : rgba(fg, .35 + .5 * i / n)); });
+  if (tag) txt(ctx, '> ' + tag, r.x, r.y + r.h - 2 * u, mono(11 * u, 700), hi);
+  ctx.restore();
+}

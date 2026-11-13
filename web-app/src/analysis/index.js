@@ -1,9 +1,10 @@
 // Decode, demo synthesis and the worker bridge. Produces immutable Track objects.
 import { analyzeMono, makeGrid } from './dsp.js';
 import { hash } from '../util/draw.js';
-export function makeTrack(a, meta, bpm, t0) {
+import { stereoFeatures } from './stereo.js';
+export function makeTrack(a, meta, bpm, t0, stereo = null) {
   const g = makeGrid(a, bpm ?? a.bpmDetected, t0);
-  return Object.freeze({ ...a, ...g, meta: Object.freeze({ ...meta }), bpmSource: meta.bpmSource || 'detected' });
+  return Object.freeze({ ...a, ...g, stereo, meta: Object.freeze({ ...meta }), bpmSource: meta.bpmSource || 'detected' });
 }
 /** New immutable track with a different grid (BPM edit / downbeat nudge). */
 export function regrid(track, bpm, t0, source = 'edited') { return Object.freeze({ ...track, ...makeGrid(track, bpm, t0), bpmSource: source }); }
@@ -12,21 +13,21 @@ let worker = null, jobId = 0;
 function getWorker() { if (worker !== null) return worker; try { worker = new Worker(new URL('./analysis.worker.js', import.meta.url), { type: 'module' }); } catch (e) { console.warn('[u2c] worker unavailable, analysing on the main thread', e); worker = false; } return worker; }
 /** Analyse an AudioBuffer. Calls onQuick(track) after the fast pass; resolves with the full track. */
 export function analyzeBuffer(buffer, meta, { onQuick, onProgress } = {}) {
-  const mono = mixdown(buffer), sr = buffer.sampleRate, duration = buffer.duration;
+  const mono = mixdown(buffer), sr = buffer.sampleRate, duration = buffer.duration, st = stereoFeatures(buffer);
   const w = getWorker();
-  if (!w) return new Promise(res => setTimeout(() => { const a = analyzeMono(mono, sr, duration, {}); res(makeTrack(a, meta, meta.bpm)); }, 0));
+  if (!w) return new Promise(res => setTimeout(() => { const a = analyzeMono(mono, sr, duration, {}); res(makeTrack(a, meta, meta.bpm, undefined, st)); }, 0));
   const id = ++jobId;
   return new Promise((resolve, reject) => {
     let res = resolve, rej = reject;
     const on = e => { const d = e.data; if (d.id !== id) return;
       if (d.stage === 'progress') onProgress && onProgress(d.p);
-      else if (d.stage === 'quick') onQuick && onQuick(makeTrack(d.a, { ...meta, quick: true }, meta.bpm));
-      else if (d.stage === 'full') { w.removeEventListener('message', on); res(makeTrack(d.a, meta, meta.bpm)); }
+      else if (d.stage === 'quick') onQuick && onQuick(makeTrack(d.a, { ...meta, quick: true }, meta.bpm, undefined, st));
+      else if (d.stage === 'full') { w.removeEventListener('message', on); res(makeTrack(d.a, meta, meta.bpm, undefined, st)); }
       else if (d.stage === 'error') { w.removeEventListener('message', on); rej(new Error(d.message)); } };
     w.addEventListener('message', on);
     // a worker-level error fails this job once: drop the worker for later jobs and analyse on the main thread
     const onErr = err => { console.warn('[u2c] worker error, falling back', err && err.message); w.removeEventListener('message', on); w.removeEventListener('error', onErr); if (worker === w) { try { w.terminate(); } catch (_) {} worker = false; }
-      res(makeTrack(analyzeMono(mono, sr, duration, {}), meta, meta.bpm)); };
+      res(makeTrack(analyzeMono(mono, sr, duration, {}), meta, meta.bpm, undefined, st)); };
     const done = () => { w.removeEventListener('error', onErr); };
     w.addEventListener('error', onErr);
     const res0 = res; res = v => { done(); res0(v); }; const rej0 = rej; rej = e => { done(); rej0(e); };
