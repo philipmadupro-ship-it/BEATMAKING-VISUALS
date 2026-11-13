@@ -12,3 +12,6 @@ audio/stems/
 audio/*-premaster.wav
 audio/clip-15s-raw.wav
 out/passes/
+film/v6-*.html
+film/data/*.wav
+out/v6/stills/
