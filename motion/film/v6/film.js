@@ -185,15 +185,15 @@
     const [x, y, w, h] = cr; c.save(); c.beginPath(); c.rect(x - 14, y - 14, w + 28, (h + 28) * k); c.clip();
     const ax = x + w * 0.56, ay = y + 8, size = w * (port ? 0.98 : 0.86);
     const sw = BR.elephant(c, S, ax, ay, size, t);
-    // pin + tape at the top of its own chain
-    lab.tape(c, ax, ay - 4, 54, 16, 0.08, S, 77); c.fillStyle = S.hot; c.beginPath(); c.arc(ax, ay, 4, 0, 7); c.fill();
-    // protractor callout: the measured swing angle
-    const R = Math.min(130, h * 0.24); c.strokeStyle = rgba(S.ink, 0.5); c.setLineDash([3, 4]); c.beginPath(); c.arc(ax, ay, R, Math.PI / 2 - sw.amp * 1.3, Math.PI / 2 + sw.amp * 1.3); c.stroke(); c.setLineDash([]);
-    c.beginPath(); c.moveTo(ax, ay); c.lineTo(ax - Math.sin(sw.th) * R * 1.05, ay + Math.cos(sw.th) * R * 1.05); c.strokeStyle = rgba(S.hot, 0.9); c.stroke();
+    // the hand's grip: tape + pin where the chain is held (it moves with the beat flicks)
+    const [gx, gy] = sw.grip; lab.tape(c, gx, gy - 4, 54, 16, 0.08, S, 77); c.fillStyle = S.hot; c.beginPath(); c.arc(gx, gy, 4, 0, 7); c.fill();
+    // protractor callout: the measured body angle (from the simulation)
+    const R = Math.min(130, h * 0.24), lim = 14 * Math.PI / 180; c.strokeStyle = rgba(S.ink, 0.5); c.setLineDash([3, 4]); c.beginPath(); c.arc(gx, gy, R, Math.PI / 2 - lim, Math.PI / 2 + lim); c.stroke(); c.setLineDash([]);
+    c.beginPath(); c.moveTo(gx, gy); c.lineTo(gx + Math.sin(sw.th) * R * 1.05, gy + Math.cos(sw.th) * R * 1.05); c.strokeStyle = rgba(S.hot, 0.9); c.stroke();
     const deg = sw.th * 180 / Math.PI;
     lab.hand(c, `θ = ${deg >= 0 ? '+' : '−'}${Math.abs(deg).toFixed(1)}°`, x + w - 8, y + 34, 30, S.hot, t, 21, -0.03, 'right');
-    lab.arrow(c, [[x + w - 70, y + 44], [ax + 60, y + 50], [ax + 14, ay + R * 0.5]], rgba(S.hot, 0.9), t, 22, 4, 1.8);
-    lab.tag(c, x + 4, y + h - 64, 178, ['SPECIMEN 05', `ELEPHANT · ${S.name}`, `SWING ${S.swing.toFixed(1)}° / ${S.embodied ? 2 : 1} BAR`], S, -0.04);
+    lab.arrow(c, [[x + w - 70, y + 44], [gx + 60, y + 50], [gx + 14, gy + R * 0.5]], rgba(S.hot, 0.9), t, 22, 4, 1.8);
+    lab.tag(c, x + 4, y + h - 64, 178, ['SPECIMEN 05', `ELEPHANT · ${S.name}`, `VERLET · T0 = 2 BEATS · ${S.embodied ? 'HEAVY' : 'HELD'}`], S, -0.04);
     c.restore();
   }
 
@@ -271,7 +271,7 @@
     boot(t); result(t); hud(t); textures(t);
   }
   const build = (async () => {
-    await BR.load(S);
+    await BR.load(S); BR.simulate(S);
     await Promise.all([`800 20px ${MONO}`, `700 20px ${MONO}`, `500 20px ${MONO}`, `400 20px ${MONO}`, `600 20px ${SANS}`, `italic 400 40px ${SERIF}`, `700 24px ${HAND}`].map((f) => document.fonts.load(f, 'EXP-03 Atelmansion 0123456789')));
     for (const [b, w] of BR.logoEvents(NB)) ev(b, w);
     ready = true; renderAt(pending);
