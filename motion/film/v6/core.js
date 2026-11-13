@@ -42,7 +42,7 @@
   const STAGES = {
     nigredo: { name: 'NIGREDO', n: 1,
       // truly black, white and greys only (no hue anywhere, the elephant is greyscaled too)
-      bg: '#0e0e0e', paper: '#151515', card: '#1b1b1b', ink: '#e8e8e8', dim: '#8a8a8a', rule: '#c8c8c8',
+      bg: '#050505', paper: '#050505', card: '#050505', ink: '#f5f5f5', dim: '#8a8a8a', rule: '#c8c8c8',
       sig1: '#9a9a9a', sig2: '#d0d0d0', hot: '#ffffff', warn: '#bdbdbd', tape: '#060606', tapeA: 0.92, stamp: '#f0f0f0',
       waveLo: '#f2f2f2', waveHi: '#8f8f8f', spec: ['#0e0e0e', '#3c3c3c', '#9a9a9a', '#ffffff'], grey: true,
       grain: 0.13, gloss: true, vignette: 0.72, gridA: 0.07, swing: 4.5, zoom: 1.08, gutter: 0.6, obstruct: true, residue: [] },

@@ -197,6 +197,9 @@
       const ws = wBody + wR + wTL + wBL || 1;
       return [(pB[0] * wBody + pR[0] * wR + pT[0] * wTL + pL[0] * wBL) / ws, (pB[1] * wBody + pR[1] * wR + pT[1] * wTL + pL[1] * wBL) / ws];
     });
+    // twist about the vertical axis (±8°, from the rope-to-body bend) shown as a horizontal foreshortening about the bail
+    const ropeA = -Math.atan2(R[N][0] - R[N - 2][0], R[N][1] - R[N - 2][1]), tw = Math.max(-0.14, Math.min(0.14, (ropeA - bodyAng) * 1.4));
+    const bx = R[N][0]; ctx.translate(bx, 0); ctx.scale(Math.cos(tw), 1); ctx.translate(-bx, 0);
     drawMesh(ctx, rg, V);
     ctx.restore();
     // the hand's grip point on screen (for the pin / tape)

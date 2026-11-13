@@ -18,3 +18,8 @@ out/v6/stills/
 out/v6/*.mp4
 out/v6/passes/*.mp4
 film/renders/
+film/v7-*.html
+film/data/tags-*.js
+out/v7/stills/
+out/v7/*.mp4
+out/v7/passes/*.mp4

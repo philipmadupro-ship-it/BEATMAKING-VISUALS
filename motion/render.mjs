@@ -5,12 +5,14 @@
 //
 // Options
 //   --beat <wav>        source beat (any rate; analysed once, cached as <beat>.grid.json)
+//   --look <name>       exe | lab | scope                                  (default exe)
 //   --stage <name>      nigredo | albedo | citrinitas | rubedo            (default nigredo)
+//   --tags <json>       override any on-screen text (deep-merged over tags.default.json)
 //   --aspect <a>        9:16 | 16:9                                       (default 9:16)
 //   --len <s>           15 | 30 | 60 (any; rounded to whole bars)         (default 30)
 //   --start-bar <n>     force the section (song bar number); default = one bar before the first drop that fits
 //   --title <text>      on-screen title (default from the filename)
-//   --out <mp4>         output path (default out/v6/<stage>-<916|169>-<len>s.mp4)
+//   --out <mp4>         output path (default out/v7/<look>-<stage>-<916|169>-<len>s.mp4)
 //   --stills <t,t,...>  render PNG frames at these seconds instead of a video (fast review)
 //   --filmstrip         also write a filmstrip PNG next to the video
 //   --quality <q>       hyperframes quality for the picture (default: 12 Mbps target)
@@ -25,6 +27,8 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, arr) =>
   if (a.startsWith('--')) acc.push([a.slice(2), arr[i + 1] && !arr[i + 1].startsWith('--') ? arr[i + 1] : true]); return acc; }, []));
 const beat = path.resolve(args.beat || 'audio/atelmansion-3c-fmin-128.wav');
 const stage = String(args.stage || 'nigredo').toLowerCase();
+const look = String(args.look || 'exe').toLowerCase();
+if (!['exe', 'lab', 'scope'].includes(look)) throw new Error('look must be exe, lab or scope');
 const aspect = String(args.aspect || '9:16').replace(':', '').replace('x', '');
 const len = Number(args.len || 30);
 if (!['nigredo', 'albedo', 'citrinitas', 'rubedo'].includes(stage)) throw new Error('unknown stage ' + stage);
@@ -46,11 +50,19 @@ run('python3', ['tools/sync_elephant_loop.py'], { cwd: ROOT, quiet: true });
 const D = JSON.parse(fs.readFileSync(js, 'utf8').replace(/^window\.U2C_DATA=/, '').replace(/;\s*$/, ''));
 const [W, H] = aspect === '169' ? [1920, 1080] : [1080, 1920];
 
-// 2. composition file for this render
-const comp = `v6-${stage}-${aspect}-${id}.html`;
-const tpl = fs.readFileSync(path.join(FILM, 'v6', 'template.html'), 'utf8')
-  .replaceAll('{{W}}', W).replaceAll('{{H}}', H).replaceAll('{{DUR}}', D.duration).replaceAll('{{STAGE}}', stage)
-  .replaceAll('{{ASPECT}}', aspect).replaceAll('{{DATA}}', `data/${id}.js`).replaceAll('{{RES}}', aspect === '169' ? 'landscape' : 'portrait');
+// 2. tags (defaults + optional overrides) and the composition file for this render
+const merge = (a, b) => { if (b == null) return a; if (Array.isArray(b) || typeof b !== 'object') return b; const o = { ...a }; for (const k of Object.keys(b)) o[k] = merge(a ? a[k] : undefined, b[k]); return o; };
+let tags = JSON.parse(fs.readFileSync(path.join(ROOT, 'tags.default.json'), 'utf8'));
+if (args.tags) tags = merge(tags, JSON.parse(fs.readFileSync(path.resolve(String(args.tags)), 'utf8')));
+const today = new Date(fs.statSync(beat).mtimeMs).toUTCString().split(' ').slice(1, 4).join(' ').toUpperCase();
+if (tags.date === '{today}') tags.date = today;
+if (args.title) tags.title = String(args.title);
+const tagFile = `data/tags-${look}-${stage}-${aspect}-${id}.js`;
+fs.writeFileSync(path.join(FILM, tagFile), 'window.U2C_TAGS=' + JSON.stringify(tags) + ';\n');
+const comp = `v7-${look}-${stage}-${aspect}-${id}.html`;
+const tpl = fs.readFileSync(path.join(FILM, 'v7', 'template.html'), 'utf8')
+  .replaceAll('{{W}}', W).replaceAll('{{H}}', H).replaceAll('{{DUR}}', D.duration).replaceAll('{{STAGE}}', stage).replaceAll('{{LOOK}}', look)
+  .replaceAll('{{ASPECT}}', aspect).replaceAll('{{DATA}}', `data/${id}.js`).replaceAll('{{TAGS}}', tagFile).replaceAll('{{RES}}', aspect === '169' ? 'landscape' : 'portrait');
 fs.writeFileSync(path.join(FILM, comp), tpl);
 
 // 3a. stills mode
@@ -64,7 +76,7 @@ if (args.stills) {
   pg.on('pageerror', (e) => console.error('pageerror', e.message));
   await pg.goto(`http://127.0.0.1:${srv.address().port}/${comp}`, { waitUntil: 'load' });
   await pg.evaluate(() => window.U2C6.ready);
-  const dir = path.resolve(args.out || path.join(ROOT, 'out', 'v6', 'stills', `${stage}-${aspect}-${len}`));
+  const dir = path.resolve(args.out || path.join(ROOT, 'out', 'v7', 'stills', `${look}-${stage}-${aspect}-${len}`));
   fs.mkdirSync(dir, { recursive: true });
   for (const t of String(args.stills).split(',').map(Number)) {
     await pg.evaluate((tt) => window.U2C6.renderAt(tt), t);
@@ -75,7 +87,7 @@ if (args.stills) {
 }
 
 // 3b. video: HyperFrames renders the picture; ffmpeg muxes the mastered clip (AAC 320k / 48 kHz)
-const out = path.resolve(args.out || path.join(ROOT, 'out', 'v6', `${stage}-${aspect}-${Math.round(len)}s.mp4`));
+const out = path.resolve(args.out || path.join(ROOT, 'out', 'v7', `${look}-${stage}-${aspect}-${Math.round(len)}s.mp4`));
 fs.mkdirSync(path.dirname(out), { recursive: true });
 const tmp = path.join(FILM, 'renders', `${path.basename(out, '.mp4')}-video.mp4`);
 const env = { ...process.env, HYPERFRAMES_NO_TELEMETRY: '1', DO_NOT_TRACK: '1', HYPERFRAMES_NO_UPDATE_CHECK: '1' };
@@ -87,7 +99,7 @@ const lo = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', out, '-af', 'e
 const s = lo.slice(lo.lastIndexOf('Summary:'));
 console.log(`${out}  ${((Date.now() - t0) / 1000).toFixed(0)} s  I ${s.match(/I:\s+(-?[\d.]+)/)[1]} LUFS  TP ${s.match(/Peak:\s+(-?[\d.]+)/)[1]} dBTP  section: song bars ${D.song.startBar}-${D.song.startBar + D.bars - 1}`);
 if (args.filmstrip) {
-  const fs_ = out.replace(/\.mp4$/, '-filmstrip.png'), dir = path.join(ROOT, 'out', 'v6', 'filmstrips'); fs.mkdirSync(dir, { recursive: true });
+  const fs_ = out.replace(/\.mp4$/, '-filmstrip.png'), dir = path.join(ROOT, 'out', 'v7', 'filmstrips'); fs.mkdirSync(dir, { recursive: true });
   const dst = path.join(dir, path.basename(fs_));
   run(path.join(ROOT, 'tools', 'filmstrip.sh'), [out, dst, aspect === '169' ? '6' : '8', len >= 60 ? '4' : '2'], { quiet: true });
   console.log(dst);
