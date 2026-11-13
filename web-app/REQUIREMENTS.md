@@ -16,7 +16,7 @@ R8  Logo + elephant prominent and integrated in EVERY template, not corner stick
 ## Looks
 R9  Hero U2C.EXE: cyberpunk OS of .exe windows, the most precise/realistic (see v4 items). Default + first.
 R10 LAB like Kollide frames (nested windows, node graph, cables, mini windows with live waveform/meters).
-R11 Kept: HANDSET, EXE, SCOPE (no bottom waveform), PENDANT BLOOM, BLOOM ORBIT (whole letters), BLOOM HALO, CHAIN POSTER, SLICER. Removed: CHROME, KINETIC, DAW, METER DECK, TERRAIN.
+R11 (v5) Looks = U2C.EXE, LAB, SCOPE only. All others removed.
 R12 Cyberpunk/futuristic via subtle FX (scanlines, grain, HUD, mono labels, glow). NO glitch on kicks (glitch default 0, opt-in slider + kicks/bars/phrases select). Clean motion design instead (spring punch, border pulses, cable signals, counters).
 R13 No text overlaps (collision-aware auto layout) in any template/aspect.
 
