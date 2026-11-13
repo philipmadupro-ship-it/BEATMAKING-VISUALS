@@ -127,7 +127,7 @@
         const t = (f * steps + s) * dt;
         while (ki < kicks.length && kicks[ki][0] <= t) {
           const amp = Math.abs(th) + Math.abs(om) / w1;
-          const room = clamp(1 - amp / 0.125);
+          const room = clamp(1 - amp / 0.148);
           om += (om >= 0 ? 1 : -1) * 0.16 * kicks[ki][1] * room + (om === 0 ? 0.05 : 0); ki++;
         }
         const low = D.frame.bands[f][0];

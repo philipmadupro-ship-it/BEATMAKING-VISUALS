@@ -25,6 +25,7 @@
     return [x0, y0, x1 - x0, y1 - y0];
   }
   function resolve(key) {
+    if (ASPECT === '169' && key.w) key = { ...key, ...key.w };  // landscape overrides
     const [x, y, w, h] = rectOf(key), p = key.pad || 0;
     const z = Math.min(L.W / (w + 2 * p), L.H / (h + 2 * p)) * (key.z || 1);
     return { x: x + w / 2 + (key.dx || 0), y: y + h / 2 + (key.dy || 0), z };
@@ -42,10 +43,11 @@
   // ---------------------------------------------------------------- window state
   function winState(id, t) {
     const o = V.open(id);
-    const open = o == null ? 0 : o < 0 ? 1 : clamp((t - o) / 0.55);
+    const open = o == null ? 0 : o < 0 ? 1 : clamp((t - o) / 0.35);
     let dim = 0, focus = 0;
     if (V.active) { const a = V.active[id]; dim = a == null ? 0 : 1 - smooth((t - a) / 0.35); focus = a != null && t >= a && t - a < BAR * 1.0 ? 1 : 0; }
-    const end = V.overlays.end; if (end && t >= end[0]) dim = Math.max(dim, 0.55 * smooth((t - end[0]) / 0.5));
+    if (V.dim) dim = Math.max(dim, V.dim(id, t));
+    const end = V.overlays.end; if (end && t >= end[0]) dim = Math.max(dim, 0.7 * smooth((t - end[0]) / 0.5));
     return { open, dim, focus };
   }
 
@@ -107,14 +109,14 @@
     const [t0, t1] = V.overlays.boot, k = clamp((t - t0) / (t1 - t0));
     const out = 1 - smooth((t - (t1 - 0.12)) / 0.12);
     if (out <= 0) return;
-    const lh = W > H ? 26 : 30, x = W > H ? 80 : 110, y0 = H * (W > H ? 0.62 : 0.70);
-    ctx.fillStyle = rgba(T.bg, 0.82 * out); ctx.fillRect(x - 24, y0 - 34, (W > H ? 620 : 720), BOOT.length * lh + 52);
-    ctx.strokeStyle = rgba(T.line, 0.3 * out); ctx.strokeRect(x - 23.5, y0 - 33.5, (W > H ? 619 : 719), BOOT.length * lh + 51);
+    const lh = W > H ? 28 : 38, x = W > H ? 80 : 170, y0 = H * (W > H ? 0.71 : 0.705);
+    ctx.fillStyle = rgba(T.bg, 0.82 * out); ctx.fillRect(x - 24, y0 - 34, (W > H ? 640 : 790), BOOT.length * lh + 52);
+    ctx.strokeStyle = rgba(T.line, 0.3 * out); ctx.strokeRect(x - 23.5, y0 - 33.5, (W > H ? 639 : 789), BOOT.length * lh + 51);
     BOOT.forEach((line, i) => {
       const lk = clamp(k * BOOT.length * 1.15 - i);
       if (lk <= 0) return;
       const s = line.slice(0, Math.ceil(line.length * lk));
-      font(ctx, W > H ? 17 : 21, U.MONO, i === 0 || i === 5 ? 700 : 400); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      font(ctx, W > H ? 18 : 26, U.MONO, i === 0 || i === 5 ? 700 : 400); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.fillStyle = rgba(i === 5 ? T.accent : T.line, (i === 0 ? 1 : 0.8) * out);
       ctx.fillText(s, x, y0 + i * lh);
       if (lk < 1 || i === 5) { const cw = ctx.measureText(s).width; if (Math.floor(t * 4) % 2 === 0 || lk < 1) { ctx.fillRect(x + cw + 3, y0 + i * lh - 10, 11, 20); } }
@@ -123,7 +125,7 @@
 
   function endCard(t, W, H) {
     const [t0] = V.overlays.end, k = (t - t0); if (k < 0) return;
-    const port = H > W, cw = port ? 760 : 820, ch = port ? 640 : 520, cx = W / 2, cy = port ? 880 : H / 2;
+    const port = H > W, cw = port ? 760 : 820, ch = port ? 640 : 520, cx = port ? W / 2 : W * 0.28, cy = port ? 720 : H / 2;
     const x = cx - cw / 2, y = cy - ch / 2;
     const o = clamp(k / 0.45), b = E.out(o);
     ctx.fillStyle = rgba(T.bg, 0.9 * b); ctx.fillRect(x, y, cw, ch);
@@ -159,14 +161,13 @@
 
   function hud(t, W, H) {
     const port = H > W, m = port ? 54 : 36, top = port ? 150 : 36, bot = port ? H - 150 : H - 36, len = 22;
-    ctx.strokeStyle = rgba(T.line, 0.35); ctx.lineWidth = 1;
+    ctx.strokeStyle = rgba(T.line, 0.25); ctx.lineWidth = 1;
     for (const [x, y, sx, sy] of [[m, top, 1, 1], [W - m, top, -1, 1], [m, bot, 1, -1], [W - m, bot, -1, -1]]) {
       ctx.beginPath(); ctx.moveTo(x + sx * len, y); ctx.lineTo(x, y); ctx.lineTo(x, y + sy * len); ctx.stroke();
     }
     const kick = U.env.kick[U.fidx(t)];
     ctx.fillStyle = rgba(T.over, 0.75 + 0.25 * kick); ctx.beginPath(); ctx.arc(m + 8, top + 38, 4, 0, 7); ctx.fill();
     label(ctx, T, `REC ${U.tc(t)}`, m + 20, top + 38, 0.7, 13);
-    label(ctx, T, `${V.name} · ${port ? '9:16' : '16:9'}`, W - m, top + 38, 0.55, 13, 'right');
     label(ctx, T, `BAR ${String(Math.floor(t / BAR) + 1).padStart(2, '0')}.${Math.floor((t % BAR) / BEAT) + 1}`, m, bot - 18, 0.55, 13);
     label(ctx, T, 'prod. @uche2crazy', W - m, bot - 18, 0.55, 13, 'right');
   }

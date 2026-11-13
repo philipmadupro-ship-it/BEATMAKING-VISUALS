@@ -11,3 +11,4 @@ tools/whisper-test/err.txt
 audio/stems/
 audio/*-premaster.wav
 audio/clip-15s-raw.wav
+out/passes/
