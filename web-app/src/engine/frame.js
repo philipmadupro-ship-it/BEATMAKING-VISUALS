@@ -27,8 +27,8 @@ const PRE = 1 / 30;
 function envAR(L, S, t, atk, rel, lp) { const h = hitsBack(L, t + PRE, lp, rel * 7 + PRE, 4); let v = 0, last = null;
   for (const x of h) { const age = x.age - PRE, s = S[x.idx]; const e = age < atk ? s * (1 - Math.pow(1 - Math.max(0, (age + PRE) / (atk + PRE)), 2)) : s * Math.exp(-(age - atk) / rel); if (e > v) v = e; if (!last && age >= 0) last = { ...x, age }; }
   return { v, age: last ? last.age : 99, idx: last ? last.idx : -1, s: last ? last.s : 0 }; }
-function adaptive(L) { const n = L.t.length, o = new Float32Array(n); let a = 0, b = 0; const dq = [];
-  for (let i = 0; i < n; i++) { while (b < n && L.t[b] <= L.t[i] + 4) { while (dq.length && L.s[dq[dq.length - 1]] <= L.s[b]) dq.pop(); dq.push(b); b++; } while (L.t[dq[0]] < L.t[i] - 4) dq.shift(); void a; o[i] = Math.min(1, .4 + .6 * L.s[i] / Math.max(1e-6, L.s[dq[0]])); }
+function adaptive(L) { const n = L.t.length, o = new Float32Array(n); let b = 0; const dq = [];
+  for (let i = 0; i < n; i++) { while (b < n && L.t[b] <= L.t[i] + 4) { while (dq.length && L.s[dq[dq.length - 1]] <= L.s[b]) dq.pop(); dq.push(b); b++; } while (L.t[dq[0]] < L.t[i] - 4) dq.shift(); o[i] = Math.min(1, .4 + .6 * L.s[i] / Math.max(1e-6, L.s[dq[0]])); }
   return o; }
 // one-pole attack/release follower over a band (frame rate), times in seconds
 function follower(src, NB, b, fps, atk, rel, n) { const o = new Float32Array(n), ka = 1 - Math.exp(-1 / (fps * atk)), kr = 1 - Math.exp(-1 / (fps * rel)); let v = 0; for (let i = 0; i < n; i++) { const x = src[i * NB + b]; v += (x > v ? ka : kr) * (x - v); o[i] = v; } return o; }

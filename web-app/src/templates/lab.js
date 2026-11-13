@@ -22,7 +22,7 @@ export default {
   reserved(P, assets) { const B = panel(P); return [B, { x: B.x, y: B.y - 210 * P.u, w: B.w, h: 200 * P.u }, { x: B.x, y: B.y + B.h + 20 * P.u, w: B.w, h: 150 * P.u }]; },
   draw(ctx, fs, P, p, assets) {
     const { W, H, u, V } = P, fg = p.main, hi = p.hi, bg = p.dark, acc = accentOn(p), ph = phrase(fs, P), pl = pulse(fs), glow = P.params && P.params.pulse != null ? P.params.pulse : .5;
-    const S = { u, fg, hi, bg, acc, pl: 0 };
+    const S = { u, fg, hi, bg, acc, pl: 0, P };
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = fs.duck;
     ctx.drawImage(cached(`labdots|${W}|${H}|${fg}`, W / 2, H / 2, (g, w, h) => { g.fillStyle = rgba(fg, .11); const st = w / 30; for (let y = st / 2; y < h; y += st) for (let x = st / 2; x < w; x += st) g.fillRect(x, y, 1.2, 1.2); }), 0, 0, W, H); ctx.globalAlpha = 1;

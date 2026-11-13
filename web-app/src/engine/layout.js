@@ -20,7 +20,7 @@ export function makeParams(project, track) {
   const A = ASPECTS[project.aspect], W = A.W, H = A.H;
   return { W, H, u: Math.min(W, H) / 1080, V: H > W, aspect: project.aspect, safe: SAFE[project.aspect], text: project.text, inT: project.inT, outT: project.outT,
     anchorBeat: Math.round((project.inT - track.t0) / track.spb), cycleBeats: cycleBeats(project, track), chains: project.chains, eleph: project.eleph,
-    finish: project.finish, fx: project.fx, pal: project.pal, tpl: project.tpl, loop: project.export && project.export.loopSafe === false ? null : { a: project.inT, b: project.outT } };
+    finish: project.finish, fx: project.fx, pal: project.pal, tpl: project.tpl, loudness: project.export ? project.export.loudness : 'off', loop: project.export && project.export.loopSafe === false ? null : { a: project.inT, b: project.outT } };
 }
 /**
  * Phrase position for the logo cycle. The logo is whole for most of the phrase; in the last D beats it dissolves

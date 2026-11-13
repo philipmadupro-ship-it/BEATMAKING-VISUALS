@@ -37,7 +37,7 @@ function drawLetters(ctx, poses, imgs, front) {
 export default {
   id: 'orbit', name: 'Bloom Orbit', category: 'Bloom', pal: 'amethyst', surface: 'dark', chainStyle: 'solid', selfChains: true,
   textPos: 'top',
-  reserved(P) { const V = P.V, cx = P.W / 2, cy = V ? P.H * .48 : P.H * .5, R = Math.min(P.W, P.H) * (V ? .19 : .25) * 1.75; return [{ x: cx - R, y: cy - R * (V ? .92 : .78), w: 2 * R, h: 2 * R * (V ? .92 : .78) }]; },
+  reserved(P) { const G = geom({ bass: 0, mid: 0, hi: 0 }, P), R = G.rOut * 1.05; return [{ x: G.cx - R, y: G.cy - R * G.ry, w: 2 * R, h: 2 * R * G.ry }]; },
   params: [{ id: 'trail', label: 'Ring glow', min: 0, max: 1, step: .05, def: .5 }],
   defaults: a => a === '916' ? { chains: { x: .5, y: .8, s: .58 }, eleph: { x: .5, y: 0, s: .6, len: .455 } } : { chains: { x: .84, y: .52, s: .62 }, eleph: { x: .5, y: 0, s: .6, len: .45 } },
   draw(ctx, fs, P, p, assets) {

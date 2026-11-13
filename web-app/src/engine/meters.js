@@ -18,7 +18,7 @@ export function meters(T) {
   m = {
     mono: S ? S.mono : true,
     peakDb: (ch, t) => DB(pk(ch, fi(t))),
-    peakBar(ch, t) { const f = fi(t); let best = -120; for (let k = 0; k < 60 && f - k >= 0; k++) best = Math.max(best, DB(pk(ch, f - k)) - 26 * k / fr); return best; },
+    peakBar(ch, t) { const f = fi(t); let best = -120; for (let k = 0; k < 3 * fr && f - k >= 0; k++) best = Math.max(best, DB(pk(ch, f - k)) - 26 * k / fr); return best; },
     holdDb(ch, t) { const f = fi(t); let best = -120; for (let k = 0; k < 4.5 * fr && f - k >= 0; k++) { const age = k / fr; best = Math.max(best, DB(pk(ch, f - k)) - (age < 1.5 ? 0 : (age - 1.5) * 20)); } return best; },
     rmsDb(ch, t) { const f = fi(t), w = Math.round(.3 * fr); let s = 0, c = 0; for (let k = 0; k < w && f - k >= 0; k++) { s += msq(ch, f - k); c++; } return DB(Math.sqrt(s / Math.max(1, c))); },
     lufsM: t => (S ? LK(win(S.cumK, t, .4)) : DB(T.rmsRaw[fi(t)]) - 3),
@@ -27,6 +27,9 @@ export function meters(T) {
       const blocks = []; for (let t = a + .4; t <= b; t += .1) blocks.push(win(S.cumK, t, .4)); const g1 = blocks.filter(x => LK(x) > -70); let v = -70;
       if (g1.length) { const rel = LK(g1.reduce((x, y) => x + y, 0) / g1.length) - 10, g2 = g1.filter(x => LK(x) > rel); v = LK(g2.reduce((x, y) => x + y, 0) / Math.max(1, g2.length)); }
       integ.set(key, v); return v; },
+    /** Gain the export applies (target LUFS with a -1 dBTP ceiling, see export/audio.js), so meters show the exported audio. */
+    exportGain(P) { if (!P || P.loudness == null || P.loudness === 'off') return 0; const key = 'g|' + P.inT.toFixed(3) + '|' + P.outT.toFixed(3) + '|' + P.loudness; if (integ.has(key)) return integ.get(key);
+      let tp = -120; for (let t = P.inT; t <= P.outT; t += .5) tp = Math.max(tp, m.truePeak(t)); let g = +P.loudness - m.lufsI(P.inT, P.outT); if (tp + g > -1) g = -1 - tp; integ.set(key, g); return g; },
     truePeak(t) { const f = fi(t); let best = 0; for (let k = 0; k < fr && f - k >= 0; k++) best = Math.max(best, pk(0, f - k), pk(1, f - k)); return DB(best); },
     clip(t) { return m.truePeak(t) >= -.1; },
     corr(t) { if (!S) return 1; const b = fi(t) + 1, a = Math.max(0, b - 20), lr = S.cLR[b] - S.cLR[a], ll = S.cLL[b] - S.cLL[a], rr = S.cRR[b] - S.cRR[a]; return ll * rr > 1e-12 ? clamp(lr / Math.sqrt(ll * rr), -1, 1) : 1; },
@@ -34,10 +37,11 @@ export function meters(T) {
     lr(t, n, span) { const out = { l: new Float32Array(n), r: new Float32Array(n) }; if (!S) return out;
       const r = S.scopeRate, s0 = Math.floor((t - span) * r); for (let j = 0; j < n; j++) { const i = s0 + Math.floor(j * span * r / n); out.l[j] = S.sL[i] || 0; out.r[j] = S.sR[i] || 0; } return out; },
     /** Spectrum in dB (rel. full scale), 1/6-octave smoothed, for analysis frame index i. */
-    specDb(i) { const NS = T.specBins, o = new Float32Array(NS), raw = k => 12.5 * Math.log10(Math.max(1e-6, T.spec[clamp(i, 0, T.frames - 1) * NS + clamp(k, 0, NS - 1)]));
-      for (let k = 0; k < NS; k++) o[k] = .25 * raw(k - 1) + .5 * raw(k) + .25 * raw(k + 1); return o; },
+    specDb(i) { const NS = T.specBins, f = clamp(i, 0, T.frames - 1); if (!m._sd) m._sd = new Float32Array(T.frames * NS).fill(NaN);
+      if (Number.isNaN(m._sd[f * NS])) { const raw = k => 12.5 * Math.log10(Math.max(1e-6, T.spec[f * NS + clamp(k, 0, NS - 1)])); for (let k = 0; k < NS; k++) m._sd[f * NS + k] = .25 * raw(k - 1) + .5 * raw(k) + .25 * raw(k + 1); }
+      return m._sd.subarray(f * NS, f * NS + NS); },
     /** Peak-hold line: max over the last 2.5 s of (dB − 12 dB/s × age). */
-    specHold(t) { const NS = T.specBins, o = new Float32Array(NS).fill(-120), f0 = clamp(Math.floor(t * T.fps), 0, T.frames - 1), w = Math.round(2.5 * T.fps);
+    specHold(t) { const NS = T.specBins, o = new Float32Array(NS).fill(-120), f0 = clamp(Math.floor(t * T.fps), 0, T.frames - 1), w = Math.round(5 * T.fps); // 5 s × 12 dB/s = the full 60 dB display
       for (let k = 0; k < w && f0 - k >= 0; k += 2) { const d = m.specDb(f0 - k), drop = 12 * k / T.fps; for (let b = 0; b < NS; b++) o[b] = Math.max(o[b], d[b] - drop); } return o; },
     /** Bin centre frequencies of the 48 log bins (30 Hz … 14 kHz). */
     binHz: k => 30 * Math.pow(14000 / 30, (k + .5) / T.specBins),

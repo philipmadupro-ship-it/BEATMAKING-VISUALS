@@ -58,18 +58,6 @@ export function cableDots(ctx, pts, fs, S, offset = 0) {
     for (let k = 0; k < 5; k++) { const p = along(pts, Math.max(0, qq - k * .025)), z = (5 - k * .8) * u; ctx.fillStyle = rgba(k ? acc : hi, (1 - k / 5) * (1 - qq * .5)); ctx.fillRect(p.x - z, p.y - z, 2 * z, 2 * z); } }
 }
 // ---- live readouts (all draw inside r)
-export function waveView(ctx, r, fs, P, S) {
-  const { u, fg, hi } = S, n = Math.max(16, Math.round(r.w / (5 * u))), L = Math.max(.1, P.outT - P.inT), q = clamp(fs.lt / L), bw = r.w / n;
-  for (let j = 0; j < n; j++) { const a = P.inT + L * j / n, v = fs.peak(a, a + L / n), hh = Math.max(1.5 * u, v * r.h * .9), played = j / n <= q;
-    ctx.fillStyle = played ? rgba(hi, .9) : rgba(fg, .35); ctx.fillRect(r.x + j * bw, r.y + (r.h - hh) / 2, Math.max(1, bw * .55), hh); }
-  const x = r.x + q * r.w; ctx.fillStyle = hi; ctx.fillRect(x - 1 * u, r.y - 4 * u, 2 * u, r.h + 8 * u); ctx.fillRect(x - 5 * u, r.y - 6 * u, 10 * u, 4 * u);
-}
-export function spectrumView(ctx, r, fs, S, bars = 24) {
-  const { u, fg, hi } = S, bw = r.w / bars;
-  for (let j = 0; j < bars; j++) { const k = Math.min(47, Math.round(j * 46 / (bars - 1))), v = fs.specAt(k), cap = Math.max(v, fs.spec(fs.t - .12, k) * .92, fs.spec(fs.t - .24, k) * .84), segs = 12, sh = r.h / segs;
-    for (let s = 0; s < Math.round(v * segs); s++) { ctx.fillStyle = rgba(s > segs * .75 ? hi : fg, .35 + .5 * s / segs); ctx.fillRect(r.x + j * bw + 1, r.y + r.h - (s + 1) * sh + 1, bw - 2, sh - 2); }
-    ctx.fillStyle = hi; ctx.fillRect(r.x + j * bw + 1, r.y + r.h - cap * r.h - 2 * u, bw - 2, 1.5 * u); }
-}
 export function scopeView(ctx, r, fs, S, span = .04) {
   const { u, fg, hi } = S, n = 160, w = fs.scopeAt(fs.t, n, span);
   ctx.strokeStyle = rgba(fg, .15); ctx.lineWidth = 1 * u; for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(r.x, r.y + r.h * i / 4); ctx.lineTo(r.x + r.w, r.y + r.h * i / 4); ctx.stroke(); }
@@ -78,28 +66,11 @@ export function scopeView(ctx, r, fs, S, span = .04) {
   for (let j = 0; j < n; j++) { const x = r.x + j / (n - 1) * r.w, y = r.y + r.h / 2 - w[j] * r.h * .8; j ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); ctx.restore();
 }
 export function meterView(ctx, r, fs, S) {
-  const { u, fg, hi, acc } = S, segs = 22, lv = [fs.level(fs.t - .05, fs.t), fs.level(fs.t - .07, fs.t - .01)], bh = (r.h - 34 * u) / 2 - 4 * u;
+  const { u, fg, hi, acc } = S, segs = 22, lv = [0, 1].map(ch => clamp((fs.m.peakBar(ch, fs.t) + fs.m.exportGain(S.P) + 60) / 60)), bh = (r.h - 34 * u) / 2 - 4 * u;
   lv.forEach((v, c) => { const y = r.y + c * (bh + 8 * u), sw = r.w / segs; txt(ctx, c ? 'R' : 'L', r.x, y + bh * .75, mono(11 * u, 700), rgba(fg, .7));
     for (let s = 0; s < segs; s++) { const on = s / segs < v; ctx.fillStyle = on ? (s > segs * .82 ? acc : s > segs * .6 ? hi : rgba(fg, .8)) : rgba(fg, .12); ctx.fillRect(r.x + 16 * u + s * (r.w - 16 * u) / segs, y, (r.w - 16 * u) / segs - 2 * u, bh); }
     const hold = Math.max(v, fs.level(fs.t - .6, fs.t) * .97), hx = r.x + 16 * u + hold * (r.w - 16 * u); ctx.fillStyle = hi; ctx.fillRect(hx - 1 * u, y - 2 * u, 2 * u, bh + 4 * u); void sw; });
-  const lufs = fs.rmsDb() - 3; txt(ctx, `${lufs.toFixed(1)} LUFS-S`, r.x, r.y + r.h - 2 * u, mono(13 * u, 700), hi); txt(ctx, 'TP -1.0', r.x + r.w, r.y + r.h - 2 * u, mono(11 * u), rgba(fg, .6), 'right');
-}
-export function counterView(ctx, r, fs, S, bpmTxt, keyTxt, fonts) {
-  const { u, fg, hi } = S, beatIn = ((Math.floor(fs.beat) % 4) + 4) % 4;
-  txt(ctx, bpmTxt || Math.round(fs.bpm) + ' BPM', r.x, r.y + 38 * u, fonts.bpm || mono(36 * u, 700), hi);
-  if (keyTxt) txt(ctx, keyTxt, r.x + r.w, r.y + 38 * u, fonts.key || mono(22 * u, 700), fg, 'right');
-  txt(ctx, 'BAR ' + String(fs.bar + 1).padStart(3, '0') + '.' + (beatIn + 1), r.x, r.y + r.h - 4 * u, mono(14 * u, 500), rgba(fg, .8));
-  for (let j = 0; j < 4; j++) { const on = j === beatIn, k = on ? 1 - ease(fs.bp) * .6 : 0, x = r.x + r.w - (4 - j) * 22 * u; ctx.fillStyle = on ? rgba(hi, .4 + .6 * k) : rgba(fg, .18); ctx.fillRect(x, r.y + r.h - 16 * u, 16 * u, 12 * u); }
-}
-const EV = ['KICK', 'SNR ', 'HAT ', 'SUB ', 'BUS ', 'SYNC'];
-export function logView(ctx, r, fs, S, tag) {
-  const { u, fg, hi } = S, lh = 17 * u, n = Math.max(2, Math.floor(r.h / lh)), b0 = Math.floor(fs.beat);
-  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
-  for (let i = 0; i < n; i++) { const b = b0 - (n - 1 - i), hx = (hash(b, 91) * 0xffffff | 0).toString(16).padStart(6, '0').toUpperCase(), ev = EV[Math.floor(hash(b, 92) * EV.length)], bar = Math.floor(b / 4) + 1, bt = ((b % 4) + 4) % 4 + 1;
-    let s = `${String(bar).padStart(3, '0')}.${bt}  0x${hx}  ${ev}  ${(hash(b, 93)).toFixed(2)}`; if (i === n - 1) s = s.slice(0, Math.ceil(s.length * ease(fs.bp / .35)));
-    txt(ctx, s, r.x, r.y + (i + 1) * lh - 4 * u, mono(12 * u, i === n - 1 ? 700 : 400), i === n - 1 ? hi : rgba(fg, .35 + .5 * i / n)); }
-  if (tag) txt(ctx, '> ' + tag, r.x, r.y + r.h, mono(12 * u, 700), hi);
-  ctx.restore();
+  const M = fs.m, g = M.exportGain(S.P); txt(ctx, `${(M.lufsS(fs.t) + g).toFixed(1)} LUFS-S`, r.x, r.y + r.h - 2 * u, mono(13 * u, 700), hi); txt(ctx, `TP ${(M.truePeak(fs.t) + g).toFixed(1)}`, r.x + r.w, r.y + r.h - 2 * u, mono(11 * u), rgba(fg, .6), 'right');
 }
 export const timecode = (fs) => tc2(fs.lt);
 // ======================= pro meters (V3) =======================
@@ -143,10 +114,10 @@ export function specAnalyzer(ctx, r, fs, S) {
 }
 /** L/R peak + RMS meter with dB scale, 1.5 s peak hold, clip LEDs and LUFS M/S/I + true-peak readouts. */
 export function proMeter(ctx, r, fs, S, P) {
-  const { u, fg, hi, acc } = S, M = fs.m, t = fs.t, bw = 18 * u, x0 = r.x + 26 * u, top = r.y + 16 * u, h = r.h - 22 * u, yOf = d => top + clamp(-d / 60) * h;
+  const { u, fg, hi, acc } = S, M = fs.m, t = fs.t, G = M.exportGain(P), bw = 18 * u, x0 = r.x + 26 * u, top = r.y + 16 * u, h = r.h - 22 * u, yOf = d => top + clamp(-d / 60) * h;
   for (const d of [0, -3, -6, -18, -60]) { const y = yOf(d); lab(ctx, String(d), r.x + 20 * u, y + 3 * u, S, .6, 'right'); ctx.fillStyle = rgba(fg, .3); ctx.fillRect(x0 - 3 * u, y, 2 * u, 1 * u); }
-  const clipped = M.clip(t);
-  [0, 1].forEach(ch => { const x = x0 + ch * (bw + 6 * u), pkb = M.peakBar(ch, t), rms = M.rmsDb(ch, t), hold = M.holdDb(ch, t);
+  const clipped = M.truePeak(t) + G >= -.1;
+  [0, 1].forEach(ch => { const x = x0 + ch * (bw + 6 * u), pkb = M.peakBar(ch, t) + G, rms = M.rmsDb(ch, t) + G, hold = M.holdDb(ch, t) + G;
     ctx.fillStyle = rgba(fg, .08); ctx.fillRect(x, top, bw, h);
     // peak (thin, bright) over RMS (wide, dimmer); segmented hairlines every 3 dB
     const yp = yOf(pkb), yr = yOf(rms); ctx.fillStyle = rgba(hi, .35); ctx.fillRect(x, yr, bw, top + h - yr);
@@ -156,10 +127,10 @@ export function proMeter(ctx, r, fs, S, P) {
     ctx.fillStyle = clipped ? acc : rgba(fg, .15); ctx.fillRect(x, r.y + 2 * u, bw, 8 * u);
     lab(ctx, ch ? 'R' : 'L', x + bw / 2, top + h + 10 * u, S, .8, 'center'); });
   const rx = x0 + 2 * bw + 22 * u, line = (k, v, y, big) => { lab(ctx, k, rx, y, S, .55); txt(ctx, v, r.x + r.w, y + (big ? 2 : 0) * u, mono((big ? 17 : 12) * u, 700), big ? hi : rgba(fg, .9), 'right'); };
-  line('MOMENTARY', M.lufsM(t).toFixed(1), r.y + 22 * u, true); line('SHORT-TERM', M.lufsS(t).toFixed(1), r.y + 50 * u, false);
-  line('INTEGRATED', M.lufsI(P.inT, P.outT).toFixed(1), r.y + 72 * u, false); line('TRUE PEAK', M.truePeak(t).toFixed(1) + ' dBTP', r.y + 94 * u, false);
-  line('PEAK L/R', M.peakBar(0, t).toFixed(1) + ' / ' + M.peakBar(1, t).toFixed(1), r.y + 116 * u, false);
-  lab(ctx, 'LUFS · BS.1770' + (M.mono ? '  ·  MONO' : '  ·  STEREO'), rx, r.y + r.h - 2 * u, S, .6);
+  line('MOMENTARY', (M.lufsM(t) + G).toFixed(1), r.y + 22 * u, true); line('SHORT-TERM', (M.lufsS(t) + G).toFixed(1), r.y + 50 * u, false);
+  line('INTEGRATED', (M.lufsI(P.inT, P.outT) + G).toFixed(1), r.y + 72 * u, false); line('TRUE PEAK', (M.truePeak(t) + G).toFixed(1) + ' dBTP', r.y + 94 * u, false);
+  line('PEAK L/R', (M.peakBar(0, t) + G).toFixed(1) + ' / ' + (M.peakBar(1, t) + G).toFixed(1), r.y + 116 * u, false);
+  lab(ctx, 'LUFS · BS.1770 · ' + (G ? 'POST-NORM ' + (G > 0 ? '+' : '') + G.toFixed(1) + ' dB' : 'UNNORMALISED') + (M.mono ? ' · MONO' : ''), rx, r.y + r.h - 2 * u, S, .6);
 }
 /** Goniometer (M up, S across) + correlation meter (−1 … +1). */
 export function goniometer(ctx, r, fs, S) {

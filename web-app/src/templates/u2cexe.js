@@ -42,7 +42,7 @@ export default {
   reserved(P) { return Object.values(rects(P, null)); },
   draw(ctx, fs, P, p, assets) {
     const { W, H, u } = P, fg = p.main, hi = p.hi, bg = p.dark, acc = accentOn(p), ph = phrase(fs, P), pl = pulse(fs), glow = P.params && P.params.cables != null ? P.params.cables : .5;
-    const S = { u, fg, hi, bg, acc, pl: 0 };
+    const S = { u, fg, hi, bg, acc, pl: 0, P };
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = fs.duck; // sidechain: the background grid ducks on kicks
     ctx.drawImage(cached(`osgrid|${W}|${H}|${fg}`, W / 2, H / 2, (g, w, h) => { g.fillStyle = rgba(fg, .1); const st = w / 36; for (let y = st / 2; y < h; y += st) for (let x = st / 2; x < w; x += st) g.fillRect(x, y, 1, 1);
@@ -79,7 +79,7 @@ export default {
         ctx.strokeStyle = rgba(fg, .16); ctx.lineWidth = 1 * u; ctx.setLineDash([2 * u, 6 * u]); ctx.strokeRect(I.x + 8 * u, I.y + 4 * u, I.w - 16 * u, I.h - 30 * u); ctx.setLineDash([]); }
       else if (id === 'eleph') { // live rope readout: swing angle, rope tension (in g) and link count
         const n0 = ropeNodes(fs, P), e = n0.length - 2, dt = 1 / 120, fa = { ...fs, t: fs.t - dt }, fb = { ...fs, t: fs.t + dt }, na = ropeNodes(fa, P), nb = ropeNodes(fb, P);
-        const ang = Math.atan2(n0[e], n0[e + 1]) * 180 / Math.PI, vx = (nb[e] - na[e]) / (2 * dt), vy = (nb[e + 1] - na[e + 1]) / (2 * dt), ax = (nb[e] - 2 * n0[e] + na[e]) / (dt * dt), ay = (nb[e + 1] - 2 * n0[e + 1] + na[e + 1]) / (dt * dt);
+        const ang = Math.atan2(n0[e], n0[e + 1]) * 180 / Math.PI, ax = (nb[e] - 2 * n0[e] + na[e]) / (dt * dt), ay = (nb[e + 1] - 2 * n0[e + 1] + na[e + 1]) / (dt * dt);
         const ten = Math.hypot(ax, ay - 13) / 13, ry = I.y + I.h - 4 * u;
         ctx.fillStyle = rgba(bg, .85); ctx.fillRect(I.x - 2 * u, ry - 30 * u, I.w + 4 * u, 34 * u); ctx.fillStyle = rgba(fg, .25); ctx.fillRect(I.x, ry - 30 * u, I.w, 1 * u);
         const cell = (k, v, x) => { txt(ctx, k, x, ry - 16 * u, mono(9 * u, 500), rgba(fg, .55)); txt(ctx, v, x, ry, mono(13 * u, 700), hi); };
@@ -87,7 +87,7 @@ export default {
         // angle gauge arc at the pivot
         const gx = I.x + I.w / 2, gy = I.y + 4 * u; ctx.strokeStyle = rgba(fg, .3); ctx.lineWidth = 1 * u; ctx.beginPath(); ctx.arc(gx, gy, 46 * u, Math.PI / 2 - .35, Math.PI / 2 + .35); ctx.stroke();
         for (let d = -15; d <= 15; d += 5) { const a = Math.PI / 2 + d * Math.PI / 180; ctx.beginPath(); ctx.moveTo(gx + Math.cos(a) * 42 * u, gy + Math.sin(a) * 42 * u); ctx.lineTo(gx + Math.cos(a) * 50 * u, gy + Math.sin(a) * 50 * u); ctx.stroke(); }
-        const a0 = Math.PI / 2 - ang * Math.PI / 180; ctx.fillStyle = acc; ctx.beginPath(); ctx.arc(gx + Math.cos(a0) * 46 * u, gy + Math.sin(a0) * 46 * u, 3 * u, 0, 7); ctx.fill(); void vx; void vy; }
+        const a0 = Math.PI / 2 - ang * Math.PI / 180; ctx.fillStyle = acc; ctx.beginPath(); ctx.arc(gx + Math.cos(a0) * 46 * u, gy + Math.sin(a0) * 46 * u, 3 * u, 0, 7); ctx.fill(); }
       ctx.restore();
     }
     // footer status

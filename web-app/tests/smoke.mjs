@@ -43,10 +43,10 @@ await page.reload();
 await page.waitForFunction(() => document.documentElement.dataset.track === '1', null, { timeout: 90000 });
 ok('boot + demo analysis', true, ((Date.now() - t0) / 1000).toFixed(1) + ' s · ' + (await page.textContent('#fxBadge')));
 if (AUDIO) {
-  await page.evaluate(() => { delete document.documentElement.dataset.quickPreview; });
+  await page.evaluate(() => { window.u2c.store.session.quickAt = 0; });
   await page.setInputFiles('#file', AUDIO);
   await page.waitForFunction(() => /Hz/.test(document.querySelector('#trackInfo').textContent) && !/refining/.test(document.querySelector('#status').textContent) && !/demo/.test(document.querySelector('#status').textContent), null, { timeout: 90000 });
-  const qp = await page.evaluate(() => document.documentElement.dataset.quickPreview || '');
+  const qp = await page.evaluate(() => window.u2c.store.session.quickAt || 0);
   ok('R29 fast first preview (quick pass, then refined)', !!qp && !/refining/.test(await page.textContent('#status')), 'quick-pass track shown first, then replaced by the full analysis');
   ok('upload + analysis', true, (await page.textContent('#status')).replace(/\s+/g, ' ').slice(0, 160));
 }

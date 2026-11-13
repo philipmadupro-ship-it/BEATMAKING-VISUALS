@@ -90,7 +90,7 @@ async function boot() {
     $('#anaProg').style.width = '0%'; status(`Analysing <b>${meta.name}</b>…`);
     const setTrack = (tr, quick) => {
       if (id !== loadId) return; // a newer file was dropped while this one was analysing
-      if (quick) document.documentElement.dataset.quickPreview = String(Date.now()); // diagnostic: first preview came from the quick pass
+      if (quick) store.session.quickAt = performance.now(); // the first preview came from the quick pass
       store.set({ session: { track: tr }, project: { text: { lines: { title: { text: meta.title }, key: { text: tr.key } } } } });
       if (!userClip) { const cl = store.project.clipLen; A.applyHook(cl === 'full' ? 'full' : (+cl || 15)); }
       const loop = app.grid.setTrack(tr); app.panels.sync();
