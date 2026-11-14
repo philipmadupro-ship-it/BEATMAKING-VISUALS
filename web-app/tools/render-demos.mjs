@@ -1,6 +1,6 @@
 // Render the demo MP4s through the app's own export path (Export tab → Export MP4: offline WebCodecs + Mediabunny)
 // and extract filmstrips. Needs a static server on :8765 (python3 -m http.server 8765) and Playwright.
-//   node tools/render-demos.mjs [audio=demo/test-beat-142.wav] [jobs=u2cexe:916,lab:916,scope:916,u2cexe:169]
+//   node tools/render-demos.mjs [audio=demo/test-beat-142.wav] [jobs=exe:916,lab:916,scope:916,exe:169]   (look:aspect[:stage])
 // Output: demo/<look>_<aspect>_15s.mp4 + demo/<look>_<aspect>_filmstrip.png (16 frames, 1 per second)
 // Headless Chromium has no AAC encoder, so the app falls back to Opus; the audio track is then re-encoded to AAC
 // with ffmpeg (video stream copied untouched) so the files play everywhere.
@@ -8,7 +8,7 @@ import { createRequire } from 'node:module'; import fs from 'node:fs'; import pa
 const require = createRequire(import.meta.url); const { chromium } = require('playwright');
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'), OUT = path.join(ROOT, 'demo');
 const AUDIO = path.resolve(process.argv[2] || path.join(ROOT, 'demo/test-beat-142.wav'));
-const JOBS = (process.argv[3] || 'u2cexe:916,lab:916,scope:916,u2cexe:169').split(',').map(s => s.split(':'));
+const JOBS = (process.argv[3] || 'exe:916,lab:916,scope:916,exe:169').split(',').map(s => s.split(':'));
 const CACHE = process.env.CDN_CACHE || '';
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -20,11 +20,12 @@ await page.goto(process.env.URL || 'http://localhost:8765/'); await page.evaluat
 await page.waitForFunction(() => document.documentElement.dataset.track === '1', null, { timeout: 90000 });
 await page.setInputFiles('#file', AUDIO);
 await page.waitForFunction(() => { const tr = window.u2c.store.session.track; return tr && !tr.meta.quick && !/demo/.test(tr.meta.name || ''); }, null, { timeout: 120000 });
-await page.evaluate(() => { const L = window.u2c.store.project.text.lines; window.u2c.store.set({ project: { text: { lines: { title: { text: 'Night Shift' }, key: { text: 'F# min' } } } } }); void L; });
 await page.click('#grid .card >> nth=0').catch(() => {});
-for (const [tpl, asp] of JOBS) {
-  await page.evaluate(([tpl, asp]) => { const A = window.u2c.actions; A.openStudio ? A.openStudio(tpl, asp) : A.setTemplate(tpl); A.setAspect && A.setAspect(asp); A.setTemplate(tpl); }, [tpl, asp]);
-  await page.click('.tabs [data-tab="export"]'); await page.evaluate(() => document.querySelector('[data-len="15"]').click()); await page.waitForTimeout(400);
+for (const [tpl, asp, stage] of JOBS) {
+  // the default cue sheet of each look, rebuilt from the analysis
+  await page.evaluate(([tpl, asp, stage]) => { const A = window.u2c.actions; A.openStudio(tpl, asp); A.setAspect(asp); if (stage) A.setStage(stage); A.applyHook(15); }, [tpl, asp, stage]);
+  await page.waitForFunction(() => window.u2c.clip.current().ready, null, { timeout: 120000 }); await page.evaluate(() => window.u2c.actions.applyPreset('default'));
+  await page.click('.tabs [data-tab="export"]'); await page.waitForTimeout(400);
   const before = await page.$$eval('#results .res', els => els.length);
   const t0 = Date.now(); await page.click('#exBtn');
   await page.waitForFunction(n => document.querySelectorAll('#results .res').length > n, before, { timeout: 1800000 });

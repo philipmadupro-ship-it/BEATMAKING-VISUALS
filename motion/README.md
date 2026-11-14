@@ -93,3 +93,10 @@ The renderer writes the merged result to `film/data/tags-*.js`. A web app can ge
 All three cut **only on bar lines**:
 - The logo is "home" for at least 50 % of the bars, with a meter or the pendant cut in between.
 - Bar 1 is the boot. The second-to-last bar is the result card. The last bar mirrors the first frame, so the loop is clean.
+
+## v9 (live project: /home/user/u2c-motion, branch v9)
+`render.mjs --cues sheet.json` renders the web app's own look code (web-app/src/v8, synced into `film/v9/src` by
+`node tools/sync_web.mjs`, never edited there) from a U2C Studio cue sheet; see web-app/CUES.md "Native CLI" and the
+skills in `.claude/skills/` (u2c-render-qa, u2c-cue-sheet). This folder mirrors the v9 native files (render.mjs,
+film/v9/template.html + boot.mjs, tools/sync_web.mjs, tools/clipdata.py with int16 wave3, tests/chain_wave_trace.py,
+tests/test_waveform_render.py, tests/sync_test.py); the synced src copy and the renders live in u2c-motion.

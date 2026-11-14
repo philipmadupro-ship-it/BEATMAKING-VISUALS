@@ -1,58 +1,58 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>U2C Studio</title>
-<meta name="description" content="Upload a beat and render branded, beat-reactive U2C preview videos for Reels, TikTok, Shorts and YouTube.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%23161616%22/%3E%3Crect x=%227%22 y=%2211%22 width=%2212%22 height=%2210%22 rx=%224%22 fill=%22none%22 stroke=%22%23c8c8c8%22 stroke-width=%222.4%22/%3E%3Crect x=%2213%22 y=%2211%22 width=%2212%22 height=%2210%22 rx=%224%22 fill=%22none%22 stroke=%22%23c8c8c8%22 stroke-width=%222.4%22/%3E%3C/svg%3E">
+<meta name="description" content="Beat-video editor: upload a beat, get the U2C lab looks locked to its grid, then decide what happens when on a keyframe timeline and export an MP4.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 fill=%22%230b0b0b%22/%3E%3Crect x=%227%22 y=%2211%22 width=%2212%22 height=%2210%22 rx=%224%22 fill=%22none%22 stroke=%22%23f2f2f2%22 stroke-width=%222.4%22/%3E%3Crect x=%2213%22 y=%2211%22 width=%2212%22 height=%2210%22 rx=%224%22 fill=%22none%22 stroke=%22%23f2f2f2%22 stroke-width=%222.4%22/%3E%3C/svg%3E">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Anton&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@400;500;700;800&display=swap">
 <style>
-/* Tokens. Dark-first studio chrome (Charcoal); --accent follows the selected U2C palette. */
+/* Tokens. Tactical-telemetry studio chrome, dark first; --accent follows the stage (NIGREDO white, ALBEDO iron oxide,
+   CITRINITAS ochre, RUBEDO violet). Sharp corners everywhere (one radius: 2px). */
 :root{
-  --pal-main:#c8c8c8; --pal-dark:#161616;
-  --bg:#121212; --bg-2:#181818; --panel:#1a1a1a; --stage:#0b0b0b;
-  --fg:#e6e6e6; --muted:#8b8b8b; --faint:#808080;
-  --line:rgba(200,200,200,.10); --line-2:rgba(200,200,200,.18);
-  --accent:var(--pal-main); --on-accent:#161616; --tint:rgba(200,200,200,.07);
+  --st-acc:#f2f2f2; --st-acc-light:#161616;
+  --bg:#0c0c0c; --bg-2:#111111; --panel:#141414; --stage:#060606;
+  --fg:#ececec; --muted:#9a9a9a; --faint:#8a8a8a;
+  --line:rgba(236,236,236,.08); --line-2:rgba(236,236,236,.17); --lane:rgba(255,255,255,.022);
+  --accent:var(--st-acc); --on-accent:#0c0c0c; --tint:rgba(236,236,236,.07); --danger:#ff6b5a;
   --sans:"Instrument Sans",ui-sans-serif,system-ui,sans-serif;
   --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
-  --serif:"Instrument Serif","Iowan Old Style",Palatino,Georgia,serif;
-  --radius:8px; --ease:cubic-bezier(.2,.7,.2,1);
+  --radius:2px; --ease:cubic-bezier(.2,.7,.2,1);
   color-scheme:dark;
 }
 @media (prefers-color-scheme: light){
   :root:not([data-theme="dark"]){
-    --bg:#e8e7e4; --bg-2:#efeeeb; --panel:#f4f3f0; --stage:#161616;
-    --fg:#161616; --muted:#5a5a5a; --faint:#666666;
-    --line:rgba(22,22,22,.12); --line-2:rgba(22,22,22,.22);
-    --accent:var(--pal-dark); --on-accent:#f4f3f0; --tint:rgba(22,22,22,.06);
+    --bg:#ecebe7; --bg-2:#f3f2ef; --panel:#f7f6f3; --stage:#121212;
+    --fg:#141414; --muted:#545454; --faint:#5e5e5e;
+    --line:rgba(20,20,20,.10); --line-2:rgba(20,20,20,.22); --lane:rgba(0,0,0,.025);
+    --accent:var(--st-acc-light); --on-accent:#f7f6f3; --tint:rgba(20,20,20,.06); --danger:#b3261e;
     color-scheme:light;
   }
 }
 :root[data-theme="light"]{
-  --bg:#e8e7e4; --bg-2:#efeeeb; --panel:#f4f3f0; --stage:#161616;
-  --fg:#161616; --muted:#5a5a5a; --faint:#666666;
-  --line:rgba(22,22,22,.12); --line-2:rgba(22,22,22,.22);
-  --accent:var(--pal-dark); --on-accent:#f4f3f0; --tint:rgba(22,22,22,.06);
+  --bg:#ecebe7; --bg-2:#f3f2ef; --panel:#f7f6f3; --stage:#121212;
+  --fg:#141414; --muted:#545454; --faint:#5e5e5e;
+  --line:rgba(20,20,20,.10); --line-2:rgba(20,20,20,.22); --lane:rgba(0,0,0,.025);
+  --accent:var(--st-acc-light); --on-accent:#f7f6f3; --tint:rgba(20,20,20,.06); --danger:#b3261e;
   color-scheme:light;
 }
 body{background:var(--bg);color:var(--fg)}
 </style>
 <link rel="stylesheet" href="src/styles.css">
-<script type="importmap">{"imports":{"pixi.js":"https://cdn.jsdelivr.net/npm/pixi.js@8.22.0/dist/pixi.min.mjs"}}</script>
 
 <header class="top">
-  <div class="brand"><i class="dot"></i><b>U2C</b><span>/ studio</span></div>
+  <div class="brand"><i class="mark" aria-hidden="true"></i><b>U2C</b><span>/ studio</span></div>
   <div class="proj"><input id="projTitle" aria-label="Beat title" value="Night Shift"><span class="saved" id="savedTxt">saved locally</span></div>
   <button class="btn small" id="creditsBtn" aria-expanded="false">Credits</button>
-  <button class="btn" id="backBtn" hidden>All looks</button>
+  <button class="btn small" id="backBtn" hidden>Looks</button>
   <button class="btn primary" id="exportTop" hidden>Export</button>
   <div class="pop" id="credits" hidden>
     <div class="lbl">Open-source credits</div>
     <ul id="creditList"></ul>
-    <p class="note">U2C artwork, chain logo and elephant © Uche2Crazy. Runs in your browser; your audio never leaves this tab.</p>
+    <p class="note">U2C artwork, chain logo and elephant © Uche2Crazy. Spectrogram, stereo and surface meters follow the methods of Aurora by Joe Croskey (AGPL-3.0); ideas only, no Aurora code. Meter ideas (documented behaviour and numbers only, all code written fresh, no names or trade dress on screen) from LSP plugins (LGPL-3.0), x42 fil4 and Audacity (GPL), iZotope Ozone Imager, FabFilter Pro-Q, TDR Nova, Voxengo SPAN, Youlean Loudness Meter, dpMeter, adieu sounds ghost, Ableton Live, Logic Pro and FL Studio (proprietary); formulas from the RBJ Audio EQ Cookbook, ITU-R BS.1770-4 / EBU R128, IEC 60268-18 and the K-system. Everything runs in this tab; your audio never leaves it.</p>
   </div>
 </header>
 
@@ -63,8 +63,8 @@ body{background:var(--bg);color:var(--fg)}
   <div class="hero">
    <div class="drop" id="drop">
      <div>
-       <h1>Your beat, <em>in chains.</em></h1>
-       <p>Drop a beat and U2C Studio renders it into nine branded, beat‑reactive looks for Reels, TikTok and Shorts (9:16) or YouTube (16:9). Everything runs in this tab.</p>
+       <h1>Your beat, in chains.</h1>
+       <p>Drop a beat. U2C Studio measures it, builds the lab looks on its grid, and gives you a timeline to decide what happens when.</p>
      </div>
      <div class="row">
        <label class="btn primary" for="file">Choose audio</label>
@@ -78,16 +78,16 @@ body{background:var(--bg);color:var(--fg)}
    <div class="fields">
      <div class="field wide"><label class="lbl" for="fTitle">Title</label><input class="inp" id="fTitle"></div>
      <div class="field"><label class="lbl" for="fBpm">BPM <span id="bpmSrc" class="hint"></span></label>
-       <div class="inrow"><input class="inp mono" id="fBpm" type="number" min="40" max="250" step="0.1" style="width:96px"><button class="btn small" data-bpm="0.5">÷2</button><button class="btn small" data-bpm="2">×2</button></div></div>
-     <div class="field"><label class="lbl" for="fKey">Key</label><input class="inp mono" id="fKey"></div>
-     <div class="field wide"><label class="lbl" for="fTag">Producer tag</label><input class="inp" id="fTag"></div>
-     <div class="field wide"><span class="hint" id="trackInfo">Tag, handle and caption format are remembered for next time.</span></div>
+       <div class="inrow"><input class="inp mono" id="fBpm" type="number" min="40" max="250" step="0.01" style="width:96px"><button class="btn small" data-bpm="0.5">÷2</button><button class="btn small" data-bpm="2">×2</button></div></div>
+     <div class="field"><label class="lbl" for="fKey">Key</label><input class="inp mono" id="fKey" placeholder="detected"></div>
+     <div class="field wide"><label class="lbl" for="fTag">Producer</label><input class="inp" id="fTag"></div>
+     <div class="field wide"><span class="hint" id="trackInfo">Title, producer and caption fields are remembered for next time.</span></div>
    </div>
   </div>
   <div>
    <div class="looks-head">
-     <div><div class="lbl" style="margin-bottom:6px">Step 2</div><h2>Pick a look. <em>Each one is playing your beat.</em></h2></div>
-     <div class="inrow"><span class="lbl">Format</span><div class="seg" id="gridAspect"><button data-a="916" aria-pressed="true">9:16</button><button data-a="169" aria-pressed="false">16:9</button></div></div>
+     <h2>Pick a look. Each card is playing your beat.</h2>
+     <div class="inrow"><span class="lbl">Stage</span><div class="seg" id="gridStage"></div><span class="lbl">Format</span><div class="seg" id="gridAspect"><button data-a="916" aria-pressed="true">9:16</button><button data-a="169" aria-pressed="false">16:9</button></div></div>
    </div>
    <p class="note" id="loopNote" style="margin:8px 0 16px">Previews loop the loudest 8 bars, muted. Hover a card to hear it.</p>
    <div class="grid" id="grid"></div>
@@ -98,141 +98,76 @@ body{background:var(--bg);color:var(--fg)}
 <section id="studio" hidden>
  <div class="stage-col">
   <div class="stage-bar">
-    <div class="inrow"><span class="lbl" id="metaLine">9:16 · 1080×1920 · 30 fps</span><span class="hint" id="fxBadge"></span></div>
+    <div class="inrow"><span class="lbl" id="metaLine">9:16 · 1080×1920 · 30 fps</span><span class="hint" id="measuring"></span></div>
     <div class="ctrls">
       <div class="seg" id="aspectSeg"><button data-a="916" aria-pressed="true">9:16</button><button data-a="169" aria-pressed="false">16:9</button></div>
       <div class="seg" id="zoomSeg"><button data-z="fit" aria-pressed="true">Fit</button><button data-z="100" aria-pressed="false">100%</button></div>
-      <button class="btn small" id="seamBtn" aria-pressed="false" title="Play the last 2 s into the first 2 s on repeat">Seam check</button>
       <button class="btn small" id="safeBtn" aria-pressed="false">Safe area</button>
       <button class="btn small" id="fsBtn">Fullscreen</button>
     </div>
   </div>
-  <div class="stage" id="stage"><div class="cwrap" id="cwrap"><canvas id="view" width="540" height="960" aria-label="Video preview. Drag the chains, elephant or text to move them."></canvas><div class="safe" id="safe" hidden></div></div>
-    <div class="seambox" id="seamBox" hidden>
-      <div class="group-h"><span class="lbl">Seam check · last frame → first frame</span><button class="btn small" id="seamClose">Close</button></div>
-      <div class="seampair"><figure><canvas id="seamLast" width="270" height="480"></canvas><figcaption>last frame</figcaption></figure><span class="arrow">→</span><figure><canvas id="seamFirst" width="270" height="480"></canvas><figcaption>frame 0</figcaption></figure></div>
-      <p class="hint" id="seamInfo"></p>
-    </div></div>
-  <div class="variant"><span class="lbl">Palette</span><div class="inrow" id="palChips"></div></div>
-  <div class="variant"><span class="lbl">Variant</span><div class="inrow" id="varChips"></div></div>
+  <div class="stage" id="stage"><div class="cwrap" id="cwrap"><canvas id="view" width="540" height="960" aria-label="Video preview. Click a window to edit its properties; drag it to move it."></canvas><div class="safe" id="safe" hidden></div><div class="pick" id="pickBox" hidden></div></div></div>
   <div class="transport">
     <button class="play" id="playBtn" aria-label="Play"><svg id="playIco" width="16" height="16" viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z" fill="currentColor"/></svg></button>
-    <button class="ib" id="restartBtn" aria-label="Back to in point"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 2v10M12 2L5 7l7 5z" stroke="currentColor" fill="currentColor" stroke-width="1.5"/></svg></button>
-    <button class="ib" id="loopBtn" aria-label="Loop in to out" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 6a3 3 0 013-3h6l-2-2M13 10a3 3 0 01-3 3H4l2 2"/></svg></button>
+    <button class="ib" id="restartBtn" aria-label="Back to bar 1"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 2v10M12 2L5 7l7 5z" stroke="currentColor" fill="currentColor" stroke-width="1.5"/></svg></button>
+    <button class="ib" id="loopBtn" aria-label="Loop the video" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 6a3 3 0 013-3h6l-2-2M13 10a3 3 0 01-3 3H4l2 2"/></svg></button>
     <span class="tc" id="tc">00:00.000</span>
-    <span class="pill" id="barPill">bar 1.1</span>
+    <span class="pill" id="barPill">1.1.0</span>
     <div class="vol"><span class="lbl">Vol</span><input type="range" id="vol" min="0" max="1" step="0.01" value="0.9" aria-label="Volume"></div>
     <div class="readout" id="readout"></div>
-  </div>
-  <div class="tlwrap">
-    <div id="wave"></div>
-    <div class="legend">
-      <div class="inrow"><span class="lbl">Auto hook</span><button class="btn small" data-len="7">7s loop</button><button class="btn small" data-len="15">15s</button><button class="btn small" data-len="30">30s</button><button class="btn small" data-len="60">60s</button><button class="btn small" data-len="full">Full</button></div>
-      <div class="inrow"><span class="lbl">Zoom</span><input type="range" id="wsZoom" min="0" max="200" step="1" value="0" aria-label="Timeline zoom" style="width:110px;accent-color:var(--accent)"></div>
-    </div>
-    <div class="legend"><span>drag the clip region · snaps to bars · <kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> beat · <kbd>I</kbd><kbd>O</kbd> in/out · <kbd>1</kbd>-<kbd>9</kbd> looks</span><span id="lgCounts"></span></div>
   </div>
  </div>
  <aside class="panel">
   <div class="tabs" role="tablist">
-    <button role="tab" id="tab-beat" aria-controls="pane-beat" data-tab="beat" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 9h2M6 5v8M9 3v12M12 6v6M15 8v2"/></svg>Beat</button>
-    <button role="tab" id="tab-look" aria-controls="pane-look" data-tab="look" aria-selected="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="10" y="2" width="6" height="6" rx="1"/><rect x="2" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/></svg>Look</button>
-    <button role="tab" id="tab-style" aria-controls="pane-style" data-tab="style" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9 1.5Q9 9 16.5 9Q9 9 9 16.5Q9 9 1.5 9Q9 9 9 1.5z"/></svg>Style</button>
-    <button role="tab" id="tab-fx" aria-controls="pane-fx" data-tab="fx" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 5h14M2 9h9M2 13h14M13 7l3 2-3 2"/></svg>FX</button>
-    <button role="tab" id="tab-text" aria-controls="pane-text" data-tab="text" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 15L8 3l5 12M5 11h6M14 7v8"/></svg>Text</button>
-    <button role="tab" id="tab-export" aria-controls="pane-export" data-tab="export" aria-selected="false"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9 2v9M5 7l4 4 4-4M3 13v3h12v-3"/></svg>Export</button>
+    <button role="tab" id="tab-inspect" aria-controls="pane-inspect" data-tab="inspect" aria-selected="true">Inspect</button>
+    <button role="tab" id="tab-look" aria-controls="pane-look" data-tab="look" aria-selected="false">Look</button>
+    <button role="tab" id="tab-text" aria-controls="pane-text" data-tab="text" aria-selected="false">Text</button>
+    <button role="tab" id="tab-beat" aria-controls="pane-beat" data-tab="beat" aria-selected="false">Beat</button>
+    <button role="tab" id="tab-export" aria-controls="pane-export" data-tab="export" aria-selected="false">Export</button>
     <i class="ul" id="tabUl"></i>
   </div>
-  <div class="pane" role="tabpanel" id="pane-beat" aria-labelledby="tab-beat" data-pane="beat" hidden>
-    <h3>Beat grid</h3>
+  <div class="pane" role="tabpanel" id="pane-inspect" aria-labelledby="tab-inspect" data-pane="inspect">
+    <div id="inspHome"><div class="insp" id="insp"></div></div>
+  </div>
+  <div class="pane" role="tabpanel" id="pane-look" aria-labelledby="tab-look" data-pane="look" hidden>
+    <div class="group"><div class="lbl">Look</div><div class="lookgrid" id="lookGrid"></div></div>
+    <div class="group"><div class="lbl">Stage</div><div class="stagegrid" id="stageGrid"></div><p class="hint">A stage is a condition, not a recolour: camera, swing, tape and residue change with it.</p></div>
+    <div class="group"><div class="group-h"><span class="lbl">Cue sheet preset</span><button class="btn small" id="regenBtn">Rebuild from analysis</button></div><div class="presets" id="presetList"></div>
+      <p class="hint">Applying a preset replaces the timeline (Cmd/Ctrl+Z brings it back). Tracks you edited are kept when the analysis or section changes.</p></div>
+  </div>
+  <div class="pane" role="tabpanel" id="pane-text" aria-labelledby="tab-text" data-pane="text" hidden>
+    <div class="group"><div class="group-h"><span class="lbl">Tags</span><input class="inp mono small" id="tagFilter" placeholder="filter" aria-label="Filter tags"></div><p class="hint">Every word on screen. {title}, {bpm}, {key}, {stage}, {lufs}… are filled in. To change one at a time, use ◆ on Tags in Inspect, or add a Text cue on the timeline.</p><div class="tags" id="tagList"></div></div>
     <div class="group">
-      <div class="field"><label class="lbl" for="sBpm">BPM</label><div class="inrow"><input class="inp mono" id="sBpm" type="number" min="40" max="250" step="0.1" style="width:96px"><button class="btn small" data-bpm="0.5">÷2</button><button class="btn small" data-bpm="2">×2</button><button class="btn small" id="tapBtn">Tap</button></div></div>
-      <div class="field"><label class="lbl" for="sKey">Key</label><input class="inp mono" id="sKey"></div>
+      <div class="lbl">Caption builder</div>
+      <div class="grid2"><div class="field"><label class="lbl" for="wA">Artist A</label><input class="inp" id="wA"></div><div class="field"><label class="lbl" for="wB">Artist B</label><input class="inp" id="wB"></div>
+      <div class="field"><label class="lbl" for="wPrice">Lease price</label><input class="inp mono" id="wPrice"></div><div class="field"><label class="lbl" for="wLink">Store link / CTA</label><input class="inp mono" id="wLink"></div></div>
+      <div class="field"><label class="lbl" for="capFmt">Title format</label><input class="inp mono" id="capFmt"></div>
+      <textarea class="inp" id="capOut" rows="8" readonly aria-label="Generated title, captions and tags"></textarea>
+      <div class="inrow"><button class="btn small" id="capCopy">Copy all</button><button class="btn small" id="capSave">Save .txt</button><span class="hint" id="capInfo"></span></div>
+    </div>
+  </div>
+  <div class="pane" role="tabpanel" id="pane-beat" aria-labelledby="tab-beat" data-pane="beat" hidden>
+    <div class="group">
+      <div class="field"><label class="lbl" for="sBpm">BPM</label><div class="inrow"><input class="inp mono" id="sBpm" type="number" min="40" max="250" step="0.01" style="width:96px"><button class="btn small" data-bpm="0.5">÷2</button><button class="btn small" data-bpm="2">×2</button><button class="btn small" id="tapBtn">Tap</button></div></div>
+      <div class="field"><label class="lbl" for="sKey">Key (shown on screen)</label><input class="inp mono" id="sKey" placeholder="detected"></div>
       <div class="field"><span class="lbl">Downbeat</span><div class="inrow"><button class="btn small" data-nudge="-b">−1 beat</button><button class="btn small" data-nudge="+b">+1 beat</button><button class="btn small" data-nudge="-ms">−10 ms</button><button class="btn small" data-nudge="+ms">+10 ms</button></div></div>
       <div class="hint" id="gridInfo"></div>
     </div>
+    <div class="group"><div class="lbl">Sections</div><div class="sections" id="sectionList"></div></div>
     <div class="group"><div class="lbl">Analysis</div><dl class="kv" id="anaKv"></dl></div>
   </div>
-  <div class="pane" role="tabpanel" id="pane-look" aria-labelledby="tab-look" data-pane="look">
-    <h3>Looks</h3>
-    <div class="lookgrid" id="lookGrid"></div>
-    <div class="group" id="tplParams"></div>
-  </div>
-  <div class="pane" role="tabpanel" id="pane-style" aria-labelledby="tab-style" data-pane="style" hidden>
-    <h3>Overlays <em>&amp; finish</em></h3>
-    <div class="group">
-      <div class="group-h"><label class="tog"><input type="checkbox" id="chOn" checked> U2C chains</label><span class="hint">fly in · pulse · shatter</span></div>
-      <div class="ctl"><label class="lbl" for="chX">Position X</label><input type="range" id="chX" min="0" max="1" step="0.01"><output for="chX"></output></div>
-      <div class="ctl"><label class="lbl" for="chY">Position Y</label><input type="range" id="chY" min="0" max="1" step="0.01"><output for="chY"></output></div>
-      <div class="ctl"><label class="lbl" for="chS">Scale</label><input type="range" id="chS" min="0.12" max="1.4" step="0.01"><output for="chS"></output></div>
-      <div class="ctl"><label class="lbl" for="chC">Shatter every</label><select class="inp mono" id="chC"><option value="auto">clip length (loop-safe)</option><option value="4">4 bars</option><option value="8">8 bars</option><option value="16">16 bars</option></select><span></span></div>
-      <p class="hint">Or drag the logo on the preview.</p>
-    </div>
-    <div class="group">
-      <div class="group-h"><label class="tog"><input type="checkbox" id="elOn" checked> Elephant pendant</label><span class="hint">swing locked to the beat</span></div>
-      <div class="ctl"><label class="lbl" for="elX">Hang from X</label><input type="range" id="elX" min="0" max="1" step="0.01"><output for="elX"></output></div>
-      <div class="ctl"><label class="lbl" for="elS">Scale</label><input type="range" id="elS" min="0.15" max="1.6" step="0.01"><output for="elS"></output></div>
-      <div class="ctl"><label class="lbl" for="elL">Chain length</label><input type="range" id="elL" min="0" max="0.6" step="0.01"><output for="elL"></output></div>
-      <div class="ctl"><label class="lbl" for="elSw">Elephant swing</label><input type="range" id="elSw" min="0" max="1" step="0.01"><output for="elSw"></output></div>
-    </div>
-    <div class="group">
-      <div class="lbl">Finish</div>
-      <div class="ctl"><label class="lbl" for="fGrain">Grain</label><input type="range" id="fGrain" min="0" max="1" step="0.01"><output for="fGrain"></output></div>
-      <div class="ctl"><label class="lbl" for="fInt">Reactivity</label><input type="range" id="fInt" min="0.2" max="2" step="0.01"><output for="fInt"></output></div>
-      <label class="tog"><input type="checkbox" id="fZoom" checked> Slow zoom (always-on motion)</label>
-    </div>
-  </div>
-  <div class="pane" role="tabpanel" id="pane-fx" aria-labelledby="tab-fx" data-pane="fx" hidden>
-    <h3>Post FX</h3>
-    <div class="group">
-      <div class="group-h"><label class="tog"><input type="checkbox" id="fxOn" checked> Audio-driven FX</label><span class="hint" id="fxStatus"></span></div>
-      <div class="ctl"><label class="lbl" for="fxReactPre">Feel</label><select class="inp mono" id="fxReactPre"><option value="calm">Calm</option><option value="balanced">Balanced</option><option value="punchy">Punchy</option></select><span></span></div>
-      <div class="ctl"><label class="lbl" for="fxReact">Reactivity</label><input type="range" id="fxReact" min="0" max="100" step="1"><output for="fxReact"></output></div>
-      <div class="ctl"><label class="lbl" for="fxAmt">FX amount</label><input type="range" id="fxAmt" min="0" max="1" step="0.01"><output for="fxAmt"></output></div>
-      <div class="ctl"><label class="lbl" for="fxCrt">CRT · scan</label><input type="range" id="fxCrt" min="0" max="1" step="0.01"><output for="fxCrt"></output></div>
-      <div class="ctl"><label class="lbl" for="fxRgb">RGB split</label><input type="range" id="fxRgb" min="0" max="1" step="0.01"><output for="fxRgb"></output></div>
-
-      <div class="ctl"><label class="lbl" for="fxBloom">Bloom</label><input type="range" id="fxBloom" min="0" max="1.5" step="0.01"><output for="fxBloom"></output></div>
-      <div class="ctl"><label class="lbl" for="fxShock">Shockwave (opt-in)</label><input type="range" id="fxShock" min="0" max="1.5" step="0.01"><output for="fxShock"></output></div>
-      
-    </div>
-    <div class="group">
-      <div class="group-h"><span class="lbl">Glitch</span><span class="hint">opt-in · off by default · thin slices ≤ 80 ms</span></div>
-      <div class="ctl"><label class="lbl" for="fxGlitch">Glitch amount</label><input type="range" id="fxGlitch" min="0" max="100" step="1"><output for="fxGlitch"></output></div>
-      <div class="ctl"><label class="lbl" for="fxGlitchOn">Glitch on</label><select class="inp mono" id="fxGlitchOn"><option value="phrases">phrases only</option><option value="bars">every bar</option><option value="kicks">strong kicks + phrase bar 1</option></select><span></span></div>
-    </div>
-    <dl class="kv"><dt>RGB split</dt><dd>only with glitch (opt-in)</dd><dt>Glitch slices</dt><dd>per “Glitch on”</dd><dt>Bloom</dt><dd>low band</dd><dt>Shockwave</dt><dd>phrase downbeat + drops</dd><dt>Kicks</dt><dd>1-3 % spring punch · edge pulse · meters</dd><dt>CRT</dt><dd>always, subtle</dd></dl>
-  </div>
-  <div class="pane" role="tabpanel" id="pane-text" aria-labelledby="tab-text" data-pane="text" hidden>
-    <h3>Printed text</h3>
-    <p class="hint">Every line a look prints. "auto" lets the look place it inside its design; top / centre / bottom stack it in the safe area; drag a line on the preview to place it freely. Remembered in your producer profile.</p>
-    <div class="inrow"><span class="lbl">Preset</span><button class="btn small" id="presetType">Type beat</button><button class="btn small" id="presetLease">Lease / CTA</button><button class="btn small" id="presetMin">Minimal</button></div>
-    <div class="group" id="textLines"></div>
-    <div class="group">
-      <div class="lbl">Caption fields</div>
-      <div class="inrow"><div class="field" style="flex:1"><label class="lbl" for="wA">Artist A</label><input class="inp" id="wA"></div><div class="field" style="flex:1"><label class="lbl" for="wB">Artist B</label><input class="inp" id="wB"></div></div>
-      <div class="inrow"><div class="field" style="flex:1"><label class="lbl" for="wPrice">Lease price</label><input class="inp mono" id="wPrice"></div><div class="field" style="flex:2"><label class="lbl" for="wLink">Store link / CTA</label><input class="inp mono" id="wLink"></div></div>
-    </div>
-    <div class="group">
-      <div class="group-h"><span class="lbl">Caption builder</span><button class="btn small" id="capCopy">Copy all</button></div>
-      <div class="field"><label class="lbl" for="capFmt">Title format</label><input class="inp mono" id="capFmt"></div>
-      <textarea class="inp" id="capOut" rows="10" readonly aria-label="Generated title, captions and tags"></textarea>
-      <div class="inrow"><button class="btn small" id="capSave">Save .txt</button><span class="hint" id="capInfo"></span></div>
-    </div>
-  </div>
   <div class="pane" role="tabpanel" id="pane-export" aria-labelledby="tab-export" data-pane="export" hidden>
-    <h3>Export</h3>
     <div class="group">
       <dl class="kv" id="exKv"></dl>
-      <div class="inrow"><span class="lbl" style="width:70px">Frame rate</span><div class="seg" id="exFps"><button data-v="30" aria-pressed="true">30</button><button data-v="60" aria-pressed="false">60</button></div></div>
-      <div class="inrow"><span class="lbl" style="width:70px">Bitrate</span><div class="seg" id="exMbps"><button data-v="10">10</button><button data-v="11">11</button><button data-v="12">12 Mbps</button></div></div>
-      <div class="inrow"><span class="lbl" style="width:70px">Loudness</span><div class="seg" id="exLufs"><button data-v="-14">−14 LUFS</button><button data-v="-12">−12</button><button data-v="off">off</button></div></div>
-      <label class="tog"><input type="checkbox" id="exLoop" checked> Seamless loop (phrase-length clip, 1-beat equal-power crossfade, loop-phase visuals)</label>
+      <div class="inrow"><span class="lbl w70">Frame rate</span><div class="seg" id="exFps"><button data-v="30" aria-pressed="true">30</button><button data-v="60" aria-pressed="false">60</button></div></div>
+      <div class="inrow"><span class="lbl w70">Bitrate</span><div class="seg" id="exMbps"><button data-v="10">10</button><button data-v="12">12</button><button data-v="14">14 Mbps</button></div></div>
+      <div class="inrow"><span class="lbl w70">Loudness</span><div class="seg" id="exLufs"><button data-v="-14">−14 LUFS</button><button data-v="-12">−12</button><button data-v="off">off</button></div></div>
+      <label class="tog"><input type="checkbox" id="exLoop"> Loop-safe audio (1-beat crossfade into bar 1)</label>
       <label class="tog"><input type="checkbox" id="exDraft"> Draft (720p, fast)</label>
-      <div class="exfoot inrow"><button class="btn primary" id="exBtn">Export MP4</button><button class="btn" id="exCancel" hidden>Cancel</button><button class="btn small" id="ytBtn">YouTube full-length</button></div>
+      <div class="exfoot inrow"><button class="btn primary" id="exBtn">Export MP4</button><button class="btn" id="exCancel" hidden>Cancel</button><button class="btn small" id="cueSave">Cue sheet .json</button></div>
       <div class="prog"><i id="exProg"></i></div>
       <div class="hint mono" id="exRate" aria-live="polite"></div>
-      <div class="status" id="exStatus">Frame-exact offline render (WebCodecs). Falls back to real-time recording if the browser cannot encode.</div>
+      <div class="status" id="exStatus">Frame-exact offline render (WebCodecs) from the cue sheet. Falls back to real-time recording if the browser cannot encode.</div>
       <dl class="kv" id="loudKv"></dl>
     </div>
     <div class="group">
@@ -243,16 +178,28 @@ body{background:var(--bg);color:var(--fg)}
     <div class="group">
       <div class="group-h"><span class="lbl">Batch</span><button class="btn small" id="batchBtn">Export batch</button></div>
       <div class="checks" id="batchTpl"></div>
-      <div class="inrow"><span class="lbl">Lengths</span><label class="tog"><input type="checkbox" data-blen="7"> 7s</label><label class="tog"><input type="checkbox" data-blen="15"> 15s</label><label class="tog"><input type="checkbox" data-blen="30"> 30s</label></div>
-      <p class="hint">Each look × length is rendered from its own auto-picked hook, in the current aspect and palette.</p>
-    </div>
-    <div class="group">
-      <div class="group-h"><span class="lbl">YouTube thumbnails</span><button class="btn small" id="thumbBtn">Make 3 variants</button></div>
-      <div class="thumbs" id="thumbs"></div>
+      <div class="inrow"><span class="lbl">Lengths</span><label class="tog"><input type="checkbox" data-blen="15"> 15s</label><label class="tog"><input type="checkbox" data-blen="30"> 30s</label><label class="tog"><input type="checkbox" data-blen="60"> 60s</label></div>
+      <p class="hint">Each look × length is rendered from its own auto-picked section with a cue sheet rebuilt from the analysis.</p>
     </div>
     <div class="results" id="results"></div>
   </div>
  </aside>
+ <section class="dock" id="dock" aria-label="Timeline">
+  <div class="dock-grip" id="dockGrip" role="separator" aria-orientation="horizontal" aria-label="Resize the timeline" tabindex="0"></div>
+  <div class="song"><div id="wave"></div>
+    <div class="songbar"><span class="lbl">Section</span><button class="btn tiny" data-len="15">15 s</button><button class="btn tiny" data-len="30">30 s</button><button class="btn tiny" data-len="60">60 s</button><button class="btn tiny" data-len="full">Full</button><span class="hint" id="lgCounts"></span></div></div>
+  <div class="cuebar" role="toolbar" aria-label="Timeline tools">
+    <div class="inrow"><button class="ib sm" id="undoBtn" aria-label="Undo" title="Undo (Cmd/Ctrl+Z)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2L1 5l3 3M1 5h8a4 4 0 010 8H5"/></svg></button><button class="ib sm" id="redoBtn" aria-label="Redo" title="Redo (Shift+Cmd/Ctrl+Z)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2l3 3-3 3M13 5H5a4 4 0 000 8h4"/></svg></button>
+      <span class="sep"></span><span class="lbl">Snap</span><div class="seg" id="snapSeg"><button data-s="bar">Bar</button><button data-s="beat">Beat</button><button data-s="1/8">1/8</button><button data-s="1/16">1/16</button><button data-s="off">Off</button></div><button class="ib sm" id="magnetBtn" aria-pressed="true" aria-label="Magnet: snap to markers, keys and the playhead (N)" title="Magnet: snap to markers, keys, playhead (N · Alt while dragging: off)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2v5a4 4 0 008 0V2M3 4.5h2.5M8.5 4.5H11"/></svg></button></div>
+    <div class="inrow"><button class="btn small" id="addTrackBtn" aria-label="Add track">+ Track</button><select class="inp mono small" id="presetSel" aria-label="Cue sheet preset"></select>
+      <button class="btn small" id="cueImport">Import</button><input type="file" id="cueFile" accept=".json,application/json" hidden><button class="btn small" id="cueExport">Export</button>
+      <span class="sep"></span><button class="ib sm wide" id="ripInBtn" aria-label="Insert a bar at the playhead (R)" title="Ripple: insert a bar at the playhead (R)">+bar</button><button class="ib sm wide" id="ripOutBtn" aria-label="Delete the bar at the playhead (Shift+R)" title="Ripple: delete the bar at the playhead (Shift+R)">−bar</button><button class="ib sm wide" id="graphBtn" aria-pressed="false" aria-label="Graph editor for the focused number lane (E)" title="Graph editor: the focused number lane (E)">Graph</button><button class="ib sm wide" id="compactBtn" aria-pressed="false" aria-label="Compact lanes" title="Compact lanes (fit every lane)">Compact</button>
+      <span class="sep"></span><button class="ib sm" id="zoomOut" aria-label="Zoom out (−)">−</button><button class="ib sm" id="zoomFit" aria-label="Fit the video">Fit</button><button class="ib sm" id="zoomIn" aria-label="Zoom in (+)">+</button><button class="ib sm" id="lanesBtn" aria-pressed="false" aria-label="Collapse lanes">≡</button></div>
+  </div>
+  <div class="cuewrap"><canvas id="cueCv" tabindex="0" role="application" aria-label="Cue timeline. Space play, J K L shuttle, I O loop, S split, Delete, arrows nudge, brackets previous and next key, M marker, Q quantise, B interpolation, G lane height, E graph, Z zoom to selection, R ripple a bar, Cmd+Z undo, plus and minus zoom."></canvas></div>
+  <div class="keys hint" id="keysHint"><kbd>Space</kbd> play <kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> shuttle <kbd>I</kbd><kbd>O</kbd> loop <kbd>S</kbd> split <kbd>Del</kbd> delete <kbd>←</kbd><kbd>→</kbd> nudge <kbd>⌘Z</kbd> undo <kbd>[</kbd><kbd>]</kbd> prev / next key <kbd>M</kbd> marker <kbd>Q</kbd> quantise <kbd>B</kbd> curve <kbd>G</kbd> lane height <kbd>E</kbd> graph <kbd>Z</kbd> zoom sel <kbd>R</kbd> ripple bar <kbd>N</kbd> magnet · double-click a lane to add a key</div>
+ </section>
+ <div class="sheet" id="sheet" aria-live="polite"><div class="sheet-h"><span class="lbl">Key</span><button class="btn small" id="sheetClose">Done</button></div><div id="sheetBody"></div></div>
 </section>
 </main>
 <script type="module" src="src/main.js"></script>

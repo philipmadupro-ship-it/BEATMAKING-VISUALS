@@ -17,12 +17,13 @@ from scipy.signal import butter, sosfilt
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ap = argparse.ArgumentParser(); ap.add_argument("--stage", default="nigredo"); ap.add_argument("--look", default="exe"); ap.add_argument("--aspect", default="9:16"); ap.add_argument("--len", default="30")
-ap.add_argument("--beat", default="audio/atelmansion-3c-fmin-128.wav"); ap.add_argument("--title", default=None)
+ap.add_argument("--beat", default="audio/atelmansion-3c-fmin-128.wav"); ap.add_argument("--title", default=None); ap.add_argument("--cues", default=None)
 a = ap.parse_args()
 aspect = a.aspect.replace(":", "")
-tmpdir = os.path.join(ROOT, "out", "v7", "stills", f"sync-{a.look}-{a.stage}-{aspect}-{a.len}")
+tmpdir = os.path.join(ROOT, "out", "v9", "stills", f"sync-{a.look}-{a.stage}-{aspect}-{a.len}")
 cmd = ["node", "render.mjs", "--beat", a.beat, "--look", a.look, "--stage", a.stage, "--aspect", a.aspect, "--len", a.len, "--stills", "0", "--schedule", "--out", tmpdir]
 if a.title: cmd += ["--title", a.title]
+if a.cues: cmd += ["--cues", a.cues]
 subprocess.run(cmd, cwd=ROOT, check=True, capture_output=True)
 sch = json.load(open(os.path.join(tmpdir, "schedule.json")))
 base = os.path.basename(a.beat).rsplit(".", 1)[0].lower()
@@ -61,7 +62,7 @@ lines = [f"SYNC TEST  {a.look} {a.stage} {a.aspect} {a.len}s   events {len(rows)
          f"max event error: {worst * 1000:.2f} ms = {worst * FPS:.3f} frames  ->  {'PASS' if ok else 'FAIL'} (limit 1 frame)", "",
          f"{'t (s)':>8}  {'frame-vs-grid ms':>16}  {'audio-vs-grid ms':>16}  {'total frames':>12}  event"]
 lines += [f"{t:8.3f}  {a_:16.2f}  {b_:16.2f}  {f_:12.3f}  {w}" for t, w, a_, b_, f_ in rows]
-rep = os.path.join(ROOT, "out", "v7", f"sync-report-{a.look}-{a.stage}-{aspect}-{a.len}.txt")
+rep = os.path.join(ROOT, "out", "v9", f"sync-report-{a.look}-{a.stage}-{aspect}-{a.len}.txt")
 open(rep, "w").write("\n".join(lines) + "\n")
 print("\n".join(lines[:3])); print("report:", rep)
 sys.exit(0 if ok else 1)
