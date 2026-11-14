@@ -1,0 +1,478 @@
+SYNC TEST  rubedo 9:16 60s   events 473   fps 30   grid 128.00 BPM
+audio on-beat transients vs grid: n=127  mean 0.02 ms  max 0.10 ms
+max event error: 16.67 ms = 0.500 frames  ->  PASS (limit 1 frame)
+
+   t (s)  frame-vs-grid ms  audio-vs-grid ms  total frames  event
+   0.000              0.00              0.00         0.000  cut → boot
+   0.000              0.00              0.00         0.000  logo OUT U step 1
+   0.117             16.15              0.00         0.484  logo OUT U step 2
+   0.234              1.04              0.00         0.031  logo OUT U step 3
+   0.352             15.10              0.00         0.453  boot line 2
+   0.352             15.10              0.00         0.453  logo OUT U step 4
+   0.469              2.08              0.00         0.062  logo OUT 2 step 1
+   0.586             14.06              0.00         0.422  logo OUT 2 step 2
+   0.703              3.13              0.08         0.096  boot line 3
+   0.703              3.13              0.08         0.096  logo OUT 2 step 3
+   0.820             13.02              0.08         0.393  logo OUT 2 step 4
+   0.938              4.17              0.08         0.127  logo OUT C step 1
+   1.055             11.98              0.08         0.362  boot line 4
+   1.055             11.98              0.08         0.362  logo OUT C step 2
+   1.172              5.21              0.08         0.159  logo OUT C step 3
+   1.289             10.94              0.02         0.329  logo OUT C step 4
+   1.406              6.25              0.02         0.188  boot line 5
+   1.875              8.33              0.02         0.251  cut → wide
+   1.875              8.33              0.02         0.251  open session
+   1.875              8.33              0.02         0.251  logo IN U step 1
+   1.934              0.26              0.02         0.008  open session step 2
+   1.992              7.81              0.02         0.235  open session step 3
+   1.992              7.81              0.02         0.235  logo IN U step 2
+   2.051             15.89              0.02         0.477  open session step 4
+   2.109              9.37              0.02         0.282  open clock
+   2.109              9.37              0.02         0.282  open session step 5
+   2.109              9.37              0.02         0.282  logo IN U step 3
+   2.168              1.30              0.00         0.039  open session step 6
+   2.168              1.30              0.00         0.039  open clock step 2
+   2.227              6.77              0.00         0.203  open clock step 3
+   2.227              6.77              0.00         0.203  logo IN U step 4
+   2.285             14.84              0.00         0.445  open clock step 4
+   2.344             10.42              0.00         0.312  open balance
+   2.344             10.42              0.00         0.312  open clock step 5
+   2.344             10.42              0.00         0.312  logo IN 2 step 1
+   2.402              2.34              0.00         0.070  open clock step 6
+   2.402              2.34              0.00         0.070  open balance step 2
+   2.461              5.73              0.00         0.172  open balance step 3
+   2.461              5.73              0.00         0.172  logo IN 2 step 2
+   2.520             13.80              0.00         0.414  open balance step 4
+   2.578             11.46              0.08         0.346  open elephant
+   2.578             11.46              0.08         0.346  open balance step 5
+   2.578             11.46              0.08         0.346  logo IN 2 step 3
+   2.637              3.39              0.08         0.104  open balance step 6
+   2.637              3.39              0.08         0.104  open elephant step 2
+   2.695              4.69              0.08         0.143  open elephant step 3
+   2.695              4.69              0.08         0.143  logo IN 2 step 4
+   2.754             12.76              0.08         0.385  open elephant step 4
+   2.812             12.50              0.08         0.378  open spectrum
+   2.812             12.50              0.08         0.378  open elephant step 5
+   2.812             12.50              0.08         0.378  logo IN C step 1
+   2.871              4.43              0.08         0.135  open elephant step 6
+   2.871              4.43              0.08         0.135  open spectrum step 2
+   2.930              3.65              0.08         0.112  open spectrum step 3
+   2.930              3.65              0.08         0.112  logo IN C step 2
+   2.988             11.72              0.08         0.354  open spectrum step 4
+   3.047             13.54              0.08         0.409  open spectro
+   3.047             13.54              0.08         0.409  open spectrum step 5
+   3.047             13.54              0.08         0.409  logo IN C step 3
+   3.105              5.47              0.02         0.165  open spectrum step 6
+   3.105              5.47              0.02         0.165  open spectro step 2
+   3.164              2.60              0.02         0.079  open spectro step 3
+   3.164              2.60              0.02         0.079  logo IN C step 4
+   3.223             10.68              0.02         0.321  open spectro step 4
+   3.281             14.58              0.02         0.438  open levels
+   3.281             14.58              0.02         0.438  open spectro step 5
+   3.340              6.51              0.02         0.196  open spectro step 6
+   3.340              6.51              0.02         0.196  open levels step 2
+   3.398              1.56              0.02         0.047  open levels step 3
+   3.457              9.64              0.02         0.290  open levels step 4
+   3.516             15.62              0.00         0.469  open gonio
+   3.516             15.62              0.00         0.469  open levels step 5
+   3.574              7.55              0.00         0.227  open levels step 6
+   3.574              7.55              0.00         0.227  open gonio step 2
+   3.633              0.52              0.00         0.016  open gonio step 3
+   3.691              8.59              0.00         0.258  open gonio step 4
+   3.750             16.67              0.00         0.500  cut → spec
+   3.750             16.67              0.00         0.500  open bands
+   3.750             16.67              0.00         0.500  open gonio step 5
+   3.750             16.67              0.00         0.500  logo OUT U step 1
+   3.809              8.59              0.00         0.258  open gonio step 6
+   3.809              8.59              0.00         0.258  open bands step 2
+   3.867              0.52              0.00         0.016  open bands step 3
+   3.867              0.52              0.00         0.016  logo OUT U step 2
+   3.926              7.55              0.00         0.227  open bands step 4
+   3.984             15.62              0.00         0.469  open bands step 5
+   3.984             15.62              0.00         0.469  logo OUT U step 3
+   4.043              9.64              0.00         0.289  open bands step 6
+   4.102              1.56              0.00         0.047  logo OUT U step 4
+   4.219             14.58              0.00         0.438  note levels
+   4.219             14.58              0.00         0.438  logo OUT 2 step 1
+   4.336              2.60              0.00         0.078  logo OUT 2 step 2
+   4.453             13.54              0.08         0.409  logo OUT 2 step 3
+   4.570              3.65              0.08         0.112  logo OUT 2 step 4
+   4.688             12.50              0.08         0.378  logo OUT C step 1
+   4.805              4.69              0.08         0.143  logo OUT C step 2
+   4.922             11.46              0.08         0.346  logo OUT C step 3
+   5.039              5.73              0.00         0.172  logo OUT C step 4
+   5.625              8.33              0.00         0.250  logo IN U step 1
+   5.742              8.85              0.00         0.266  logo IN U step 2
+   5.859              7.29              0.00         0.219  logo IN U step 3
+   5.977              9.90              0.00         0.297  logo IN U step 4
+   6.094              6.25              0.00         0.187  note spectrum
+   6.094              6.25              0.00         0.187  logo IN 2 step 1
+   6.211             10.94              0.00         0.328  logo IN 2 step 2
+   6.328              5.21              0.08         0.159  logo IN 2 step 3
+   6.445             11.98              0.08         0.362  logo IN 2 step 4
+   6.562              4.17              0.08         0.127  logo IN C step 1
+   6.680             13.02              0.08         0.393  logo IN C step 2
+   6.797              3.12              0.08         0.096  logo IN C step 3
+   6.914             14.06              0.00         0.422  logo IN C step 4
+   7.500              0.00              0.00         0.000  cut → elephant
+   7.500              0.00              0.00         0.000  logo OUT U step 1
+   7.617             16.15              0.00         0.484  logo OUT U step 2
+   7.734              1.04              0.00         0.031  logo OUT U step 3
+   7.852             15.10              0.00         0.453  logo OUT U step 4
+   7.969              2.08              0.00         0.062  note session
+   7.969              2.08              0.00         0.062  logo OUT 2 step 1
+   8.086             14.06              0.00         0.422  logo OUT 2 step 2
+   8.203              3.13              0.04         0.095  logo OUT 2 step 3
+   8.320             13.02              0.04         0.392  logo OUT 2 step 4
+   8.438              4.17              0.04         0.126  logo OUT C step 1
+   8.555             11.98              0.04         0.361  logo OUT C step 2
+   8.672              5.21              0.04         0.158  logo OUT C step 3
+   8.789             10.94              0.00         0.328  logo OUT C step 4
+   9.375              8.33              0.02         0.251  logo IN U step 1
+   9.492              7.81              0.02         0.235  logo IN U step 2
+   9.609              9.38              0.02         0.282  logo IN U step 3
+   9.727              6.77              0.00         0.203  logo IN U step 4
+   9.844             10.42              0.00         0.312  note gonio
+   9.844             10.42              0.00         0.312  logo IN 2 step 1
+   9.961              5.73              0.00         0.172  logo IN 2 step 2
+  10.078             11.46              0.08         0.346  logo IN 2 step 3
+  10.195              4.69              0.08         0.143  logo IN 2 step 4
+  10.312             12.50              0.08         0.377  logo IN C step 1
+  10.430              3.65              0.08         0.112  logo IN C step 2
+  10.547             13.54              0.08         0.409  logo IN C step 3
+  10.664              2.60              0.02         0.079  logo IN C step 4
+  11.250             16.67              0.00         0.500  cut → lufs
+  11.250             16.67              0.00         0.500  logo OUT U step 1
+  11.367              0.52              0.00         0.016  logo OUT U step 2
+  11.484             15.62              0.00         0.469  logo OUT U step 3
+  11.602              1.56              0.00         0.047  logo OUT U step 4
+  11.719             14.58              0.00         0.437  note clock
+  11.719             14.58              0.00         0.437  logo OUT 2 step 1
+  11.836              2.60              0.00         0.078  logo OUT 2 step 2
+  11.953             13.54              0.10         0.409  logo OUT 2 step 3
+  12.070              3.65              0.10         0.113  logo OUT 2 step 4
+  12.188             12.50              0.10         0.378  logo OUT C step 1
+  12.305              4.69              0.10         0.144  logo OUT C step 2
+  12.422             11.46              0.10         0.347  logo OUT C step 3
+  12.539              5.73              0.00         0.172  logo OUT C step 4
+  13.125              8.33              0.00         0.250  logo IN U step 1
+  13.242              8.85              0.00         0.266  logo IN U step 2
+  13.359              7.29              0.00         0.219  logo IN U step 3
+  13.477              9.90              0.00         0.297  logo IN U step 4
+  13.594              6.25              0.00         0.187  note balance
+  13.594              6.25              0.00         0.187  logo IN 2 step 1
+  13.711             10.94              0.00         0.328  logo IN 2 step 2
+  13.828              5.21              0.08         0.159  logo IN 2 step 3
+  13.945             11.98              0.08         0.362  logo IN 2 step 4
+  14.062              4.17              0.08         0.127  logo IN C step 1
+  14.180             13.02              0.08         0.393  logo IN C step 2
+  14.297              3.13              0.08         0.096  logo IN C step 3
+  14.414             14.06              0.00         0.422  logo IN C step 4
+  15.000              0.00              0.00         0.000  cut → logo
+  15.000              0.00              0.00         0.000  logo OUT U step 1
+  15.117             16.15              0.00         0.484  logo OUT U step 2
+  15.234              1.04              0.00         0.031  logo OUT U step 3
+  15.352             15.10              0.00         0.453  logo OUT U step 4
+  15.469              2.08              0.00         0.062  logo OUT 2 step 1
+  15.586             14.06              0.00         0.422  logo OUT 2 step 2
+  15.703              3.13              0.08         0.096  logo OUT 2 step 3
+  15.820             13.02              0.08         0.393  logo OUT 2 step 4
+  15.938              4.17              0.08         0.127  logo OUT C step 1
+  16.055             11.98              0.08         0.362  logo OUT C step 2
+  16.172              5.21              0.08         0.159  logo OUT C step 3
+  16.289             10.94              0.00         0.328  logo OUT C step 4
+  16.875              8.33              0.00         0.250  cut → detail
+  16.875              8.33              0.00         0.250  logo IN U step 1
+  16.992              7.81              0.00         0.234  logo IN U step 2
+  17.109              9.37              0.00         0.281  logo IN U step 3
+  17.227              6.77              0.00         0.203  logo IN U step 4
+  17.344             10.42              0.00         0.313  logo IN 2 step 1
+  17.461              5.73              0.00         0.172  logo IN 2 step 2
+  17.578             11.46              0.08         0.346  logo IN 2 step 3
+  17.695              4.69              0.08         0.143  logo IN 2 step 4
+  17.812             12.50              0.08         0.377  logo IN C step 1
+  17.930              3.65              0.08         0.112  logo IN C step 2
+  18.047             13.54              0.08         0.409  logo IN C step 3
+  18.164              2.60              0.00         0.078  logo IN C step 4
+  18.750             16.67              0.00         0.500  logo OUT U step 1
+  18.867              0.52              0.00         0.016  logo OUT U step 2
+  18.984             15.62              0.00         0.469  logo OUT U step 3
+  19.102              1.56              0.00         0.047  logo OUT U step 4
+  19.219             14.58              0.00         0.438  logo OUT 2 step 1
+  19.336              2.60              0.00         0.078  logo OUT 2 step 2
+  19.453             13.54              0.10         0.409  logo OUT 2 step 3
+  19.570              3.65              0.10         0.113  logo OUT 2 step 4
+  19.688             12.50              0.10         0.378  logo OUT C step 1
+  19.805              4.69              0.10         0.144  logo OUT C step 2
+  19.922             11.46              0.10         0.347  logo OUT C step 3
+  20.039              5.73              0.00         0.172  logo OUT C step 4
+  20.625              8.33              0.00         0.250  cut → gonioC
+  20.625              8.33              0.00         0.250  logo IN U step 1
+  20.742              8.85              0.00         0.266  logo IN U step 2
+  20.859              7.29              0.00         0.219  logo IN U step 3
+  20.977              9.90              0.00         0.297  logo IN U step 4
+  21.094              6.25              0.00         0.188  logo IN 2 step 1
+  21.211             10.94              0.00         0.328  logo IN 2 step 2
+  21.328              5.21              0.08         0.159  logo IN 2 step 3
+  21.445             11.98              0.08         0.362  logo IN 2 step 4
+  21.562              4.17              0.08         0.127  logo IN C step 1
+  21.680             13.02              0.08         0.393  logo IN C step 2
+  21.797              3.13              0.08         0.096  logo IN C step 3
+  21.914             14.06              0.00         0.422  logo IN C step 4
+  22.500              0.00              0.00         0.000  logo OUT U step 1
+  22.617             16.15              0.00         0.484  logo OUT U step 2
+  22.734              1.04              0.00         0.031  logo OUT U step 3
+  22.852             15.10              0.00         0.453  logo OUT U step 4
+  22.969              2.08              0.00         0.063  logo OUT 2 step 1
+  23.086             14.06              0.00         0.422  logo OUT 2 step 2
+  23.203              3.13              0.08         0.096  logo OUT 2 step 3
+  23.320             13.02              0.08         0.393  logo OUT 2 step 4
+  23.438              4.17              0.08         0.127  logo OUT C step 1
+  23.555             11.98              0.08         0.362  logo OUT C step 2
+  23.672              5.21              0.08         0.159  logo OUT C step 3
+  23.789             10.94              0.00         0.328  logo OUT C step 4
+  23.906              6.25              0.00         0.188  glide start → elephant
+  24.375              8.33              0.02         0.251  glide land elephant
+  24.375              8.33              0.02         0.251  logo IN U step 1
+  24.492              7.81              0.02         0.235  logo IN U step 2
+  24.609              9.37              0.02         0.282  logo IN U step 3
+  24.727              6.77              0.00         0.203  logo IN U step 4
+  24.844             10.42              0.00         0.313  logo IN 2 step 1
+  24.961              5.73              0.00         0.172  logo IN 2 step 2
+  25.078             11.46              0.08         0.346  logo IN 2 step 3
+  25.195              4.69              0.08         0.143  logo IN 2 step 4
+  25.312             12.50              0.08         0.377  logo IN C step 1
+  25.430              3.65              0.08         0.112  logo IN C step 2
+  25.547             13.54              0.08         0.409  logo IN C step 3
+  25.664              2.60              0.02         0.079  logo IN C step 4
+  26.250             16.67              0.00         0.500  logo OUT U step 1
+  26.367              0.52              0.00         0.016  logo OUT U step 2
+  26.484             15.62              0.00         0.469  logo OUT U step 3
+  26.602              1.56              0.00         0.047  logo OUT U step 4
+  26.719             14.58              0.00         0.438  logo OUT 2 step 1
+  26.836              2.60              0.00         0.078  logo OUT 2 step 2
+  26.953             13.54              0.08         0.409  logo OUT 2 step 3
+  27.070              3.65              0.08         0.112  logo OUT 2 step 4
+  27.188             12.50              0.08         0.377  logo OUT C step 1
+  27.305              4.69              0.08         0.143  logo OUT C step 2
+  27.422             11.46              0.08         0.346  logo OUT C step 3
+  27.539              5.73              0.00         0.172  logo OUT C step 4
+  27.656             10.42              0.00         0.313  glide start → notes
+  28.125              8.33              0.00         0.250  glide land notes
+  28.125              8.33              0.00         0.250  logo IN U step 1
+  28.242              8.85              0.00         0.266  logo IN U step 2
+  28.359              7.29              0.00         0.219  logo IN U step 3
+  28.477              9.90              0.00         0.297  logo IN U step 4
+  28.594              6.25              0.00         0.188  logo IN 2 step 1
+  28.711             10.94              0.00         0.328  logo IN 2 step 2
+  28.828              5.21              0.08         0.159  logo IN 2 step 3
+  28.945             11.98              0.08         0.362  logo IN 2 step 4
+  29.062              4.17              0.08         0.127  logo IN C step 1
+  29.180             13.02              0.08         0.393  logo IN C step 2
+  29.297              3.13              0.08         0.096  logo IN C step 3
+  29.414             14.06              0.00         0.422  logo IN C step 4
+  30.000              0.00              0.00         0.000  logo OUT U step 1
+  30.117             16.15              0.00         0.484  logo OUT U step 2
+  30.234              1.04              0.00         0.031  logo OUT U step 3
+  30.352             15.10              0.00         0.453  logo OUT U step 4
+  30.469              2.08              0.00         0.063  logo OUT 2 step 1
+  30.586             14.06              0.00         0.422  logo OUT 2 step 2
+  30.703              3.13              0.10         0.097  logo OUT 2 step 3
+  30.820             13.02              0.10         0.394  logo OUT 2 step 4
+  30.938              4.17              0.10         0.128  logo OUT C step 1
+  31.055             11.98              0.10         0.362  logo OUT C step 2
+  31.172              5.21              0.10         0.159  logo OUT C step 3
+  31.289             10.94              0.00         0.328  logo OUT C step 4
+  31.406              6.25              0.00         0.188  glide start → detail
+  31.875              8.33              0.02         0.251  glide land detail
+  31.875              8.33              0.02         0.251  logo IN U step 1
+  31.992              7.81              0.02         0.235  logo IN U step 2
+  32.109              9.37              0.02         0.282  logo IN U step 3
+  32.227              6.77              0.00         0.203  logo IN U step 4
+  32.344             10.42              0.00         0.312  logo IN 2 step 1
+  32.461              5.73              0.00         0.172  logo IN 2 step 2
+  32.578             11.46              0.08         0.346  logo IN 2 step 3
+  32.695              4.69              0.08         0.143  logo IN 2 step 4
+  32.812             12.50              0.08         0.378  logo IN C step 1
+  32.930              3.65              0.08         0.112  logo IN C step 2
+  33.047             13.54              0.08         0.409  logo IN C step 3
+  33.164              2.60              0.00         0.078  logo IN C step 4
+  33.750             16.67              0.00         0.500  logo OUT U step 1
+  33.867              0.52              0.00         0.016  logo OUT U step 2
+  33.984             15.62              0.00         0.469  logo OUT U step 3
+  34.102              1.56              0.00         0.047  logo OUT U step 4
+  34.219             14.58              0.00         0.438  logo OUT 2 step 1
+  34.336              2.60              0.00         0.078  logo OUT 2 step 2
+  34.453             13.54              0.08         0.409  logo OUT 2 step 3
+  34.570              3.65              0.08         0.112  logo OUT 2 step 4
+  34.688             12.50              0.08         0.378  logo OUT C step 1
+  34.805              4.69              0.08         0.143  logo OUT C step 2
+  34.922             11.46              0.08         0.346  logo OUT C step 3
+  35.039              5.73              0.00         0.172  logo OUT C step 4
+  35.156             10.42              0.00         0.312  glide start → gonioC
+  35.625              8.33              0.00         0.250  glide land gonioC
+  35.625              8.33              0.00         0.250  logo IN U step 1
+  35.742              8.85              0.00         0.266  logo IN U step 2
+  35.859              7.29              0.00         0.219  logo IN U step 3
+  35.977              9.90              0.00         0.297  logo IN U step 4
+  36.094              6.25              0.00         0.188  logo IN 2 step 1
+  36.211             10.94              0.00         0.328  logo IN 2 step 2
+  36.328              5.21              0.08         0.159  logo IN 2 step 3
+  36.445             11.98              0.08         0.362  logo IN 2 step 4
+  36.562              4.17              0.08         0.128  logo IN C step 1
+  36.680             13.02              0.08         0.393  logo IN C step 2
+  36.797              3.12              0.08         0.096  logo IN C step 3
+  36.914             14.06              0.00         0.422  logo IN C step 4
+  37.500              0.00              0.00         0.000  logo OUT U step 1
+  37.617             16.15              0.00         0.484  logo OUT U step 2
+  37.734              1.04              0.00         0.031  logo OUT U step 3
+  37.852             15.10              0.00         0.453  logo OUT U step 4
+  37.969              2.08              0.00         0.062  logo OUT 2 step 1
+  38.086             14.06              0.00         0.422  logo OUT 2 step 2
+  38.203              3.12              0.08         0.096  logo OUT 2 step 3
+  38.320             13.02              0.08         0.393  logo OUT 2 step 4
+  38.438              4.17              0.08         0.128  logo OUT C step 1
+  38.555             11.98              0.08         0.362  logo OUT C step 2
+  38.672              5.21              0.08         0.159  logo OUT C step 3
+  38.789             10.94              0.00         0.328  logo OUT C step 4
+  38.906              6.25              0.00         0.188  glide start → logo
+  39.375              8.33              0.02         0.251  glide land logo
+  39.375              8.33              0.02         0.251  logo IN U step 1
+  39.492              7.81              0.02         0.235  logo IN U step 2
+  39.609              9.37              0.02         0.282  logo IN U step 3
+  39.727              6.77              0.00         0.203  logo IN U step 4
+  39.844             10.42              0.00         0.312  logo IN 2 step 1
+  39.961              5.73              0.00         0.172  logo IN 2 step 2
+  40.078             11.46              0.08         0.346  logo IN 2 step 3
+  40.195              4.69              0.08         0.143  logo IN 2 step 4
+  40.312             12.50              0.08         0.378  logo IN C step 1
+  40.430              3.65              0.08         0.112  logo IN C step 2
+  40.547             13.54              0.08         0.409  logo IN C step 3
+  40.664              2.60              0.02         0.079  logo IN C step 4
+  40.781             14.58              0.02         0.438  glide start → spec
+  41.250             16.67              0.00         0.500  glide land spec
+  41.250             16.67              0.00         0.500  logo OUT U step 1
+  41.367              0.52              0.00         0.016  logo OUT U step 2
+  41.484             15.62              0.00         0.469  logo OUT U step 3
+  41.602              1.56              0.00         0.047  logo OUT U step 4
+  41.719             14.58              0.00         0.438  logo OUT 2 step 1
+  41.836              2.60              0.00         0.078  logo OUT 2 step 2
+  41.953             13.54              0.10         0.409  logo OUT 2 step 3
+  42.070              3.65              0.10         0.112  logo OUT 2 step 4
+  42.188             12.50              0.10         0.378  logo OUT C step 1
+  42.305              4.69              0.10         0.144  logo OUT C step 2
+  42.422             11.46              0.10         0.347  logo OUT C step 3
+  42.539              5.73              0.00         0.172  logo OUT C step 4
+  43.125              8.33              0.00         0.250  logo IN U step 1
+  43.242              8.85              0.00         0.266  logo IN U step 2
+  43.359              7.29              0.00         0.219  logo IN U step 3
+  43.477              9.90              0.00         0.297  logo IN U step 4
+  43.594              6.25              0.00         0.188  logo IN 2 step 1
+  43.711             10.94              0.00         0.328  logo IN 2 step 2
+  43.828              5.21              0.08         0.159  logo IN 2 step 3
+  43.945             11.98              0.08         0.362  logo IN 2 step 4
+  44.062              4.17              0.08         0.128  logo IN C step 1
+  44.180             13.02              0.08         0.393  logo IN C step 2
+  44.297              3.12              0.08         0.096  logo IN C step 3
+  44.414             14.06              0.00         0.422  logo IN C step 4
+  44.531              2.08              0.00         0.062  glide start → body
+  45.000              0.00              0.00         0.000  glide land body
+  45.000              0.00              0.00         0.000  logo OUT U step 1
+  45.117             16.15              0.00         0.484  logo OUT U step 2
+  45.234              1.04              0.00         0.031  logo OUT U step 3
+  45.352             15.10              0.00         0.453  logo OUT U step 4
+  45.469              2.08              0.00         0.062  logo OUT 2 step 1
+  45.586             14.06              0.00         0.422  logo OUT 2 step 2
+  45.703              3.12              0.08         0.096  logo OUT 2 step 3
+  45.820             13.02              0.08         0.393  logo OUT 2 step 4
+  45.938              4.17              0.08         0.128  logo OUT C step 1
+  46.055             11.98              0.08         0.362  logo OUT C step 2
+  46.172              5.21              0.08         0.159  logo OUT C step 3
+  46.289             10.94              0.02         0.329  logo OUT C step 4
+  46.875              8.33              0.02         0.251  logo IN U step 1
+  46.992              7.81              0.02         0.235  logo IN U step 2
+  47.109              9.37              0.02         0.282  logo IN U step 3
+  47.227              6.77              0.00         0.203  logo IN U step 4
+  47.344             10.42              0.00         0.312  logo IN 2 step 1
+  47.461              5.73              0.00         0.172  logo IN 2 step 2
+  47.578             11.46              0.10         0.347  logo IN 2 step 3
+  47.695              4.69              0.10         0.144  logo IN 2 step 4
+  47.812             12.50              0.10         0.378  logo IN C step 1
+  47.930              3.65              0.10         0.112  logo IN C step 2
+  48.047             13.54              0.10         0.409  logo IN C step 3
+  48.164              2.60              0.02         0.079  logo IN C step 4
+  48.750             16.67              0.00         0.500  cut → body
+  48.750             16.67              0.00         0.500  logo OUT U step 1
+  48.867              0.52              0.00         0.016  logo OUT U step 2
+  48.984             15.62              0.00         0.469  logo OUT U step 3
+  49.102              1.56              0.00         0.047  logo OUT U step 4
+  49.219             14.58              0.00         0.438  logo OUT 2 step 1
+  49.336              2.60              0.00         0.078  logo OUT 2 step 2
+  49.453             13.54              0.10         0.409  logo OUT 2 step 3
+  49.570              3.65              0.10         0.112  logo OUT 2 step 4
+  49.688             12.50              0.10         0.378  logo OUT C step 1
+  49.805              4.69              0.10         0.144  logo OUT C step 2
+  49.922             11.46              0.10         0.347  logo OUT C step 3
+  50.039              5.73              0.00         0.172  logo OUT C step 4
+  50.625              8.33              0.00         0.250  logo IN U step 1
+  50.742              8.85              0.00         0.266  logo IN U step 2
+  50.859              7.29              0.00         0.219  logo IN U step 3
+  50.977              9.90              0.00         0.297  logo IN U step 4
+  51.094              6.25              0.00         0.188  logo IN 2 step 1
+  51.211             10.94              0.00         0.328  logo IN 2 step 2
+  51.328              5.21              0.10         0.159  logo IN 2 step 3
+  51.445             11.98              0.10         0.363  logo IN 2 step 4
+  51.562              4.17              0.10         0.128  logo IN C step 1
+  51.680             13.02              0.10         0.394  logo IN C step 2
+  51.797              3.12              0.10         0.097  logo IN C step 3
+  51.914             14.06              0.00         0.422  logo IN C step 4
+  52.500              0.00              0.00         0.000  cut → meters
+  52.500              0.00              0.00         0.000  logo OUT U step 1
+  52.617             16.15              0.00         0.484  logo OUT U step 2
+  52.734              1.04              0.00         0.031  logo OUT U step 3
+  52.852             15.10              0.00         0.453  logo OUT U step 4
+  52.969              2.08              0.00         0.062  logo OUT 2 step 1
+  53.086             14.06              0.00         0.422  logo OUT 2 step 2
+  53.203              3.12              0.08         0.096  logo OUT 2 step 3
+  53.320             13.02              0.08         0.393  logo OUT 2 step 4
+  53.438              4.17              0.08         0.128  logo OUT C step 1
+  53.555             11.98              0.08         0.362  logo OUT C step 2
+  53.672              5.21              0.08         0.159  logo OUT C step 3
+  53.789             10.94              0.00         0.328  logo OUT C step 4
+  54.375              8.33              0.02         0.251  logo IN U step 1
+  54.492              7.81              0.02         0.235  logo IN U step 2
+  54.609              9.37              0.02         0.282  logo IN U step 3
+  54.727              6.77              0.00         0.203  logo IN U step 4
+  54.844             10.42              0.00         0.312  logo IN 2 step 1
+  54.961              5.73              0.00         0.172  logo IN 2 step 2
+  55.078             11.46              0.08         0.346  logo IN 2 step 3
+  55.195              4.69              0.08         0.143  logo IN 2 step 4
+  55.312             12.50              0.08         0.378  logo IN C step 1
+  55.430              3.65              0.08         0.112  logo IN C step 2
+  55.547             13.54              0.08         0.409  logo IN C step 3
+  55.664              2.60              0.00         0.078  logo IN C step 4
+  56.250             16.67              0.00         0.500  cut → end
+  56.250             16.67              0.00         0.500  logo OUT U step 1
+  56.367              0.52              0.00         0.016  logo OUT U step 2
+  56.484             15.62              0.00         0.469  logo OUT U step 3
+  56.602              1.56              0.00         0.047  logo OUT U step 4
+  56.719             14.58              0.00         0.438  logo OUT 2 step 1
+  56.836              2.60              0.00         0.078  logo OUT 2 step 2
+  56.953             13.54              0.10         0.409  logo OUT 2 step 3
+  57.070              3.65              0.10         0.112  logo OUT 2 step 4
+  57.188             12.50              0.10         0.378  logo OUT C step 1
+  57.305              4.69              0.10         0.144  logo OUT C step 2
+  57.422             11.46              0.10         0.347  logo OUT C step 3
+  57.539              5.73              0.00         0.172  logo OUT C step 4
+  58.125              8.33              0.00         0.250  logo IN U step 1
+  58.242              8.85              0.00         0.266  logo IN U step 2
+  58.359              7.29              0.00         0.219  logo IN U step 3
+  58.477              9.90              0.00         0.297  logo IN U step 4
+  58.594              6.25              0.00         0.188  logo IN 2 step 1
+  58.711             10.94              0.00         0.328  logo IN 2 step 2
+  58.828              5.21              0.08         0.159  logo IN 2 step 3
+  58.945             11.98              0.08         0.362  logo IN 2 step 4
+  59.062              4.17              0.08         0.128  logo IN C step 1
+  59.180             13.02              0.08         0.393  logo IN C step 2
+  59.297              3.12              0.08         0.096  logo IN C step 3
+  59.414             14.06              0.00         0.422  logo IN C step 4
