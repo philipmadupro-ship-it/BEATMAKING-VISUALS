@@ -57,8 +57,18 @@ them per element with a ◆ to keyframe any of them.
 | featured meter | `focus.featured`: `auto` (v8: the bracket hops to the window each beat is about), `none`, or a window id |
 | logo chain | `logo.mode` (cycle, full, off), `logo.cycle` (bars per IN/OUT cycle, v8: 2), `logo.hero` (clip: whole chain, link lit on the half beat), `logo.scale` |
 | pendant | `pendant.amp` (degrees; θ = A·cos(π·beat·2/period) × (1 − r/2 + r·bass)), `pendant.period` (beats, 2 = an extreme on every beat), `pendant.react` (r, 0.32), `pendant.size`, `pendant.x`, `pendant.y` |
-| windows | `win.<id>.x / .y / .w / .h` (px on the 1080×1920 or 1920×1080 frame), `.visible` (a key opens or closes it in 6 steps on 32nds), `.open` (beat it steps in; −2 = open at frame 0), `.content` (logo, waveform, clock, bands, pendant, eq, spectrum, loudness, stereo, spectrogram, surface), `.accent` |
-| meters | `meter.spectrum.floor / .trail / .smooth / .hold`, `meter.spectro.window / .gamma`, `meter.eq.range / .tilt`, `meter.loud.target / .floor`, `meter.stereo.persist / .gain`, `meter.session.span`, `meter.scope.span / .amp`, `meter.surface.rows` |
+| windows | `win.<id>.x / .y / .w / .h` (px on the 1080×1920 or 1920×1080 frame), `.visible` (a key opens or closes it in 6 steps on 32nds), `.open` (beat it steps in; −2 = open at frame 0), `.content` (logo, waveform, clock, bands, pendant, eq, spectrum, loudness, stereo, spectrogram, surface, levels, ghost), `.accent` |
+| meters | `meter.spectrum.mode` (bars, ms) `/ .floor / .trail / .smooth / .hold`, `meter.spectro.mode` (ms, m) `/ .range / .window / .gamma`, `meter.eq.*`, `meter.stereo.*`, `meter.levels.*`, `meter.loud.*`, `meter.ghost.history`, `meter.session.span`, `meter.scope.span / .amp`, `meter.surface.rows` (details below) |
+| imager | `meter.stereo.mode` (sample = polar sample, default; level = polar level; lissajous), `.range` (dB from the rim to the centre of the log radius, 40), `.persist` (s, 0.42), `.smoothing` (polar-level fill release, dB/s, 12), `.hold` (polar-level outline hold, s, 0.5), `.gain` |
+| EQ | `meter.eq.range` (EQ scale ± dB; 0 = auto from the curve: 3/6/12/30), `.anRange` (analyzer range 60/90/120 dB), `.mode` (pre-post, pre, off), `.tilt` (dB/oct about 1 kHz, 4.5), `.smoothing` (analyzer release, dB/s, 20), `.hold` (analyzer peak hold, s; 0 = off), `.strength` (match EQ %, 50) |
+| level meters | `meter.levels.mode` (peak-rms = peak + 300 ms RMS; k20 / k14 / k12 = K-system, 600 ms RMS + 3.01 dB), `.scale` (live = the measured Live 12 table, linear), `.range` (dB, linear scale), `.smoothing` (peak release, dB/s, 20; 11.8 = IEC slow), `.hold` (s, 1.5), `.style` (auto, gradient, segment) |
+| loudness | `meter.loud.layout` (history, gauge), `.focus` (ghost = the camera's focus shot on this window shows the ghost readout; meter), `.target` (LUFS), `.floor` (history range), `.scale` (linear, compressed), `.window` (s of history; 0 = the whole clip) |
+
+Meter keys step (enum / bool) or interpolate (numbers) like any other track: e.g. a key `meter.stereo.mode = level` on a
+bar line switches the vectorscope to polar level on that downbeat, `meter.levels.mode = k14` turns the strip into a K-14
+meter. The match-EQ bands themselves are not keys: they are fitted per song section from the audio and change only on the
+section's first bar line (4-frame ease). Window content kinds now include `levels` (DAW strip meter) and `ghost` (hero
+readout); `bands` shows the strip meter with dB band meters.
 | text | `text.cue` (clip): `v` text with `{vars}`, `x`, `y` (0..1), `size` (px), `font` (mono, sans, serif, hand, stencil), `color` (ink, hot, dim, #hex), `align`, `box`. Typed one character per 64th note, hard cut at the end. |
 | tags | `tag.<path>` for every leaf of `src/v8/tags.js` (e.g. `tag.notes.spectrum`, `tag.boot.2`, `tag.result.cta`) as text tracks; the `tags` object deep-merges static overrides |
 | overlays | `hud.on`, `boot.on`, `result.on`, `result.at` (beat), `bracket.on`, `wires.on`, `notes.on`, `furniture.on` |

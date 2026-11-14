@@ -76,6 +76,14 @@ export function createMeters(L) {
     const sp = avg(f), hd = F.hold[f], showHold = L.meter('spectrum', 'hold', true);
     for (const d of [0, -30, -60, -90].filter((d) => -d <= fl)) { const yy = Math.round(Y(d)) + 0.5; ctx.strokeStyle = rgba(S.ink, 0.09); ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); ctx.stroke(); if (d > -fl) lbl(ctx, S, String(d), x + 2, yy + 14, { a: 0.45 }); }
     for (const [s, fq] of [['20', 20], ['100', 100], ['1k', 1000], ['10k', 10000]]) { const X = X20(fq, x, w); ctx.strokeStyle = rgba(S.ink, 0.09); ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X, y + h); ctx.stroke(); lbl(ctx, S, s, Math.min(x + w - 24, X + (fq === 20 ? 2 : -12)), y + h + 16, { a: 0.6 }); }
+    if (L.meter('spectrum', 'mode', 'bars') === 'ms') {   // M/S overlay: M filled, S a line, one dB axis (S never normalised up)
+      const MSs = D.ms, nb = 128, row = (arr) => Array.from({ length: nb }, (_, i) => arr[f * nb + i] / 2.55 - 100), Xb = (i) => x + w * (i + 0.5) / nb, m = row(MSs.spectroM), sd = row(MSs.spectroS);
+      ctx.beginPath(); ctx.moveTo(x, y + h); m.forEach((v, i) => ctx.lineTo(Xb(i), Y(v))); ctx.lineTo(x + w, y + h); ctx.closePath(); ctx.fillStyle = rgba(S.sig1, 0.22); ctx.fill();
+      ctx.beginPath(); m.forEach((v, i) => (i ? ctx.lineTo(Xb(i), Y(v)) : ctx.moveTo(Xb(i), Y(v)))); ctx.strokeStyle = S.ink; ctx.lineWidth = 1.25; ctx.lineJoin = 'round'; ctx.stroke();
+      ctx.beginPath(); sd.forEach((v, i) => (i ? ctx.lineTo(Xb(i), Y(v)) : ctx.moveTo(Xb(i), Y(v)))); ctx.strokeStyle = S.grey ? '#bdbdbd' : S.sig2; ctx.lineWidth = 1.5; if (S.grey) ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+      lbl(ctx, S, 'M', x + w - 60, y + 14, { size: 16, w: 700, a: 0.9 }); lbl(ctx, S, 'S', x + w - 30, y + 14, { size: 16, w: 700, col: S.grey ? '#bdbdbd' : S.sig2 });
+      ctx.restore(); return;
+    }
     const bw = w / c.length;
     for (let i = 0; i < c.length; i++) {
       const X = X20(c[i], x, w) - bw * 0.35, top = Y(sp[i]);
