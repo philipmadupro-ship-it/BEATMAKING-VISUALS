@@ -7,7 +7,7 @@ export const DEFAULT_PROJECT = {
   title: 'Night Shift', producer: '@uche2crazy', key: '',
   text: { artistA: 'Travis Scott', artistB: 'Future', price: '$29', link: 'link in bio', titleFormat: '' },
   inT: 0, outT: 15, loop: true, clipLen: 30,
-  timeline: { snap: 'beat', pxPerBeat: 0, collapsed: null },
+  timeline: { snap: 'beat', pxPerBeat: 0, collapsed: null, compact: null, closed: {}, density: 'fewer', magnet: true },
   export: { fps: 30, mbps: 12, loudness: -14, loopSafe: false, draft: false, voiceTag: false, voiceEvery: 25, batch: ['exe', 'lab', 'scope'], batchLens: [15] },
 };
 const clone = (o) => JSON.parse(JSON.stringify(o));
