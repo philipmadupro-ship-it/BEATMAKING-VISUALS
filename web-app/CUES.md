@@ -55,17 +55,17 @@ them per element with a ◆ to keyframe any of them.
 | scene | `look` (exe, lab, scope), `stage` (nigredo, albedo, citrinitas, rubedo) |
 | camera | `camera.shot` (shot), `camera.zoom` (×), `camera.x`, `camera.y` (px pan) |
 | featured meter | `focus.featured`: `auto` (v8: the bracket hops to the window each beat is about), `none`, or a window id |
-| logo chain | `logo.mode` (cycle, full, off), `logo.cycle` (bars per IN/OUT cycle, v8: 2), `logo.hero` (clip: whole chain, link lit on the half beat), `logo.scale` |
-| pendant | `pendant.amp` (degrees; θ = A·cos(π·beat·2/period) × (1 − r/2 + r·bass)), `pendant.period` (beats, 2 = an extreme on every beat), `pendant.react` (r, 0.32), `pendant.size`, `pendant.x`, `pendant.y` |
-| windows | `win.<id>.x / .y / .w / .h` (px on the 1080×1920 or 1920×1080 frame), `.visible` (a key opens or closes it in 6 steps on 32nds), `.open` (beat it steps in; −2 = open at frame 0), `.content` (logo, waveform, clock, bands, pendant, eq, spectrum, loudness, stereo, spectrogram, surface), `.accent` |
+| logo chain | `logo.mode` (cycle, full, off), `logo.cycle` (bars per IN/OUT cycle, v8: 2), `logo.hero` (clip: whole chain, link lit on the half beat), `logo.scale`, v9: `logo.glow` (×, pulses on kicks), `logo.bloom` (×, on drop phrase downbeats), `logo.runner` (lit link stepping on 16ths) |
+| pendant (v9 chain wave) | `pendant.amp` (degrees at the body's extremes, × (1 − r/2 + r·bass)), `pendant.period` (beats, 2 = an extreme on every beat), `pendant.react` (r, 0.32), `pendant.links` (10), `pendant.wave` (beats of delay down the chain, 0.75), `pendant.damp` (body ζ, 0.35), `pendant.chain` (chain length, 0.3 of the window), `pendant.size`, `pendant.x`, `pendant.y` |
+| windows | `win.<id>.x / .y / .w / .h` (px on the 1080×1920 or 1920×1080 frame), `.visible` (a key opens or closes it in 6 steps on 32nds), `.open` (beat it steps in; −2 = open at frame 0), `.content` (logo, waveform, pendant, eq, spectrum, loudness, stereo, spectrogram, surface), `.accent` |
 | meters | `meter.spectrum.floor / .trail / .smooth / .hold`, `meter.spectro.window / .gamma`, `meter.eq.range / .tilt`, `meter.loud.target / .floor`, `meter.stereo.persist / .gain`, `meter.session.span`, `meter.scope.span / .amp`, `meter.surface.rows` |
 | text | `text.cue` (clip): `v` text with `{vars}`, `x`, `y` (0..1), `size` (px), `font` (mono, sans, serif, hand, stencil), `color` (ink, hot, dim, #hex), `align`, `box`. Typed one character per 64th note, hard cut at the end. |
 | tags | `tag.<path>` for every leaf of `src/v8/tags.js` (e.g. `tag.notes.spectrum`, `tag.boot.2`, `tag.result.cta`) as text tracks; the `tags` object deep-merges static overrides |
 | overlays | `hud.on`, `boot.on`, `result.on`, `result.at` (beat), `bracket.on`, `wires.on`, `notes.on`, `furniture.on` |
 | finish | `fx.grain`, `fx.vignette`, `fx.scan`, `fx.flash` (event: 1-frame invert), `fx.glitch` (clip, opt-in, default off: thin slices ≤ 80 ms on each beat), `ground.pattern` (auto, graph, dots, scan, none), `ground.gridA`, `stage.<colour>` (bg, paper, card, ink, dim, rule, sig1, sig2, hot, stamp, tape) |
 
-Window ids per look: exe `session chains clock bands elephant eq spectrum loud stereo spectro`; lab `chains session
-elephant spectrum eq loud stereo spectro clock`; scope `chains elephant eq spectrum loud stereo surface (spectro on 16:9)`.
+Window ids per look (v9: no clock.sys / bands.dat): exe `session chains elephant eq spectrum loud stereo spectro`; lab `chains session
+elephant spectrum eq loud stereo spectro`; scope `chains elephant eq spectrum loud stereo surface (spectro on 16:9)`.
 
 Tag variables: `{title} {Title} {titleWord} {producer} {bpm} {bpm2} {key} {keyShort} {stage} {stageN} {look}
 {experiment} {date} {lufs} {srcLufs} {lra} {tp} {bars}`, plus `{angle}` in the pendant note and `{tc} {bbt} {songBar}` in the HUD.
@@ -86,19 +86,20 @@ Keys: Space play/pause · J reverse shuttle (×2 per press) · K stop · L play 
 ← → nudge by the grid (Shift: a bar) · ↑ ↓ value · Cmd/Ctrl+Z undo · Shift+Cmd/Ctrl+Z redo · Cmd+C / V / D / A ·
 + / − zoom · , / . one frame · Home / End. Autosaved per beat in localStorage; Import / Export JSON in the toolbar.
 
-## Native CLI (`--cues file.json`)
-`src/cues/adapter-native.mjs` is the bridge for `u2c-motion/render.mjs`. Proposed change to the CLI:
+## Native CLI (`--cues file.json`): implemented (v9)
+One cue sheet drives both renderers, with ONE copy of the look code. `u2c-motion` (branch v9) renders the web app's
+own composition: `node tools/sync_web.mjs` copies `src/v8/*`, `src/cues/{schema,generate,adapter-native}` and the brand
+assets into `film/v9/` (+ `SYNCED.json`, sha256 per file; `render.mjs` warns when out of sync). `film/v9/template.html`
+registers the HyperFrames timeline, `film/v9/boot.mjs` imports `createFilm` and draws `film.render(ctx, t, {ev, tags})`
+on every `hf-seek`, with the native analysis adapted by `src/v8/data.js fromNative()`.
 
 ```
---cues <file.json>   cue sheet (this format). Base look/stage are the defaults of --look/--stage; explicit flags win.
+node render.mjs --cues sheet.json [--beat x.wav --title T --aspect 9:16 --len 30] [--stills t,..] [--filmstrip]
+node render.mjs                         # no --cues: generateSheet() default from the analysis (same as the studio)
+node render.mjs --test pendant|waveform # element test cards; --engine v8 renders the frozen v8 film
 ```
-1. `const sheet = readCuesFile(fs.readFileSync(args.cues, 'utf8'))` (validates, warns on unknown paths).
-2. `Object.assign(args, nativeArgs(sheet, args))`, then `tags = mergedTags(tagsDefault, cliTags, sheet)`.
-3. Write `cueScript(sheet, { bars, aspect })` next to the tags file and add it to `film/v8/template.html`
-   (`window.U2C_CUES = { sheet, plan }`).
-4. **Plan mode** (small change to `film/v8/film.js`): use `plan.focus` for `FOCUS`, `plan.ampDeg[k]` for the per-beat
-   amplitude in `B.pendulum`, `plan.logoCycleBeats` in `logoPhase`, `plan.flashBeats` for the drop invert.
-   **Full mode**: load `web-app/src/v8/film.js` and `src/cues/schema.js` as ES modules in the page and call
-   `createFilm({ D, assets, aspect }).render(ctx, t, { ev: createEvaluator(parseSheet(U2C_CUES.sheet)) })`; the data
-   shape `D` is the native `U2C_DATA` (the web app's `src/v8/data.js` produces the same shape from its own analysis).
-Times stay musical, so one sheet fits any length: keys after the last bar are ignored.
+The sheet's base/first look and stage are the defaults of `--look/--stage`; explicit flags win (their tracks become
+one key). Tags: `tags.js` defaults <- `sheet.tags` <- `{title, date}` (`--title`, `--date`) <- `--tags`.
+Parity: `node tools/parity.mjs <dir>` exports the studio's default sheet and renders frames with this code; native
+stills of the same sheet differ by 0 (bit-identical, same browser build) when fed the same analysis
+(`tools/parity_diff.py`). Frames from the studio's own in-browser analysis differ only where the analyses differ.

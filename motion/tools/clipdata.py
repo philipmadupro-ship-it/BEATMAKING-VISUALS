@@ -169,6 +169,13 @@ for i in range(cols2):
     for j, arr in enumerate((Lc, Rc)):
         v = arr[s2]; w2[i, j * 3:(j + 1) * 3] = np.clip(np.round([v.min() * 127, v.max() * 127, np.sqrt((v * v).mean()) * 127]), -127, 127)
 wave2 = base64.b64encode(w2.tobytes()).decode()
+# v9 Ableton-grade waveform: the finest LOD, ~2400 columns / s (an integer number of samples per column, 20 at 48 kHz),
+# per channel min, max, rms as int16 (x32767, little-endian), from the exact float32 samples written to the clip WAV.
+# The renderer builds coarser LODs (x4 each) from it. tests/test_waveform_render.py checks it against numpy.
+yw = y.astype(np.float32).astype(np.float64); SPC3 = max(1, int(round(SR / 2400))); cols3 = len(yw) // SPC3
+yy = yw[:cols3 * SPC3].reshape(cols3, SPC3, 2)
+w3 = np.stack([yy[:, :, 0].min(1), yy[:, :, 0].max(1), np.sqrt((yy[:, :, 0] ** 2).mean(1)), yy[:, :, 1].min(1), yy[:, :, 1].max(1), np.sqrt((yy[:, :, 1] ** 2).mean(1))], 1)
+wave3 = base64.b64encode(np.clip(np.round(w3 * 32767), -32767, 32767).astype("<i2").tobytes()).decode()
 src_lufs = round(M.Loudness(x).integrated(), 1)
 OV = 1200; ow = len(x) / OV; xm = x.mean(1)
 overview = [int(1000 * np.abs(xm[int(i * ow):int((i + 1) * ow)]).max()) for i in range(OV)]
@@ -190,7 +197,8 @@ data = {
     "frame": fr, "oct6": [round(v, 2) for v in M.OCT6], "oct1": M.OCT1.tolist(), "bandNames": ["SUB", "LOW", "LO-MID", "MID", "HI-MID", "AIR"],
     "spectroBins": M.SPEC_BINS, "spectro": base64.b64encode(spectro.tobytes()).decode(),
     "gonioN": 160, "gonioS": base64.b64encode(gonio.tobytes()).decode(), "gonioM": base64.b64encode(gonio2.tobytes()).decode(),
-    "onsets": ons, "wave": wave, "wave2": {"cps": CPS2, "n": cols2, "b64": wave2}, "srcLufs": src_lufs,
+    "onsets": ons, "wave": wave, "wave2": {"cps": CPS2, "n": cols2, "b64": wave2},
+    "wave3": {"cps": SR / SPC3, "n": int(cols3), "spc": SPC3, "sr": SR, "b64": wave3}, "srcLufs": src_lufs,
     "summary": {"I": round(L.integrated(), 2), "LRA": round(L.lra(), 2), "TP": round(float(M.db(TPt.max())), 2), "ffmpeg": ff},
 }
 js = os.path.join(ROOT, "film", "data", a.id + ".js")
