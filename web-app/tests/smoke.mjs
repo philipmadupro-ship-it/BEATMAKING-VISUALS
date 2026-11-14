@@ -71,7 +71,7 @@ const sel = await ev(() => window.u2c.cuetl.selected().map(([r, k]) => r.path + 
 ok('UI: click a camera key selects it', sel.length === 1 && sel[0] === 'camera.shot:' + k0.v, sel.join());
 const before = await frameAt(k0.b + 0.5);
 // 2. retarget it in the inspector (value select) -> the preview pushes to the new window
-const target = await ev(() => { const o = [...document.querySelectorAll('#insp [data-k="v"] option')].map((x) => x.value); return o.find((v) => v !== 'wide' && v !== window.u2c.cuetl.selected()[0][1].v && v !== 'chains'); });
+const target = await ev(() => { const o = [...document.querySelectorAll('#insp [data-k="v"] option')].map((x) => x.value); const cur = window.u2c.cuetl.selected()[0][1].v; return o.includes('eq') && cur !== 'eq' ? 'eq' : o.find((v) => v !== 'wide' && v !== cur && v !== 'chains'); });   // v9: session + chains are both full width (same framing): prefer a half-width window
 await page.selectOption('#insp [data-k="v"]', target); await page.waitForTimeout(200);
 const after = await frameAt(k0.b + 0.5), rect = await ev((id) => window.u2c.clip.film(window.u2c.clip.current(), '916').rects(window.u2c.cues.ev(), 0, window.u2c.store.project.look)[id], target);
 const camOn = after.cam && rect && Math.abs(after.cam.x - (rect[0] + rect[2] / 2)) < rect[2] && after.cam.z > 1.1;

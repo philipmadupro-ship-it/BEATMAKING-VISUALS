@@ -64,17 +64,17 @@ export function createMeters(L) {
     // L / R lanes, Ableton-grade: one column per DEVICE pixel (zoom-aware), min/max peak envelope + RMS body from the
     // finest LOD that still has >= 1 source column per pixel, crisp 1-px outline, bar / beat grid behind, transient
     // markers at the measured (unquantised) onsets, played part in the stage colour by tone, unplayed dimmed.
-    const ly = wy + 12, onH = 26, laneH = (y + h - ly - onH - 6) / 2, m = ctx.getTransform(), sx = Math.max(1e-3, Math.hypot(m.a, m.b)), nc = Math.max(1, Math.round(w * sx)), cwp = w / nc;
+    const ly = wy + 12, onH = 26, laneH = (y + h - ly - onH - 6) / 2, m = ctx.getTransform(), dpx = Math.max(1e-3, Math.hypot(m.a, m.b)), nc = Math.max(1, Math.round(w * dpx)), cwp = w / nc;
     const dbg = L.waveDebug ? (L.waveDebug.cols = [], L.waveDebug.skip = [], L.waveDebug) : null;
-    if (dbg) Object.assign(dbg, { x, w, nc, sx, laneH, lanes: [], sr: WV.sr, spc: WV.spc, lod0cps: WV.lv[0].cps });
-    const snap = (v) => Math.round(v * sx) / sx;
+    if (dbg) Object.assign(dbg, { x, w, nc, dpx, laneH, lanes: [], sr: WV.sr, spc: WV.spc, lod0cps: WV.lv[0].cps });
+    const snap = (v) => Math.round(v * dpx) / dpx;
     for (let ch = 0; ch < 2; ch++) {
       const top0 = ly + laneH * ch, cy = snap(top0 + laneH / 2), sc = laneH * 0.47;
       ctx.fillStyle = rgba(S.sig1, S.name === 'ALBEDO' ? 0.05 : 0.07); ctx.fillRect(x, top0 + 2, w, laneH - 4);
       // grid behind the waveform: bars strong, beats faint, 16ths as short ticks at the lane edge
       for (let q = Math.floor(t0 / (BEAT / 4)) - 1; q * BEAT / 4 < t0 + span + BEAT; q++) {
         const X = snap(tx(q * BEAT / 4)); if (X < x || X > x + w) continue; const isBar = ((q % 16) + 16) % 16 === 0, isBeat = ((q % 4) + 4) % 4 === 0;
-        ctx.fillStyle = rgba(S.ink, isBar ? 0.26 : isBeat ? 0.12 : 0.1); ctx.fillRect(X, isBeat ? top0 + 2 : top0 + laneH - 8, 1 / sx, isBeat ? laneH - 4 : 6); if (dbg && isBeat) dbg.skip.push(X);
+        ctx.fillStyle = rgba(S.ink, isBar ? 0.26 : isBeat ? 0.12 : 0.1); ctx.fillRect(X, isBeat ? top0 + 2 : top0 + laneH - 8, 1 / dpx, isBeat ? laneH - 4 : 6); if (dbg && isBeat) dbg.skip.push(X);
       }
       const cols = new Float32Array(nc * 3);
       for (let px = 0; px < nc; px++) {
@@ -82,26 +82,28 @@ export function createMeters(L) {
         const q = WV.col(Math.max(0, ta), Math.min(D.duration, tb), ch); cols[px * 3] = q.mn; cols[px * 3 + 1] = q.mx; cols[px * 3 + 2] = q.rms;
         const X = x + px * cwp, played = ta <= t, wi = Math.min(D.wave.tone.length - 1, Math.floor(ta * D.wave.cps)), tone = D.wave.tone[Math.max(0, wi)] || [50, 10];
         const col = played ? mix(S.waveHi, S.waveLo, clamp(tone[0] / 100 - tone[1] / 120 + 0.3), 1) : rgba(S.dim, 0.75);
-        const yT = snap(cy - q.mx * sc), hT = Math.max(1 / sx, snap((q.mx - q.mn) * sc)), r = Math.min(q.rms, q.mx, -q.mn), yR = snap(cy - r * sc), hR = Math.max(1 / sx, snap(2 * r * sc));
+        const yT = snap(cy - q.mx * sc), hT = Math.max(1 / dpx, snap((q.mx - q.mn) * sc));
+        // RMS body: the +-rms band around zero, clipped to the column's [min, max] (a column that sits above zero stays inside)
+        const rHi = Math.min(q.rms, q.mx), rLo = Math.max(-q.rms, q.mn), yR = snap(cy - rHi * sc), hR = snap((rHi - rLo) * sc);
         ctx.fillStyle = col; ctx.globalAlpha = played ? 0.5 : 0.32; ctx.fillRect(X, yT, cwp, hT);
-        ctx.globalAlpha = played ? 1 : 0.6; ctx.fillRect(X, Math.max(yT, yR), cwp, Math.min(hR, hT));
+        if (hR > 0) { ctx.globalAlpha = played ? 1 : 0.6; ctx.fillRect(X, yR, cwp, hR); }
+        // crisp 1-device-px caps on the peak envelope (top + bottom of the column)
+        ctx.globalAlpha = played ? 0.95 : 0.5; ctx.fillRect(X, yT, cwp, 1 / dpx); ctx.fillRect(X, yT + hT - 1 / dpx, cwp, 1 / dpx);
         if (dbg) dbg.cols.push({ px, ch, X, mn: q.mn, mx: q.mx, rms: q.rms, s0: q.s0, s1: q.s1, lod: q.lod, yT, hT });
       }
       ctx.globalAlpha = 1;
-      // crisp outline of the peak envelope (top and bottom), one vertex per device pixel
-      ctx.strokeStyle = rgba(S.ink, S.name === 'ALBEDO' ? 0.55 : 0.5); ctx.lineWidth = 1 / sx;
-      for (const side of [1, 0]) { ctx.beginPath(); let pen = false; for (let px = 0; px < nc; px++) { const v = cols[px * 3 + side]; if (Number.isNaN(cols[px * 3])) { pen = false; continue; } const X = x + (px + 0.5) * cwp, Y = cy - v * sc + (side ? 0.5 : -0.5) / sx; if (pen) ctx.lineTo(X, Y); else { ctx.moveTo(X, Y); pen = true; } } ctx.stroke(); }
-      ctx.lineWidth = 1; ctx.fillStyle = rgba(S.ink, 0.22); ctx.fillRect(x, cy, w, 1 / sx);
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1; ctx.fillStyle = rgba(S.ink, 0.22); ctx.fillRect(x, cy, w, 1 / dpx);
       // transient markers: the measured onset (not the quantised one), a small flag on the lane top + a hairline
       for (const [kind, colr] of [['kick', S.sig2], ['snare', S.ink]]) for (const [tr] of D.onsets[kind]) { const X = snap(tx(tr)); if (X < x || X > x + w) continue;
-        ctx.fillStyle = rgba(colr, tr <= t ? 0.5 : 0.25); ctx.fillRect(X, top0 + 2, 1 / sx, laneH - 4); ctx.fillStyle = rgba(colr, tr <= t ? 0.95 : 0.5); ctx.beginPath(); ctx.moveTo(X, top0 + 2); ctx.lineTo(X + 7, top0 + 2); ctx.lineTo(X, top0 + 11); ctx.fill(); if (dbg) dbg.skip.push(X); }
+        ctx.fillStyle = rgba(colr, tr <= t ? 0.5 : 0.25); ctx.fillRect(X, top0 + 2, 1 / dpx, laneH - 4); ctx.fillStyle = rgba(colr, tr <= t ? 0.95 : 0.5); ctx.beginPath(); ctx.moveTo(X, top0 + 2); ctx.lineTo(X + 7, top0 + 2); ctx.lineTo(X, top0 + 11); ctx.fill(); if (dbg) dbg.skip.push(X); }
       lbl(ctx, S, ch ? 'R' : 'L', x + 6, top0 + 16, { w: 700, a: 0.8 });
       if (dbg) dbg.lanes.push({ ch, top: top0, h: laneH, cy, sc });
     }
     // onset lane: kick / snare / hat as tick marks, the one just hit in the accent
     const oy2 = y + h - onH;
     [['kick', 0, S.sig2], ['snare', 1, S.ink], ['hat', 2, S.dim]].forEach(([kind, i, col]) => { for (const [, s, tq] of D.onsets[kind]) { const X = tx(tq); if (X < x || X > x + w) continue; const hit = tq <= t && t - tq < BEAT / 4; ctx.fillStyle = hit ? S.hot : rgba(col, tq <= t ? 1 : 0.35); ctx.fillRect(Math.round(X), oy2 + i * 9, hit ? 4 : 2, 7); } });
-    const PX = Math.round(tx(t)); ctx.fillStyle = S.hot; ctx.fillRect(PX, ry - 2, 2, y + h - ry + 2);
+    const PX = Math.round(tx(t)); if (dbg) dbg.playX = PX; ctx.fillStyle = S.hot; ctx.fillRect(PX, ry - 2, 2, y + h - ry + 2);
     ctx.beginPath(); ctx.moveTo(PX - 8, ry - 4); ctx.lineTo(PX + 10, ry - 4); ctx.lineTo(PX + 1, ry + 6); ctx.fill();
     text(ctx, bbt(t), PX + 10, ly + 14, { size: 22, w: 700, col: S.hot });
     ctx.restore();

@@ -242,7 +242,7 @@ export function createBrand(L, assets) {
   /** Chain geometry: hand at (ax, ay) (+ its push / kick lift), N links of length len/N; returns joints + the pendant pivot. */
   B.chainGeom = (ax, ay, len, t) => {
     const a = B.linkAngles(t), N = P8.N, l = len / N, lift = 0.22 * l * kickEnv[fidx(t)];
-    const hx = ax + 0.8 * len * Math.sin(a[0]), hy = ay - lift, pts = [[hx, hy]];
+    const hx = ax - 0.8 * len * Math.sin(a[0]), hy = ay - lift, pts = [[hx, hy]];
     for (let j = 1; j <= N; j++) { const p = pts[j - 1]; pts.push([p[0] - Math.sin(a[j]) * l, p[1] + Math.cos(a[j]) * l]); }
     return { pts, ang: a, l, end: pts[N] };
   };

@@ -318,7 +318,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const waveRect = () => (port ? [24, 420, 1032, 1000] : [24, 160, 1872, 760]);
   function testMode(kind, t) {
     c.fillStyle = S.bg; c.fillRect(0, 0, W, H); ground();
-    if (kind === 'waveform') { M.session(c, S, waveRect(), t, 1); text(c, `WAVEFORM TEST · ${bbt(t)}`, 40, 120, { size: 28, w: 700, col: S.ink }); return; }
+    if (kind === 'waveform') { const r = waveRect(); c.fillStyle = S.card; c.fillRect(r[0] - 8, r[1] - 8, r[2] + 16, r[3] + 16); M.session(c, S, r, t, 1); text(c, `WAVEFORM TEST · ${bbt(t)}`, 40, 120, { size: 28, w: 700, col: S.ink }); return; }
     elephantBody(testRect(), t, 1, S);
     const bb = Math.floor(t / BEAT + 1e-6); text(c, `PENDANT · CHAIN WAVE · beat ${bb + 1} · ${bbt(t)}`, 40, port ? 120 : 50, { size: 28, w: 700, col: S.ink });
   }
