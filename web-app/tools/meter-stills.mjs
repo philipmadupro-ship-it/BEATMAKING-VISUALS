@@ -36,4 +36,14 @@ for (const stage of STAGES) for (const [name, fn, w, h, over] of JOBS) {
   }, [stage, fn, w, h, over, process.env.T ? +process.env.T : null]);
   const f = path.join(OUT, `${name}_${stage}.png`); fs.writeFileSync(f, Buffer.from(png, 'base64')); console.log(f);
 }
+// full film frames (1080x1920, exe look): the camera on one window, as in a focus shot, plus the wide bench
+for (const stage of STAGES) for (const shotTo of (process.env.FILM || 'wide,stereo,loud,eq,bands').split(',').filter(Boolean)) {
+  const png = await page.evaluate(async ([stage, shotTo]) => {
+    const { createEvaluator, emptySheet } = await import('/src/cues/schema.js'), e = window.u2c.clip.current(), film = window.u2c.clip.film(e, '916');
+    const sh = emptySheet(); sh.tracks.push({ id: 't1', path: 'camera.shot', kind: 'shot', lane: 'camera', keys: [{ id: 'k1', b: 0, v: shotTo, ease: 'cut' }] }, { id: 't2', path: 'stage', kind: 'enum', lane: 'stage', keys: [{ id: 'k2', b: 0, v: stage }] });
+    const c = document.createElement('canvas'); c.width = 1080; c.height = 1920; film.render(c.getContext('2d'), e.D.duration * 0.5, { ev: createEvaluator(sh), look: 'exe', stage });
+    return c.toDataURL('image/png').split(',')[1];
+  }, [stage, shotTo]);
+  const f = path.join(OUT, `film-${shotTo}_${stage}.png`); fs.writeFileSync(f, Buffer.from(png, 'base64')); console.log(f);
+}
 await browser.close(); server.close();

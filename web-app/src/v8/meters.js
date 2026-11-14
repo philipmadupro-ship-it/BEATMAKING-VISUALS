@@ -260,26 +260,29 @@ export function createMeters(L) {
     const [x, y, w, h] = r; if (!opt.noReveal) reveal(ctx, x, y, w, h, k);
     const o = levOpts(), sc = levScale(o), st0 = L.meter('levels', 'style', 'auto'), style = st0 === 'auto' ? (S.grey ? 'segment' : 'gradient') : st0, compact = opt.compact || w < 140, tf = tickF(t);
     const vL = levRead(0, t, o), vR = levRead(1, t, o), rd = [levRead(0, tf / FPS, o), levRead(1, tf / FPS, o)];
-    const lampH = 10, cellH = compact ? 0 : Math.max(52, 2 * L.floorSize(ctx, 18) + 10), top = y + cellH + lampH + 8, foot = opt.foot ?? (compact ? 0 : L.floorSize(ctx, 14) + 6), bh = y + h - top - foot - 4;
+    // short windows: one-line readout (PK and RMS side by side) and no band names, so the bars keep their height
+    const lampH = 10, fs18 = L.floorSize(ctx, 18), oneLine = h < 300, cellH = compact ? 0 : oneLine ? fs18 + 12 : Math.max(52, 2 * fs18 + 10), top = y + cellH + lampH + 8;
+    const bandLbl = !compact && !oneLine, foot = opt.foot ?? (bandLbl ? L.floorSize(ctx, 14) + 6 : 0), bh = y + h - top - foot - 4;
     const bw = compact ? Math.max(8, Math.min(12, (w - 40) / 2 - 1)) : clamp(w * 0.045, 12, 20), gap = 2, bx = x + (compact ? 2 : 6);
     [vL, vR].forEach((v, ch) => { const X = bx + ch * (bw + gap); levBar(ctx, S, X, top, bw, bh, sc, v, style);
       ctx.fillStyle = v.clip ? S.hot : rgba(S.ink, 0.12); ctx.fillRect(X, top - lampH - 4, bw, lampH); if (v.clip && S.grey) hatch(ctx, X, top - lampH - 4, bw, lampH, S.bg); });
     levTicks(ctx, S, bx + 2 * bw + gap + 3, top, bh, sc);
     if (!compact) {   // readouts above the pair: peak max (red cell when >= -0.1 dBFS) and RMS
-      const cw = (w * 0.34), cx0 = x + 6;
+      const cw = oneLine ? w * 0.4 - 6 : w * 0.34, cx0 = x + 6;
       const mx = Math.max(rd[0].max, rd[1].max), hot = mx >= -0.1 || rd[0].clip || rd[1].clip;
       if (hot) { ctx.fillStyle = rgba(S.hot, 0.16); ctx.fillRect(cx0, y, cw, cellH); }
       ctx.strokeStyle = rgba(S.ink, 0.4); ctx.strokeRect(cr(cx0), cr(y), Math.round(cw), Math.round(cellH));
       const rr = 10 * Math.log10((10 ** (rd[0].rms / 10) + 10 ** (rd[1].rms / 10)) / 2), kk = o.kmode ? o.K : 0;
-      text(ctx, mx < -140 ? '−∞' : fmt(mx + kk), cx0 + cw - 6, y + cellH * 0.3, { size: 24, w: 600, col: hot ? S.hot : S.ink, align: 'right', maxW: cw - 10 });
-      text(ctx, rr < -140 ? '−∞' : fmt(rr + kk), cx0 + cw - 6, y + cellH * 0.74, { size: 20, col: rgba(S.ink, 0.7), align: 'right', maxW: cw - 10 });
-      lbl(ctx, S, o.kmode ? `K-${o.K}` : 'PK', cx0 + 5, y + cellH * 0.3, { size: 14, a: 0.5 }); lbl(ctx, S, o.kmode ? 'RMS' : 'RMS', cx0 + 5, y + cellH * 0.74, { size: 14, a: 0.5 });
+      const pkS = mx < -140 ? '−∞' : fmt(mx + kk), rmS = rr < -140 ? '−∞' : fmt(rr + kk);
+      if (oneLine) { text(ctx, pkS, cx0 + cw * 0.48, y + cellH / 2, { size: 20, w: 700, col: hot ? S.hot : S.ink, align: 'right', maxW: cw * 0.46 }); text(ctx, rmS, cx0 + cw - 6, y + cellH / 2, { size: 20, col: rgba(S.ink, 0.7), align: 'right', maxW: cw * 0.46 }); }
+      else { text(ctx, pkS, cx0 + cw - 6, y + cellH * 0.3, { size: 24, w: 600, col: hot ? S.hot : S.ink, align: 'right', maxW: cw - 10 }); text(ctx, rmS, cx0 + cw - 6, y + cellH * 0.74, { size: 20, col: rgba(S.ink, 0.7), align: 'right', maxW: cw - 10 });
+        lbl(ctx, S, o.kmode ? `K${o.K}` : 'PK', cx0 + 5, y + cellH * 0.3, { size: 14, a: 0.5 }); lbl(ctx, S, 'RMS', cx0 + 5, y + cellH * 0.74, { size: 14, a: 0.5 }); }
       // band meters: dBFS band power (sine-referenced, 8192-pt) on the same scale, hold line per band
-      const names = ['SUB', 'LO', 'LM', 'MID', 'HM', 'AIR'], b0 = x + w * 0.42, bw2 = (x + w - 48 - b0) / 6, f = fidx(t);
+      const names = ['SB', 'LO', 'LM', 'MD', 'HM', 'AR'], b0 = x + w * 0.42, bw2 = (x + w - 48 - b0) / 6, f = fidx(t);
       names.forEach((nm, i) => { const get = (ff) => F.bandDb[ff][i], v = { pk: get(f), rms: get(f), hold: ML.releaseAt(get, f, FPS, o.rel, -150, o.hold) }, X = b0 + i * bw2 + 2;
-        levBar(ctx, S, X, top, bw2 - 6, bh, sc, v, style); lbl(ctx, S, nm, X + (bw2 - 6) / 2, y + h - 10, { size: 14, align: 'center', a: 0.6, maxW: bw2 - 2 }); });
+        levBar(ctx, S, X, top, bw2 - 6, bh, sc, v, style); if (bandLbl && L.floorSize(ctx, 14) * 1.3 <= bw2) lbl(ctx, S, nm, X + (bw2 - 6) / 2, y + h - 10, { size: 14, align: 'center', a: 0.6 }); });
       levTicks(ctx, S, x + w - 44, top, bh, sc);
-      lbl(ctx, S, 'BANDS dBFS', b0, y + 12, { size: 14, a: 0.5 });
+      lbl(ctx, S, oneLine ? 'BANDS' : 'BANDS dBFS', b0, y + cellH / 2, { size: 14, a: 0.5 });
     }
     if (!opt.noReveal) ctx.restore();
   };
@@ -307,7 +310,7 @@ export function createMeters(L) {
     path(F.M); ctx.strokeStyle = rgba(S.ink, 0.35); ctx.lineWidth = 1; ctx.stroke();
     path(F.S); ctx.strokeStyle = S.ink; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.stroke(); ctx.lineWidth = 1;
     ctx.strokeStyle = S.warn; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(gx, cr(Y(tgt))); ctx.lineTo(gx + gw, cr(Y(tgt))); ctx.stroke(); ctx.setLineDash([]);
-    lbl(ctx, S, `−${-tgt}`, gx + 3, Y(tgt) + 9, { size: 14, w: 700, col: S.warn, a: 1 });
+    lbl(ctx, S, `−${-tgt}`, gx + gw - 3, Y(tgt) + 10, { size: 14, w: 700, col: S.warn, a: 1, align: 'right' });
     ctx.fillStyle = S.hot; ctx.fillRect(Math.round(X(t)), gy, 1, gh);
     // time ruler: bars
     for (let b = Math.ceil(t0 / BAR); b * BAR <= t0 + span; b++) { const xx = X(b * BAR); if (xx < gx || xx > gx + gw) continue; ctx.fillStyle = rgba(S.ink, 0.3); ctx.fillRect(Math.round(xx), gy + gh, 1, 6); }
@@ -427,7 +430,7 @@ export function createMeters(L) {
   // ---------------------------------------------------------------- IMAGER: vectorscope (polar sample / polar level / Lissajous),
   // vertical correlation bar, balance bar, per-band width numerics and the mirrored per-frequency width strip.
   // Original layout and colours (stage palettes); the measurement grammar follows a free imaging plug-in's manual.
-  const IMG = { NIGREDO: ['#8a8a8a', '#ffffff', '#ffffff', '#c8c8c8'], ALBEDO: ['#6e4433', '#1a1917', '#1a1917', '#a8432e'], CITRINITAS: ['#6e4433', '#f0d79a', '#f0d79a', '#e0475f'], RUBEDO: ['#5a1020', '#ff9be0', '#a35cf0', '#e0475f'] };
+  const IMG = { NIGREDO: ['#8a8a8a', '#ffffff', '#c8c8c8', '#c8c8c8'], ALBEDO: ['#6e4433', '#1a1917', '#3a2a22', '#a8432e'], CITRINITAS: ['#6e4433', '#f0d79a', '#d79a35', '#e0475f'], RUBEDO: ['#5a1020', '#ff9be0', '#a35cf0', '#e0475f'] };
   const imgCols = (S) => { const p = IMG[S.name] || [S.sig1, S.ink, S.ink, S.hot]; return { lo: p[0], hi: p[1], mid: p[2], neg: S.grey ? '#c8c8c8' : S.hot === p[3] ? p[3] : S.hot }; };
   function hatch(ctx, x, y, w, h, col) { ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.beginPath(); for (let d = -h; d < w + h; d += 4) { ctx.moveTo(x + d, y + h); ctx.lineTo(x + d + h, y); } ctx.stroke(); ctx.restore(); }
   const GD = 320;
@@ -436,11 +439,12 @@ export function createMeters(L) {
     dens[iy * GD + ix] += wgt * (1 - fx) * (1 - fy); dens[iy * GD + ix + 1] += wgt * fx * (1 - fy); dens[(iy + 1) * GD + ix] += wgt * (1 - fx) * fy; dens[(iy + 1) * GD + ix + 1] += wgt * fx * fy;
   }
   function densImage(dens, C, rows) {
-    const oc = M8._oc || (M8._oc = document.createElement('canvas')); oc.width = GD; oc.height = rows; const og = oc.getContext('2d'), im = og.createImageData(GD, rows), a = hx3(C.lo), b = hx3(C.hi);
+    const oc = M8._oc || (M8._oc = document.createElement('canvas')); oc.width = GD; oc.height = rows; const og = oc.getContext('2d'), im = og.createImageData(GD, rows), a = hx3(C.lo), b = hx3(C.hi), c = hx3(C.mid);
     for (let j = 1; j < rows - 1; j++) for (let i = 1; i < GD - 1; i++) {
       const d = dens[j * GD + i]; if (d <= 0) continue; const nb = dens[j * GD + i - 1] + dens[j * GD + i + 1] + dens[(j - 1) * GD + i] + dens[(j + 1) * GD + i];
-      const al = 1 - Math.exp(-(d + 0.085 * nb) * 1.36), o4 = (j * GD + i) * 4, m = clamp(d * 0.5);
-      im.data[o4] = lerp(a[0], b[0], m); im.data[o4 + 1] = lerp(a[1], b[1], m); im.data[o4 + 2] = lerp(a[2], b[2], m); im.data[o4 + 3] = 255 * al;
+      // density low -> high through the stage's mid stop (Rubedo: oxblood -> violet -> pink), alpha saturates fast
+      const al = 1 - Math.exp(-(d + 0.085 * nb) * 2.2), o4 = (j * GD + i) * 4, m = clamp(Math.sqrt(d * 0.7)), u = m < 0.5 ? m * 2 : (m - 0.5) * 2, p0 = m < 0.5 ? a : c, p1 = m < 0.5 ? c : b;
+      im.data[o4] = lerp(p0[0], p1[0], u); im.data[o4 + 1] = lerp(p0[1], p1[1], u); im.data[o4 + 2] = lerp(p0[2], p1[2], u); im.data[o4 + 3] = 255 * al;
     }
     og.putImageData(im, 0, 0); return oc;
   }
@@ -490,7 +494,7 @@ export function createMeters(L) {
       if (liss) ctx.drawImage(oc, 0, 0, GD, GD, cx - R * 0.5, cy - R, R, R);
       else ctx.drawImage(oc, 0, 0, GD, GD / 2, cx - R, cy - R, 2 * R, R);
     }
-    lbl(ctx, S, { sample: 'POLAR SAMPLE', level: 'POLAR LEVEL', lissajous: 'LISSAJOUS' }[mode] || 'POLAR SAMPLE', x0 + 6, y0 + 14, { size: 18, a: 0.6 });
+    lbl(ctx, S, { sample: 'POLAR SAMPLE', level: 'POLAR LEVEL', lissajous: 'LISSAJOUS' }[mode] || 'POLAR SAMPLE', corrX - 8, y0 + 14, { size: 18, a: 0.6, align: 'right' });
     // vertical correlation bar: +1 top, 0 mid, -1 bottom; fill 0 -> value, marker 8x2
     const c1 = top, c2 = scopeBot, cyM = (c1 + c2) / 2, Yc = (v) => cyM - (c2 - c1) / 2 * clamp(v, -1, 1), cv = F.corr[f];
     ctx.fillStyle = rgba(S.ink, 0.35); ctx.fillRect(corrX + barW / 2, c1, 1, c2 - c1);
@@ -504,7 +508,7 @@ export function createMeters(L) {
     const bx = x0 + 58, bw = corrX - 70 - bx, by = scopeBot + 16, bal = ML.balanceAt(D.lv, f / FPS, 3), Xb = (v) => bx + bw * (clamp(v, -6, 6) + 6) / 12;
     ctx.fillStyle = rgba(S.ink, 0.12); ctx.fillRect(bx, by, bw, 4); ctx.fillStyle = rgba(S.ink, 0.5); ctx.fillRect(Math.round(Xb(0)), by - 3, 1, 10);
     ctx.fillStyle = rgba(C.mid, 0.9); ctx.fillRect(Math.min(Xb(0), Xb(bal)), by, Math.abs(Xb(bal) - Xb(0)), 4); ctx.fillStyle = S.ink; ctx.fillRect(Math.round(Xb(bal)) - 1, by - 3, 2, 10);
-    lbl(ctx, S, 'BAL', x0 + 6, by + 2, { size: 15, a: 0.6 }); lbl(ctx, S, 'L', bx - 2, by + 16, { size: 13, a: 0.4 }); lbl(ctx, S, 'R', bx + bw + 2, by + 16, { size: 13, a: 0.4, align: 'right' });
+    lbl(ctx, S, 'BAL', x0 + 6, by + 2, { size: 15, a: 0.6 });
     M8.widthStrip(ctx, S, [x0, y0 + h - stripH, w, stripH], t, C);
     ctx.restore();
   };
