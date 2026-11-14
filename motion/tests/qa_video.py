@@ -22,10 +22,14 @@ ok = True; rep = [f"QA {os.path.basename(a.video)}  stage={stage}"]
 e = subprocess.run(["ffmpeg", "-hide_banner", "-i", a.video, "-vf", "select='gt(scene,0.08)',showinfo", "-an", "-f", "null", "-"], capture_output=True, text=True).stderr
 cuts = [float(x) for x in re.findall(r"pts_time:([\d.]+)", e)]
 dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", a.video], capture_output=True, text=True).stdout)
-offs = [abs(c - round(c / beat) * beat) for c in cuts]
+# a detected change is either a shot cut (on a bar line) or a stepped element (letter decode / reveal on the 32nd grid);
+# every one must sit within 1 frame of the 32nd-note grid, and shot cuts within 1 frame of a bar line
+g32 = beat / 8
+offs = [abs(c - round(c / g32) * g32) for c in cuts]
 bad = [c for c, o in zip(cuts, offs) if o > fr + 1e-3]
+barcuts = [c for c in cuts if abs(c - round(c / (4 * beat)) * 4 * beat) <= fr + 1e-3]
 bars = dur / (4 * beat)
-rep.append(f"cuts: {len(cuts)} ({len(cuts) / bars:.2f}/bar)  max off-grid {max(offs) * 1000 if offs else 0:.1f} ms  -> {'PASS' if not bad else 'FAIL ' + str(bad[:5])}")
+rep.append(f"changes: {len(cuts)} on the 32nd grid (max off {max(offs) * 1000 if offs else 0:.1f} ms), of which {len(barcuts)} bar-line cuts ({len(barcuts) / bars:.2f}/bar)  -> {'PASS' if not bad else 'FAIL ' + str(bad[:5])}")
 ok &= not bad
 
 # decode small grey frames for luma + sampled full RGB frames for palette

@@ -199,3 +199,36 @@ Filmstrips are in `out/v6/filmstrips/`. The CLI is documented in README.md.
 - **Hats.** The kick lane counts some 808 attacks (72 kicks detected over 64 beats). Hat detection is denser than the real hats. These lanes are display-only; visual triggers use the grid.
 - **AI elephant loop.** If one is swapped in, it swings rigidly: the rig deformation needs the still art.
 - **Albedo and Citrinitas** use new hexes (bone, limestone, ochre, brass, …), as the brief allows per stage. **Rubedo** adds a vibrant violet, magenta heat and oxblood.
+
+---
+
+# v7: professional pass (skill: u2c-beat-preview-motion; research: /home/user/research/STYLE-RESEARCH.md)
+1. **NIGREDO** is black, white and greys only:
+   - ground #050505
+   - the elephant and the logo are greyscaled (Rec.709 luma)
+   - tested on decoded frames: max |R−G|, |G−B| = 0.
+2. **Chain physics** (`film/v6/brand.js`). A held-in-hand pendant:
+   - A kinematic hand flicks on every beat (downbeat 1.0, beat 3 0.7, beats 2/4 0.45, alternating direction).
+   - That drives a verlet rope through the elephant's own chain (8 segments, gravity, damping, 12 constraint iterations) to a heavy body hung below the bail.
+   - The two side loops are lagging secondary pendulums. A ±8° twist comes from the rope-to-body bend.
+   - Gravity is auto-calibrated so the free period is 2 beats.
+   - Fixed 1/240 s step, with a 16-bar pre-roll so frame 0 is in steady state. Deterministic.
+   - The art's pixels are skinned onto the rope and body by mesh.
+3. **Pacing and composition** (`film/v7/compose.js`). Static "screenshot" compositions cut only on bar lines:
+   - The logo is home (at least 50 % of bars); one meter or the pendant cuts in between.
+   - Boot is bar 1, the result card is the second-to-last bar, and the last bar mirrors the boot (loop-clean).
+   - No camera zooms.
+4. **Meters:**
+   - **EQ:** an original Pro-Q-spirit display: 3 bands, filled areas, a 3 px summed curve, numbered nodes, a hover bubble, dual dB rulers, a 30 kHz axis and a piano strip. Gains are automation steps on the beat.
+   - **balance.vst** has been removed.
+   - **Loudness:** redone as a Kollide-style instrument: an 84-tick 270° gauge, M/I sub-gauges and numeric cells; display ticks every ½ beat.
+   - **Waveform:** sample-accurate, 400 columns/s, with 1 px columns.
+   - **Spectrum, spectrogram and stereo** follow the Aurora methods: a peak-keeping projection, a 0.22 s trail, glow, a LUT with alpha v^0.56, and a density goniometer with 0.42 s persistence.
+   - **Meter design ideas after Aurora by Joe Croskey (AGPL-3.0). Only the methods and parameters were re-implemented; no Aurora code is used.**
+5. **Looks:** `--look exe | lab | scope`, each with its own composition logic (see README).
+6. **Tags:** all on-screen text comes from `tags.default.json`, plus per-beat overrides via `--tags` (see README).
+7. **Deliverables:** `out/v7/{exe,lab,scope}-nigredo-916-30s.mp4` and `out/v7/exe-rubedo-916-30s.mp4`. Filmstrips are in `out/v7/filmstrips/`; notes in `review/v7-director-notes-pass{1,2}.md`.
+
+**Caveats:**
+- The 15 s / 60 s / 16:9 cuts were not re-rendered in v7. The CLI makes them in one command each.
+- The v6 renders in `out/v6/` use the older camera engine.
