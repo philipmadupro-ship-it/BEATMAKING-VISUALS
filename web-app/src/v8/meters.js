@@ -41,8 +41,8 @@ export function createMeters(L) {
     const [x, y, w, h] = r; reveal(ctx, x, y, w, h, k);
     const song = D.song, W2 = L.W2, cps = D.wave2.cps;
     const hh = 34; ctx.fillStyle = rgba(S.sig1, S.name === 'ALBEDO' ? 0.2 : 0.26); ctx.fillRect(x, y, w, hh); ctx.fillStyle = S.sig1; ctx.fillRect(x, y, 5, hh);
-    text(ctx, `${L.tag('title')} · ${L.tag('experiment')}`, x + 14, y + hh / 2 + 1, { size: 22, w: 700, col: S.ink, maxW: w * 0.58 });
-    lbl(ctx, S, `${Math.round(D.bpm)} BPM · ${D.key}`, x + w - 10, y + hh / 2 + 1, { align: 'right', a: 0.85 });
+    const rw = lbl(ctx, S, `${Math.round(D.bpm)} BPM · ${D.key}`, x + w - 10, y + hh / 2 + 1, { align: 'right', a: 0.85 }) || 0;   // the title yields to the tempo / key
+    text(ctx, `${L.tag('title')} · ${L.tag('experiment')}`, x + 14, y + hh / 2 + 1, { size: 22, w: 700, col: S.ink, maxW: Math.min(w * 0.58, w - 24 - rw - 18) });
     // overview (whole track) + sections + clip bracket + song playhead
     const oy = y + hh + 8, oh = 36, sx = (st) => x + w * st / song.duration;
     for (const q of song.phrases) { const a0 = song.bar1 + (q.bar - 1) * BAR, a1 = a0 + q.bars * BAR; if (a0 > song.duration) continue; ctx.fillStyle = rgba(q.label === 'drop' ? S.sig2 : S.rule, q.label === 'drop' ? 0.18 : 0.06); ctx.fillRect(sx(a0), oy, sx(Math.min(a1, song.duration)) - sx(a0) - 1, oh); }
@@ -238,12 +238,14 @@ export function createMeters(L) {
     // nodes (at each band's own curve at f0) + collision-free number labels + the selected band's bubble
     const nodes = bands.map((b, bi) => { const X = XF(b.f), i = clamp(Math.round(X - x), 0, pw); return { bi, X, Y: Yg(bandDb[bi][i]), b }; });
     const boxes = nodes.map((n) => [n.X - 12, n.Y - 12, 24, 24]), hit = (a, q) => a[0] < q[0] + q[2] && q[0] < a[0] + a[2] && a[1] < q[1] + q[3] && q[1] < a[1] + a[3];
+    const avoid = L.avoid || [];   // rects of handwritten notes on this window (film.js)
     const inPlot = (q) => q[0] >= x && q[1] >= y && q[0] + q[2] <= x + pw && q[1] + q[3] <= y + h;
     const place = (n, bw, bh, gap, own) => { for (const [sx, sy] of [[1, -1], [-1, -1], [1, 1], [-1, 1]]) { const q = [sx > 0 ? n.X + gap : n.X - gap - bw, sy < 0 ? n.Y - gap - bh : n.Y + gap, bw, bh];
-      if (inPlot(q) && !boxes.some((o, j) => j !== own && hit(q, o))) return q; } return null; };
+      if (inPlot(q) && !boxes.some((o, j) => j !== own && hit(q, o)) && !avoid.some((o) => hit(q, o))) return q; } return null; };
     const order = [...nodes].sort((a, b) => (a.bi === sel) - (b.bi === sel));
-    if (sel >= 0) { const n = nodes[sel], bw = 196, bh = 74, q = place(n, bw, bh, 14, sel) || [clamp(n.X - bw / 2, x, x + pw - bw), n.Y < y + h / 2 ? n.Y + 20 : n.Y - 20 - bh, bw, bh]; boxes.push(q);
-      const rows = L.steps(t, Math.floor(t / BAR) * 4, 3, 0.25), b = n.b, rh = Math.max(24, L.floorSize(ctx, 16) + 6); q[3] = 10 + rows * rh; if (q[1] + bh > n.Y) q[1] += bh - q[3];
+    if (sel >= 0) { const n = nodes[sel], bw = 196, bh = 74, q = place(n, bw, bh, 14, sel) || [[clamp(n.X - bw / 2, x, x + pw - bw), n.Y < y + h / 2 ? n.Y + 20 : n.Y - 20 - bh], [x + 4, y + 4], [x + pw - bw - 4, y + 4], [x + 4, y + h - bh - 4], [x + pw - bw - 4, y + h - bh - 4]]
+        .map(([qx, qy]) => [qx, qy, bw, bh]).find((qq, i) => i === 4 || !avoid.some((o) => hit(qq, o))); boxes.push(q);
+      const rows = L.steps(t, Math.floor(t / BAR) * 4, 3, 0.25), b = n.b, rh = Math.max(24, L.floorSize(ctx, 16) + 6); q[3] = 10 + rows * rh; if (q[1] + bh > n.Y) q[1] = Math.max(y, q[1] + bh - q[3]);
       ctx.strokeStyle = rgba(S.ink, 0.6); ctx.beginPath(); ctx.moveTo(n.X, n.Y); ctx.lineTo(clamp(n.X, q[0], q[0] + bw), n.Y < q[1] ? q[1] : q[1] + q[3]); ctx.stroke();
       ctx.fillStyle = rgba(S.bg, 0.94); ctx.fillRect(q[0], q[1], bw, q[3]); ctx.strokeStyle = rgba(S.ink, 0.8); ctx.strokeRect(cr(q[0]), cr(q[1]), bw, q[3]);
       [`${b.f >= 1000 ? (b.f / 1000).toFixed(2) + 'k' : b.f.toFixed(1)} Hz · ${noteName(b.f)}`, `${b.g >= 0 ? '+' : '−'}${Math.abs(b.g).toFixed(1)} dB · #${sel + 1}`, `Q ${b.q.toFixed(2)} · ${b.type}`].slice(0, rows)
@@ -539,7 +541,9 @@ export function createMeters(L) {
       if (liss) ctx.drawImage(oc, 0, 0, GD, GD, cx - R * 0.5, cy - R, R, R);
       else ctx.drawImage(oc, 0, 0, GD, GD / 2, cx - R, cy - R, 2 * R, R);
     }
-    lbl(ctx, S, { sample: 'POLAR SAMPLE', level: 'POLAR LEVEL', lissajous: 'LISSAJOUS' }[mode] || 'POLAR SAMPLE', corrX - 8, y0 + 14, { size: 18, a: 0.6, align: 'right' });
+    { const ml = { sample: 'POLAR SAMPLE', level: 'POLAR LEVEL', lissajous: 'LISSAJOUS' }[mode] || 'POLAR SAMPLE';   // the mode label yields to a handwritten note in the strip
+      ctx.save(); L.font(ctx, L.floorSize(ctx, 18), MONO, 500); const lw = ctx.measureText(ml).width; ctx.restore(); const q = [corrX - 8 - lw, y0, lw, 24];
+      if (!(L.avoid || []).some((o) => q[0] < o[0] + o[2] && o[0] < q[0] + q[2] && q[1] < o[1] + o[3] && o[1] < q[1] + q[3])) lbl(ctx, S, ml, corrX - 8, y0 + 14, { size: 18, a: 0.6, align: 'right' }); }
     // vertical correlation bar: +1 top, 0 mid, -1 bottom; fill 0 -> value, marker 8x2
     const c1 = top, c2 = scopeBot, cyM = (c1 + c2) / 2, Yc = (v) => cyM - (c2 - c1) / 2 * clamp(v, -1, 1), cv = F.corr[f];
     ctx.fillStyle = rgba(S.ink, 0.35); ctx.fillRect(corrX + barW / 2, c1, 1, c2 - c1);
