@@ -18,7 +18,7 @@ export function createCueTimeline(app, cv) {
   const g = cv.getContext('2d'), st = { ppb: 24, scroll: 0, vscroll: 0, sel: new Set(), focusRow: 0, loop: null, playhead: 0, collapsed: false, hover: null };
   let W = 0, H = 0, dpr = 1, drag = null, dirty = true, colors = null, rows = [];
   const cues = app.cues, P = () => app.store.project, tr = () => app.store.session.track;
-  const HEAD = () => (st.collapsed ? 58 : 176), RULER = 22, SECT = 14, ROW = () => (st.collapsed ? 64 : 24), TOP = RULER + SECT;
+  const HEAD = () => (st.collapsed ? 58 : 176), RULER = 22, SECT = 14, ROW = () => (st.collapsed ? 64 : 23), TOP = RULER + SECT;
   const bars = () => { const t = tr(); return t ? Math.max(1, Math.round((P().outT - P().inT) / t.barDur)) : 16; };
   const totalBeats = () => bars() * 4, BEAT = () => (tr() ? tr().spb : 0.5);
   const snapGrid = () => SNAPS[P().timeline.snap] ?? 1;
@@ -77,7 +77,9 @@ export function createCueTimeline(app, cv) {
         diamond(x, mid, compact ? 4 : 6, s ? C.acc : C.fg, s ? C.fg : null); continue; }
       if (row.kind !== 'number') { const x1 = nx ? xOf(nx.b) : W; g.fillStyle = C.lane; g.fillRect(x, y + 4, x1 - x, h - 8); g.strokeStyle = C.line2; g.strokeRect(x + .5, y + 4.5, x1 - x - 1, h - 9);
         if (!compact) { g.fillStyle = C.fg; g.fillText(valueText(row, k), x + 10, mid, Math.max(10, x1 - x - 16)); } }
-      diamond(x, row.kind === 'number' && !compact ? vy(k.v) : mid, compact ? 4 : 6, s ? C.acc : C.fg, s ? C.fg : null);
+      const ky = row.kind === 'number' && !compact ? vy(k.v) : mid;
+      if (row.kind === 'number' && !compact) { const lab = valueText(row, k) + (p.unit && p.unit.length <= 3 ? p.unit : ''); g.fillStyle = s ? C.acc : C.fg; g.fillText(lab, x + 9, Math.max(y + 7, Math.min(y + h - 7, ky - 7)), 60); }
+      diamond(x, ky, compact ? 4 : 6, s ? C.acc : C.fg, s ? C.fg : null);
     }
     g.restore();
   }
@@ -119,6 +121,9 @@ export function createCueTimeline(app, cv) {
       if (r.custom) { g.fillStyle = C.muted; g.fillText('×', hx - 20, y + rh / 2); }
       g.fillStyle = C.line; g.fillRect(0, y + rh - 1, hx, 1); g.restore(); });
     g.fillStyle = C.panel; g.fillRect(0, 0, hx, TOP); g.fillStyle = C.muted; g.font = '500 10px "JetBrains Mono", monospace'; g.fillText(st.collapsed ? 'BAR' : `BAR · SNAP ${P().timeline.snap.toUpperCase()}`, 10, RULER / 2); g.fillText(st.collapsed ? '' : 'SECTION', 10, RULER + SECT / 2);
+    // vertical scroll affordance
+    const total = rows.length * rh, view = H - TOP; if (!st.collapsed && total > view) { const th = Math.max(18, view * view / total), ty = TOP + (view - th) * st.vscroll / (total - view); g.fillStyle = C.line2; g.fillRect(W - 4, TOP, 4, view); g.fillStyle = C.muted; g.fillRect(W - 4, ty, 4, th);
+      if (st.vscroll < total - view - 1) { g.fillStyle = C.acc; g.font = '500 10px "JetBrains Mono", monospace'; g.textAlign = 'right'; g.fillText(`+${Math.ceil((total - view - st.vscroll) / rh)} ↓`, hx - 10, RULER + SECT / 2); g.textAlign = 'left'; } }
     // marquee
     if (drag && drag.kind === 'marquee' && drag.moved) { const [x0, y0, x1, y1] = drag.box; g.strokeStyle = C.acc; g.setLineDash([4, 3]); g.strokeRect(Math.min(x0, x1) + .5, Math.min(y0, y1) + .5, Math.abs(x1 - x0), Math.abs(y1 - y0)); g.setLineDash([]); g.fillStyle = C.acc; g.globalAlpha = .08; g.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0)); g.globalAlpha = 1; }
     // playhead
@@ -246,6 +251,8 @@ export function createCueTimeline(app, cv) {
     clearLoop() { st.loop = null; dirty = true; app.actions.loopChanged && app.actions.loopChanged(); },
     focusRowOf(path) { buildRows(); const i = rows.findIndex((r) => r.path === path); if (i >= 0) { st.focusRow = i; const y = rowY(i); if (y < TOP || y + ROW() > H) st.vscroll += y - TOP - ROW(); resize(); clampScroll(); dirty = true; } return i; },
     bbt: (b) => beatsToBbt(b),
+    /** Canvas point of a beat on a track's lane (scrolls the lane into view): for tests and tooling. */
+    pointOf(path, b) { const i = api.focusRowOf(path); draw(); return { x: xOf(b), y: st.collapsed ? TOP + ROW() / 2 : rowY(i) + ROW() / 2 }; },
   };
   return api;
 }

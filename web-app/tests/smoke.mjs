@@ -60,8 +60,8 @@ const def = await ev(() => { const s = window.u2c.cues.sheet, cam = s.tracks.fin
 ok('default cue sheet from the analysis (v8 focus plan by section)', def.n >= 10 && /chains|eq|elephant|spectrum/.test(def.cam), `${def.n} tracks · ${def.bars} bars · camera ${def.cam} · sections ${def.labels}`);
 // helpers to reach the timeline canvas
 const cvBox = await page.$eval('#cueCv', (c) => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
-const keyXY = (pathName, idx) => ev(([p, i]) => { const tl = window.u2c.cuetl, rows = tl.rows(), ri = rows.findIndex((r) => r.path === p), t = rows[ri].track, k = t.keys[i];
-  tl.focusRowOf(p); tl.markDirty(); tl.draw(); const r = document.querySelector('#cueCv').getBoundingClientRect(), y = 22 + 14 + ri * 24 - tl.state.vscroll + 12; return { x: r.x + tl.xOf(k.b), y: r.y + y, b: k.b, v: k.v, id: k.id }; }, [pathName, idx]);
+const keyXY = (pathName, idx) => ev(([p, i]) => { const tl = window.u2c.cuetl, t = tl.rows().find((r) => r.path === p).track, k = t.keys[i], pt = tl.pointOf(p, k.b), r = document.querySelector('#cueCv').getBoundingClientRect();
+  return { x: r.x + pt.x, y: r.y + pt.y, b: k.b, v: k.v, id: k.id }; }, [pathName, idx]);
 const frameAt = (beat) => ev(async (b) => { const app = window.u2c, p = app.store.project, tr = app.store.session.track, { makeSurface } = await import('/src/engine/render.js'); const s = makeSurface(270, 480), info = {};
   app.renderFrame(p.inT + b * tr.spb, s, p, tr, { info }); const d = s.ctx.getImageData(0, 0, 270, 480).data; let sum = 0; const sig = []; for (let i = 0; i < d.length; i += 4 * 97) { sig.push(d[i] + d[i + 1] + d[i + 2]); sum += d[i]; } return { sig, cam: info.cam, look: info.look }; }, beat);
 const diff = (a, b) => a.sig.reduce((s, v, i) => s + Math.abs(v - b.sig[i]), 0) / a.sig.length / 7.65;
@@ -89,16 +89,16 @@ await page.keyboard.press('ControlOrMeta+z');
 await page.mouse.click(k0.x, k0.y); await page.keyboard.press('ArrowRight'); const nudged = await ev((id) => window.u2c.cuetl.findKey(id)[1].b, k0.id); await page.keyboard.press('ControlOrMeta+z');
 ok('UI: arrow nudges the selection by the grid', nudged === k0.b + 1, `beat ${k0.b} → ${nudged}`);
 // 5. double-click the Text lane at bar 2 -> a text cue; type its text in the inspector; S splits it; Del deletes
-const textRow = await ev(() => { const tl = window.u2c.cuetl; tl.focusRowOf('text.cue'); tl.draw(); const rows = tl.rows(), ri = rows.findIndex((r) => r.path === 'text.cue'), r = document.querySelector('#cueCv').getBoundingClientRect(); return { x: r.x + tl.xOf(4), y: r.y + 36 + ri * 24 - tl.state.vscroll + 12 }; });
+const textRow = await ev(() => { const tl = window.u2c.cuetl, pt = tl.pointOf('text.cue', 4), r = document.querySelector('#cueCv').getBoundingClientRect(); return { x: r.x + pt.x, y: r.y + pt.y }; });
 await page.mouse.dblclick(textRow.x + 2, textRow.y); await page.waitForTimeout(150);
 await page.fill('#insp textarea[data-k="v"]', 'LAB RESULT {bpm}'); await page.locator('#insp textarea[data-k="v"]').dispatchEvent('change');
 const txt = await ev(() => { const t = window.u2c.cues.sheet.tracks.find((x) => x.path === 'text.cue'); return t.keys.map((k) => `${k.b}:${k.v}:${k.dur}`); });
-const noText = await frameAt(4 + 1.5); await ev(() => {}); const tf = await frameAt(4 + 1.5);
+const tf = await frameAt(4 + 1.5);
 const withText = await ev(async () => { const app = window.u2c, t = app.cues.sheet.tracks.find((x) => x.path === 'text.cue'); const k = t.keys[0]; return k.v; });
 ok('UI: double-click adds a text cue, the inspector sets its text', txt.length === 1 && /LAB RESULT/.test(withText), txt.join(' | '));
-const offText = await ev(async () => { const app = window.u2c, s = app.cues.sheet, t = s.tracks.find((x) => x.path === 'text.cue'), keep = t.mute; t.mute = true; app.cues.preview(() => {}); return keep; });
+await ev(() => { const app = window.u2c, t = app.cues.sheet.tracks.find((x) => x.path === 'text.cue'); t.mute = true; app.cues.preview(() => {}); });
 const muted = await frameAt(4 + 1.5); await ev(() => { const app = window.u2c, t = app.cues.sheet.tracks.find((x) => x.path === 'text.cue'); t.mute = false; app.cues.preview(() => {}); });
-ok('preview reflects the text cue (typed on the grid)', diff(muted, tf) > .3, `frame difference with / without the cue ${diff(muted, tf).toFixed(2)} %`); void noText; void offText;
+ok('preview reflects the text cue (typed on the grid)', diff(muted, tf) > .3, `frame difference with / without the cue ${diff(muted, tf).toFixed(2)} %`);
 await ev(() => window.u2c.actions.seek(window.u2c.store.project.inT + 6 * window.u2c.store.session.track.spb)); await page.waitForTimeout(100);
 await page.focus('#cueCv'); await page.keyboard.press('s'); const split = await ev(() => window.u2c.cues.sheet.tracks.find((x) => x.path === 'text.cue').keys.map((k) => `${k.b}+${k.dur}`).join(' '));
 ok('S splits the clip at the playhead', /^4\+2 6\+2$/.test(split), split);
@@ -184,7 +184,7 @@ if (!process.env.NOEXPORT) {
 await page.setViewportSize({ width: 390, height: 844 }); await page.click('.tabs [data-tab="inspect"]'); await page.waitForTimeout(600);
 const collapsed = await ev(() => window.u2c.cuetl.state.collapsed);
 await page.locator('#cueCv').scrollIntoViewIfNeeded(); await page.waitForTimeout(200); await shot('studio-390.png');
-const tap = await ev(() => { const tl = window.u2c.cuetl, k = window.u2c.cues.sheet.tracks.find((t) => t.path === 'camera.shot').keys[0], r = document.querySelector('#cueCv').getBoundingClientRect(); return { x: r.x + tl.xOf(k.b), y: r.y + 60 }; });
+const tap = await ev(() => { const tl = window.u2c.cuetl, k = window.u2c.cues.sheet.tracks.find((t) => t.path === 'camera.shot').keys[0], pt = tl.pointOf('camera.shot', k.b), r = document.querySelector('#cueCv').getBoundingClientRect(); return { x: r.x + pt.x, y: r.y + pt.y }; });
 await page.mouse.click(tap.x, tap.y); await page.waitForTimeout(400);
 const sheet = await ev(() => ({ sel: window.u2c.cuetl.selected().length, inSheet: !!document.querySelector('#sheetBody #insp'), vis: getComputedStyle(document.querySelector('#sheet')).transform }));
 await shot('timeline-390.png');
