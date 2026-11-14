@@ -15,17 +15,17 @@ export function createTimeline(app) {
       try {
         regions = L.Regions.create();
         const plugins = [regions];
-        if (L.Timeline) plugins.push(L.Timeline.create({ height: 16, timeInterval: 1, primaryLabelInterval: 10, secondaryLabelInterval: 5, style: { fontSize: '10px', color: css('--muted') || '#8b8b8b', fontFamily: 'JetBrains Mono, monospace' } }));
+        if (false && L.Timeline) plugins.push(L.Timeline.create({ height: 16, timeInterval: 1, primaryLabelInterval: 10, secondaryLabelInterval: 5, style: { fontSize: '10px', color: css('--muted') || '#8b8b8b', fontFamily: 'JetBrains Mono, monospace' } }));
         if (L.Hover) plugins.push(L.Hover.create({ lineColor: css('--fg') || '#e6e6e6', lineWidth: 1, labelBackground: '#161616', labelColor: '#e6e6e6', labelSize: '11px', formatTimeCallback: barLabel }));
-        if (L.Minimap) plugins.push(L.Minimap.create({ height: 18, waveColor: 'rgba(160,160,160,.35)', progressColor: css('--accent') || '#c8c8c8', overlayColor: 'rgba(200,200,200,.12)', cursorWidth: 0 }));
+        if (false && L.Minimap) plugins.push(L.Minimap.create({ height: 18, waveColor: 'rgba(160,160,160,.35)', progressColor: css('--accent') || '#c8c8c8', overlayColor: 'rgba(200,200,200,.12)', cursorWidth: 0 }));
         const peaks = Array.from(tr.peaks.max, (v, i) => Math.max(v, -tr.peaks.min[i]));
-        ws = L.WaveSurfer.create({ container: host, height: 64, waveColor: 'rgba(160,160,160,.45)', progressColor: css('--accent') || '#c8c8c8', cursorColor: css('--fg') || '#e6e6e6', cursorWidth: 1,
+        ws = L.WaveSurfer.create({ container: host, height: 40, waveColor: 'rgba(160,160,160,.45)', progressColor: css('--accent') || '#c8c8c8', cursorColor: css('--fg') || '#e6e6e6', cursorWidth: 1,
           barWidth: 2, barGap: 1, barRadius: 1, peaks: [peaks], duration: tr.duration, interact: true, dragToSeek: true, autoScroll: true, autoCenter: false, hideScrollbar: false, normalize: false, plugins });
         ws.on('interaction', t => app.actions.seek(t));
         const me = ws; let added = false;
         const addRegions = () => { if (added || ws !== me) return; added = true; const p = app.store.project;
-          tr.bars.forEach((t, k) => { if (k % 4 === 0) regions.addRegion({ start: t, content: mkLabel(String(k + 1)), color: 'rgba(200,200,200,.35)', drag: false, resize: false }); });
-          tr.drops.forEach(t => regions.addRegion({ start: t, content: mkLabel('drop'), color: 'rgba(224,122,208,.8)', drag: false, resize: false }));
+          // song structure: one marker per 4-bar phrase (song bar number + label), drops brighter
+          tr.song.phrases.forEach(q => { const t = tr.song.bar1 + (q.bar - 1) * tr.barDur; if (t < tr.duration) regions.addRegion({ start: t, content: mkLabel(q.bar + ' ' + q.label), color: q.label === 'drop' ? 'rgba(236,236,236,.85)' : 'rgba(160,160,160,.35)', drag: false, resize: false }); });
           clip = regions.addRegion({ id: 'clip', start: p.inT, end: p.outT, color: 'rgba(200,200,200,.16)', drag: true, resize: true, minLength: tr.barDur * .99 });
           ws.setTime(app.clock.time()); };
         ws.once('ready', addRegions); ws.once('decode', addRegions); setTimeout(addRegions, 400);
