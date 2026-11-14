@@ -124,7 +124,8 @@ export const ltasGrid = (n = 96) => Array.from({ length: n }, (_, i) => 20 * 100
  * section moves toward a -4.5 dB/oct reference (flat after the +tilt), at `strength` (50 % suggestion):
  *   LTAS_t = LTAS + tilt·log2(f/1k); target = mean(LTAS_t, 100 Hz..5 kHz); d = LTAS_t - target on 30 Hz..16 kHz
  *   correction c = -strength·d; greedy: f* = argmax |c - Σbands|; G = clamp(residual, ±6); Q from the half-residual
- *   points (0.5..4); LS below 120 Hz, HS above 7 kHz, else a bell; stop when the residual < strength·1.5 dB.
+ *   points (0.5..4); LS below 120 Hz / HS above 7 kHz when the deviation runs to that edge, else a bell; stop when the
+ *   residual < strength·1.5 dB.
  */
 export function fitMatch(freqs, ltasDb, { tilt = 4.5, strength = 0.5, max = 4, fs = 96000, stop = 1.5 } = {}) {
   const n = freqs.length, lt = ltasDb.map((v, i) => v + tilt * Math.log2(freqs[i] / 1000));
@@ -140,7 +141,9 @@ export function fitMatch(freqs, ltasDb, { tilt = 4.5, strength = 0.5, max = 4, f
     while (lo > 0 && use[lo - 1] && sg * res[lo - 1] > am / 2) lo--;
     while (hi < n - 1 && use[hi + 1] && sg * res[hi + 1] > am / 2) hi++;
     const fz = freqs[im], flo = freqs[lo] * 2 ** (-1 / 12), fhi = freqs[hi] * 2 ** (1 / 12);
-    const type = fz < 120 ? 'LS' : fz > 7000 ? 'HS' : 'BELL', q = type === 'BELL' ? clamp(fz / (fhi - flo), 0.5, 4) : 0.71;
+    // a shelf only when the deviation runs out to that edge of the fitted range (and once per side); else a bell
+    const edgeLo = lo === 0 || !use[lo - 1], edgeHi = hi === n - 1 || !use[hi + 1], has = (t) => bands.some((b) => b.type === t);
+    const type = fz < 120 && edgeLo && !has('LS') ? 'LS' : fz > 7000 && edgeHi && !has('HS') ? 'HS' : 'BELL', q = type === 'BELL' ? clamp(fz / (fhi - flo), 0.5, 4) : 0.71;
     const f0 = type === 'LS' ? Math.min(fhi, 120) : type === 'HS' ? Math.max(flo, 7000) : fz;
     bands.push({ type, f: Math.round(f0 * 10) / 10, g: Math.round(clamp(res[im], -6, 6) * 10) / 10, q: Math.round(q * 100) / 100 });
   }

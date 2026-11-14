@@ -135,63 +135,92 @@ export function createMeters(L) {
     });
   };
 
-  // ---------------------------------------------------------------- EQ
-  const BANDS = [['LS', 70, 0.8], ['BELL', 900, 0.9], ['HS', 9000, 0.8]];
-  const balAt = (f, fc) => { const oct = D.oct1, b = F.bal[f], lf = Math.log2(fc / 1000); let i = 0; while (i < oct.length - 2 && Math.log2(oct[i + 1] / 1000) < lf) i++; const a0 = Math.log2(oct[i] / 1000), a1 = Math.log2(oct[i + 1] / 1000); return lerp(b[i], b[i + 1], clamp((lf - a0) / (a1 - a0))); };
-  const beatGain = (k, bi) => { const f = fidx(Math.max(0, k) * BEAT); let s = 0; for (let j = -3; j <= 3; j++) s += balAt(clamp(f + j, 0, NF - 1), BANDS[bi][1]); return clamp(s / 7 * 0.6, -12, 12); };
-  function eqGain(t, bi) { const k = Math.floor(t / BEAT + 1e-9), u = clamp((t - k * BEAT) * FPS / 4), e = 1 - Math.pow(1 - u, 3); return lerp(beatGain(k - 1, bi), beatGain(k, bi), e); }
-  const resp = (type, fc, q, g, f) => { const d = Math.log2(f / fc); return type === 'BELL' ? g * Math.exp(-(d * d) / (2 * q * q)) : type === 'LS' ? g / (1 + Math.exp(d * 4 / q)) : g / (1 + Math.exp(-d * 4 / q)); };
-  const FMAX = 22000, XF = (f, x, w) => x + w * Math.log(f / 20) / Math.log(FMAX / 20);
+  // ---------------------------------------------------------------- EQ: precise, in the spirit of a pro parametric EQ (original design)
+  // Analyzer: 8192-pt Hann, hop 1024 (87.5 %), coherent scaling, max-preserving log projection (analysis/msspec.js);
+  // here: instant attack + release (`smoothing` dB/s), optional peak hold with decay, +tilt dB/oct about 1 kHz, range
+  // 60/90/120 dB, and the max of the log bins inside each pixel column (peaks survive decimation).
+  // Curves: RBJ cookbook biquads evaluated at every pixel column (fs 96 kHz for display, as analog-matched EQs draw).
+  // Bands: a spectral-balance match EQ fitted per SECTION against a -4.5 dB/oct reference (meterlib.fitMatch); they change
+  // only on the section's first bar line, eased over 4 frames (power3.out). No per-beat wobble.
+  const EQ_DASH = [[], [7, 4], [2, 3], [10, 3, 2, 3]], FS_EQ = 96000;
+  const eqCols = (S) => (S.grey ? ['#ffffff', '#d4d4d4', '#a8a8a8', '#8a8a8a'] : [...S.bandCols, S.sig2 === S.bandCols[1] ? S.ink : S.sig2].slice(0, 4));
+  const eqFit = { key: null, segOf: [], fits: [] };
+  function eqSections(tilt, strength) {
+    const key = tilt + '|' + strength; if (eqFit.key === key) return eqFit;
+    const MS = D.ms, nT = MS.ltasN, grid = ML.ltasGrid(nT), segOf = [], segs = [];
+    for (let k = 0; k < D.bars; k++) { const sb = D.song.startBar + k; let pi = -1; D.song.phrases.forEach((q, i) => { if (q.bar <= sb) pi = i; }); if (!segs.length || segs[segs.length - 1].pi !== pi) segs.push({ pi, bars: [], label: pi >= 0 ? D.song.phrases[pi].label : 'intro' }); segs[segs.length - 1].bars.push(k); segOf.push(segs.length - 1); }
+    const fits = segs.map((sg) => { const lt = grid.map((_, i) => { let p = 0; for (const k of sg.bars) p += 10 ** (MS.ltas[k * nT + i] / 10); return 10 * Math.log10(Math.max(1e-30, p / sg.bars.length)); });
+      return { label: sg.label, start: sg.bars[0], bands: ML.fitMatch(grid, lt, { tilt, strength }) }; });
+    Object.assign(eqFit, { key, segOf, fits }); return eqFit;
+  }
+  function eqBandsAt(t, tilt, strength) {
+    const E = eqSections(tilt, strength), k = clamp(Math.floor(t / BAR + 1e-9), 0, D.bars - 1), si = E.segOf[k], cur = E.fits[si];
+    const u = (t - cur.start * BAR) * FPS / 4; if (si === 0 || u >= 1) return { bands: cur.bands, label: cur.label, seg: si };
+    const prev = E.fits[si - 1].bands, n = Math.max(prev.length, cur.bands.length), e = ML.easeOut3(u), out = [];
+    for (let i = 0; i < n; i++) { const a = prev[i] || { ...cur.bands[i], g: 0 }, b = cur.bands[i] || { ...prev[i], g: 0 };
+      out.push(a.type === b.type ? { type: b.type, f: Math.exp(lerp(Math.log(a.f), Math.log(b.f), e)), g: lerp(a.g, b.g, e), q: lerp(a.q, b.q, e) } : (e < 0.5 ? a : b)); }
+    return { bands: out, label: cur.label, seg: si };
+  }
+  M8.eqBandsAt = eqBandsAt;
+  const noteName = (fc) => { const ni = Math.round(12 * Math.log2(fc / 440) + 57); return ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][((ni % 12) + 12) % 12] + Math.floor(ni / 12); };
   M8.eq = (ctx, S, r, t, k) => {
     const [x0, y0, w0, h0] = r; reveal(ctx, x0, y0, w0, h0, k);
-    const pianoH = 20, rulerH = 30, x = x0 + 54, pw = w0 - 54 - 50, y = y0 + 4, h = h0 - pianoH - rulerH - 8;
-    const f = fidx(t), g = BANDS.map((_, i) => eqGain(t, i)), sel = Math.floor(t / BAR) % 3, cols = S.bandCols;
-    const rg = L.meter('eq', 'range', 15), tilt = L.meter('eq', 'tilt', 4.5), Yg = (db) => y + h * (0.5 - db / (2 * rg)), Ya = (v) => y + h * clamp(-v / 90);
-    for (const fq of [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]) { const X = cr(XF(fq, x, pw)); ctx.strokeStyle = rgba(S.ink, [100, 1000, 10000].includes(fq) ? 0.18 : 0.07); ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X, y + h); ctx.stroke(); }
-    for (let db = -12; db <= 12; db += 6) { if (Math.abs(db) > rg) continue; const Y = cr(Yg(db)); ctx.strokeStyle = rgba(S.ink, db === 0 ? 0.32 : 0.07); ctx.beginPath(); ctx.moveTo(x, Y); ctx.lineTo(x + pw, Y); ctx.stroke(); if (db % 12 === 0) lbl(ctx, S, (db > 0 ? '+' : '') + db, x - 8, Y, { align: 'right', a: 0.9 }); }
-    for (const v of [0, -45, -90]) lbl(ctx, S, String(v), x + pw + 6, clamp(Ya(v), y + 11, y + h - 11), { a: 0.45 });
-    // analyzer behind: pre (thin), post (filled + line), tilted +4.5 dB/oct about 1 kHz
-    const sp = F.spec[f], c6 = D.oct6, path = (gf) => c6.map((fq, i) => [XF(fq, x, pw), Ya(sp[i] + tilt * Math.log2(fq / 1000) + gf(fq))]);
-    const sum = (fq) => BANDS.reduce((a, [ty, fc, q], bi) => a + resp(ty, fc, q, g[bi], fq), 0);
-    const pre = path(() => 0), post = path(sum);
-    ctx.beginPath(); pre.forEach(([X, Y], i) => (i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y))); ctx.strokeStyle = rgba(S.ink, 0.22); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(post[0][0], y + h); post.forEach(([X, Y]) => ctx.lineTo(X, Y)); ctx.lineTo(post[post.length - 1][0], y + h); ctx.closePath();
-    const gr = ctx.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, rgba(S.sig1, 0.3)); gr.addColorStop(1, rgba(S.sig1, 0)); ctx.fillStyle = gr; ctx.fill();
-    ctx.beginPath(); post.forEach(([X, Y], i) => (i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y))); ctx.strokeStyle = rgba(S.ink, 0.45); ctx.stroke();
-    const NPT = 220, fr = (i) => 20 * Math.pow(FMAX / 20, i / NPT);
-    BANDS.forEach(([ty, fc, q], bi) => {
-      ctx.beginPath(); ctx.moveTo(x, Yg(0)); for (let i = 0; i <= NPT; i++) ctx.lineTo(XF(fr(i), x, pw), Yg(resp(ty, fc, q, g[bi], fr(i)))); ctx.lineTo(x + pw, Yg(0)); ctx.closePath();
-      ctx.fillStyle = rgba(cols[bi], bi === sel ? 0.26 : 0.1); ctx.fill();
-    });
+    const MS = D.ms, AB = MS.anBins, FMX = MS.anFmax, x = Math.round(x0 + 44), pw = Math.round(w0 - 44 - 40), y = y0 + 34, h = h0 - 34 - 30, cols = eqCols(S);
+    const tilt = L.meter('eq', 'tilt', 4.5), strength = L.meter('eq', 'strength', 50) / 100, anR = L.meter('eq', 'anRange', 90), rel = L.meter('eq', 'smoothing', 20), hold = L.meter('eq', 'hold', 1), mode = L.meter('eq', 'mode', 'pre-post');
+    const XF = (f) => x + pw * Math.log(f / 20) / Math.log(FMX / 20), FX = (X) => 20 * (FMX / 20) ** ((X - x) / pw);
+    const { bands, label } = eqBandsAt(t, tilt, strength), f = fidx(t), sel = bands.length ? Math.floor(t / BAR) % bands.length : -1;
+    // per pixel column: summed curve and band curves (exact RBJ magnitude at the column's centre frequency)
+    const colF = Array.from({ length: pw + 1 }, (_, i) => FX(x + i)), bandDb = bands.map((b) => colF.map((fq) => ML.magDb(ML.coefOf(b, FS_EQ), fq, FS_EQ))), sum = colF.map((_, i) => bandDb.reduce((a, d) => a + d[i], 0));
+    let rg = L.meter('eq', 'range', 0); if (!rg) { const m = Math.max(0, ...sum.map(Math.abs)); rg = [3, 6, 12, 30].find((v) => v >= m * 1.15) || 30; }
+    const Yg = (db) => y + h * (0.5 - db / (2 * rg)), Ya = (v) => y + h * clamp(-v / anR);
+    // grid: 1..9 per decade (100 / 1k / 10k darker), dB lines every 6 (12 at ±30), 0 dB stronger
+    for (let dec = 10; dec <= 10000; dec *= 10) for (let m = 1; m <= 9; m++) { const fq = dec * m; if (fq < 20 || fq > FMX) continue; const X = cr(XF(fq)); ctx.strokeStyle = rgba(S.ink, m === 1 && dec >= 100 ? 0.16 : 0.06); ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X, y + h); ctx.stroke(); }
+    const step = rg >= 30 ? 12 : rg >= 12 ? 6 : rg >= 6 ? 3 : 1;
+    for (let db = -rg; db <= rg + 1e-9; db += step) { const Y = cr(Yg(db)); ctx.strokeStyle = rgba(S.ink, db === 0 ? 0.3 : 0.06); ctx.beginPath(); ctx.moveTo(x, Y); ctx.lineTo(x + pw, Y); ctx.stroke(); if (db !== -rg) lbl(ctx, S, (db > 0 ? '+' : db < 0 ? '−' : '') + Math.abs(db), x - 6, Y, { size: 16, align: 'right', a: 0.9 }); }
+    for (let v = 0; v <= anR; v += 30) if (v < anR) lbl(ctx, S, v ? '−' + v : '0', x + pw + 5, clamp(Ya(-v), y + 9, y + h - 9), { size: 15, a: 0.4 });
+    // analyzer: release + hold per log bin, tilt, then the max per pixel column
+    if (mode !== 'off') {
+      const an = new Float32Array(AB), hd = new Float32Array(AB), get = (j) => (ff) => -MS.anSpec[ff * AB + j] / 2;
+      for (let j = 0; j < AB; j++) { const tl = tilt * Math.log2(20 * (FMX / 20) ** ((j + 0.5) / AB) / 1000); an[j] = ML.releaseAt(get(j), f, FPS, rel, -anR - 30) + tl; hd[j] = hold > 0 ? ML.releaseAt(get(j), f, FPS, rel, -anR - 30, hold) + tl : -999; }
+      const colMax = (arr, i) => { const j0 = clamp(Math.floor((i / pw) * AB), 0, AB - 1), j1 = clamp(Math.floor(((i + 1) / pw) * AB), j0, AB - 1); let v = -999; for (let j = j0; j <= j1; j++) if (arr[j] > v) v = arr[j]; return v; };
+      const pre = colF.map((_, i) => colMax(an, i)), hl = hold > 0 ? colF.map((_, i) => colMax(hd, i)) : null;
+      ctx.beginPath(); ctx.moveTo(x, y + h); pre.forEach((v, i) => ctx.lineTo(x + i, Ya(v))); ctx.lineTo(x + pw, y + h); ctx.closePath(); ctx.fillStyle = rgba(S.ink, 0.08); ctx.fill();
+      if (mode === 'pre-post') { const post = pre.map((v, i) => v + sum[i]);
+        ctx.beginPath(); ctx.moveTo(x, y + h); post.forEach((v, i) => ctx.lineTo(x + i, Ya(v))); ctx.lineTo(x + pw, y + h); ctx.closePath();
+        const gr = ctx.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, rgba(S.sig1, 0.18)); gr.addColorStop(1, rgba(S.sig1, 0.02)); ctx.fillStyle = gr; ctx.fill();
+        ctx.beginPath(); post.forEach((v, i) => (i ? ctx.lineTo(x + i, Ya(v)) : ctx.moveTo(x, Ya(v)))); ctx.strokeStyle = rgba(S.ink, 0.55); ctx.lineWidth = 1; ctx.stroke(); }
+      if (hl) { ctx.beginPath(); hl.forEach((v, i) => (i ? ctx.lineTo(x + i, Ya(v)) : ctx.moveTo(x, Ya(v)))); ctx.setLineDash([1, 2]); ctx.strokeStyle = rgba(S.ink, 0.3); ctx.stroke(); ctx.setLineDash([]); }
+    }
+    // band curves from 0 dB (thin, band colour); only the selected band is filled (both sides of 0)
+    bands.forEach((b, bi) => { const d = bandDb[bi];
+      if (bi === sel) { ctx.beginPath(); ctx.moveTo(x, Yg(0)); d.forEach((v, i) => ctx.lineTo(x + i, Yg(v))); ctx.lineTo(x + pw, Yg(0)); ctx.closePath(); ctx.fillStyle = rgba(cols[bi], 0.22); ctx.fill(); }
+      ctx.beginPath(); d.forEach((v, i) => (i ? ctx.lineTo(x + i, Yg(v)) : ctx.moveTo(x, Yg(v)))); ctx.setLineDash(S.grey ? EQ_DASH[bi] : []); ctx.strokeStyle = rgba(cols[bi], 0.7); ctx.lineWidth = 1.25; ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; });
     // summed curve: the thickest line on screen
-    ctx.beginPath(); for (let i = 0; i <= NPT; i++) { const X = XF(fr(i), x, pw), Y = Yg(sum(fr(i))); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
-    ctx.lineJoin = 'round'; ctx.strokeStyle = rgba(S.ink, 0.14); ctx.lineWidth = 9; ctx.stroke(); ctx.strokeStyle = S.ink; ctx.lineWidth = 3.5; ctx.stroke(); ctx.lineWidth = 1;
-    BANDS.forEach(([ty, fc], bi) => {
-      const X = XF(fc, x, pw), Y = Yg(sum(fc)), R = bi === sel ? 15 : 12;
-      ctx.fillStyle = cols[bi]; ctx.beginPath(); ctx.arc(X, Y, R, 0, 7); ctx.fill(); ctx.strokeStyle = cols[bi]; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(X, Y, R + 5, 0, 7); ctx.stroke(); ctx.lineWidth = 1;
-      text(ctx, String(bi + 1), X, Y + 1, { size: 22, w: 800, col: S.bg, align: 'center' });
-    });
-    { // hover bubble on the selected node (rows type in on 16ths from the bar line)
-      const [ty, fc, q] = BANDS[sel], X = XF(fc, x, pw), Y = Yg(sum(fc)), bw = 250, bh = 96, bx = X < x + pw / 2 ? x + pw - bw - 4 : x + 4, by = Y < y + h / 2 ? y + h - bh - 4 : y + 4;
-      const rows = L.steps(t, Math.floor(t / BAR) * 4, 3, 0.25);
-      ctx.strokeStyle = rgba(S.ink, 0.6); ctx.beginPath(); ctx.moveTo(X, Y + (by > Y ? 18 : -18)); ctx.lineTo(bx + 12, by + (by > Y ? 0 : bh)); ctx.stroke();
-      ctx.fillStyle = rgba(S.bg, 0.94); ctx.fillRect(bx, by, bw, bh); ctx.strokeStyle = rgba(S.ink, 0.85); ctx.strokeRect(cr(bx), cr(by), bw, bh);
-      const n = 12 * Math.log2(fc / 440) + 57, ni = Math.round(n), nm = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][((ni % 12) + 12) % 12] + Math.floor(ni / 12);
-      [`${bi1(sel)} ${fc >= 1000 ? (fc / 1000).toFixed(1) + 'k' : fc} Hz · ${nm}`, `G ${g[sel] >= 0 ? '+' : '−'}${Math.abs(g[sel]).toFixed(1)} dB`, `Q ${(1 / q).toFixed(2)} · ${ty.toLowerCase()}`].slice(0, rows)
-        .forEach((s, i) => lbl(ctx, S, s, bx + 10, by + 17 + i * 30, { a: 1, maxW: bw - 18 }));
-    }
-    const ry = y + h + rulerH / 2 + 2;
-    [['20', 20], ['100', 100], ['1k', 1000], ['10k', 10000]].forEach(([s, fq]) => lbl(ctx, S, s, XF(fq, x, pw), ry, { align: 'center', a: 0.6 }));
-    const py = y + h + rulerH + 2;
-    ctx.strokeStyle = rgba(S.ink, 0.25); ctx.strokeRect(cr(x), cr(py), Math.round(pw), pianoH);
-    for (let m = 21; m <= 108; m++) {
-      const fq = 440 * Math.pow(2, (m - 69) / 12), X = XF(fq, x, pw), bk = [1, 3, 6, 8, 10].includes(m % 12), lit = BANDS.findIndex(([, fc]) => Math.abs(12 * Math.log2(fc / fq)) < 0.5);
-      ctx.fillStyle = lit >= 0 ? cols[lit] : rgba(S.ink, bk ? 0.32 : 0.22);
-      if (bk) ctx.fillRect(Math.round(X - 1.5), Math.round(py), 3, Math.round(pianoH * 0.6)); else ctx.fillRect(Math.round(X), Math.round(py), 1, pianoH);
-    }
+    ctx.beginPath(); sum.forEach((v, i) => (i ? ctx.lineTo(x + i, Yg(v)) : ctx.moveTo(x, Yg(v)))); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    const sc = S.name === 'RUBEDO' ? S.hot : S.ink; ctx.strokeStyle = rgba(sc, 0.12); ctx.lineWidth = 7; ctx.stroke(); ctx.strokeStyle = sc; ctx.lineWidth = 3; ctx.stroke(); ctx.lineWidth = 1; ctx.lineCap = 'butt';
+    // nodes (at each band's own curve at f0) + collision-free number labels + the selected band's bubble
+    const nodes = bands.map((b, bi) => { const X = XF(b.f), i = clamp(Math.round(X - x), 0, pw); return { bi, X, Y: Yg(bandDb[bi][i]), b }; });
+    const boxes = nodes.map((n) => [n.X - 12, n.Y - 12, 24, 24]), hit = (a, q) => a[0] < q[0] + q[2] && q[0] < a[0] + a[2] && a[1] < q[1] + q[3] && q[1] < a[1] + a[3];
+    const inPlot = (q) => q[0] >= x && q[1] >= y && q[0] + q[2] <= x + pw && q[1] + q[3] <= y + h;
+    const place = (n, bw, bh, gap, own) => { for (const [sx, sy] of [[1, -1], [-1, -1], [1, 1], [-1, 1]]) { const q = [sx > 0 ? n.X + gap : n.X - gap - bw, sy < 0 ? n.Y - gap - bh : n.Y + gap, bw, bh];
+      if (inPlot(q) && !boxes.some((o, j) => j !== own && hit(q, o))) return q; } return null; };
+    const order = [...nodes].sort((a, b) => (a.bi === sel) - (b.bi === sel));
+    if (sel >= 0) { const n = nodes[sel], bw = 196, bh = 74, q = place(n, bw, bh, 14, sel) || [clamp(n.X - bw / 2, x, x + pw - bw), n.Y < y + h / 2 ? n.Y + 20 : n.Y - 20 - bh, bw, bh]; boxes.push(q);
+      const rows = L.steps(t, Math.floor(t / BAR) * 4, 3, 0.25), b = n.b, rh = Math.max(24, L.floorSize(ctx, 16) + 6); q[3] = 10 + rows * rh; if (q[1] + bh > n.Y) q[1] += bh - q[3];
+      ctx.strokeStyle = rgba(S.ink, 0.6); ctx.beginPath(); ctx.moveTo(n.X, n.Y); ctx.lineTo(clamp(n.X, q[0], q[0] + bw), n.Y < q[1] ? q[1] : q[1] + q[3]); ctx.stroke();
+      ctx.fillStyle = rgba(S.bg, 0.94); ctx.fillRect(q[0], q[1], bw, q[3]); ctx.strokeStyle = rgba(S.ink, 0.8); ctx.strokeRect(cr(q[0]), cr(q[1]), bw, q[3]);
+      [`${b.f >= 1000 ? (b.f / 1000).toFixed(2) + 'k' : b.f.toFixed(1)} Hz · ${noteName(b.f)}`, `${b.g >= 0 ? '+' : '−'}${Math.abs(b.g).toFixed(1)} dB · #${sel + 1}`, `Q ${b.q.toFixed(2)} · ${b.type}`].slice(0, rows)
+        .forEach((s, i) => lbl(ctx, S, s, q[0] + 8, q[1] + 5 + rh / 2 + i * rh, { size: 16, a: 1, maxW: bw - 14 })); }
+    for (const n of order) { const s = n.bi === sel, R = s ? 7.5 : 5.5, close = nodes.some((o) => o !== n && Math.hypot(o.X - n.X, o.Y - n.Y) < 16 && !s);
+      ctx.fillStyle = S.bg; ctx.beginPath(); ctx.arc(n.X, n.Y, R + 2, 0, 7); ctx.fill(); ctx.fillStyle = cols[n.bi]; ctx.beginPath(); ctx.arc(n.X, n.Y, R, 0, 7); ctx.fill();
+      if (s || close) { ctx.strokeStyle = S.ink; ctx.lineWidth = 1.5; if (close) ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.arc(n.X, n.Y, R + 3.5, 0, 7); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; }
+      const q = place(n, 16, 18, 6, n.bi); if (q) { boxes.push(q); lbl(ctx, S, String(n.bi + 1), q[0] + 8, q[1] + 9, { size: 15, w: 700, align: 'center', a: 0.95 }); } }
+    // header + frequency ruler (labels skip when they would collide)
+    lbl(ctx, S, `MATCH · ${label.toUpperCase()} · ref −${tilt} dB/oct · ${Math.round(strength * 100)}%`, x0 + 6, y0 + 12, { size: 16, a: 0.65, maxW: w0 - 12 });
+    let lastR = -1e9; for (const [s, fq] of [['20', 20], ['50', 50], ['100', 100], ['200', 200], ['500', 500], ['1k', 1000], ['2k', 2000], ['5k', 5000], ['10k', 10000], ['20k', 20000]]) {
+      const X = XF(fq), wl = s.length * 0.62 * L.floorSize(ctx, 16) + 8; if (X - wl / 2 < lastR || X + wl / 2 > x0 + w0) continue; lbl(ctx, S, s, X, y + h + 14, { size: 16, align: 'center', a: [100, 1000, 10000].includes(fq) ? 0.8 : 0.5 }); lastR = X + wl / 2; }
     ctx.restore();
   };
-  const bi1 = (i) => `#${i + 1}`;
 
   // ---------------------------------------------------------------- LOUDNESS (Kollide-frames instrument)
   M8.loud = (ctx, S, r, t, k) => {

@@ -16,7 +16,9 @@ const col = (path, label, def) => ({ path, label, kind: 'color', default: def })
 export const METER_PROPS = {
   spectrum: [['floor', 'Range (dB below 0)', 90, 30, 120, 1, 'dB'], ['trail', 'Trail', 0.22, 0, 1, 0.01, 's'], ['smooth', 'Smoothing', 1, 1, 12, 1, 'frames'], ['hold', 'Peak hold', true]],
   spectrogram: [['mode', 'Panes (M + S, or M only)', 'ms', ['ms', 'm']], ['range', 'Range (floor below 0 dBFS)', 90, 40, 120, 1, 'dB'], ['window', 'Time window', 8, 1, 16, 0.5, 's'], ['gamma', 'Alpha curve (Aurora v^g)', 0.56, 0.2, 1.5, 0.01, '']],
-  eq: [['range', 'Gain range (±)', 15, 6, 30, 1, 'dB'], ['tilt', 'Analyzer tilt', 4.5, 0, 6, 0.1, 'dB/oct']],
+  eq: [['range', 'EQ scale ± (0 = auto: 3/6/12/30)', 0, 0, 30, 1, 'dB'], ['anRange', 'Analyzer range', 90, 60, 120, 30, 'dB'], ['mode', 'Analyzer', 'pre-post', ['pre-post', 'pre', 'off']],
+    ['tilt', 'Analyzer tilt (about 1 kHz)', 4.5, 0, 6, 0.1, 'dB/oct'], ['smoothing', 'Analyzer release', 20, 3, 120, 1, 'dB/s'], ['hold', 'Analyzer peak hold (0 = off)', 1, 0, 10, 0.1, 's'],
+    ['strength', 'Match strength', 50, 0, 100, 5, '%']],
   loudness: [['target', 'Target marker', -14, -24, -6, 0.5, 'LUFS'], ['floor', 'Gauge floor', -36, -60, -18, 1, 'LUFS']],
   stereo: [['mode', 'Vectorscope mode', 'sample', ['sample', 'level', 'lissajous']], ['range', 'Radius range (log)', 40, 12, 80, 1, 'dB'], ['persist', 'Persistence (sample / Lissajous)', 0.42, 0.03, 1.5, 0.01, 's'],
     ['smoothing', 'Polar level release', 12, 1, 60, 0.5, 'dB/s'], ['hold', 'Polar level outline hold', 0.5, 0, 4, 0.05, 's'], ['gain', 'Scope gain', 1, 0.25, 4, 0.05, '×']],

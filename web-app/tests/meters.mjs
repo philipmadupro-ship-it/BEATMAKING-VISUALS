@@ -181,6 +181,48 @@ if (fs.existsSync(BEAT)) {
   const sideOK = sAct > 0.05 * (nf - 30) * 128, wMean = wS / wN;
   ok('real beat: imager shows real stereo (S pane active, 0.02 < W̄ < 0.5, low band narrowest)', sideOK && wMean > 0.02 && wMean < 0.5 && bw[0] < bw[2], `S active ${(100 * sAct / ((nf - 30) * 128)).toFixed(0)} % of cells · W̄ ${wMean.toFixed(3)} · band width ${bw.map((v) => v.toFixed(0) + '%').join(' / ')}`);
 }
+
+// ---- 8. EQ: RBJ magnitudes vs an independent scipy evaluation (≤ 0.1 dB), the match-EQ fit, the analyzer calibration
+{ const SETS = [
+    [{ type: 'LS', f: 80, g: 4.5, q: 0.71 }, { type: 'BELL', f: 176.1, g: 2.5, q: 1 }, { type: 'BELL', f: 2400, g: -3.2, q: 2.7 }, { type: 'HS', f: 9000, g: -2, q: 0.71 }],
+    [{ type: 'HP', f: 30, g: 0, q: 0.541 }, { type: 'HP', f: 30, g: 0, q: 1.307 }, { type: 'LP', f: 18000, g: 0, q: 0.71 }, { type: 'BELL', f: 60, g: 6, q: 4 }, { type: 'BELL', f: 12000, g: -6, q: 0.5 }]];
+  const freqs = Array.from({ length: 400 }, (_, i) => 20 * 1500 ** (i / 399));
+  fs.writeFileSync(path.join(DIR, 'eq.json'), JSON.stringify({ sets: SETS, freqs, fss: [96000, 48000] }));
+  const EQPY = String.raw`
+import json, sys, numpy as np
+from scipy.signal import freqz
+d = json.load(open(sys.argv[1])); out = []
+def coef(t, f0, G, Q, fs):
+    A = 10 ** (G / 40); w0 = 2 * np.pi * min(f0, fs * 0.49) / fs; c = np.cos(w0); al = np.sin(w0) / (2 * Q); sA = 2 * np.sqrt(A) * al
+    if t == 'LS': return [A*((A+1)-(A-1)*c+sA), 2*A*((A-1)-(A+1)*c), A*((A+1)-(A-1)*c-sA)], [(A+1)+(A-1)*c+sA, -2*((A-1)+(A+1)*c), (A+1)+(A-1)*c-sA]
+    if t == 'HS': return [A*((A+1)+(A-1)*c+sA), -2*A*((A-1)+(A+1)*c), A*((A+1)+(A-1)*c-sA)], [(A+1)-(A-1)*c+sA, 2*((A-1)-(A+1)*c), (A+1)-(A-1)*c-sA]
+    if t == 'HP': return [(1+c)/2, -(1+c), (1+c)/2], [1+al, -2*c, 1-al]
+    if t == 'LP': return [(1-c)/2, 1-c, (1-c)/2], [1+al, -2*c, 1-al]
+    return [1+al*A, -2*c, 1-al*A], [1+al/A, -2*c, 1-al/A]
+for fs in d['fss']:
+    for bands in d['sets']:
+        tot = np.zeros(len(d['freqs']))
+        for b in bands:
+            bb, aa = coef(b['type'], b['f'], b['g'], b['q'], fs); _, H = freqz(bb, aa, worN=np.array(d['freqs']), fs=fs); tot += 20 * np.log10(np.abs(H))
+        out.append(tot.tolist())
+json.dump(out, open(sys.argv[2], 'w'))
+`;
+  fs.writeFileSync(path.join(DIR, 'eq.py'), EQPY); execFileSync('python3', ['-I', path.join(DIR, 'eq.py'), path.join(DIR, 'eq.json'), path.join(DIR, 'eq-ref.json')]);
+  const REF = JSON.parse(fs.readFileSync(path.join(DIR, 'eq-ref.json'), 'utf8')); let worst = 0, idx = 0;
+  for (const fsr of [96000, 48000]) for (const set of SETS) { const ref = REF[idx++]; freqs.forEach((fq, i) => { worst = Math.max(worst, Math.abs(ML.sumDb(set, fq, fsr) - ref[i])); }); }
+  ok('EQ curve: RBJ magnitude per column vs scipy freqz ≤ 0.1 dB (2 band sets × 400 freqs × 2 fs)', worst <= 0.1, `worst ${worst.toExponential(2)} dB`);
+  // match fit on an LTAS that already follows -4.5 dB/oct -> no bands; plus a +6 dB bump at 1 kHz -> one cut there
+  const grid = ML.ltasGrid(96), ref45 = grid.map((fq) => -30 - 4.5 * Math.log2(fq / 1000)), bump = ref45.map((v, i) => v + 6 * Math.exp(-((Math.log2(grid[i] / 1000)) ** 2) / (2 * 0.3 ** 2)));
+  const f0 = ML.fitMatch(grid, ref45), f1 = ML.fitMatch(grid, bump), b1 = f1[0] || {};
+  ok('match EQ: a -4.5 dB/oct section needs no band; a +6 dB bump at 1 kHz gets a ≈ -3 dB bell there (50 %)', f0.length === 0 && f1.length >= 1 && b1.type === 'BELL' && Math.abs(Math.log2(b1.f / 1000)) < 0.2 && Math.abs(b1.g + 3) < 0.8,
+    `flat → ${f0.length} bands · bump → ${f1.map((b) => `${b.type} ${b.f.toFixed(0)} Hz ${b.g} dB Q ${b.q}`).join(', ')}`);
+  // analyzer calibration: a bin-centred sine (amplitude 0.5) on both channels reads -6.02 dB in its log bin
+  const sr = 48000, n = sr * 2, fz = 171 * sr / 8192, sn = new Float32Array(n).map((_, i) => 0.5 * Math.sin(2 * Math.PI * fz * i / sr));
+  const D = clipData({ L: sn, R: sn, sr, inT: 0, bars: 1, beat: 0.5, target: 'off' }), AB = D.ms.anBins, row = [...D.ms.anSpec.subarray(30 * AB, 31 * AB)].map((v) => -v / 2), pk = Math.max(...row), j = row.indexOf(pk), fj = 20 * 1500 ** ((j + 0.5) / AB);
+  ok('EQ analyzer: 8192 Hann hop 1024, coherent scaling: bin-centred -6.02 dBFS sine reads -6 ±0.5 dB at its frequency', Math.abs(pk + 6.02) <= 0.5 && Math.abs(Math.log2(fj / fz)) < 0.02, `peak ${pk} dB at ${fj.toFixed(1)} Hz (sine ${fz.toFixed(1)} Hz)`);
+  if (realClip) { const Dm = realClip, nT = Dm.ms.ltasN, lt = ML.ltasGrid(nT).map((_, i) => { let p = 0; for (let k = 0; k < Dm.bars; k++) p += 10 ** (Dm.ms.ltas[k * nT + i] / 10); return 10 * Math.log10(p / Dm.bars); });
+    const fit = ML.fitMatch(ML.ltasGrid(nT), lt); ok('real beat: the match EQ fit gives 1-4 bands within ±6 dB from the measured LTAS', fit.length >= 1 && fit.length <= 4 && fit.every((b) => Math.abs(b.g) <= 6 && b.q >= 0.5 && b.q <= 4), fit.map((b) => `${b.type} ${b.f} Hz ${b.g} dB Q ${b.q}`).join(' · ')); }
+}
 fs.writeFileSync(path.join(DIR, 'results.json'), JSON.stringify(table.map(({ k, A, F, N }) => ({ k, app: { peak: A.peak, rms: A.rms, lufs: A.lufs, tp: A.tp, corr: A.corr, clip: A.clip, eq: A.eq }, ffmpeg: F, numpy: N })), null, 1));
 const fails = results.filter(r => !r.pass).length;
 console.log(`\n${results.length - fails}/${results.length} passed · signals + results in ${DIR}`);
