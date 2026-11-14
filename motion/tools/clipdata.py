@@ -122,13 +122,14 @@ for f in range(NF):
     rel, tilt = M.balance_vs_pink(P); fr["bal"].append([round(v, 1) for v in np.clip(rel, -24, 24)]); fr["tilt"].append(round(tilt, 2))
     band_raw.append([P[(M.FREQS >= lo) & (M.FREQS < hi)].sum() for lo, hi in BANDS])
     v0 = max(0, c - int(SR * dt)); idx = np.linspace(v0, max(c - 1, v0), 160).astype(int)
-    sc = np.clip(np.round(((Lc[idx] - Rc[idx]) / np.sqrt(2)) * 127 / 0.8), -127, 127)
+    sc = np.clip(np.round(((Rc[idx] - Lc[idx]) / np.sqrt(2)) * 127 / 0.8), -127, 127)   # meters v2: S = (r-l)/sqrt2, +S = right
     gonio[f] = sc.astype(np.int8)
     # store M as the second half? keep both: S (x) in gonio, M (y) in gonio2
     if f == 0: gonio2 = np.zeros((NF, 160), np.int8)
     gonio2[f] = np.clip(np.round(((Lc[idx] + Rc[idx]) / np.sqrt(2)) * 127 / 0.8), -127, 127).astype(np.int8)
 br_ = np.array(band_raw); br_ = np.sqrt(br_ / np.percentile(br_, 98, axis=0)[None, :])
 fr["bands"] = np.round(np.clip(br_, 0, 1.5), 3).tolist()
+fr["bandDb"] = np.round(np.maximum(-120, M.pdb(np.array(band_raw))), 1).tolist()   # meters v2: dBFS band power (band meters)
 
 # ---------------------------------------------------------------- onsets (on the clip), quantised to the 16th grid
 def flux(lo, hi, n=1024, hop=128, log=True):

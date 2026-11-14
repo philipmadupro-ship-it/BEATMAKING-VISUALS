@@ -14,6 +14,9 @@ const DST = path.join(ROOT, 'film', 'v9');
 const FILES = [
   ...fs.readdirSync(path.join(WEB, 'src/v8')).filter((f) => f.endsWith('.js')).map((f) => ['src/v8/' + f, 'src/v8/' + f]),
   ...['schema.js', 'generate.js', 'adapter-native.mjs'].map((f) => ['src/cues/' + f, 'src/cues/' + f]),
+  // meters v2: the analysis modules tools/meterdata.mjs runs for the native data (same numbers as the web app)
+  ...['meterstreams.js', 'msspec.js', 'dsp.js', 'stereo.js', 'truepeak.js'].map((f) => ['src/analysis/' + f, 'src/analysis/' + f]),
+  ['src/export/audio.js', 'src/export/audio.js'],
   ...['u2c-links.png', 'u2c-links-edge.png', 'elephant.png', 'elephant-rig.json'].map((f) => ['assets/' + f, 'assets/' + f]),
 ];
 const sha = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex').slice(0, 16);

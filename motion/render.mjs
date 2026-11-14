@@ -57,12 +57,15 @@ const run = (cmd, a, opt = {}) => { const r = spawnSync(cmd, a, { stdio: opt.qui
 
 // 1. data + mastered clip (cached per beat/length/section)
 const js = path.join(FILM, 'data', id + '.js');
-const stale = () => !fs.existsSync(js) || fs.statSync(js).mtimeMs < fs.statSync(beat).mtimeMs || (ENGINE === 'v9' && !fs.readFileSync(js, 'utf8').includes('"wave3"'));
+const stale = () => !fs.existsSync(js) || fs.statSync(js).mtimeMs < fs.statSync(beat).mtimeMs || (ENGINE === 'v9' && !(() => { const s = fs.readFileSync(js, 'utf8'); return s.includes('"wave3"') && s.includes('"bandDb"'); })());
 if (stale() || args.rebuild) {
   const a = ['tools/clipdata.py', '--beat', beat, '--len', String(len), '--id', id];
   if (args['start-bar']) a.push('--start-bar', String(args['start-bar']));
   if (args.title) a.push('--title', String(args.title));
   console.log(run(PY, a, { cwd: ROOT, quiet: true }).trim().split('\n').pop());
+}
+if (ENGINE === 'v9') {   // meters v2 streams (scope / polar / levels / M-S spectra) from the web app's analysis code
+  if (!fs.readFileSync(js, 'utf8').includes('"meters":')) console.log(run('node', ['tools/meterdata.mjs', id], { cwd: ROOT, quiet: true }).trim());
 }
 run('python3', ['tools/sync_elephant_loop.py'], { cwd: ROOT, quiet: true });
 const D = JSON.parse(fs.readFileSync(js, 'utf8').replace(/^window\.U2C_DATA=/, '').replace(/;\s*$/, ''));
