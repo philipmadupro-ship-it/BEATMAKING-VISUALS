@@ -165,15 +165,20 @@ export function clipData({ L, R, sr, inT, bars, beat, fps = 30, target = -14, tp
   for (let i = 0; i < cols2; i++) { const a = Math.floor(i * cw2), b = Math.max(a + 1, Math.floor((i + 1) * cw2));
     [cL, cR].forEach((ch, k) => { let mn = Infinity, mx = -Infinity, s = 0; for (let j = a; j < b; j++) { const v = ch[j]; if (v < mn) mn = v; if (v > mx) mx = v; s += v * v; }
       w2[i * 6 + k * 3] = clampv(Math.round(mn * 127), -127, 127); w2[i * 6 + k * 3 + 1] = clampv(Math.round(mx * 127), -127, 127); w2[i * 6 + k * 3 + 2] = clampv(Math.round(Math.sqrt(s / (b - a)) * 127), -127, 127); }); }
+  // v9 Ableton-grade waveform: finest LOD ~2400 col/s, an integer number of samples per column, int16 min/max/rms per channel
+  const SPC3 = Math.max(1, Math.round(sr / 2400)), cols3 = Math.floor(n / SPC3), w3 = new Int16Array(cols3 * 6), q15 = (v) => clampv(Math.round(v * 32767), -32767, 32767);
+  for (let i = 0; i < cols3; i++) { const a = i * SPC3, b = a + SPC3;
+    [cL, cR].forEach((ch, k) => { let mn = Infinity, mx = -Infinity, s = 0; for (let j = a; j < b; j++) { const v = ch[j]; if (v < mn) mn = v; if (v > mx) mx = v; s += v * v; }
+      w3[i * 6 + k * 3] = q15(mn); w3[i * 6 + k * 3 + 1] = q15(mx); w3[i * 6 + k * 3 + 2] = q15(Math.sqrt(s / SPC3)); }); }
   let tpMax = 0; for (let b = 0; b < nTB; b++) tpMax = Math.max(tpMax, tpRun[b]);
   const summary = { I: Math.round(LO.integrated() * 100) / 100, LRA: Math.round(LO.lra() * 100) / 100, TP: Math.round(20 * Math.log10(tpMax || 1e-12) * 100) / 100, gainDb: Math.round(gainDb * 100) / 100 };
   if (progress) progress(1);
   return { fps, frames: NF, duration: dur, bars, beat, bpm: 60 / beat, inT, frame: F, oct6: OCT6.map(v => Math.round(v * 100) / 100), oct1: OCT1, bandNames: BAND_NAMES,
-    spectroBins: SPEC_BINS, spectro, gonioN: GON, gonioS, gonioM, onsets: ons, wave: { cps: CPS, tone }, wave2: { cps: CPS2, n: cols2, data: w2 }, summary };
+    spectroBins: SPEC_BINS, spectro, gonioN: GON, gonioS, gonioM, onsets: ons, wave: { cps: CPS, tone }, wave2: { cps: CPS2, n: cols2, data: w2 }, wave3: { cps: sr / SPC3, n: cols3, spc: SPC3, sr, data: w3 }, summary };
 }
 
 /** Typed arrays of a clipData result, for postMessage transfer lists. */
 export function transferables(d) {
-  const t = [d.spectro.buffer, d.gonioS.buffer, d.gonioM.buffer, d.wave.tone.buffer, d.wave2.data.buffer];
+  const t = [d.spectro.buffer, d.gonioS.buffer, d.gonioM.buffer, d.wave.tone.buffer, d.wave2.data.buffer]; if (d.wave3) t.push(d.wave3.data.buffer);
   for (const k in d.frame) t.push(d.frame[k].buffer); return t;
 }

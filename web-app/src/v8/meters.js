@@ -9,6 +9,26 @@
 export function createMeters(L) {
   const { D, F, FPS, NF, BEAT, BAR, T, U, rgba, mix, text, fmt, tc, bbt, fidx, clamp, lerp, hash, SANS, MONO } = L;
   const M = {};
+  // ---------------------------------------------------------------- waveform LODs (v9): level 0 = D.wave3 (int16, ~2400
+  // col/s, spc samples per column) or D.wave2 (int8, 400 col/s); every next level merges 4 columns. col(ta, tb, ch) ->
+  // min/max/rms over the source columns the pixel spans (and the exact clip-sample range they cover, for the test).
+  const WV = (() => {
+    const src = D.wave3 || { cps: D.wave2.cps, n: D.wave2.n, spc: 0, data: D.wave2.data }, FS = D.wave3 ? 32767 : 127, n0 = src.n, lv = [];
+    const l0 = { cps: src.cps, n: n0, k: 1, mn: [new Float32Array(n0), new Float32Array(n0)], mx: [new Float32Array(n0), new Float32Array(n0)], ms: [new Float32Array(n0), new Float32Array(n0)], c: null };
+    for (let i = 0; i < n0; i++) for (let ch = 0; ch < 2; ch++) { const q = i * 6 + ch * 3, r = src.data[q + 2] / FS; l0.mn[ch][i] = src.data[q] / FS; l0.mx[ch][i] = src.data[q + 1] / FS; l0.ms[ch][i] = r * r; }
+    lv.push(l0);
+    while (lv[lv.length - 1].n > 64) { const p = lv[lv.length - 1], n = Math.ceil(p.n / 4), o = { cps: p.cps / 4, n, k: p.k * 4, mn: [new Float32Array(n), new Float32Array(n)], mx: [new Float32Array(n), new Float32Array(n)], ms: [new Float32Array(n), new Float32Array(n)] };
+      for (let i = 0; i < n; i++) for (let ch = 0; ch < 2; ch++) { let mn = 1e9, mx = -1e9, s = 0, c = 0; for (let j = i * 4; j < Math.min(p.n, i * 4 + 4); j++) { const w = Math.min(p.k, n0 - j * p.k); mn = Math.min(mn, p.mn[ch][j]); mx = Math.max(mx, p.mx[ch][j]); s += p.ms[ch][j] * w; c += w; } o.mn[ch][i] = mn; o.mx[ch][i] = mx; o.ms[ch][i] = s / c; }
+      lv.push(o); }
+    const col = (ta, tb, ch) => {
+      let l = 0; const need = (tb - ta) * lv[0].cps; while (l < lv.length - 1 && need / lv[l + 1].k >= 4) l++;
+      const V = lv[l], i0 = clamp(Math.floor(ta * V.cps + 1e-9), 0, V.n - 1), i1 = clamp(Math.max(i0, Math.ceil(tb * V.cps - 1e-9) - 1), 0, V.n - 1);
+      let mn = 1e9, mx = -1e9, s = 0, c = 0; for (let i = i0; i <= i1; i++) { const w = Math.min(V.k, n0 - i * V.k); if (V.mn[ch][i] < mn) mn = V.mn[ch][i]; if (V.mx[ch][i] > mx) mx = V.mx[ch][i]; s += V.ms[ch][i] * w; c += w; }
+      return { mn, mx, rms: Math.sqrt(s / c), lod: l, s0: i0 * V.k * src.spc, s1: Math.min(n0, (i1 + 1) * V.k) * src.spc };
+    };
+    return { lv, col, spc: src.spc, sr: src.sr || 0 };
+  })();
+  M.wave = WV;
   const X20 = (f, x, w) => x + w * Math.log(f / 20) / Math.log(1000);
   const lbl = (ctx, S, s, x, y, o = {}) => text(ctx, s, x, y, { size: o.size || 22, col: rgba(o.col || S.ink, o.a == null ? 0.7 : o.a), align: o.align, w: o.w || 500, ls: o.ls == null ? 0 : o.ls, base: o.base, maxW: o.maxW });
   function reveal(ctx, x, y, w, h, k) { ctx.save(); ctx.beginPath(); ctx.rect(x - 2, y - 2, w + 4, (h + 4) * k); ctx.clip(); }
@@ -41,22 +61,42 @@ export function createMeters(L) {
     // warp-marker ticks on the quantised kick + snare transients
     const wy = ry + rh + 2;
     for (const [kind, col] of [['kick', S.sig2], ['snare', S.ink]]) for (const [, s, tq] of D.onsets[kind]) { const X = tx(tq); if (X < x || X > x + w) continue; ctx.fillStyle = rgba(col, tq <= t ? 1 : 0.4); ctx.beginPath(); ctx.moveTo(X - 6, wy); ctx.lineTo(X + 6, wy); ctx.lineTo(X, wy + 9); ctx.fill(); }
-    // L / R lanes, 1 px columns: peak (light) + rms (solid), coloured by tone, unplayed dimmed
-    const ly = wy + 12, onH = 26, laneH = (y + h - ly - onH - 6) / 2;
+    // L / R lanes, Ableton-grade: one column per DEVICE pixel (zoom-aware), min/max peak envelope + RMS body from the
+    // finest LOD that still has >= 1 source column per pixel, crisp 1-px outline, bar / beat grid behind, transient
+    // markers at the measured (unquantised) onsets, played part in the stage colour by tone, unplayed dimmed.
+    const ly = wy + 12, onH = 26, laneH = (y + h - ly - onH - 6) / 2, m = ctx.getTransform(), sx = Math.max(1e-3, Math.hypot(m.a, m.b)), nc = Math.max(1, Math.round(w * sx)), cwp = w / nc;
+    const dbg = L.waveDebug ? (L.waveDebug.cols = [], L.waveDebug.skip = [], L.waveDebug) : null;
+    if (dbg) Object.assign(dbg, { x, w, nc, sx, laneH, lanes: [], sr: WV.sr, spc: WV.spc, lod0cps: WV.lv[0].cps });
+    const snap = (v) => Math.round(v * sx) / sx;
     for (let ch = 0; ch < 2; ch++) {
-      const cy = Math.round(ly + laneH * ch + laneH / 2), sc = laneH * 0.47 / 127;
-      ctx.fillStyle = rgba(S.ink, 0.12); ctx.fillRect(x, cy, w, 1);
-      for (let px = 0; px < w; px++) {
-        const ta = t0 + span * px / w, tb = t0 + span * (px + 1) / w; if (tb < 0 || ta >= D.duration) continue;
-        const i0 = Math.max(0, Math.floor(ta * cps)), i1 = Math.min(D.wave2.n - 1, Math.max(i0, Math.ceil(tb * cps) - 1));
-        let mn = 127, mx = -127, rm = 0; for (let i = i0; i <= i1; i++) { const q = i * 6 + ch * 3; if (W2[q] < mn) mn = W2[q]; if (W2[q + 1] > mx) mx = W2[q + 1]; if (W2[q + 2] > rm) rm = W2[q + 2]; }
-        const played = ta <= t, wi = Math.min(D.wave.tone.length - 1, Math.floor(ta * D.wave.cps)), tone = D.wave.tone[Math.max(0, wi)] || [50, 10];
-        const col = played ? mix(S.waveHi, S.waveLo, clamp(tone[0] / 100 - tone[1] / 120 + 0.3), 1) : rgba(S.dim, 0.7);
-        ctx.fillStyle = col; ctx.globalAlpha = played ? 0.42 : 0.3; ctx.fillRect(Math.round(x + px), Math.round(cy - mx * sc), 1, Math.max(1, Math.round((mx - mn) * sc)));
-        ctx.globalAlpha = played ? 1 : 0.55; ctx.fillRect(Math.round(x + px), Math.round(cy - rm * sc), 1, Math.max(1, Math.round(rm * 2 * sc)));
+      const top0 = ly + laneH * ch, cy = snap(top0 + laneH / 2), sc = laneH * 0.47;
+      ctx.fillStyle = rgba(S.sig1, S.name === 'ALBEDO' ? 0.05 : 0.07); ctx.fillRect(x, top0 + 2, w, laneH - 4);
+      // grid behind the waveform: bars strong, beats faint, 16ths as short ticks at the lane edge
+      for (let q = Math.floor(t0 / (BEAT / 4)) - 1; q * BEAT / 4 < t0 + span + BEAT; q++) {
+        const X = snap(tx(q * BEAT / 4)); if (X < x || X > x + w) continue; const isBar = ((q % 16) + 16) % 16 === 0, isBeat = ((q % 4) + 4) % 4 === 0;
+        ctx.fillStyle = rgba(S.ink, isBar ? 0.26 : isBeat ? 0.12 : 0.1); ctx.fillRect(X, isBeat ? top0 + 2 : top0 + laneH - 8, 1 / sx, isBeat ? laneH - 4 : 6); if (dbg && isBeat) dbg.skip.push(X);
+      }
+      const cols = new Float32Array(nc * 3);
+      for (let px = 0; px < nc; px++) {
+        const ta = t0 + span * px / nc, tb = t0 + span * (px + 1) / nc; if (tb <= 0 || ta >= D.duration) { cols[px * 3] = NaN; continue; }
+        const q = WV.col(Math.max(0, ta), Math.min(D.duration, tb), ch); cols[px * 3] = q.mn; cols[px * 3 + 1] = q.mx; cols[px * 3 + 2] = q.rms;
+        const X = x + px * cwp, played = ta <= t, wi = Math.min(D.wave.tone.length - 1, Math.floor(ta * D.wave.cps)), tone = D.wave.tone[Math.max(0, wi)] || [50, 10];
+        const col = played ? mix(S.waveHi, S.waveLo, clamp(tone[0] / 100 - tone[1] / 120 + 0.3), 1) : rgba(S.dim, 0.75);
+        const yT = snap(cy - q.mx * sc), hT = Math.max(1 / sx, snap((q.mx - q.mn) * sc)), r = Math.min(q.rms, q.mx, -q.mn), yR = snap(cy - r * sc), hR = Math.max(1 / sx, snap(2 * r * sc));
+        ctx.fillStyle = col; ctx.globalAlpha = played ? 0.5 : 0.32; ctx.fillRect(X, yT, cwp, hT);
+        ctx.globalAlpha = played ? 1 : 0.6; ctx.fillRect(X, Math.max(yT, yR), cwp, Math.min(hR, hT));
+        if (dbg) dbg.cols.push({ px, ch, X, mn: q.mn, mx: q.mx, rms: q.rms, s0: q.s0, s1: q.s1, lod: q.lod, yT, hT });
       }
       ctx.globalAlpha = 1;
-      lbl(ctx, S, ch ? 'R' : 'L', x + 6, cy - laneH / 2 + 14, { w: 700, a: 0.8 });
+      // crisp outline of the peak envelope (top and bottom), one vertex per device pixel
+      ctx.strokeStyle = rgba(S.ink, S.name === 'ALBEDO' ? 0.55 : 0.5); ctx.lineWidth = 1 / sx;
+      for (const side of [1, 0]) { ctx.beginPath(); let pen = false; for (let px = 0; px < nc; px++) { const v = cols[px * 3 + side]; if (Number.isNaN(cols[px * 3])) { pen = false; continue; } const X = x + (px + 0.5) * cwp, Y = cy - v * sc + (side ? 0.5 : -0.5) / sx; if (pen) ctx.lineTo(X, Y); else { ctx.moveTo(X, Y); pen = true; } } ctx.stroke(); }
+      ctx.lineWidth = 1; ctx.fillStyle = rgba(S.ink, 0.22); ctx.fillRect(x, cy, w, 1 / sx);
+      // transient markers: the measured onset (not the quantised one), a small flag on the lane top + a hairline
+      for (const [kind, colr] of [['kick', S.sig2], ['snare', S.ink]]) for (const [tr] of D.onsets[kind]) { const X = snap(tx(tr)); if (X < x || X > x + w) continue;
+        ctx.fillStyle = rgba(colr, tr <= t ? 0.5 : 0.25); ctx.fillRect(X, top0 + 2, 1 / sx, laneH - 4); ctx.fillStyle = rgba(colr, tr <= t ? 0.95 : 0.5); ctx.beginPath(); ctx.moveTo(X, top0 + 2); ctx.lineTo(X + 7, top0 + 2); ctx.lineTo(X, top0 + 11); ctx.fill(); if (dbg) dbg.skip.push(X); }
+      lbl(ctx, S, ch ? 'R' : 'L', x + 6, top0 + 16, { w: 700, a: 0.8 });
+      if (dbg) dbg.lanes.push({ ch, top: top0, h: laneH, cy, sc });
     }
     // onset lane: kick / snare / hat as tick marks, the one just hit in the accent
     const oy2 = y + h - onH;

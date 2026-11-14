@@ -10,8 +10,21 @@ export function filmData(cd, track, { title = 'UNTITLED', inT = 0 } = {}) {
     fps: cd.fps, frames: NF, duration: cd.duration, bars: cd.bars, bpm: track.bpm, beat: track.spb, key: keyName(track.key), title: String(title || 'UNTITLED').toUpperCase(),
     song: { duration: track.duration, startBar, startTime: inT, bar1: song.bar1, phrases: song.phrases.map((q) => ({ bar: q.bar, label: q.label, bars: q.bars })), overview: cd.overview, lastBar: song.bars.length ? song.bars[song.bars.length - 1].bar : 0 },
     frame: F, oct6: cd.oct6, oct1: cd.oct1, bandNames: cd.bandNames, spectroBins: cd.spectroBins, spectro: cd.spectro, gonioN: cd.gonioN, gonioS: cd.gonioS, gonioM: cd.gonioM,
-    onsets: cd.onsets, wave: { cps: cd.wave.cps, tone }, wave2: cd.wave2, srcLufs: cd.srcLufs, summary: cd.summary,
+    onsets: cd.onsets, wave: { cps: cd.wave.cps, tone }, wave2: cd.wave2, wave3: cd.wave3, srcLufs: cd.srcLufs, summary: cd.summary,
   };
 }
 /** Labels of each clip bar (0-based) from the song structure. */
 export function clipBarLabels(D) { const out = []; for (let k = 0; k < D.bars; k++) { const sb = D.song.startBar + k; let lab = 'intro'; for (const q of D.song.phrases) if (q.bar <= sb) lab = q.label; out.push(lab); } return out; }
+/**
+ * The native renderer's window.U2C_DATA (u2c-motion tools/clipdata.py: base64 strings, nested arrays) -> the shape the
+ * v8 composition reads (typed arrays). Used by the native v9 page (film/v9) so both renderers run this same code.
+ */
+export function fromNative(N) {
+  const b64 = (s) => { const bin = typeof atob === 'function' ? atob(s) : Buffer.from(s, 'base64').toString('binary'), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; };
+  const i8 = (s) => new Int8Array(b64(s).buffer);
+  const tone = Array.isArray(N.wave.tone[0]) ? N.wave.tone : Array.from({ length: N.wave.tone.length / 2 }, (_, i) => [N.wave.tone[2 * i], N.wave.tone[2 * i + 1]]);
+  const D = { ...N, spectro: b64(N.spectro), gonioS: i8(N.gonioS), gonioM: i8(N.gonioM), wave: { cps: N.wave.cps, tone },
+    wave2: { cps: N.wave2.cps, n: N.wave2.n, data: i8(N.wave2.b64) } };
+  if (N.wave3) D.wave3 = { cps: N.wave3.cps, n: N.wave3.n, sr: N.wave3.sr, spc: N.wave3.spc, data: new Int16Array(b64(N.wave3.b64).buffer) };
+  return D;
+}

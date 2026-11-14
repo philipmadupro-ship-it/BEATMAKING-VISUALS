@@ -22,8 +22,6 @@ export const DEFAULT_TAGS = {
   "eq": "eq.vst",
   "loud": "loudness.exe",
   "gonio": "gonio.scope",
-  "clock": "clock.sys",
-  "bands": "bands.dat",
   "scope": "scope.osc",
   "surface": "surface.gl",
   "terminal": "terminal",
@@ -36,7 +34,7 @@ export const DEFAULT_TAGS = {
  "specimen": [
   "SPECIMEN 05",
   "ELEPHANT · {stage}",
-  "VERLET · T0 = 2 BEATS"
+  "CHAIN WAVE · T0 = 2 BEATS"
  ],
  "notes": {
   "loud_old": "SRC {srcLufs} LUFS",

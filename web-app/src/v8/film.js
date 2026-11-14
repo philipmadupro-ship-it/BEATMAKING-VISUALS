@@ -75,7 +75,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     [3, () => 'spectrum', (r, cr, t, n, Sx) => { const x = cr[0] + cr[2] * 0.1, y = cr[1] + cr[3] * 0.5; lab.arrow(c, [[x + 150, y - 70], [x + 70, y - 50], [x + 14, y]], Sx.hot, t, 5, n, 2.6); lab.hand(c, tag('notes.spectrum'), x + 140, y - 80, 32, Sx.hot, t, 6); }],
     [4, () => 'session', (r, cr, t, n, Sx) => { lab.ring(c, cr[0] + cr[2] * 0.25, cr[1] + 60, 80, 30, Sx.hot, t, 9, n); lab.hand(c, tag('notes.wave'), cr[0] + cr[2] * 0.25 + 100, cr[1] + 74, 32, Sx.hot, t, 10, -0.02); }],
     [5, () => 'stereo', (r, cr, t, n, Sx) => { lab.hand(c, tag('notes.gonio'), cr[0] + 4, cr[1] + 26, 28, Sx.hot, t, 12); }],
-    [6, () => 'clock', (r, cr, t, n, Sx) => { lab.stamp(c, tag('stamps.clock'), cr[0] + 70, cr[1] + cr[3] - 34, -0.12, Sx.stamp, 22); }],
+    [6, () => 'loud', (r, cr, t, n, Sx) => { lab.stamp(c, tag('stamps.clock'), cr[0] + 70, cr[1] + cr[3] - 34, -0.12, Sx.stamp, 22); }],
     [7, () => 'eq', (r, cr, t, n, Sx) => { lab.hand(c, tag('notes.eq'), cr[0] + cr[2] - 8, cr[1] + cr[3] - 64, 30, Sx.hot, t, 13, -0.03, 'right'); }],
     [9, () => 'surface', (r, cr, t, n, Sx) => { lab.hand(c, '← the drop, folded', cr[0] + 8, cr[1] + cr[3] - 20, 28, Sx.hot, t, 14); }],
     [9, () => 'spectro', (r, cr, t, n, Sx) => { lab.hand(c, 'kick every beat ↓', cr[0] + 8, cr[1] + 30, 28, Sx.hot, t, 15); }],
@@ -143,27 +143,41 @@ export function createFilm({ D, assets, aspect = '916' }) {
       for (let j = 0; j <= 8; j++) { const Y = Math.round(y + (h - 40) * j / 8) + 0.5; c.beginPath(); c.moveTo(x, Y); c.lineTo(x + w, Y); c.stroke(); }
       M.trace(c, Sx, [x, y, w, h - 40], t, { span: BEAT * V(meterPath('logo', 'span'), 0.25), amp: V(meterPath('logo', 'amp'), 0.2), lanes: [[0, 0.3, Sx.sig1], [1, 0.72, Sx.sig2]] });
     }
-    const s = BR.logo(c, Sx, [x, y, w, h - (LOOK === 'scope' ? 40 : 34)], t, { cycle: C, mode: V('logo.mode', 'cycle'), hero, scale: V('logo.scale', 1) });
+    const s = BR.logo(c, Sx, [x, y, w, h - (LOOK === 'scope' ? 40 : 34)], t, { cycle: C, mode: V('logo.mode', 'cycle'), hero, scale: V('logo.scale', 1),
+      glow: V('logo.glow', 1) * (0.35 + 0.8 * kickEnv[fidx(t)]), bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
     const cb = Math.floor(t / BEAT + C / 2) % C, inOut = cb < C / 2 ? 'chain in' : 'chain out', lt = ['U', '2', 'C', '·'][Math.min(3, Math.floor(cb % (C / 2) / (C / 8)))];
     const load = Math.round((s[0] + s[1] + s[2]) / 3 * 100);
     text(c, hero ? `> chain locked  ${String(load).padStart(3, ' ')}%` : `> ${inOut} ${lt}  ${String(load).padStart(3, ' ')}%`, x, y + h - 14, { size: 22, w: 700, col: Sx.ink, maxW: w * 0.6 });
     text(c, LOOK === 'scope' ? `${(BEAT * 100 * V(meterPath('logo', 'span'), 0.25)).toFixed(1)} ms/div · trig ${bbt(t)}` : `cycle ${Math.floor(t / (C * BEAT)) + 1} · ${bbt(t)}`, x + w, y + h - 14, { size: 22, col: rgba(Sx.ink, 0.7), align: 'right', maxW: w * 0.4 });
     c.restore();
   }
+  // pendant geometry inside a content rect: the hand (top of the chain) and the chain length (v9 chain wave)
+  function pendantGeom(cr) {
+    const [x, y, w, h] = cr, avail = h - 80, len = avail * clamp(V('pendant.chain', 0.3), 0, 0.6), size = Math.min(w * 0.8, (avail - len) / 0.95) * V('pendant.size', 1);
+    return { size, len, ax: x + w / 2 + size * (346 / 700 - 0.5) + V('pendant.x', 0), ay: y + 22 + V('pendant.y', 0) };
+  }
+  // drop bloom: inside a drop 0.35, plus an envelope from each drop phrase's downbeat that decays over 2 beats
+  function dropBloom(t) {
+    const bar = Math.floor(t / BAR); if (labelAt(bar) !== 'drop') return 0;
+    const sb = D.song.startBar + bar; let p0 = sb; for (const q of D.song.phrases) if (q.bar <= sb) p0 = q.bar;
+    return 0.35 + 0.65 * Math.exp(-Math.max(0, t - (p0 - D.song.startBar) * BAR) / (2 * BEAT));
+  }
   function elephantBody(cr, t, k, Sx) {
     const [x, y, w, h] = cr; c.save(); c.beginPath(); c.rect(x - 14, y - 14, w + 28, (h + 28) * k); c.clip();
-    const size = Math.min(w * 0.8, (h - 80) / 0.95) * V('pendant.size', 1), ax = x + w / 2 + size * (346 / 700 - 0.5) + V('pendant.x', 0), ay = y + 22 + V('pendant.y', 0);
-    const sw = BR.elephant(c, Sx, ax, ay, size, t);
+    const { size, len, ax, ay } = pendantGeom(cr), g = BR.chainGeom(ax, ay, len, t);
+    BR.drawChain(c, Sx, g);
+    const sw = BR.elephant(c, Sx, g.end[0], g.end[1], size, t, g.ang[g.ang.length - 1]);
     if (LOOK === 'lab') lab.tape(c, ax, ay - 6, 70, 22, 0.08, Sx, 77);
     if (LOOK === 'scope') { c.fillStyle = rgba(Sx.ink, 0.8); c.fillRect(ax - 22, ay - 20, 44, 10); c.fillRect(ax - 3, ay - 12, 6, 12); }
-    c.strokeStyle = Sx.hot; c.lineWidth = 2; c.beginPath(); c.arc(ax, ay, 7, 0, 7); c.stroke(); c.beginPath(); c.moveTo(ax - 14, ay); c.lineTo(ax + 14, ay); c.moveTo(ax, ay - 14); c.lineTo(ax, ay + 14); c.stroke(); c.lineWidth = 1;
-    const R = Math.min(170, h * 0.3); c.strokeStyle = rgba(Sx.ink, 0.5); c.setLineDash([4, 5]); c.beginPath(); c.arc(ax, ay, R, Math.PI / 2 - sw.amp, Math.PI / 2 + sw.amp); c.stroke(); c.setLineDash([]);
+    const hx = g.pts[0][0], hy = g.pts[0][1];   // the hand: a crosshair that pushes on the beat
+    c.strokeStyle = Sx.hot; c.lineWidth = 2; c.beginPath(); c.arc(hx, hy, 7, 0, 7); c.stroke(); c.beginPath(); c.moveTo(hx - 14, hy); c.lineTo(hx + 14, hy); c.moveTo(hx, hy - 14); c.lineTo(hx, hy + 14); c.stroke(); c.lineWidth = 1;
+    const R = Math.min(170, h * 0.3) + len; c.strokeStyle = rgba(Sx.ink, 0.5); c.setLineDash([4, 5]); c.beginPath(); c.arc(ax, ay, R, Math.PI / 2 - sw.amp, Math.PI / 2 + sw.amp); c.stroke(); c.setLineDash([]);
     for (const a of [-sw.amp, sw.amp]) { c.strokeStyle = rgba(Sx.ink, 0.6); c.beginPath(); c.moveTo(ax - Math.sin(a) * (R - 8), ay + Math.cos(a) * (R - 8)); c.lineTo(ax - Math.sin(a) * (R + 8), ay + Math.cos(a) * (R + 8)); c.stroke(); }
-    c.beginPath(); c.moveTo(ax, ay); c.lineTo(ax - Math.sin(sw.th) * R * 1.08, ay + Math.cos(sw.th) * R * 1.08); c.strokeStyle = Sx.hot; c.lineWidth = 2; c.stroke(); c.lineWidth = 1;
+    c.beginPath(); c.moveTo(ax - Math.sin(sw.th) * (R - 14), ay + Math.cos(sw.th) * (R - 14)); c.lineTo(ax - Math.sin(sw.th) * (R + 14), ay + Math.cos(sw.th) * (R + 14)); c.strokeStyle = Sx.hot; c.lineWidth = 3; c.stroke(); c.lineWidth = 1;
     const deg = sw.th * 180 / Math.PI;
     lab.hand(c, tag('notes.elephant', { angle: `${deg >= 0 ? '+' : '−'}${Math.abs(deg).toFixed(1)}` }), x + w - 4, y + 44, 34, Sx.hot, t, 21, -0.03, 'right');
-    const per = V('pendant.period', 2), perTxt = `T = ${+per.toFixed(2)} BEATS · ${Math.round(sw.amp * 180 / Math.PI)}°`;
-    lab.tag(c, x + 2, y + h - 104, Math.min(300, w * 0.62), tag('specimen').map((s) => s.replace('VERLET · T0 = 2 BEATS', perTxt)), Sx, -0.04);
+    const per = V('pendant.period', 2), perTxt = `${BR.chainInfo().links} LINKS · T = ${+per.toFixed(2)} BEATS · ${Math.round(sw.amp * 180 / Math.PI)}°`;
+    lab.tag(c, x + 2, y + h - 104, Math.min(300, w * 0.62), tag('specimen').map((s) => s.replace(/^(VERLET|CHAIN WAVE) · T0 = 2 BEATS$/, perTxt)), Sx, -0.04);
     c.restore();
   }
   const BODY = { logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),
@@ -183,7 +197,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // exe: dashed elbow wires between windows; one square signal dot steps along each wire on 16ths, lit on kicks
   function wires(t) {
     if (LOOK !== 'exe' || !V('wires.on', true)) return;
-    const pairs = port ? [['session', 'chains', 0.3, 0.5], ['chains', 'elephant', 0.5, 0.5], ['eq', 'spectrum', 0.85, 0.85], ['clock', 'bands', 0.5, 0.5]] : [['session', 'chains', 0.3, 0.3], ['chains', 'elephant', 0.9, 0.5]];
+    const pairs = port ? [['session', 'chains', 0.3, 0.5], ['chains', 'elephant', 0.5, 0.5], ['eq', 'spectrum', 0.85, 0.85]] : [['session', 'chains', 0.3, 0.3], ['chains', 'elephant', 0.9, 0.5]];
     for (const [a, bq, fa, fb] of pairs) {
       if (!LY[a] || !LY[bq] || openStep(a, t) < 6 || openStep(bq, t) < 6) continue;
       const ra = LY[a], rb = LY[bq], A0 = [ra[0] + ra[2] * fa, ra[1] + ra[3]], B0 = [rb[0] + rb[2] * fb, rb[1]];
@@ -296,7 +310,17 @@ export function createFilm({ D, assets, aspect = '916' }) {
     setVars();
   }
   function pendulum() {
-    BR.pendulum((k) => { const st = ev.value('stage', k, 'nigredo'); return ev.value('pendant.amp', k, stageOf(st).swingDeg.calm); }, V('pendant.period', 2), V('pendant.react', 0.32));
+    BR.pendulum((k) => { const st = ev.value('stage', k, 'nigredo'); return ev.value('pendant.amp', k, stageOf(st).swingDeg.calm); }, V('pendant.period', 2), V('pendant.react', 0.32),
+      { links: V('pendant.links', 10), wave: V('pendant.wave', 0.75), damp: V('pendant.damp', 0.35) });
+  }
+  // test modes (native --test pendant | waveform, and the motion / waveform tests): one element alone, no camera or textures
+  const testRect = () => (port ? [90, 240, 900, 1480] : [560, 90, 800, 900]);
+  const waveRect = () => (port ? [24, 420, 1032, 1000] : [24, 160, 1872, 760]);
+  function testMode(kind, t) {
+    c.fillStyle = S.bg; c.fillRect(0, 0, W, H); ground();
+    if (kind === 'waveform') { M.session(c, S, waveRect(), t, 1); text(c, `WAVEFORM TEST · ${bbt(t)}`, 40, 120, { size: 28, w: 700, col: S.ink }); return; }
+    elephantBody(testRect(), t, 1, S);
+    const bb = Math.floor(t / BEAT + 1e-6); text(c, `PENDANT · CHAIN WAVE · beat ${bb + 1} · ${bbt(t)}`, 40, port ? 120 : 50, { size: 28, w: 700, col: S.ink });
   }
   /** Draw clip time t into ctx (a canvas of width W*scale). opts: {ev, fps (sample at the frame centre), look, stage}. */
   function render(ctx, t, opts = {}) {
@@ -305,6 +329,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     t = clamp(t, 0, D.duration - 1 / fps) + 0.5 / fps; b = t / BEAT;
     setState(V('look', opts.look || 'exe'), V('stage', opts.stage || 'nigredo')); pendulum();
     c.setTransform(scale, 0, 0, scale, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
+    if (opts.test) { L.view.camZ = 1; L.view.base = scale; testMode(opts.test, t); c.setTransform(1, 0, 0, 1, 0, 0); return { look: LOOK, stage: S.name, test: opts.test }; }
     const cam = camera(), z = cam.z; L.view.camZ = z; L.view.base = scale;
     c.fillStyle = S.bg; c.fillRect(0, 0, W, H);
     c.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z));
@@ -331,6 +356,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     for (const nt of notes()) add(nt.b, `note ${nt.id}`);
     for (const [bb, w] of BR.logoEvents(0, NB * 4, Math.max(4, Math.round(V('logo.cycle', 2) * 4)))) add(bb, w);
     for (let k = 0; k < NB * 4; k++) add(k * V('pendant.period', 2) / 2, 'pendant swing extreme');
+    if (V('logo.runner', true)) for (let q = 0; q < NB * 16; q++) add(q / 4, 'logo runner step (16th)');
     for (const k of ev.keysIn('fx.flash', 0, NB * 4)) add(k.b, '1-frame invert');
     for (const k of ev.keysIn('text.cue', 0, NB * 4)) add(k.b, `text cue "${String(k.v).slice(0, 24)}"`);
     for (const t of ev.sheet.tracks) if (!['camera.shot', 'text.cue', 'fx.flash'].includes(t.path)) for (const k of t.keys) add(k.b, `${t.path} key`);
@@ -338,7 +364,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   /** Window rects of a look (with the sheet's overrides at beat bb), for hit testing and camera framing in the UI. */
   function rects(evx, bb, look) { ev = evx; b = bb; setState(look || V('look', 'exe'), V('stage', 'nigredo')); return { ...LY }; }
-  const trace = (t, evx) => { if (evx) ev = evx; b = 0; pendulum(); const size = W * 0.8, ax = W / 2 + size * (346 / 700 - 0.5), ay = H * 0.18; return BR.tracePts(ax, ay, size, t + 0.5 / FPS); };
-  return { W, H, D, render, schedule, rects, trace, registry: (o = {}) => buildRegistry({ aspect, bars: NB, ...o }), core: L, brand: BR, WINDOW_IDS };
+  // motion trace in the pendant test geometry (testRect): hand, every joint, every link angle, the body angle
+  const trace = (t, evx) => { if (evx) ev = evx; b = 0; pendulum(); const g = pendantGeom(testRect()); return BR.tracePts(g.ax, g.ay, g.size, t + 0.5 / FPS, g.len); };
+  return { W, H, D, render, schedule, rects, trace, testRect, waveRect, registry: (o = {}) => buildRegistry({ aspect, bars: NB, ...o }), core: L, brand: BR, WINDOW_IDS };
 }
 export { mergeDeep };
