@@ -28,7 +28,7 @@ export function createCueTimeline(app, cv) {
   const curveCache = new Map();
   const cues = app.cues, P = () => app.store.project, TL = () => P().timeline, tr = () => app.store.session.track;
   const HEAD = () => (st.collapsed ? 58 : 176), RULER = 22, SECT = 14, MARK = 13, TOP = RULER + SECT + MARK, MINI = () => (st.collapsed ? 0 : 12);
-  const BASE = () => (st.compactNow ? 17 : 23), PHONE_ROW = 64;
+  const BASE = () => (st.compactNow ? st.compactH || 16 : 23), PHONE_ROW = 64, HALF_FRAME = () => FRAME / BEAT() / 2 + 1e-4;
   const bars = () => { const t = tr(); return t ? Math.max(1, Math.round((P().outT - P().inT) / t.barDur)) : 16; };
   const totalBeats = () => bars() * 4, BEAT = () => (tr() ? tr().spb : 0.5);
   const snapGrid = () => SNAPS[TL().snap] ?? 1;
@@ -45,13 +45,16 @@ export function createCueTimeline(app, cv) {
       const row = { path: t.path, label: p ? `${p.elementLabel} · ${p.label}` : t.path, lane: 'custom', group: grp, groupLabel: p ? p.elementLabel : grp, track: t, kind: t.kind, custom: true };
       let at = -1; base.forEach((r, i) => { if (r.group === grp) at = i; }); if (at >= 0) base.splice(at + 1, 0, row); else base.push(row); }
     const size = {}; for (const r of base) size[r.group] = (size[r.group] || 0) + 1;
-    const closed = TL().closed || {}; let out = [];
+    const avail = Math.max(40, H - TOP - MINI()), pref = TL().compact, sum = (h) => base.reduce((s, r) => s + (r.track && r.track.h ? r.track.h : h), 0);
+    st.compactNow = pref === true || (pref == null && sum(23) > avail);
+    // laptop fit: still overflowing in compact -> groups the user never opened fold into summary rows
+    const closed = { ...(TL().closed || {}) }; if (st.compactNow && pref !== false && sum(BASE()) > avail && !st.collapsed) for (const g of Object.keys(size)) if (size[g] >= 2 && closed[g] == null) closed[g] = true;
+    st.autoClosed = closed; let out = [];
     for (const r of base) { r.gsize = size[r.group]; r.gfirst = !out.some((q) => q.group === r.group) && !(out.length && out[out.length - 1].summary && out[out.length - 1].group === r.group);
       if (size[r.group] >= 2 && closed[r.group]) { if (r.gfirst) out.push({ summary: true, group: r.group, path: '#' + r.group, label: `${GROUP_LABEL[r.group] || r.groupLabel || r.group} (${size[r.group]})`, kind: 'summary', members: base.filter((q) => q.group === r.group), gsize: size[r.group], gfirst: true, track: null }); continue; }
       out.push(r); }
-    const avail = Math.max(40, H - TOP - MINI());
     if (st.graph) { const r = out.find((q) => q.path === st.graph); if (r && r.kind === 'number') { r.graph = true; out = [r]; } else st.graph = null; }
-    const pref = TL().compact; st.compactNow = pref === true || (pref == null && out.reduce((s, r) => s + (r.track && r.track.h ? r.track.h : 23), 0) > avail);
+    st.compactH = 16; if (st.compactNow && !st.graph) { const fixed = out.reduce((s, r) => s + (r.track && r.track.h ? r.track.h : 0), 0), n = out.filter((r) => !(r.track && r.track.h)).length; if (n) st.compactH = Math.max(14, Math.min(16, Math.floor((avail - fixed) / n))); }
     let y = 0; for (const r of out) { r.h = st.graph ? avail : r.track && r.track.h ? r.track.h : BASE(); r.y = y; y += r.h; }
     rows = out; return rows;
   }
@@ -68,6 +71,7 @@ export function createCueTimeline(app, cv) {
   const rowsWithKeys = () => { const o = []; for (const r of rows) if (r.summary) o.push(...r.members); else o.push(r); return o; };
   const allKeys = () => { buildRows(); const o = []; for (const r of rowsWithKeys()) if (r.track) for (const k of r.track.keys) o.push([r, k]); return o; };
   const findKey = (id) => { buildRows(); for (const r of rowsWithKeys()) if (r.track) { const k = r.track.keys.find((x) => x.id === id); if (k) return [r, k]; } return null; };
+  const rowIdx = (r) => rows.findIndex((q) => q.path === r.path);   // rows are rebuilt every draw: find by path
   const locked = (r) => !!(r && r.track && r.track.lock);
   // ---------------------------------------------------------------- markers + snap points
   const density = () => TL().density || 'fewer';
@@ -137,7 +141,7 @@ export function createCueTimeline(app, cv) {
       const c = curvePath(row, h), focus = rows[st.focusRow] === row; g.translate(0, y);
       if (tall) { g.fillStyle = C.acc; g.globalAlpha = 0.07; g.fill(c.area); g.globalAlpha = 1; }
       g.strokeStyle = focus || tall ? C.acc : C.muted; g.globalAlpha = focus || tall ? 0.9 : 1; g.lineWidth = tall ? 2 : 1.5; g.stroke(c.line); g.globalAlpha = 1; g.lineWidth = 1; g.translate(0, -y);
-      if (tall) { const [mn, mx] = vrange(row); g.fillStyle = C.muted; g.font = '400 9px "JetBrains Mono", monospace'; g.fillText((mx - (mx - mn) * 0.0).toFixed(mx - mn < 3 ? 2 : 0), hx + 4, y + 7); g.fillText(mn.toFixed(mx - mn < 3 ? 2 : 0), hx + 4, y + h - 6); g.font = `500 11px "JetBrains Mono", monospace`; }
+      if (tall) { const [mn, mx] = vrange(row), d = mx - mn < 3 ? 2 : 0; g.fillStyle = C.muted; g.font = '400 9px "JetBrains Mono", monospace'; g.textAlign = 'right'; g.fillText(mx.toFixed(d), W - 8, y + 7); g.fillText(mn.toFixed(d), W - 8, y + h - 6); g.textAlign = 'left'; g.font = `500 11px "JetBrains Mono", monospace`; }
     }
     if (row.kind === 'color' && !compact) { const ev = cues.ev(), x0 = Math.max(hx, xOf(K[0].b)), x1 = Math.min(W, xOf(totalBeats())); for (let x = x0; x < x1; x += 4) { g.fillStyle = ev.trackValue(t, bOf(x), K[0].v); g.fillRect(x, y + h - 6, 4, 3); } }
     for (let i = 0; i < K.length; i++) { const k = K[i], nx = K[i + 1], x = xOf(k.b), s = sel(k);
@@ -163,8 +167,9 @@ export function createCueTimeline(app, cv) {
   function hatch(x, y, w, h) { g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip(); g.strokeStyle = colors.line2; g.lineWidth = 1; g.beginPath(); for (let i = x - h; i < x + w; i += 8) { g.moveTo(i, y + h); g.lineTo(i + h, y); } g.stroke(); g.restore(); }
   function drawMarkers(hx) {
     const C = colors, y0 = RULER + SECT, M = markers(); g.save(); g.beginPath(); g.rect(hx, y0, W - hx, MARK); g.clip();
-    for (const m of M) { const x = Math.round(xOf(m.b)) + .5; if (x < hx - 40 || x > W + 2) continue;
-      if (m.user) { g.fillStyle = m.id === st.selMarker ? C.fg : C.acc; g.beginPath(); g.moveTo(x - .5, y0 + 1); g.lineTo(x + 6, y0 + 1); g.lineTo(x + 6, y0 + 6); g.lineTo(x + 1.5, y0 + 9); g.lineTo(x - .5, y0 + MARK); g.closePath(); g.fill();
+    for (const m of [...M.filter((q) => !q.user), ...M.filter((q) => q.user)]) { const x = Math.round(xOf(m.b)) + .5; if (x < hx - 40 || x > W + 2) continue;
+      if (m.user) { if (m.label && st.ppb > 6) { g.font = '500 9px "JetBrains Mono", monospace'; const tw = Math.min(80, g.measureText(m.label).width); g.fillStyle = C.panel; g.fillRect(x + 7, y0 + 1, tw + 4, MARK - 2); }
+        g.fillStyle = m.id === st.selMarker ? C.fg : C.acc; g.beginPath(); g.moveTo(x - .5, y0 + 1); g.lineTo(x + 6, y0 + 1); g.lineTo(x + 6, y0 + 6); g.lineTo(x + 1.5, y0 + 9); g.lineTo(x - .5, y0 + MARK); g.closePath(); g.fill();
         if (m.label && st.ppb > 6) { g.font = '500 9px "JetBrains Mono", monospace'; g.fillText(m.label, x + 9, y0 + MARK / 2, 80); } continue; }
       if (m.kind === 'section') { g.fillStyle = C.fg; g.fillRect(x - .5, y0, 2, MARK); continue; }
       if (m.kind === 'downbeat') { g.fillStyle = C.line2; g.fillRect(x - .5, y0 + 2, 1, MARK - 3); continue; }
@@ -183,7 +188,7 @@ export function createCueTimeline(app, cv) {
   }
   /** Header buttons per row, right to left. */
   const headBtns = (r) => (r.summary ? [] : r.custom ? ['x', 'M', 'L', 'S', 'T'] : ['M', 'L', 'S', 'T']);
-  const BTN = 14;
+  const BTN = 14, navX = (r) => (r.h >= 40 ? HEAD() - 10 - 3 * BTN - 5 : HEAD() - 12 - headBtns(r).length * BTN - 40), navY = (r, y) => (r.h >= 40 ? y + 33 : y + Math.min(r.h, 23) / 2);
   function drawHead(r, i, y, h) {
     const C = colors, hx = HEAD(), t = r.track, focus = i === st.focusRow, hover = st.hover === i, mid = y + Math.min(h, 23) / 2;
     g.save(); g.beginPath(); g.rect(0, Math.max(TOP, y), hx, h); g.clip();
@@ -201,9 +206,9 @@ export function createCueTimeline(app, cv) {
       else g.fillText(b === 'x' ? '×' : b, cx, mid);
       g.textAlign = 'left'; });
     if ((focus || hover) && !r.summary && h >= 16) {   // ‹ ◆ ›: previous key, add / remove at the playhead, next key
-      const x0 = hx - 12 - btns.length * BTN - 40, onKey = t && t.keys.some((k) => Math.abs(k.b - st.playhead) < 1e-3);
-      g.fillStyle = focus ? C.line2 : C.panel; g.fillStyle = C.panel; g.fillRect(x0 - 4, y + 1, 44, Math.min(h, 23) - 2); g.fillStyle = C.muted; g.font = '500 11px "JetBrains Mono", monospace'; g.textAlign = 'center';
-      g.fillText('‹', x0 + 5, mid); g.fillText('›', x0 + 33, mid); g.textAlign = 'left'; glyph(x0 + 19, mid, 4.5, 'diamond', onKey ? C.acc : 'transparent', onKey ? null : C.muted); }
+      const x0 = navX(r), ny = navY(r, y), onKey = t && t.keys.some((k) => Math.abs(k.b - st.playhead) < HALF_FRAME());
+      if (h < 40) { g.fillStyle = C.panel; g.fillRect(x0 - 4, y + 1, 44, Math.min(h, 23) - 2); } g.fillStyle = C.muted; g.font = '500 11px "JetBrains Mono", monospace'; g.textAlign = 'center';
+      g.fillText('‹', x0 + 5, ny); g.fillText('›', x0 + 33, ny); g.textAlign = 'left'; glyph(x0 + 19, ny, 4.5, 'diamond', onKey ? C.acc : 'transparent', onKey ? null : C.muted); }
     g.fillStyle = C.line; g.fillRect(0, y + h - 1, hx, 1); g.restore();
   }
   function draw() {
@@ -284,7 +289,8 @@ export function createCueTimeline(app, cv) {
     if (!r.summary && y > y0 + h - 4 && h >= 14) return { zone: 'head', ri, part: 'resize' };
     if (r.gsize >= 2 && (r.gfirst || r.summary) && x < 16 && y < top) return { zone: 'head', ri, part: 'chevron' };
     if (y < top) { const btns = headBtns(r); for (let j = 0; j < btns.length; j++) { const cx = hx - 10 - j * BTN; if (Math.abs(x - cx) <= BTN / 2) return { zone: 'head', ri, part: btns[j] }; }
-      if (!r.summary) { const x0 = hx - 12 - btns.length * BTN - 40; if (x >= x0 - 4 && x < x0 + 12) return { zone: 'head', ri, part: 'prev' }; if (x >= x0 + 12 && x < x0 + 27) return { zone: 'head', ri, part: 'kf' }; if (x >= x0 + 27 && x < x0 + 40) return { zone: 'head', ri, part: 'next' }; } }
+    }
+    if (!r.summary && Math.abs(y - navY(r, y0)) < 9) { const x0 = navX(r); if (x >= x0 - 4 && x < x0 + 12) return { zone: 'head', ri, part: 'prev' }; if (x >= x0 + 12 && x < x0 + 27) return { zone: 'head', ri, part: 'kf' }; if (x >= x0 + 27 && x < x0 + 40) return { zone: 'head', ri, part: 'next' }; }
     return { zone: 'head', ri, part: 'label' };
   }
   // ---------------------------------------------------------------- editing helpers
@@ -309,10 +315,10 @@ export function createCueTimeline(app, cv) {
   const viewTouch = (fn) => cues.touch(fn, 'view');
   // ---------------------------------------------------------------- pointer
   const pos = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
-  const seekBeat = (b, snapGrid_) => { const bt = BEAT(); let bb = Math.max(0, Math.min(totalBeats(), b)); if (snapGrid_) bb = snapBeat(bb, snapGrid_); let t = bb * bt; t = Math.round(t / FRAME) * FRAME; app.actions.seek(P().inT + Math.min(t, totalBeats() * bt - FRAME)); };
+  const seekBeat = (b, snapGrid_) => { const bt = BEAT(); let bb = Math.max(0, Math.min(totalBeats(), b)); if (snapGrid_) bb = snapBeat(bb, snapGrid_); let t = bb * bt; t = Math.min(Math.round(t / FRAME) * FRAME, totalBeats() * bt - FRAME); app.actions.seek(P().inT + t); st.playhead = t / bt; dirty = true; };
   function headClick(h, e, x) {
     const r = rows[h.ri]; if (!r) return; st.focusRow = h.ri; const part = h.part;
-    if (part === 'chevron') { setTL({ closed: { [r.group]: !(TL().closed || {})[r.group] } }); dirty = true; return; }
+    if (part === 'chevron') { api.toggleGroup(r.group); return; }
     if (part === 'resize') { drag = { kind: 'laneH', row: r, y0: pos(e)[1], h0: r.h }; return; }
     if (part === 'x' && r.custom) { cues.edit((s) => { s.tracks = s.tracks.filter((t) => t !== r.track); }, 'remove track'); return; }
     if (part === 'M' && r.track) { cues.edit(() => { r.track.mute = !r.track.mute; }, 'mute'); return; }
@@ -357,7 +363,7 @@ export function createCueTimeline(app, cv) {
       clampScroll(); dirty = true; return; }
     if (drag.kind === 'loopA' || drag.kind === 'loopB') { const s = Math.min(totalBeats(), snapTo(bOf(x), { alt: e.altKey, grid: grid || .25 })); if (drag.kind === 'loopA') st.loop.a = s; else st.loop.b = s; if (st.loop.a > st.loop.b) { [st.loop.a, st.loop.b] = [st.loop.b, st.loop.a]; drag.kind = drag.kind === 'loopA' ? 'loopB' : 'loopA'; } dirty = true; return; }
     if (drag.kind === 'marquee') { drag.box[2] = x; drag.box[3] = y; drag.moved = drag.moved || Math.hypot(x - drag.x0, y - drag.y0) > 3; dirty = true; return; }
-    if (drag.kind === 'handle') { const r = drag.row, K = r.track.keys, i = drag.idx, k = K[i], ri = rows.indexOf(r), y0 = rowY(ri), v = valAt(r, y0, r.h, y), b = bOf(x);
+    if (drag.kind === 'handle') { const ri = rowIdx(drag.row), r = rows[ri] || drag.row, K = r.track.keys, i = drag.idx, k = K[i], y0 = rowY(ri), v = valAt(r, y0, r.h, y), b = bOf(x);
       cues.preview(() => { r.track.auto = false;
         if (drag.side === 'out') { const nx = K[i + 1], L = nx.b - k.b, dv = +nx.v - +k.v, hx_ = Math.max(0, Math.min(1, (b - k.b) / L)), hy = Math.abs(dv) > 1e-9 ? (v - +k.v) / dv : 0; k.ty = 'bezier'; k.ob = [Math.round(hx_ * 1e4) / 1e4, Math.round(hy * 1e4) / 1e4];
           const pv = K[i - 1]; if (!e.altKey && pv && pv.ty === 'bezier' && k.ib) { const Lp = k.b - pv.b, dvp = +k.v - +pv.v, slope = hx_ > 1e-6 ? hy * dv / (hx_ * L) : 0; if (Math.abs(dvp) > 1e-9) k.ib = [k.ib[0], Math.round(slope * k.ib[0] * Lp / dvp * 1e4) / 1e4]; } }
@@ -371,7 +377,7 @@ export function createCueTimeline(app, cv) {
       if (drag.kind === 'resize') { const o = drag.orig.get(drag.key.id), end = snapTo(drag.key.b + (o.dur ?? 1) + db, { alt: e.altKey }); drag.key.dur = Math.max(grid || 1 / 16, end - drag.key.b); return; }
       const oa = drag.orig.get(drag.key.id), na = snapTo(oa.b + db, { alt: e.altKey }), d = na - oa.b;
       for (const [sid, o] of drag.orig) { const f = findKey(sid); if (f) { f[1].b = Math.max(0, tick(o.b + d)); if (f[0].track) f[0].track.auto = false; } }
-      if (drag.row.kind === 'number' && !st.collapsed && Math.abs(y - drag.y0) > 2) { const p = reg().byPath[drag.row.path] || {}, ri = rows.indexOf(drag.row), rh = rowH(ri), [mn, mx] = vrange(drag.row), step = p.step || 0.01, dv = -(y - drag.y0) / (rh - (rh >= 40 ? 20 : 8)) * (mx - mn);
+      if (drag.row.kind === 'number' && !st.collapsed && Math.abs(y - drag.y0) > 2) { const p = reg().byPath[drag.row.path] || {}, ri = rowIdx(drag.row), rh = rowH(ri), [mn, mx] = vrange(drag.row), step = p.step || 0.01, dv = -(y - drag.y0) / (rh - (rh >= 40 ? 20 : 8)) * (mx - mn);
         drag.key.v = Math.max(p.min ?? -Infinity, Math.min(p.max ?? Infinity, Math.round((drag.orig.get(drag.key.id).v + dv) / step) * step)); }
     });
     sortAll(); dirty = true;
@@ -389,7 +395,7 @@ export function createCueTimeline(app, cv) {
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', () => { if (drag && (drag.moved || drag.kind === 'handle') && drag.kind !== 'marquee') cues.cancel(); drag = null; st.guide = null; dirty = true; });
   cv.addEventListener('pointerleave', () => { if (st.hover !== -1 && !drag) { st.hover = -1; dirty = true; } });
   cv.addEventListener('dblclick', (e) => { const [x, y] = pos(e), h = hit(x, y);
-    if (h.zone === 'lane' && h.row && !h.row.summary && !h.locked) addKeyAt(h.row, snapTo(bOf(x), { model: buildSnap() }));
+    if (h.zone === 'lane' && h.row && !h.row.summary && !h.locked) addKeyAt(h.row, Math.max(0, snapBeat(bOf(x), snapGrid())));
     else if (h.zone === 'key') app.inspector && app.inspector.focusValue();
     else if (h.zone === 'head' && h.part === 'label' && rows[h.ri]) api.toggleLaneHeight(rows[h.ri]); dirty = true; });
   cv.addEventListener('wheel', (e) => { e.preventDefault(); const [x, y] = pos(e);
@@ -447,22 +453,27 @@ export function createCueTimeline(app, cv) {
     keyPoint(id) { const f = findKey(id); if (!f) return null; const [r, k] = f, i = api.focusRowOf(r.path); draw(); const y0 = rowY(i), h = rows[i].h, K = r.track.keys;
       return { x: xOf(k.b), y: r.kind === 'number' && !st.collapsed ? vyOf(rows[i], y0, h)(k.v) : y0 + h / 2, handles: r.kind === 'number' && h >= 40 ? handlePoints(rows[i], K.indexOf(k), y0, h) : {} }; },
     /** Canvas point of a header button of a lane ('M', 'L', 'S', 'T', 'prev', 'kf', 'next', 'chevron', 'resize', 'label'). */
-    headPoint(path, part) { const i = api.focusRowOf(path); draw(); const r = rows[i], y0 = rowY(i), mid = y0 + Math.min(r.h, 23) / 2, hx = HEAD(), btns = headBtns(r), j = btns.indexOf(part), x0 = hx - 12 - btns.length * BTN - 40;
-      const x = j >= 0 ? hx - 10 - j * BTN : part === 'prev' ? x0 + 5 : part === 'kf' ? x0 + 19 : part === 'next' ? x0 + 33 : part === 'chevron' ? 9 : 40; return { x, y: part === 'resize' ? y0 + r.h - 2 : mid }; },
+    headPoint(path, part) { const i = api.focusRowOf(path); draw(); const r = rows[i], y0 = rowY(i), mid = y0 + Math.min(r.h, 23) / 2, hx = HEAD(), btns = headBtns(r), j = btns.indexOf(part), x0 = navX(r), nav = ['prev', 'kf', 'next'].includes(part);
+      const x = j >= 0 ? hx - 10 - j * BTN : part === 'prev' ? x0 + 5 : part === 'kf' ? x0 + 19 : part === 'next' ? x0 + 33 : part === 'chevron' ? 9 : 40; return { x, y: part === 'resize' ? y0 + r.h - 2 : nav ? navY(r, y0) : mid }; },
+    /** Visible beat range of the lanes (the inspector's mini key strips follow it). */
+    view: () => ({ a: st.scroll, z: st.scroll + (W - HEAD()) / st.ppb, total: totalBeats() }),
+    /** Canvas y of a value on a number lane (as drawn now). */
+    valueY(path, v) { const i = api.focusRowOf(path); draw(); return vyOf(rows[i], rowY(i), rows[i].h)(v); },
+    lanesFit: () => { buildRows(); return totalH() <= H - TOP - MINI() + 0.5; },
     markerY: () => RULER + SECT + MARK / 2, miniY: () => H - MINI() / 2,
     // ---- 1. key navigation
     /** [ / ]: jump to the previous / next key on the given lanes (default: targeted lanes, else the focused lane; all = every lane) and select it. */
     navKey(dir, lanes = null, all = false) { buildRows(); const L = all ? rowsWithKeys() : lanes || scopeRows(); let best = null;
-      for (const r of L) if (r.track) for (const k of r.track.keys) { const d = (k.b - st.playhead) * dir; if (d > 1e-3 && (!best || d < best.d)) best = { d, k, r }; }
-      if (!best) return false; seekBeat(best.k.b); st.playhead = best.k.b; const ids = []; for (const r of L) if (r.track) for (const k of r.track.keys) if (Math.abs(k.b - best.k.b) < 1e-6) ids.push(k.id);
-      st.sel = new Set(ids); const ri = rows.indexOf(best.r); if (ri >= 0) st.focusRow = ri; const x = xOf(best.k.b); if (x < HEAD() || x > W - 20) { st.scroll = best.k.b - (W - HEAD()) / st.ppb / 2; clampScroll(); }
+      for (const r of L) if (r.track) for (const k of r.track.keys) { const d = (k.b - st.playhead) * dir; if (d > HALF_FRAME() && (!best || d < best.d)) best = { d, k, r }; }
+      if (!best) return false; seekBeat(best.k.b); const ids = []; for (const r of L) if (r.track) for (const k of r.track.keys) if (Math.abs(k.b - best.k.b) < 1e-6) ids.push(k.id);
+      st.sel = new Set(ids); const ri = rowIdx(best.r); if (ri >= 0) st.focusRow = ri; const x = xOf(best.k.b); if (x < HEAD() || x > W - 20) { st.scroll = best.k.b - (W - HEAD()) / st.ppb / 2; clampScroll(); }
       dirty = true; app.inspector && app.inspector.show(); return true; },
     /** Shift+[ / ]: previous / next marker (any visible kind except plain beats). */
-    navMarker(dir) { const M = markers().filter((m) => m.kind !== 'beat' && m.kind !== 'hat'); let best = null; for (const m of M) { const d = (m.b - st.playhead) * dir; if (d > 1e-3 && (!best || d < best.d)) best = { d, m }; }
-      if (!best) return false; seekBeat(best.m.b); st.playhead = best.m.b; dirty = true; return true; },
+    navMarker(dir) { const M = markers().filter((m) => m.kind !== 'beat' && m.kind !== 'hat'); let best = null; for (const m of M) { const d = (m.b - st.playhead) * dir; if (d > HALF_FRAME() && (!best || d < best.d)) best = { d, m }; }
+      if (!best) return false; seekBeat(best.m.b); return true; },
     /** ◆ / ; : add a key at the playhead on the lanes, or remove it when one is there. */
-    toggleKey(lanes = null) { const L = (lanes || scopeRows()).filter((r) => !r.summary && !locked(r)); if (!L.length) return false; const b = snapBeat(st.playhead, 1 / 960); let ids = [];
-      cues.edit(() => { for (const r of L) { const t = ensureTrack(r), here = t.keys.filter((k) => Math.abs(k.b - b) < 2e-3); if (here.length) t.keys = t.keys.filter((k) => !here.includes(k)); else { const k = newKeyFor(r, b); t.keys.push(k); ids.push(k.id); } t.auto = false; t.keys.sort((x, y) => x.b - y.b); } }, 'key at playhead');
+    toggleKey(lanes = null) { const L = (lanes || scopeRows()).filter((r) => !r.summary && !locked(r)); if (!L.length) return false; const b = snapBeat(st.playhead, snapGrid() || 1 / 16); let ids = [];
+      cues.edit(() => { for (const r of L) { const t = ensureTrack(r), here = t.keys.filter((k) => Math.abs(k.b - b) < 1e-6); if (here.length) t.keys = t.keys.filter((k) => !here.includes(k)); else { const k = newKeyFor(r, b); t.keys.push(k); ids.push(k.id); } t.auto = false; t.keys.sort((x, y) => x.b - y.b); } }, 'key at playhead');
       st.sel = new Set(ids); app.inspector && app.inspector.show(); return true; },
     // ---- 3. markers
     addMarker(label = null) { const b = snapBeat(st.playhead, snapGrid() || 1 / 16), m = { id: newId('m'), b, label: label ?? `M${((cues.sheet.markers || []).length + 1)}`, kind: 'cue' };
@@ -472,7 +483,7 @@ export function createCueTimeline(app, cv) {
     /** Q: selected keys (else the keys of the targeted / focused lanes, inside the loop if set) to the nearest marker or grid line. */
     quantise(to = 'markers', strength = 1) { let ks = editable(selected()); if (!ks.length) { const [a, z] = st.loop ? [st.loop.a, st.loop.b] : [0, totalBeats()]; ks = []; for (const r of scopeRows()) if (r.track && !locked(r)) for (const k of r.track.keys) if (k.b >= a - 1e-9 && k.b < z) ks.push([r, k]); }
       if (!ks.length) return 0; const T = to === 'grid' ? gridTargets(snapGrid() || 0.25, totalBeats()) : markers().filter((m) => m.kind !== 'hat').map((m) => m.b); let n = 0;
-      cues.edit(() => { n = quantiseKeys(ks.map(([, k]) => k), T, { strength, window: to === 'grid' ? (snapGrid() || 0.25) / 2 : 0.5 }); for (const [r] of ks) r.track.auto = false; sortAll(); }, 'quantise'); return n; },
+      cues.edit(() => { n = quantiseKeys(ks.map(([, k]) => k), T, { strength, window: to === 'grid' ? (snapGrid() || 0.25) / 2 : 1 }); for (const [r] of ks) r.track.auto = false; sortAll(); }, 'quantise'); return n; },
     // ---- 7. interpolation
     setInterp(id) { const ks = editable(selected()).filter(([r]) => ['number', 'color', 'shot'].includes(r.kind)); if (!ks.length) return false;
       cues.edit(() => { for (const [r, k] of ks) { const K = r.track.keys, nx = r.kind === 'shot' ? k : K[K.indexOf(k) + 1]; if (id === 'bezier') { if (r.kind === 'shot') { k.ty = 'bezier'; k.ob = k.ob || [0.45, 0]; k.ib = k.ib || [-0.45, 0]; } else toBezier(k, nx); } else applyEasePreset(k, r.kind === 'shot' ? k : nx, id); r.track.auto = false; } }, 'interpolation'); return true; },
@@ -484,7 +495,7 @@ export function createCueTimeline(app, cv) {
     // ---- 4. lanes
     toggleLaneHeight(r = rows[st.focusRow]) { if (!r || r.summary) return false; const big = r.h >= 40; viewTouch(() => { const t = ensureTrack(r); if (big) delete t.h; else t.h = EXPANDED; }); return true; },
     setLaneHeight(path, h) { const r = rowsWithKeys().find((q) => q.path === path); if (!r) return false; viewTouch(() => { const t = ensureTrack(r); if (h) t.h = Math.max(MIN_H, Math.min(MAX_H, h)); else delete t.h; }); return true; },
-    toggleGroup(group) { setTL({ closed: { [group]: !(TL().closed || {})[group] } }); dirty = true; },
+    toggleGroup(group) { setTL({ closed: { [group]: !(st.autoClosed || TL().closed || {})[group] } }); dirty = true; },
     collapseAll(c = true) { const o = {}; for (const r of rowsWithKeys()) if (r.gsize >= 2) o[r.group] = c; setTL({ closed: o }); dirty = true; },
     setCompact(c) { setTL({ compact: c }); st.vscroll = 0; dirty = true; },
     get compact() { return st.compactNow; },

@@ -36,7 +36,7 @@ export const EASE_PRESETS = {
   snap: { label: 'Snap (late, hard)', ob: [0.7, 0], ib: [-0.05, -0.1], ease: 'easeInOut' }, auto: { label: 'Auto bezier (smooth)', ty: 'auto' },
 };
 /** Bezier handles that approximate a named ease (used when a named-ease key is converted to bezier). */
-export const EASE_HANDLES = { linear: [[1 / 3, 1 / 3], [-1 / 3, -1 / 3]], easeInOut: [[0.45, 0], [-0.45, 0]], expoOut: [[0.16, 1], [-0.7, 0]], backOut: [[0.34, 1.56], [-0.36, 0]], step: [[0, 0], [0, -1]] };
+export const EASE_HANDLES = { linear: [[1 / 3, 1 / 3], [-1 / 3, -1 / 3]], easeInOut: [[0.45, 0], [-0.45, 0]], expoOut: [[0.16, 1], [-0.7, 0]], backOut: [[0.34, 1.56], [-0.36, 0]], step: [[0.45, 0], [-0.45, 0]] };
 const clampX = (h, lo, hi, d) => (Array.isArray(h) && h.length === 2 && h.every(Number.isFinite) ? [Math.min(hi, Math.max(lo, h[0])), h[1]] : d);
 /** Cubic bezier (0,0),(x1,y1),(x2,y2),(1,1) evaluated at x = u. x1, x2 are clamped to [0,1], so x(t) is monotone and the
  *  solve is single-valued: Newton from a good start, bisection when the slope is flat. */
