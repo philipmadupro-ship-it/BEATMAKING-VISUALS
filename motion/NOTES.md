@@ -202,33 +202,21 @@ Filmstrips are in `out/v6/filmstrips/`. The CLI is documented in README.md.
 
 ---
 
-# v7: professional pass (skill: u2c-beat-preview-motion; research: /home/user/research/STYLE-RESEARCH.md)
-1. **NIGREDO** is black, white and greys only:
-   - ground #050505
-   - the elephant and the logo are greyscaled (Rec.709 luma)
-   - tested on decoded frames: max |R−G|, |G−B| = 0.
-2. **Chain physics** (`film/v6/brand.js`). A held-in-hand pendant:
-   - A kinematic hand flicks on every beat (downbeat 1.0, beat 3 0.7, beats 2/4 0.45, alternating direction).
-   - That drives a verlet rope through the elephant's own chain (8 segments, gravity, damping, 12 constraint iterations) to a heavy body hung below the bail.
-   - The two side loops are lagging secondary pendulums. A ±8° twist comes from the rope-to-body bend.
-   - Gravity is auto-calibrated so the free period is 2 beats.
-   - Fixed 1/240 s step, with a 16-bar pre-roll so frame 0 is in steady state. Deterministic.
-   - The art's pixels are skinned onto the rope and body by mesh.
-3. **Pacing and composition** (`film/v7/compose.js`). Static "screenshot" compositions cut only on bar lines:
-   - The logo is home (at least 50 % of bars); one meter or the pendant cuts in between.
-   - Boot is bar 1, the result card is the second-to-last bar, and the last bar mirrors the boot (loop-clean).
-   - No camera zooms.
-4. **Meters:**
-   - **EQ:** an original Pro-Q-spirit display: 3 bands, filled areas, a 3 px summed curve, numbered nodes, a hover bubble, dual dB rulers, a 30 kHz axis and a piano strip. Gains are automation steps on the beat.
-   - **balance.vst** has been removed.
-   - **Loudness:** redone as a Kollide-style instrument: an 84-tick 270° gauge, M/I sub-gauges and numeric cells; display ticks every ½ beat.
-   - **Waveform:** sample-accurate, 400 columns/s, with 1 px columns.
-   - **Spectrum, spectrogram and stereo** follow the Aurora methods: a peak-keeping projection, a 0.22 s trail, glow, a LUT with alpha v^0.56, and a density goniometer with 0.42 s persistence.
-   - **Meter design ideas after Aurora by Joe Croskey (AGPL-3.0). Only the methods and parameters were re-implemented; no Aurora code is used.**
-5. **Looks:** `--look exe | lab | scope`, each with its own composition logic (see README).
-6. **Tags:** all on-screen text comes from `tags.default.json`, plus per-beat overrides via `--tags` (see README).
-7. **Deliverables:** `out/v7/{exe,lab,scope}-nigredo-916-30s.mp4` and `out/v7/exe-rubedo-916-30s.mp4`. Filmstrips are in `out/v7/filmstrips/`; notes in `review/v7-director-notes-pass{1,2}.md`.
-
-**Caveats:**
-- The 15 s / 60 s / 16:9 cuts were not re-rendered in v7. The CLI makes them in one command each.
-- The v6 renders in `out/v6/` use the older camera engine.
+# v8 (branch v8, from the v6 renders commit b54359c; v7 stays on master)
+The user preferred v6 and rejected v7 (too minimal, bad held-in-hand chain). v8 = v6 look + v7 infrastructure.
+- **Kept from v6:** the bench of live windows, lab kit (tape, stamps, specimen tags, handwritten notes), the 2-bar logo cycle, the stages.
+- **Ported from v7:** `--look exe|lab|scope`, `tags.default.json` + `--tags`, grey NIGREDO (+ test), the EQ (original design in the
+  spirit of a pro parametric EQ), the Kollide-style loudness instrument, the sample-accurate waveform (400 col/s), the Aurora-method
+  spectrogram and stereo scope (Aurora by Joe Croskey, AGPL-3.0: methods only, no code), balance.vst removed, sync/QA tests.
+  v6's spectrum look is kept (bars + peak hold) with an Aurora-style 0.22 s trail added.
+- **Not ported:** v7's one-element-per-frame layout engine and its verlet "hand" chain.
+- **Pendant:** `film/v8/brand.js`. One rigid body about one pivot (the top of its own chain, art (346, 6); the art's alpha centre of
+  mass sits straight below it at x 344.6). theta = A(t) cos(pi * beat); A per beat = 9 deg (drop) / 4.6 deg (else) x (0.84 + 0.32 bass),
+  bass = SUB+LOW energy smoothed over a bar, blended across the beat with a cosine. Springs (1/240 s, 4-bar pre-roll) chase theta:
+  chain loop bow (3.2 w0, zeta 0.55, weight sin(pi s) along the loop), top-left loop (1.55 w0), bottom-left loop (1.3 w0), legs (2.1 w0).
+  Downbeat settle: 7 % of A, 1/2-beat period, 85 ms decay. `tests/pendant_trace.py` measures it from the rendered frames.
+- **Logo:** `tools`-free: the link anchors in `links.js` drive a Voronoi split of each letter into whole links; letters thread in and
+  run out link by link on 32nds, the active link lit. No dither.
+- **Legibility:** `L6.text` floors every type size at 22 px on screen at the overview (ignoring the camera zoom so pushes scale cleanly).
+- **Caveats:** 16:9 layouts exist but were not reviewed this round; 15/60 s not re-rendered; ink coverage is above the minimalist
+  15 % budget by design.

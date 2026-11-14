@@ -20,7 +20,7 @@ ap = argparse.ArgumentParser(); ap.add_argument("--stage", default="nigredo"); a
 ap.add_argument("--beat", default="audio/atelmansion-3c-fmin-128.wav"); ap.add_argument("--title", default=None)
 a = ap.parse_args()
 aspect = a.aspect.replace(":", "")
-tmpdir = os.path.join(ROOT, "out", "v7", "stills", f"sync-{a.look}-{a.stage}-{aspect}-{a.len}")
+tmpdir = os.path.join(ROOT, "out", "v8", "stills", f"sync-{a.look}-{a.stage}-{aspect}-{a.len}")
 cmd = ["node", "render.mjs", "--beat", a.beat, "--look", a.look, "--stage", a.stage, "--aspect", a.aspect, "--len", a.len, "--stills", "0", "--schedule", "--out", tmpdir]
 if a.title: cmd += ["--title", a.title]
 subprocess.run(cmd, cwd=ROOT, check=True, capture_output=True)
@@ -61,7 +61,7 @@ lines = [f"SYNC TEST  {a.look} {a.stage} {a.aspect} {a.len}s   events {len(rows)
          f"max event error: {worst * 1000:.2f} ms = {worst * FPS:.3f} frames  ->  {'PASS' if ok else 'FAIL'} (limit 1 frame)", "",
          f"{'t (s)':>8}  {'frame-vs-grid ms':>16}  {'audio-vs-grid ms':>16}  {'total frames':>12}  event"]
 lines += [f"{t:8.3f}  {a_:16.2f}  {b_:16.2f}  {f_:12.3f}  {w}" for t, w, a_, b_, f_ in rows]
-rep = os.path.join(ROOT, "out", "v7", f"sync-report-{a.look}-{a.stage}-{aspect}-{a.len}.txt")
+rep = os.path.join(ROOT, "out", "v8", f"sync-report-{a.look}-{a.stage}-{aspect}-{a.len}.txt")
 open(rep, "w").write("\n".join(lines) + "\n")
 print("\n".join(lines[:3])); print("report:", rep)
 sys.exit(0 if ok else 1)

@@ -1,0 +1,577 @@
+SYNC TEST  exe nigredo 9:16 30s   events 572   fps 30   grid 128.00 BPM
+audio on-beat transients vs grid: n=63  mean 0.02 ms  max 0.10 ms
+max event error: 16.67 ms = 0.500 frames  ->  PASS (limit 1 frame)
+
+   t (s)  frame-vs-grid ms  audio-vs-grid ms  total frames  event
+   0.000              0.00              0.00         0.000  pendant swing extreme (theta = A cos(pi beat))
+   0.000              0.00              0.00         0.000  logo OUT U link step 1
+   0.059              8.07              0.00         0.242  logo OUT U link step 2
+   0.117             16.15              0.00         0.484  logo OUT U link step 3
+   0.176              9.11              0.00         0.273  logo OUT U link step 4
+   0.234              1.04              0.00         0.031  open eq
+   0.234              1.04              0.00         0.031  logo OUT U link step 5
+   0.293              7.03              0.00         0.211  open eq step 2
+   0.293              7.03              0.00         0.211  logo OUT U link step 6
+   0.352             15.10              0.00         0.453  open eq step 3
+   0.352             15.10              0.00         0.453  boot line 2
+   0.352             15.10              0.00         0.453  logo OUT U link step 7
+   0.410             10.16              0.00         0.305  open eq step 4
+   0.410             10.16              0.00         0.305  logo OUT U link step 8
+   0.469              2.08              0.00         0.062  open eq step 5
+   0.469              2.08              0.00         0.062  open spectrum
+   0.469              2.08              0.00         0.062  attention hop
+   0.469              2.08              0.00         0.062  pendant swing extreme (theta = A cos(pi beat))
+   0.469              2.08              0.00         0.062  logo OUT 2 link step 1
+   0.527              5.99              0.00         0.180  open eq step 6
+   0.527              5.99              0.00         0.180  open spectrum step 2
+   0.527              5.99              0.00         0.180  logo OUT 2 link step 2
+   0.586             14.06              0.00         0.422  open spectrum step 3
+   0.586             14.06              0.00         0.422  logo OUT 2 link step 3
+   0.645             11.20              0.00         0.336  open spectrum step 4
+   0.645             11.20              0.00         0.336  logo OUT 2 link step 4
+   0.703              3.13              0.08         0.096  open spectrum step 5
+   0.703              3.13              0.08         0.096  open loud
+   0.703              3.13              0.08         0.096  boot line 3
+   0.703              3.13              0.08         0.096  logo OUT 2 link step 5
+   0.762              4.95              0.08         0.151  open spectrum step 6
+   0.762              4.95              0.08         0.151  open loud step 2
+   0.762              4.95              0.08         0.151  logo OUT 2 link step 6
+   0.820             13.02              0.08         0.393  open loud step 3
+   0.820             13.02              0.08         0.393  logo OUT 2 link step 7
+   0.879             12.24              0.08         0.370  open loud step 4
+   0.879             12.24              0.08         0.370  logo OUT 2 link step 8
+   0.938              4.17              0.08         0.127  open loud step 5
+   0.938              4.17              0.08         0.127  open stereo
+   0.938              4.17              0.08         0.127  attention hop
+   0.938              4.17              0.08         0.127  pendant swing extreme (theta = A cos(pi beat))
+   0.938              4.17              0.08         0.127  logo OUT C link step 1
+   0.996              3.91              0.08         0.120  open loud step 6
+   0.996              3.91              0.08         0.120  open stereo step 2
+   0.996              3.91              0.08         0.120  logo OUT C link step 2
+   1.055             11.98              0.08         0.362  open stereo step 3
+   1.055             11.98              0.08         0.362  boot line 4
+   1.055             11.98              0.08         0.362  logo OUT C link step 3
+   1.113             13.28              0.08         0.401  open stereo step 4
+   1.113             13.28              0.08         0.401  logo OUT C link step 4
+   1.172              5.21              0.08         0.159  open stereo step 5
+   1.172              5.21              0.08         0.159  open spectro
+   1.172              5.21              0.08         0.159  logo OUT C link step 5
+   1.230              2.86              0.02         0.087  open stereo step 6
+   1.230              2.86              0.02         0.087  open spectro step 2
+   1.230              2.86              0.02         0.087  logo OUT C link step 6
+   1.289             10.94              0.02         0.329  open spectro step 3
+   1.289             10.94              0.02         0.329  logo OUT C link step 7
+   1.348             14.32              0.02         0.430  open spectro step 4
+   1.348             14.32              0.02         0.430  logo OUT C link step 8
+   1.406              6.25              0.02         0.188  open spectro step 5
+   1.406              6.25              0.02         0.188  attention hop
+   1.406              6.25              0.02         0.188  pendant swing extreme (theta = A cos(pi beat))
+   1.406              6.25              0.02         0.188  boot line 5
+   1.465              1.82              0.02         0.055  open spectro step 6
+   1.875              8.33              0.02         0.251  drop: 1-frame invert
+   1.875              8.33              0.02         0.251  attention hop
+   1.875              8.33              0.02         0.251  pendant swing extreme (theta = A cos(pi beat))
+   1.875              8.33              0.02         0.251  boot terminal closes (hard)
+   1.875              8.33              0.02         0.251  logo IN U link step 1
+   1.934              0.26              0.02         0.008  logo IN U link step 2
+   1.992              7.81              0.02         0.235  logo IN U link step 3
+   2.051             15.89              0.02         0.477  logo IN U link step 4
+   2.109              9.37              0.02         0.282  logo IN U link step 5
+   2.168              1.30              0.00         0.039  logo IN U link step 6
+   2.227              6.77              0.00         0.203  logo IN U link step 7
+   2.285             14.84              0.00         0.445  logo IN U link step 8
+   2.344             10.42              0.00         0.312  attention hop
+   2.344             10.42              0.00         0.312  pendant swing extreme (theta = A cos(pi beat))
+   2.344             10.42              0.00         0.312  logo IN 2 link step 1
+   2.402              2.34              0.00         0.070  logo IN 2 link step 2
+   2.461              5.73              0.00         0.172  logo IN 2 link step 3
+   2.520             13.80              0.00         0.414  logo IN 2 link step 4
+   2.578             11.46              0.08         0.346  logo IN 2 link step 5
+   2.637              3.39              0.08         0.104  logo IN 2 link step 6
+   2.695              4.69              0.08         0.143  logo IN 2 link step 7
+   2.754             12.76              0.08         0.385  logo IN 2 link step 8
+   2.812             12.50              0.08         0.378  attention hop
+   2.812             12.50              0.08         0.378  pendant swing extreme (theta = A cos(pi beat))
+   2.812             12.50              0.08         0.378  logo IN C link step 1
+   2.871              4.43              0.08         0.135  logo IN C link step 2
+   2.930              3.65              0.08         0.112  logo IN C link step 3
+   2.988             11.72              0.08         0.354  logo IN C link step 4
+   3.047             13.54              0.08         0.409  logo IN C link step 5
+   3.105              5.47              0.02         0.165  logo IN C link step 6
+   3.164              2.60              0.02         0.079  logo IN C link step 7
+   3.223             10.68              0.02         0.321  logo IN C link step 8
+   3.281             14.58              0.02         0.438  attention hop
+   3.281             14.58              0.02         0.438  pendant swing extreme (theta = A cos(pi beat))
+   3.750             16.67              0.00         0.500  attention hop
+   3.750             16.67              0.00         0.500  pendant swing extreme (theta = A cos(pi beat))
+   3.750             16.67              0.00         0.500  logo OUT U link step 1
+   3.809              8.59              0.00         0.258  logo OUT U link step 2
+   3.867              0.52              0.00         0.016  logo OUT U link step 3
+   3.926              7.55              0.00         0.227  logo OUT U link step 4
+   3.984             15.62              0.00         0.469  logo OUT U link step 5
+   4.043              9.64              0.00         0.289  logo OUT U link step 6
+   4.102              1.56              0.00         0.047  logo OUT U link step 7
+   4.160              6.51              0.00         0.195  logo OUT U link step 8
+   4.219             14.58              0.00         0.438  attention hop
+   4.219             14.58              0.00         0.438  pendant swing extreme (theta = A cos(pi beat))
+   4.219             14.58              0.00         0.438  note session
+   4.219             14.58              0.00         0.438  logo OUT 2 link step 1
+   4.277             10.68              0.00         0.320  logo OUT 2 link step 2
+   4.336              2.60              0.00         0.078  logo OUT 2 link step 3
+   4.395              5.47              0.00         0.164  logo OUT 2 link step 4
+   4.453             13.54              0.08         0.409  logo OUT 2 link step 5
+   4.512             11.72              0.08         0.354  logo OUT 2 link step 6
+   4.570              3.65              0.08         0.112  logo OUT 2 link step 7
+   4.629              4.43              0.08         0.135  logo OUT 2 link step 8
+   4.688             12.50              0.08         0.378  attention hop
+   4.688             12.50              0.08         0.378  pendant swing extreme (theta = A cos(pi beat))
+   4.688             12.50              0.08         0.378  logo OUT C link step 1
+   4.746             12.76              0.08         0.385  logo OUT C link step 2
+   4.805              4.69              0.08         0.143  logo OUT C link step 3
+   4.863              3.39              0.08         0.104  logo OUT C link step 4
+   4.922             11.46              0.08         0.346  logo OUT C link step 5
+   4.980             13.80              0.00         0.414  logo OUT C link step 6
+   5.039              5.73              0.00         0.172  logo OUT C link step 7
+   5.098              2.34              0.00         0.070  logo OUT C link step 8
+   5.156             10.42              0.00         0.313  focus in → chains (start)
+   5.156             10.42              0.00         0.313  attention hop
+   5.156             10.42              0.00         0.313  pendant swing extreme (theta = A cos(pi beat))
+   5.625              8.33              0.00         0.250  focus in → chains (land)
+   5.625              8.33              0.00         0.250  attention hop
+   5.625              8.33              0.00         0.250  pendant swing extreme (theta = A cos(pi beat))
+   5.625              8.33              0.00         0.250  logo IN U link step 1
+   5.684             16.41              0.00         0.492  logo IN U link step 2
+   5.742              8.85              0.00         0.266  logo IN U link step 3
+   5.801              0.78              0.00         0.023  logo IN U link step 4
+   5.859              7.29              0.00         0.219  logo IN U link step 5
+   5.918             15.36              0.00         0.461  logo IN U link step 6
+   5.977              9.90              0.00         0.297  logo IN U link step 7
+   6.035              1.82              0.00         0.055  logo IN U link step 8
+   6.094              6.25              0.00         0.187  attention hop
+   6.094              6.25              0.00         0.187  pendant swing extreme (theta = A cos(pi beat))
+   6.094              6.25              0.00         0.187  note spectrum
+   6.094              6.25              0.00         0.187  logo IN 2 link step 1
+   6.152             14.32              0.00         0.430  logo IN 2 link step 2
+   6.211             10.94              0.00         0.328  logo IN 2 link step 3
+   6.270              2.86              0.00         0.086  logo IN 2 link step 4
+   6.328              5.21              0.08         0.159  logo IN 2 link step 5
+   6.387             13.28              0.08         0.401  logo IN 2 link step 6
+   6.445             11.98              0.08         0.362  logo IN 2 link step 7
+   6.504              3.91              0.08         0.120  logo IN 2 link step 8
+   6.562              4.17              0.08         0.127  attention hop
+   6.562              4.17              0.08         0.127  pendant swing extreme (theta = A cos(pi beat))
+   6.562              4.17              0.08         0.127  logo IN C link step 1
+   6.621             12.24              0.08         0.370  logo IN C link step 2
+   6.680             13.02              0.08         0.393  logo IN C link step 3
+   6.738              4.95              0.08         0.151  logo IN C link step 4
+   6.797              3.12              0.08         0.096  logo IN C link step 5
+   6.855             11.20              0.00         0.336  logo IN C link step 6
+   6.914             14.06              0.00         0.422  logo IN C link step 7
+   6.973              5.99              0.00         0.180  logo IN C link step 8
+   7.031              2.08              0.00         0.062  attention hop
+   7.031              2.08              0.00         0.062  pendant swing extreme (theta = A cos(pi beat))
+   7.500              0.00              0.00         0.000  attention hop
+   7.500              0.00              0.00         0.000  pendant swing extreme (theta = A cos(pi beat))
+   7.500              0.00              0.00         0.000  logo OUT U link step 1
+   7.559              8.07              0.00         0.242  logo OUT U link step 2
+   7.617             16.15              0.00         0.484  logo OUT U link step 3
+   7.676              9.11              0.00         0.273  logo OUT U link step 4
+   7.734              1.04              0.00         0.031  logo OUT U link step 5
+   7.793              7.03              0.00         0.211  logo OUT U link step 6
+   7.852             15.10              0.00         0.453  logo OUT U link step 7
+   7.910             10.16              0.00         0.305  logo OUT U link step 8
+   7.969              2.08              0.00         0.062  attention hop
+   7.969              2.08              0.00         0.062  pendant swing extreme (theta = A cos(pi beat))
+   7.969              2.08              0.00         0.062  note session
+   7.969              2.08              0.00         0.062  logo OUT 2 link step 1
+   8.027              5.99              0.00         0.180  logo OUT 2 link step 2
+   8.086             14.06              0.00         0.422  logo OUT 2 link step 3
+   8.145             11.20              0.00         0.336  logo OUT 2 link step 4
+   8.203              3.13              0.04         0.095  logo OUT 2 link step 5
+   8.262              4.95              0.04         0.150  logo OUT 2 link step 6
+   8.320             13.02              0.04         0.392  logo OUT 2 link step 7
+   8.379             12.24              0.04         0.368  logo OUT 2 link step 8
+   8.438              4.17              0.04         0.126  attention hop
+   8.438              4.17              0.04         0.126  pendant swing extreme (theta = A cos(pi beat))
+   8.438              4.17              0.04         0.126  logo OUT C link step 1
+   8.496              3.91              0.04         0.118  logo OUT C link step 2
+   8.555             11.98              0.04         0.361  logo OUT C link step 3
+   8.613             13.28              0.04         0.400  logo OUT C link step 4
+   8.672              5.21              0.04         0.158  logo OUT C link step 5
+   8.730              2.86              0.00         0.086  logo OUT C link step 6
+   8.789             10.94              0.00         0.328  logo OUT C link step 7
+   8.848             14.32              0.00         0.430  logo OUT C link step 8
+   8.906              6.25              0.00         0.187  focus out ← chains (start)
+   8.906              6.25              0.00         0.187  attention hop
+   8.906              6.25              0.00         0.187  pendant swing extreme (theta = A cos(pi beat))
+   9.375              8.33              0.02         0.251  focus out (land wide)
+   9.375              8.33              0.02         0.251  attention hop
+   9.375              8.33              0.02         0.251  pendant swing extreme (theta = A cos(pi beat))
+   9.375              8.33              0.02         0.251  logo IN U link step 1
+   9.434              0.26              0.02         0.008  logo IN U link step 2
+   9.492              7.81              0.02         0.235  logo IN U link step 3
+   9.551             15.89              0.02         0.477  logo IN U link step 4
+   9.609              9.38              0.02         0.282  logo IN U link step 5
+   9.668              1.30              0.00         0.039  logo IN U link step 6
+   9.727              6.77              0.00         0.203  logo IN U link step 7
+   9.785             14.84              0.00         0.445  logo IN U link step 8
+   9.844             10.42              0.00         0.312  attention hop
+   9.844             10.42              0.00         0.312  pendant swing extreme (theta = A cos(pi beat))
+   9.844             10.42              0.00         0.312  note stereo
+   9.844             10.42              0.00         0.312  logo IN 2 link step 1
+   9.902              2.34              0.00         0.070  logo IN 2 link step 2
+   9.961              5.73              0.00         0.172  logo IN 2 link step 3
+  10.020             13.80              0.00         0.414  logo IN 2 link step 4
+  10.078             11.46              0.08         0.346  logo IN 2 link step 5
+  10.137              3.39              0.08         0.104  logo IN 2 link step 6
+  10.195              4.69              0.08         0.143  logo IN 2 link step 7
+  10.254             12.76              0.08         0.385  logo IN 2 link step 8
+  10.312             12.50              0.08         0.377  attention hop
+  10.312             12.50              0.08         0.377  pendant swing extreme (theta = A cos(pi beat))
+  10.312             12.50              0.08         0.377  logo IN C link step 1
+  10.371              4.43              0.08         0.135  logo IN C link step 2
+  10.430              3.65              0.08         0.112  logo IN C link step 3
+  10.488             11.72              0.08         0.354  logo IN C link step 4
+  10.547             13.54              0.08         0.409  logo IN C link step 5
+  10.605              5.47              0.02         0.165  logo IN C link step 6
+  10.664              2.60              0.02         0.079  logo IN C link step 7
+  10.723             10.68              0.02         0.321  logo IN C link step 8
+  10.781             14.58              0.02         0.438  attention hop
+  10.781             14.58              0.02         0.438  pendant swing extreme (theta = A cos(pi beat))
+  11.250             16.67              0.00         0.500  attention hop
+  11.250             16.67              0.00         0.500  pendant swing extreme (theta = A cos(pi beat))
+  11.250             16.67              0.00         0.500  logo OUT U link step 1
+  11.309              8.59              0.00         0.258  logo OUT U link step 2
+  11.367              0.52              0.00         0.016  logo OUT U link step 3
+  11.426              7.55              0.00         0.227  logo OUT U link step 4
+  11.484             15.62              0.00         0.469  logo OUT U link step 5
+  11.543              9.64              0.00         0.289  logo OUT U link step 6
+  11.602              1.56              0.00         0.047  logo OUT U link step 7
+  11.660              6.51              0.00         0.195  logo OUT U link step 8
+  11.719             14.58              0.00         0.437  attention hop
+  11.719             14.58              0.00         0.437  pendant swing extreme (theta = A cos(pi beat))
+  11.719             14.58              0.00         0.437  note clock
+  11.719             14.58              0.00         0.437  logo OUT 2 link step 1
+  11.777             10.68              0.00         0.320  logo OUT 2 link step 2
+  11.836              2.60              0.00         0.078  logo OUT 2 link step 3
+  11.895              5.47              0.00         0.164  logo OUT 2 link step 4
+  11.953             13.54              0.10         0.409  logo OUT 2 link step 5
+  12.012             11.72              0.10         0.355  logo OUT 2 link step 6
+  12.070              3.65              0.10         0.113  logo OUT 2 link step 7
+  12.129              4.43              0.10         0.136  logo OUT 2 link step 8
+  12.188             12.50              0.10         0.378  attention hop
+  12.188             12.50              0.10         0.378  pendant swing extreme (theta = A cos(pi beat))
+  12.188             12.50              0.10         0.378  logo OUT C link step 1
+  12.246             12.76              0.10         0.386  logo OUT C link step 2
+  12.305              4.69              0.10         0.144  logo OUT C link step 3
+  12.363              3.39              0.10         0.105  logo OUT C link step 4
+  12.422             11.46              0.10         0.347  logo OUT C link step 5
+  12.480             13.80              0.00         0.414  logo OUT C link step 6
+  12.539              5.73              0.00         0.172  logo OUT C link step 7
+  12.598              2.34              0.00         0.070  logo OUT C link step 8
+  12.656             10.42              0.00         0.312  focus in → eq (start)
+  12.656             10.42              0.00         0.312  attention hop
+  12.656             10.42              0.00         0.312  pendant swing extreme (theta = A cos(pi beat))
+  13.125              8.33              0.00         0.250  focus in → eq (land)
+  13.125              8.33              0.00         0.250  attention hop
+  13.125              8.33              0.00         0.250  pendant swing extreme (theta = A cos(pi beat))
+  13.125              8.33              0.00         0.250  logo IN U link step 1
+  13.184             16.41              0.00         0.492  logo IN U link step 2
+  13.242              8.85              0.00         0.266  logo IN U link step 3
+  13.301              0.78              0.00         0.023  logo IN U link step 4
+  13.359              7.29              0.00         0.219  logo IN U link step 5
+  13.418             15.36              0.00         0.461  logo IN U link step 6
+  13.477              9.90              0.00         0.297  logo IN U link step 7
+  13.535              1.82              0.00         0.055  logo IN U link step 8
+  13.594              6.25              0.00         0.187  attention hop
+  13.594              6.25              0.00         0.187  pendant swing extreme (theta = A cos(pi beat))
+  13.594              6.25              0.00         0.187  note eq
+  13.594              6.25              0.00         0.187  logo IN 2 link step 1
+  13.652             14.32              0.00         0.430  logo IN 2 link step 2
+  13.711             10.94              0.00         0.328  logo IN 2 link step 3
+  13.770              2.86              0.00         0.086  logo IN 2 link step 4
+  13.828              5.21              0.08         0.159  logo IN 2 link step 5
+  13.887             13.28              0.08         0.401  logo IN 2 link step 6
+  13.945             11.98              0.08         0.362  logo IN 2 link step 7
+  14.004              3.91              0.08         0.120  logo IN 2 link step 8
+  14.062              4.17              0.08         0.127  attention hop
+  14.062              4.17              0.08         0.127  pendant swing extreme (theta = A cos(pi beat))
+  14.062              4.17              0.08         0.127  logo IN C link step 1
+  14.121             12.24              0.08         0.370  logo IN C link step 2
+  14.180             13.02              0.08         0.393  logo IN C link step 3
+  14.238              4.95              0.08         0.151  logo IN C link step 4
+  14.297              3.13              0.08         0.096  logo IN C link step 5
+  14.355             11.20              0.00         0.336  logo IN C link step 6
+  14.414             14.06              0.00         0.422  logo IN C link step 7
+  14.473              5.99              0.00         0.180  logo IN C link step 8
+  14.531              2.08              0.00         0.062  attention hop
+  14.531              2.08              0.00         0.062  pendant swing extreme (theta = A cos(pi beat))
+  15.000              0.00              0.00         0.000  attention hop
+  15.000              0.00              0.00         0.000  pendant swing extreme (theta = A cos(pi beat))
+  15.000              0.00              0.00         0.000  logo OUT U link step 1
+  15.059              8.07              0.00         0.242  logo OUT U link step 2
+  15.117             16.15              0.00         0.484  logo OUT U link step 3
+  15.176              9.11              0.00         0.273  logo OUT U link step 4
+  15.234              1.04              0.00         0.031  logo OUT U link step 5
+  15.293              7.03              0.00         0.211  logo OUT U link step 6
+  15.352             15.10              0.00         0.453  logo OUT U link step 7
+  15.410             10.16              0.00         0.305  logo OUT U link step 8
+  15.469              2.08              0.00         0.062  attention hop
+  15.469              2.08              0.00         0.062  pendant swing extreme (theta = A cos(pi beat))
+  15.469              2.08              0.00         0.062  logo OUT 2 link step 1
+  15.527              5.99              0.00         0.180  logo OUT 2 link step 2
+  15.586             14.06              0.00         0.422  logo OUT 2 link step 3
+  15.645             11.20              0.00         0.336  logo OUT 2 link step 4
+  15.703              3.13              0.08         0.096  logo OUT 2 link step 5
+  15.762              4.95              0.08         0.151  logo OUT 2 link step 6
+  15.820             13.02              0.08         0.393  logo OUT 2 link step 7
+  15.879             12.24              0.08         0.370  logo OUT 2 link step 8
+  15.938              4.17              0.08         0.127  attention hop
+  15.938              4.17              0.08         0.127  pendant swing extreme (theta = A cos(pi beat))
+  15.938              4.17              0.08         0.127  logo OUT C link step 1
+  15.996              3.91              0.08         0.120  logo OUT C link step 2
+  16.055             11.98              0.08         0.362  logo OUT C link step 3
+  16.113             13.28              0.08         0.401  logo OUT C link step 4
+  16.172              5.21              0.08         0.159  logo OUT C link step 5
+  16.230              2.86              0.00         0.086  logo OUT C link step 6
+  16.289             10.94              0.00         0.328  logo OUT C link step 7
+  16.348             14.32              0.00         0.430  logo OUT C link step 8
+  16.406              6.25              0.00         0.188  focus out ← eq (start)
+  16.406              6.25              0.00         0.188  attention hop
+  16.406              6.25              0.00         0.188  pendant swing extreme (theta = A cos(pi beat))
+  16.875              8.33              0.00         0.250  focus out (land wide)
+  16.875              8.33              0.00         0.250  attention hop
+  16.875              8.33              0.00         0.250  pendant swing extreme (theta = A cos(pi beat))
+  16.875              8.33              0.00         0.250  logo IN U link step 1
+  16.934              0.26              0.00         0.008  logo IN U link step 2
+  16.992              7.81              0.00         0.234  logo IN U link step 3
+  17.051             15.89              0.00         0.477  logo IN U link step 4
+  17.109              9.37              0.00         0.281  logo IN U link step 5
+  17.168              1.30              0.00         0.039  logo IN U link step 6
+  17.227              6.77              0.00         0.203  logo IN U link step 7
+  17.285             14.84              0.00         0.445  logo IN U link step 8
+  17.344             10.42              0.00         0.313  attention hop
+  17.344             10.42              0.00         0.313  pendant swing extreme (theta = A cos(pi beat))
+  17.344             10.42              0.00         0.313  note spectro
+  17.344             10.42              0.00         0.313  logo IN 2 link step 1
+  17.402              2.34              0.00         0.070  logo IN 2 link step 2
+  17.461              5.73              0.00         0.172  logo IN 2 link step 3
+  17.520             13.80              0.00         0.414  logo IN 2 link step 4
+  17.578             11.46              0.08         0.346  logo IN 2 link step 5
+  17.637              3.39              0.08         0.104  logo IN 2 link step 6
+  17.695              4.69              0.08         0.143  logo IN 2 link step 7
+  17.754             12.76              0.08         0.385  logo IN 2 link step 8
+  17.812             12.50              0.08         0.377  attention hop
+  17.812             12.50              0.08         0.377  pendant swing extreme (theta = A cos(pi beat))
+  17.812             12.50              0.08         0.377  logo IN C link step 1
+  17.871              4.43              0.08         0.135  logo IN C link step 2
+  17.930              3.65              0.08         0.112  logo IN C link step 3
+  17.988             11.72              0.08         0.354  logo IN C link step 4
+  18.047             13.54              0.08         0.409  logo IN C link step 5
+  18.105              5.47              0.00         0.164  logo IN C link step 6
+  18.164              2.60              0.00         0.078  logo IN C link step 7
+  18.223             10.68              0.00         0.320  logo IN C link step 8
+  18.281             14.58              0.00         0.438  attention hop
+  18.281             14.58              0.00         0.438  pendant swing extreme (theta = A cos(pi beat))
+  18.750             16.67              0.00         0.500  attention hop
+  18.750             16.67              0.00         0.500  pendant swing extreme (theta = A cos(pi beat))
+  18.750             16.67              0.00         0.500  logo OUT U link step 1
+  18.809              8.59              0.00         0.258  logo OUT U link step 2
+  18.867              0.52              0.00         0.016  logo OUT U link step 3
+  18.926              7.55              0.00         0.227  logo OUT U link step 4
+  18.984             15.62              0.00         0.469  logo OUT U link step 5
+  19.043              9.64              0.00         0.289  logo OUT U link step 6
+  19.102              1.56              0.00         0.047  logo OUT U link step 7
+  19.160              6.51              0.00         0.195  logo OUT U link step 8
+  19.219             14.58              0.00         0.438  attention hop
+  19.219             14.58              0.00         0.438  pendant swing extreme (theta = A cos(pi beat))
+  19.219             14.58              0.00         0.438  logo OUT 2 link step 1
+  19.277             10.68              0.00         0.320  logo OUT 2 link step 2
+  19.336              2.60              0.00         0.078  logo OUT 2 link step 3
+  19.395              5.47              0.00         0.164  logo OUT 2 link step 4
+  19.453             13.54              0.10         0.409  logo OUT 2 link step 5
+  19.512             11.72              0.10         0.355  logo OUT 2 link step 6
+  19.570              3.65              0.10         0.113  logo OUT 2 link step 7
+  19.629              4.43              0.10         0.136  logo OUT 2 link step 8
+  19.688             12.50              0.10         0.378  attention hop
+  19.688             12.50              0.10         0.378  pendant swing extreme (theta = A cos(pi beat))
+  19.688             12.50              0.10         0.378  logo OUT C link step 1
+  19.746             12.76              0.10         0.386  logo OUT C link step 2
+  19.805              4.69              0.10         0.144  logo OUT C link step 3
+  19.863              3.39              0.10         0.105  logo OUT C link step 4
+  19.922             11.46              0.10         0.347  logo OUT C link step 5
+  19.980             13.80              0.00         0.414  logo OUT C link step 6
+  20.039              5.73              0.00         0.172  logo OUT C link step 7
+  20.098              2.34              0.00         0.070  logo OUT C link step 8
+  20.156             10.42              0.00         0.313  focus in → elephant (start)
+  20.156             10.42              0.00         0.313  attention hop
+  20.156             10.42              0.00         0.313  pendant swing extreme (theta = A cos(pi beat))
+  20.625              8.33              0.00         0.250  focus in → elephant (land)
+  20.625              8.33              0.00         0.250  attention hop
+  20.625              8.33              0.00         0.250  pendant swing extreme (theta = A cos(pi beat))
+  20.625              8.33              0.00         0.250  logo IN U link step 1
+  20.684             16.41              0.00         0.492  logo IN U link step 2
+  20.742              8.85              0.00         0.266  logo IN U link step 3
+  20.801              0.78              0.00         0.023  logo IN U link step 4
+  20.859              7.29              0.00         0.219  logo IN U link step 5
+  20.918             15.36              0.00         0.461  logo IN U link step 6
+  20.977              9.90              0.00         0.297  logo IN U link step 7
+  21.035              1.82              0.00         0.055  logo IN U link step 8
+  21.094              6.25              0.00         0.188  attention hop
+  21.094              6.25              0.00         0.188  pendant swing extreme (theta = A cos(pi beat))
+  21.094              6.25              0.00         0.188  logo IN 2 link step 1
+  21.152             14.32              0.00         0.430  logo IN 2 link step 2
+  21.211             10.94              0.00         0.328  logo IN 2 link step 3
+  21.270              2.86              0.00         0.086  logo IN 2 link step 4
+  21.328              5.21              0.08         0.159  logo IN 2 link step 5
+  21.387             13.28              0.08         0.401  logo IN 2 link step 6
+  21.445             11.98              0.08         0.362  logo IN 2 link step 7
+  21.504              3.91              0.08         0.120  logo IN 2 link step 8
+  21.562              4.17              0.08         0.127  attention hop
+  21.562              4.17              0.08         0.127  pendant swing extreme (theta = A cos(pi beat))
+  21.562              4.17              0.08         0.127  logo IN C link step 1
+  21.621             12.24              0.08         0.370  logo IN C link step 2
+  21.680             13.02              0.08         0.393  logo IN C link step 3
+  21.738              4.95              0.08         0.151  logo IN C link step 4
+  21.797              3.13              0.08         0.096  logo IN C link step 5
+  21.855             11.20              0.00         0.336  logo IN C link step 6
+  21.914             14.06              0.00         0.422  logo IN C link step 7
+  21.973              5.99              0.00         0.180  logo IN C link step 8
+  22.031              2.08              0.00         0.063  attention hop
+  22.031              2.08              0.00         0.063  pendant swing extreme (theta = A cos(pi beat))
+  22.500              0.00              0.00         0.000  attention hop
+  22.500              0.00              0.00         0.000  pendant swing extreme (theta = A cos(pi beat))
+  22.500              0.00              0.00         0.000  logo OUT U link step 1
+  22.559              8.07              0.00         0.242  logo OUT U link step 2
+  22.617             16.15              0.00         0.484  logo OUT U link step 3
+  22.676              9.11              0.00         0.273  logo OUT U link step 4
+  22.734              1.04              0.00         0.031  logo OUT U link step 5
+  22.793              7.03              0.00         0.211  logo OUT U link step 6
+  22.852             15.10              0.00         0.453  logo OUT U link step 7
+  22.910             10.16              0.00         0.305  logo OUT U link step 8
+  22.969              2.08              0.00         0.063  attention hop
+  22.969              2.08              0.00         0.063  pendant swing extreme (theta = A cos(pi beat))
+  22.969              2.08              0.00         0.063  logo OUT 2 link step 1
+  23.027              5.99              0.00         0.180  logo OUT 2 link step 2
+  23.086             14.06              0.00         0.422  logo OUT 2 link step 3
+  23.145             11.20              0.00         0.336  logo OUT 2 link step 4
+  23.203              3.13              0.08         0.096  logo OUT 2 link step 5
+  23.262              4.95              0.08         0.151  logo OUT 2 link step 6
+  23.320             13.02              0.08         0.393  logo OUT 2 link step 7
+  23.379             12.24              0.08         0.370  logo OUT 2 link step 8
+  23.438              4.17              0.08         0.127  attention hop
+  23.438              4.17              0.08         0.127  pendant swing extreme (theta = A cos(pi beat))
+  23.438              4.17              0.08         0.127  logo OUT C link step 1
+  23.496              3.91              0.08         0.120  logo OUT C link step 2
+  23.555             11.98              0.08         0.362  logo OUT C link step 3
+  23.613             13.28              0.08         0.401  logo OUT C link step 4
+  23.672              5.21              0.08         0.159  logo OUT C link step 5
+  23.730              2.86              0.00         0.086  logo OUT C link step 6
+  23.789             10.94              0.00         0.328  logo OUT C link step 7
+  23.848             14.32              0.00         0.430  logo OUT C link step 8
+  23.906              6.25              0.00         0.188  focus out ← elephant (start)
+  23.906              6.25              0.00         0.188  attention hop
+  23.906              6.25              0.00         0.188  pendant swing extreme (theta = A cos(pi beat))
+  24.375              8.33              0.02         0.251  focus out (land wide)
+  24.375              8.33              0.02         0.251  attention hop
+  24.375              8.33              0.02         0.251  pendant swing extreme (theta = A cos(pi beat))
+  24.375              8.33              0.02         0.251  logo IN U link step 1
+  24.434              0.26              0.02         0.008  logo IN U link step 2
+  24.492              7.81              0.02         0.235  logo IN U link step 3
+  24.551             15.89              0.02         0.477  logo IN U link step 4
+  24.609              9.37              0.02         0.282  logo IN U link step 5
+  24.668              1.30              0.00         0.039  logo IN U link step 6
+  24.727              6.77              0.00         0.203  logo IN U link step 7
+  24.785             14.84              0.00         0.445  logo IN U link step 8
+  24.844             10.42              0.00         0.313  attention hop
+  24.844             10.42              0.00         0.313  pendant swing extreme (theta = A cos(pi beat))
+  24.844             10.42              0.00         0.313  logo IN 2 link step 1
+  24.902              2.34              0.00         0.070  logo IN 2 link step 2
+  24.961              5.73              0.00         0.172  logo IN 2 link step 3
+  25.020             13.80              0.00         0.414  logo IN 2 link step 4
+  25.078             11.46              0.08         0.346  logo IN 2 link step 5
+  25.137              3.39              0.08         0.104  logo IN 2 link step 6
+  25.195              4.69              0.08         0.143  logo IN 2 link step 7
+  25.254             12.76              0.08         0.385  logo IN 2 link step 8
+  25.312             12.50              0.08         0.377  attention hop
+  25.312             12.50              0.08         0.377  pendant swing extreme (theta = A cos(pi beat))
+  25.312             12.50              0.08         0.377  logo IN C link step 1
+  25.371              4.43              0.08         0.135  logo IN C link step 2
+  25.430              3.65              0.08         0.112  logo IN C link step 3
+  25.488             11.72              0.08         0.354  logo IN C link step 4
+  25.547             13.54              0.08         0.409  logo IN C link step 5
+  25.605              5.47              0.02         0.165  logo IN C link step 6
+  25.664              2.60              0.02         0.079  logo IN C link step 7
+  25.723             10.68              0.02         0.321  logo IN C link step 8
+  25.781             14.58              0.02         0.438  attention hop
+  25.781             14.58              0.02         0.438  pendant swing extreme (theta = A cos(pi beat))
+  26.250             16.67              0.00         0.500  attention hop
+  26.250             16.67              0.00         0.500  pendant swing extreme (theta = A cos(pi beat))
+  26.250             16.67              0.00         0.500  result card
+  26.250             16.67              0.00         0.500  logo OUT U link step 1
+  26.309              8.59              0.00         0.258  logo OUT U link step 2
+  26.367              0.52              0.00         0.016  logo OUT U link step 3
+  26.426              7.55              0.00         0.227  logo OUT U link step 4
+  26.484             15.62              0.00         0.469  result line 2
+  26.484             15.62              0.00         0.469  logo OUT U link step 5
+  26.543              9.64              0.00         0.289  logo OUT U link step 6
+  26.602              1.56              0.00         0.047  logo OUT U link step 7
+  26.660              6.51              0.00         0.195  logo OUT U link step 8
+  26.719             14.58              0.00         0.438  attention hop
+  26.719             14.58              0.00         0.438  pendant swing extreme (theta = A cos(pi beat))
+  26.719             14.58              0.00         0.438  result line 3
+  26.719             14.58              0.00         0.438  logo OUT 2 link step 1
+  26.777             10.68              0.00         0.320  logo OUT 2 link step 2
+  26.836              2.60              0.00         0.078  logo OUT 2 link step 3
+  26.895              5.47              0.00         0.164  logo OUT 2 link step 4
+  26.953             13.54              0.08         0.409  result line 4
+  26.953             13.54              0.08         0.409  logo OUT 2 link step 5
+  27.012             11.72              0.08         0.354  logo OUT 2 link step 6
+  27.070              3.65              0.08         0.112  logo OUT 2 link step 7
+  27.129              4.43              0.08         0.135  logo OUT 2 link step 8
+  27.188             12.50              0.08         0.377  attention hop
+  27.188             12.50              0.08         0.377  pendant swing extreme (theta = A cos(pi beat))
+  27.188             12.50              0.08         0.377  result line 5
+  27.188             12.50              0.08         0.377  logo OUT C link step 1
+  27.246             12.76              0.08         0.385  logo OUT C link step 2
+  27.305              4.69              0.08         0.143  logo OUT C link step 3
+  27.363              3.39              0.08         0.104  logo OUT C link step 4
+  27.422             11.46              0.08         0.346  result line 6
+  27.422             11.46              0.08         0.346  logo OUT C link step 5
+  27.480             13.80              0.00         0.414  logo OUT C link step 6
+  27.539              5.73              0.00         0.172  logo OUT C link step 7
+  27.598              2.34              0.00         0.070  logo OUT C link step 8
+  27.656             10.42              0.00         0.313  attention hop
+  27.656             10.42              0.00         0.313  pendant swing extreme (theta = A cos(pi beat))
+  28.125              8.33              0.00         0.250  attention hop
+  28.125              8.33              0.00         0.250  pendant swing extreme (theta = A cos(pi beat))
+  28.125              8.33              0.00         0.250  logo IN U link step 1
+  28.184             16.41              0.00         0.492  logo IN U link step 2
+  28.242              8.85              0.00         0.266  logo IN U link step 3
+  28.301              0.78              0.00         0.023  logo IN U link step 4
+  28.359              7.29              0.00         0.219  logo IN U link step 5
+  28.418             15.36              0.00         0.461  logo IN U link step 6
+  28.477              9.90              0.00         0.297  logo IN U link step 7
+  28.535              1.82              0.00         0.055  logo IN U link step 8
+  28.594              6.25              0.00         0.188  attention hop
+  28.594              6.25              0.00         0.188  pendant swing extreme (theta = A cos(pi beat))
+  28.594              6.25              0.00         0.188  logo IN 2 link step 1
+  28.652             14.32              0.00         0.430  logo IN 2 link step 2
+  28.711             10.94              0.00         0.328  logo IN 2 link step 3
+  28.770              2.86              0.00         0.086  logo IN 2 link step 4
+  28.828              5.21              0.08         0.159  logo IN 2 link step 5
+  28.887             13.28              0.08         0.401  logo IN 2 link step 6
+  28.945             11.98              0.08         0.362  logo IN 2 link step 7
+  29.004              3.91              0.08         0.120  logo IN 2 link step 8
+  29.062              4.17              0.08         0.127  attention hop
+  29.062              4.17              0.08         0.127  pendant swing extreme (theta = A cos(pi beat))
+  29.062              4.17              0.08         0.127  logo IN C link step 1
+  29.121             12.24              0.08         0.370  logo IN C link step 2
+  29.180             13.02              0.08         0.393  logo IN C link step 3
+  29.238              4.95              0.08         0.151  logo IN C link step 4
+  29.297              3.13              0.08         0.096  logo IN C link step 5
+  29.355             11.20              0.00         0.336  logo IN C link step 6
+  29.414             14.06              0.00         0.422  logo IN C link step 7
+  29.473              5.99              0.00         0.180  logo IN C link step 8
+  29.531              2.08              0.00         0.063  attention hop
+  29.531              2.08              0.00         0.063  pendant swing extreme (theta = A cos(pi beat))

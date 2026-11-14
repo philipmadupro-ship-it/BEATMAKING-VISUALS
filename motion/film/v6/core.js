@@ -41,10 +41,9 @@
   // ---------------------------------------------------------------- the four stages (a condition, not a colour)
   const STAGES = {
     nigredo: { name: 'NIGREDO', n: 1,
-      // truly black, white and greys only (no hue anywhere, the elephant is greyscaled too)
-      bg: '#050505', paper: '#050505', card: '#050505', ink: '#f5f5f5', dim: '#8a8a8a', rule: '#c8c8c8',
-      sig1: '#9a9a9a', sig2: '#d0d0d0', hot: '#ffffff', warn: '#bdbdbd', tape: '#060606', tapeA: 0.92, stamp: '#f0f0f0',
-      waveLo: '#f2f2f2', waveHi: '#8f8f8f', spec: ['#0e0e0e', '#3c3c3c', '#9a9a9a', '#ffffff'], grey: true,
+      bg: '#121212', paper: '#1a1a1a', card: '#202020', ink: '#d9d9d6', dim: '#8d8d88', rule: '#c8c8c8',
+      sig1: '#b79ad8', sig2: '#e07ad0', hot: '#e0475f', warn: '#f2c14e', tape: '#0b0b0b', tapeA: 0.92, stamp: '#e0475f',
+      waveLo: '#e07ad0', waveHi: '#b79ad8', spec: ['#121212', '#3a3a3a', '#b79ad8', '#e6e6e6'],
       grain: 0.13, gloss: true, vignette: 0.72, gridA: 0.07, swing: 4.5, zoom: 1.08, gutter: 0.6, obstruct: true, residue: [] },
     albedo: { name: 'ALBEDO', n: 2,
       bg: '#e4dccb', paper: '#ece5d5', card: '#f2ede2', ink: '#1a1917', dim: '#7d776b', rule: '#2a2824',

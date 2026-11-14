@@ -11,7 +11,7 @@
   function tinted(img, S, kind) {
     const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d');
     g.drawImage(img, 0, 0);
-    const col = kind === 'edge' ? S.sig1 : ({ NIGREDO: '#d6d6d6', ALBEDO: '#1a1917', CITRINITAS: '#d79a35', RUBEDO: '#c08cf5' })[S.name];
+    const col = kind === 'edge' ? S.sig1 : ({ NIGREDO: null, ALBEDO: '#1a1917', CITRINITAS: '#d79a35', RUBEDO: '#c08cf5' })[S.name];
     if (col) {
       if (S.name === 'ALBEDO' && kind !== 'edge') {          // ink drawing on paper: solid ink with the metal texture multiplied in
         g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, c.width, c.height);
@@ -25,15 +25,9 @@
     return c;
   }
 
-  function greyscale(img) {   // NIGREDO: luminance-only copy (Rec. 709 weights), alpha kept
-    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d');
-    g.drawImage(img, 0, 0); const im = g.getImageData(0, 0, c.width, c.height), d = im.data;
-    for (let i = 0; i < d.length; i += 4) { const y = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; const v = Math.min(255, y * 1.12); d[i] = d[i + 1] = d[i + 2] = v; }
-    g.putImageData(im, 0, 0); return c;
-  }
   B.load = async (S) => {
     const [logo, edge, eleph] = await Promise.all([loadImg('assets/brand/u2c-links.png'), loadImg('assets/brand/u2c-links-edge.png'), loadImg('assets/brand/elephant.png')]);
-    A.logo = tinted(logo, S, 'logo'); A.edge = tinted(edge, S, 'edge'); A.eleph = S.grey ? greyscale(eleph) : eleph; A.links = window.U2C_LINKS; A.rig = window.U2C_RIG;
+    A.logo = tinted(logo, S, 'logo'); A.edge = tinted(edge, S, 'edge'); A.eleph = eleph; A.links = window.U2C_LINKS; A.rig = window.U2C_RIG;
     const Lp = window.U2C_ELEPHANT_LOOP;
     if (Lp && Lp.frames && Lp.frames.length) A.loop = { ...Lp, imgs: await Promise.all(Lp.frames.map((f) => loadImg('assets/elephant-loop/' + f))) };
     // which rig quads carry pixels (skip empty ones)
@@ -94,121 +88,36 @@
 
   // ---------------------------------------------------------------- ELEPHANT on its own chain
   const rot = (p, c, a) => { const s = Math.sin(a), co = Math.cos(a), dx = p[0] - c[0], dy = p[1] - c[1]; return [c[0] + dx * co - dy * s, c[1] + dx * s + dy * co]; };
-  // ---------------------------------------------------------------- PENDANT PHYSICS (held in a hand)
-  // A kinematic "hand" holds the top of the elephant's own chain. The chain is a verlet rope (gravity, damping,
-  // length constraints) down to the bail; the body is a heavy particle rigidly hung below the bail; the two side
-  // loops are lagging secondary pendulums hung from the rope at the crossing. The hand flicks ON THE BEAT
-  // (downbeat strongest, beat 3 medium, 2 and 4 light), alternating direction, so the swing phase-locks to the tempo.
-  // Gravity is calibrated so the free pendulum's natural period = 2 beats. Fixed 1/240 s step, simulated once from
-  // a 16-bar pre-roll (steady state at frame 0), sampled per frame. Units: art pixels.
-  const SIM = {};
-  B.simulate = (S) => {
-    const rg = A.rig, P0 = rg.pivot, BL = rg.bail, N = 8, DT = 1 / 240;
-    const seg = Math.hypot(BL[0] - P0[0], BL[1] - P0[1]) / N, bodyL = 183, loopTL = 110, loopBL = 230;
-    const heavy = S.embodied, damp = heavy ? 0.42 : 0.55, mBody = heavy ? 18 : 12;
-    const kc = Math.round(N * (rg.cross[1] - P0[1]) / (BL[1] - P0[1]));     // rope index nearest the crossing
-    const amp = { 0: 1.0, 1: 0.45, 2: 0.7, 3: 0.45 }, A0 = heavy ? 26 : 20;
-    const handX = (t) => {   // sum of beat flicks: smooth 0 -> peak -> 0 bumps (0.16 s), alternating sign each beat
-      const k0 = Math.floor(t / BEAT); let x = 0;
-      for (let k = k0 - 1; k <= k0; k++) { const u = (t - k * BEAT) / 0.16; if (u < 0 || u > 1) continue; x += (k % 2 === 0 ? 1 : -1) * amp[((k % 4) + 4) % 4] * A0 * Math.sin(Math.PI * u) ** 2; }
-      return x;
-    };
-    const handY = (t) => { const u = (t % BEAT) / 0.12; return u < 1 ? -3 * Math.sin(Math.PI * u) : 0; };   // a small lift on every beat
-    function run(g, t0, t1, forced, record, kick0) {
-      const n = N + 1, x = [], px = [];
-      for (let i = 0; i < n; i++) { const p = [P0[0] + (BL[0] - P0[0]) * i / N, P0[1] + (BL[1] - P0[1]) * i / N]; x.push(p); px.push(p.slice()); }
-      const C = [BL[0], BL[1] + bodyL], pC = C.slice();
-      if (kick0) { for (let i = 1; i < n; i++) { x[i][0] += kick0 * i / N; px[i][0] += kick0 * i / N; } C[0] += kick0 * 1.6; pC[0] += kick0 * 1.6; }
-      let lt = 0, lv = 0, bt = 0, bv = 0;             // loop sway angles (secondary, about the crossing)
-      let prevA = 0, prevAv = 0;
-      const out = [];
-      const steps = Math.round((t1 - t0) / DT);
-      for (let s = 0; s <= steps; s++) {
-        const t = t0 + s * DT;
-        const hx = forced ? handX(t) : 0, hy = forced ? handY(t) : 0;
-        // integrate
-        for (let i = 1; i < n; i++) { const vx = (x[i][0] - px[i][0]) * (1 - damp * DT), vy = (x[i][1] - px[i][1]) * (1 - damp * DT); px[i] = x[i].slice(); x[i][0] += vx; x[i][1] += vy + g * DT * DT; }
-        { const vx = (C[0] - pC[0]) * (1 - damp * DT), vy = (C[1] - pC[1]) * (1 - damp * DT); pC[0] = C[0]; pC[1] = C[1]; C[0] += vx; C[1] += vy + g * DT * DT; }
-        x[0] = [P0[0] + hx, P0[1] + hy]; px[0] = x[0].slice();
-        // constraints (mass-weighted), 12 iterations
-        for (let it = 0; it < 12; it++) {
-          for (let i = 0; i < N; i++) {
-            const a = x[i], b = x[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy) || 1e-9, e = (d - seg) / d;
-            if (i === 0) { b[0] -= dx * e; b[1] -= dy * e; } else { a[0] += dx * e * 0.5; a[1] += dy * e * 0.5; b[0] -= dx * e * 0.5; b[1] -= dy * e * 0.5; }
-          }
-          const b = x[N], dx = C[0] - b[0], dy = C[1] - b[1], d = Math.hypot(dx, dy) || 1e-9, e = (d - bodyL) / d;
-          b[0] += dx * e * (mBody / (1 + mBody)); b[1] += dy * e * (mBody / (1 + mBody)); C[0] -= dx * e * (1 / (1 + mBody)); C[1] -= dy * e * (1 / (1 + mBody));
-        }
-        // secondary loops: angular springs driven by the rope's angular acceleration at the crossing
-        const xc = x[kc], xp = x[Math.max(0, kc - 1)], ang = Math.atan2(xc[0] - xp[0], xc[1] - xp[1]);
-        const av = (ang - prevA) / DT, aa = (av - prevAv) / DT; prevA = ang; prevAv = av;
-        const wl = 2 * Math.PI / (BEAT * 0.9), wb = 2 * Math.PI / (BEAT * 1.4);
-        lv += (-wl * wl * lt - 3.0 * lv - 0.9 * aa) * DT; lt += lv * DT;
-        bv += (-wb * wb * bt - 2.2 * bv - 1.2 * aa) * DT; bt += bv * DT;
-        if (record) { const f = Math.round(t * L.FPS * 1e6) / 1e6; if (Math.abs(f - Math.round(f)) < 1e-6 && t >= 0) out[Math.round(f)] = { rope: x.map((p) => p.slice()), C: C.slice(), lt, bt, hand: [hx, hy] }; }
-        else if (s % 4 === 0) out.push(C[0] - x[0][0]);
-      }
-      return out;
-    }
-    // calibrate gravity: natural period of the free compound pendulum = 2 beats
-    const target = 2 * BEAT; let g = 4 * Math.PI * Math.PI * (seg * N + bodyL) / (target * target);
-    for (let it = 0; it < 4; it++) {
-      const tr = run(g, 0, 6 * target, false, false, 18), zc = [];
-      for (let i = 1; i < tr.length; i++) if ((tr[i - 1] < 0) !== (tr[i] < 0)) zc.push(i * 4 * DT);
-      if (zc.length < 3) break;
-      const Tm = 2 * (zc[zc.length - 1] - zc[0]) / (zc.length - 1);
-      g *= (Tm / target) ** 2;
-    }
-    SIM.g = g;
-    SIM.frames = run(g, -16 * BAR, D.duration + 0.1, true, true, 0);   // 16-bar pre-roll: steady state at frame 0
-    SIM.rest = { seg, N, kc, bodyL };
+  B.swing = (t, S) => {
+    const b = t / BEAT, per = S.embodied ? 8 : 4;           // RUBEDO: heavier, two-bar swing
+    // amplitude follows the section: drop bars swing full, others at 60 %; blended across each bar with a cosine
+    const bar = Math.floor(t / BAR), lab = (i) => (L.labelAt(i) === 'drop' ? 1 : 0.6), u = (t % BAR) / BAR;
+    const A0 = lab(bar), A1 = lab(bar + 1), amp = (S.swing * Math.PI / 180) * (A0 + (A1 - A0) * (0.5 - 0.5 * Math.cos(Math.PI * u)));
+    const w = 2 * Math.PI / per;
+    const th = amp * Math.cos(w * b);                          // extremes land on beats 1 and 3 (or bar 1 / bar 2 in RUBEDO)
+    const beta = 0.35 * amp * Math.cos(w * (b - 0.5));         // body lags half a beat
+    const jolt = 0.25 * amp * kickEnv[fidx(t)];
+    const phi1 = 0.9 * amp * Math.cos(w * (b - 0.75)) + jolt, phi2 = 1.15 * amp * Math.cos(w * (b - 1.0)) - jolt;
+    return { th, beta, phi1, phi2, amp };
   };
-  const sinA = (a, o) => [o[0] * Math.cos(a) - o[1] * Math.sin(a), o[0] * Math.sin(a) + o[1] * Math.cos(a)];
-  B.pose = (t) => { const f = Math.max(0, Math.min(L.NF - 1, Math.floor(t * L.FPS + 1e-6))); return SIM.frames[f] || SIM.frames[SIM.frames.length - 1]; };
-  B.swing = (t) => {   // readouts: body angle (deg), rope angle, hand offset
-    const p = B.pose(t), b = p.rope[p.rope.length - 1];
-    return { th: Math.atan2(p.C[0] - b[0], p.C[1] - b[1]), rope: Math.atan2(p.rope[1][0] - p.rope[0][0], p.rope[1][1] - p.rope[0][1]), hand: p.hand, amp: 0.2 };
-  };
-  // draw: (ax, ay) = where the hand holds the chain on screen; size = rendered sprite width
+  // draw: anchor (ax, ay) is where the chain's top is pinned; size = rendered sprite width
   B.elephant = (ctx, S, ax, ay, size, t) => {
-    const rg = A.rig, sc = size / rg.w, P = rg.pivot, pose = B.pose(t), R = pose.rope, N = R.length - 1;
-    const bodyAng = -Math.atan2(pose.C[0] - R[N][0], pose.C[1] - R[N][1]);
+    const rg = A.rig, sc = size / rg.w, P = rg.pivot, sw = B.swing(t, S);
     ctx.save(); ctx.translate(ax, ay); ctx.scale(sc, sc); ctx.translate(-P[0], -P[1]);
-    if (A.loop) {
+    if (A.loop) {   // AI loop swapped in: rigid pendulum about the pivot
       const Lp = A.loop, im = Lp.imgs[Math.floor(t * Lp.fps) % Lp.imgs.length];
-      ctx.translate(R[N][0], R[N][1]); ctx.rotate(bodyAng); ctx.translate(-rg.bail[0], -rg.bail[1]); ctx.drawImage(im, 0, 0, rg.w, rg.w * im.height / im.width);
-      ctx.restore(); return B.swing(t);
+      ctx.translate(P[0], P[1]); ctx.rotate(sw.th); ctx.translate(-P[0], -P[1]); ctx.drawImage(im, 0, 0, rg.w, rg.h * im.height / im.width * rg.w / rg.w);
+      ctx.restore(); return sw;
     }
-    const ropeAt = (u) => { const q = Math.max(0, Math.min(N - 1e-6, u * N)), i = Math.floor(q), k = q - i, a = R[i], b = R[i + 1];
-      return { p: [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k], ang: -Math.atan2(b[0] - a[0], b[1] - a[1]) }; };
-    const P0 = rg.pivot, BL = rg.bail, restAng = -Math.atan2(BL[0] - P0[0], BL[1] - P0[1]);
-    const uc = (rg.cross[1] - P0[1]) / (BL[1] - P0[1]), X = ropeAt(uc), restX = [P0[0] + (BL[0] - P0[0]) * uc, P0[1] + (BL[1] - P0[1]) * uc];
-    const oc = sinA(X.ang - restAng, [rg.cross[0] - restX[0], rg.cross[1] - restX[1]]), anc = [X.p[0] + oc[0], X.p[1] + oc[1]];   // the crossing rides the rope
     const V = rg.verts.map(([vx, vy, wTL, wBL, wBody]) => {
-      const wR = Math.max(0, 1 - wTL - wBL - wBody);
-      // body: rigid about the simulated bail
-      const ob = sinA(bodyAng, [vx - BL[0], vy - BL[1]]), pB = [R[N][0] + ob[0], R[N][1] + ob[1]];
-      // rope (hanger loop): skinned to the rope point at the same height, rotated with the local tangent
-      const u = Math.max(0, Math.min(1, (vy - P0[1]) / (BL[1] - P0[1]))), rp = ropeAt(u), r0 = [P0[0] + (BL[0] - P0[0]) * u, P0[1] + (BL[1] - P0[1]) * u];
-      const orp = sinA(rp.ang - restAng, [vx - r0[0], vy - r0[1]]), pR = [rp.p[0] + orp[0], rp.p[1] + orp[1]];
-      // loops: hung from the crossing, rope tangent + their own lagging sway
-      const oT = sinA(X.ang - restAng + pose.lt, [vx - rg.cross[0], vy - rg.cross[1]]), pT = [anc[0] + oT[0], anc[1] + oT[1]];
-      const oL = sinA(X.ang - restAng + pose.bt, [vx - rg.cross[0], vy - rg.cross[1]]), pL = [anc[0] + oL[0], anc[1] + oL[1]];
-      const ws = wBody + wR + wTL + wBL || 1;
-      return [(pB[0] * wBody + pR[0] * wR + pT[0] * wTL + pL[0] * wBL) / ws, (pB[1] * wBody + pR[1] * wR + pT[1] * wTL + pL[1] * wBL) / ws];
+      let p = [vx, vy];
+      p = rot(p, rg.cross, sw.phi1 * wTL); p = rot(p, rg.cross, sw.phi2 * wBL); p = rot(p, rg.bail, sw.beta * wBody); p = rot(p, P, sw.th);
+      return p;
     });
-    // twist about the vertical axis (±8°, from the rope-to-body bend) shown as a horizontal foreshortening about the bail
-    const ropeA = -Math.atan2(R[N][0] - R[N - 2][0], R[N][1] - R[N - 2][1]), tw = Math.max(-0.14, Math.min(0.14, (ropeA - bodyAng) * 1.4));
-    const bx = R[N][0]; ctx.translate(bx, 0); ctx.scale(Math.cos(tw), 1); ctx.translate(-bx, 0);
-    drawMesh(ctx, rg, V);
-    ctx.restore();
-    // the hand's grip point on screen (for the pin / tape)
-    return { ...B.swing(t), grip: [ax + (R[0][0] - P[0]) * sc, ay + (R[0][1] - P[1]) * sc] };
-  };
-  function drawMesh(ctx, rg, V) {
     const img = A.eleph;
     for (const q of A.quads) for (const tri of [[q[0], q[1], q[2]], [q[0], q[2], q[3]]]) {
       const s0 = rg.verts[tri[0]], s1 = rg.verts[tri[1]], s2 = rg.verts[tri[2]], d0 = V[tri[0]], d1 = V[tri[1]], d2 = V[tri[2]];
+      // affine map source triangle -> destination triangle
       const den = (s1[0] - s0[0]) * (s2[1] - s0[1]) - (s2[0] - s0[0]) * (s1[1] - s0[1]);
       const a = ((d1[0] - d0[0]) * (s2[1] - s0[1]) - (d2[0] - d0[0]) * (s1[1] - s0[1])) / den;
       const b_ = ((d1[1] - d0[1]) * (s2[1] - s0[1]) - (d2[1] - d0[1]) * (s1[1] - s0[1])) / den;
@@ -216,8 +125,9 @@
       const d = ((d2[1] - d0[1]) * (s1[0] - s0[0]) - (d1[1] - d0[1]) * (s2[0] - s0[0])) / den;
       const e = d0[0] - a * s0[0] - c * s0[1], f = d0[1] - b_ * s0[0] - d * s0[1];
       ctx.save();
-      const cx = (d0[0] + d1[0] + d2[0]) / 3, cy = (d0[1] + d1[1] + d2[1]) / 3, gr = (p) => { const dx = p[0] - cx, dy = p[1] - cy, l = Math.hypot(dx, dy) || 1; return [p[0] + dx / l * 0.6, p[1] + dy / l * 0.6]; };
-      const [e0, e1, e2] = [gr(d0), gr(d1), gr(d2)];
+      // clip to the destination triangle, grown 0.6 px so neighbouring triangles overlap (no hairline seams)
+      const cx = (d0[0] + d1[0] + d2[0]) / 3, cy = (d0[1] + d1[1] + d2[1]) / 3, g = (p) => { const dx = p[0] - cx, dy = p[1] - cy, l = Math.hypot(dx, dy) || 1; return [p[0] + dx / l * 0.6, p[1] + dy / l * 0.6]; };
+      const [e0, e1, e2] = [g(d0), g(d1), g(d2)];
       ctx.beginPath(); ctx.moveTo(e0[0], e0[1]); ctx.lineTo(e1[0], e1[1]); ctx.lineTo(e2[0], e2[1]); ctx.closePath(); ctx.clip();
       ctx.transform(a, b_, c, d, e, f);
       const bx0 = Math.max(0, Math.floor(Math.min(s0[0], s1[0], s2[0])) - 2), by0 = Math.max(0, Math.floor(Math.min(s0[1], s1[1], s2[1])) - 2);
@@ -225,7 +135,9 @@
       ctx.drawImage(img, bx0, by0, bx1 - bx0, by1 - by0, bx0, by0, bx1 - bx0, by1 - by0);
       ctx.restore();
     }
-  }
+    ctx.restore();
+    return sw;
+  };
 
   window.L6.B = B;
 })();

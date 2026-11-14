@@ -4,20 +4,18 @@ Code → MP4 beat previews for UCHE2CRAZYYY. Every frame is drawn by code (Hyper
 
 ## One command
 ```bash
-node render.mjs --beat audio/atelmansion-3c-fmin-128.wav --look exe --stage rubedo --aspect 9:16 --len 30 --title "ATELMANSION 3"
+node render.mjs --beat audio/atelmansion-3c-fmin-128.wav --stage rubedo --aspect 9:16 --len 30
 ```
 | flag | values | default |
 |---|---|---|
 | `--beat` | any WAV (analysed once, cached as `<beat>.grid.json`) | the ATELMANSION 3 beat |
-| `--look` | `exe` (clean OS windows) · `lab` (lab-notebook ground, specimen layer) · `scope` (one oscilloscope screen) | `exe` |
-| `--tags` | a JSON file of text overrides (see below) | none |
 | `--stage` | `nigredo` · `albedo` · `citrinitas` · `rubedo` | `nigredo` |
 | `--aspect` | `9:16` · `16:9` | `9:16` |
 | `--len` | seconds, rounded to whole bars (at 128 BPM: 15 = 8 bars, 30 = 16, 60 = 32) | `30` |
 | `--start-bar` | force the section (song bar number) | one bar before the first drop that fits |
 | `--title` | on-screen title | from the filename |
-| `--out` | output path | `out/v7/<look>-<stage>-<916\|169>-<len>s.mp4` |
-| `--filmstrip` | also write `out/v7/filmstrips/<name>-filmstrip.png` | off |
+| `--out` | output path | `out/v6/<stage>-<916\|169>-<len>s.mp4` |
+| `--filmstrip` | also write `out/v6/filmstrips/<name>-filmstrip.png` | off |
 | `--stills 0,2.5,9` | PNG frames instead of a video (fast look) | off |
 | `--rebuild` | re-run the audio analysis for this length | off |
 
@@ -55,41 +53,3 @@ Drop a seamless loop of PNG/WebP frames with alpha into `assets/elephant-loop/` 
 
 ## Requirements
 Node 22+, ffmpeg, Python venv (`.venv`: numpy, scipy, soundfile, librosa, pyloudnorm). HyperFrames renders through the system Chromium (`/usr/bin/google-chrome` → `/opt/pw-browsers/chromium`).
-
-## Editing the on-screen text (tags)
-Every word on screen comes from **`tags.default.json`**:
-- window titles, the boot lines and the experiment / trial codes
-- the specimen tag
-- notes such as "808 lives here"
-- stamps, the result-card lines, the big display words and the HUD.
-
-To change any of it for one beat, write a small JSON file with only the keys you want to change and pass it with `--tags`. Your keys are deep-merged over the defaults:
-```json
-{ "title": "NIGHT SHIFT", "experiment": "EXP-07", "notes": { "spectrum": "sub sits at 41 Hz" },
-  "result": { "cta": "free download → link in bio" }, "bigwords": ["NIGHT", "{bpm}", "SHIFT"] }
-```
-```bash
-node render.mjs --beat audio/night.wav --tags tags/night-shift.json --look lab --stage albedo
-```
-
-**Variables.** Values may use `{vars}`, which are filled from the analysis:
-- `{title}`, `{Title}`, `{titleWord}`
-- `{bpm}`, `{bpm2}`, `{key}`, `{keyShort}`
-- `{stage}`, `{stageN}`, `{look}`
-- `{lufs}`, `{srcLufs}`, `{lra}`, `{tp}`, `{bars}`
-- `{producer}`, `{experiment}`, `{date}`.
-
-`date` defaults to `{today}`, which takes the beat file's date. Arrays (for example `boot` or `bigwords`) are replaced as a whole.
-
-The renderer writes the merged result to `film/data/tags-*.js`. A web app can generate the same JSON.
-
-## The three looks
-- **exe:** the clean U2C.EXE grammar.
-  - A true-black ground, one hero per frame (the logo, a meter or the pendant), dashed elbow connectors and a step tag (`1 CHAIN IN_`).
-  - Two type voices: huge display and lowercase mono.
-- **lab:** the same edit on lab-notebook graph paper, with the lab layer kept within the frame budget: one handwritten note, a specimen tag, a crossed-out reading and a stamp.
-- **scope:** one oscilloscope screen is the hero of every frame. Its content changes on the bar: the logo wrapped by two live traces, the scope, spectrum, stereo, spectrogram, folded-light surface or EQ. Numeric cells sit below it.
-
-All three cut **only on bar lines**:
-- The logo is "home" for at least 50 % of the bars, with a meter or the pendant cut in between.
-- Bar 1 is the boot. The second-to-last bar is the result card. The last bar mirrors the first frame, so the loop is clean.

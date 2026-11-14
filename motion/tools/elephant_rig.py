@@ -1,4 +1,5 @@
-"""Rig the elephant's OWN chain from the art (no extra chain).
+"""Rig the elephant's OWN chain from the art (no extra chain). v8: per-vertex hanger weight + position along the hanger
+(s = 0 at the pivot, 1 at the bail) and a leg weight, for the beat-locked pendulum in film/v8/brand.js.
 
 The sprite (700x662) is a pendant hanging from its own chain: a right "hanger" loop runs from the bail on the head
 (343,197) up to the top of the chain (346,6), which is the pivot; from the crossing (~215,110) a small top-left loop
@@ -37,6 +38,11 @@ wBL *= pin
 # hanger weight grows from 0 at the pivot to 1 at the bail (it carries the body's lag)
 wH *= np.clip((yy - PIVOT[1]) / (BAIL[1] - PIVOT[1]), 0, 1)
 
+# legs / trunk below the shield: trail the body (overlapping action), hinged at the hips
+legs = [(300, 470), (700, 470), (700, 662), (300, 662)]
+wLeg = poly_mask(legs, 14) * np.clip((yy - 470) / 150, 0, 1) * (1 - np.clip(wBL * 4, 0, 1))
+sH = np.clip((yy - PIVOT[1]) / (BAIL[1] - PIVOT[1]), 0, 1)
+wHang = poly_mask(hanger, 8)
 N = 26
 xs = np.linspace(0, W, N); ys = np.linspace(0, H, N)
 verts = []
@@ -44,15 +50,16 @@ for y in ys:
     for x in xs:
         xi, yi = int(min(W - 1, x)), int(min(H - 1, y))
         body = float(np.clip(1 - wTL[yi, xi] - wBL[yi, xi] - (1 - wH[yi, xi]) * (np.asarray(poly_mask(hanger, 10))[yi, xi]), 0, 1))
-        verts.append([round(float(x), 2), round(float(y), 2), round(float(wTL[yi, xi]), 3), round(float(wBL[yi, xi]), 3), round(body, 3)])
-rig = {"w": W, "h": H, "n": N, "pivot": PIVOT, "bail": BAIL, "cross": CROSS, "verts": verts}
+        verts.append([round(float(x), 2), round(float(y), 2), round(float(wTL[yi, xi]), 3), round(float(wBL[yi, xi]), 3), round(body, 3),
+                      round(float(wHang[yi, xi] * (1 - wTL[yi, xi])), 3), round(float(sH[yi, xi]), 3), round(float(wLeg[yi, xi]), 3)])
+rig = {"w": W, "h": H, "n": N, "pivot": PIVOT, "bail": BAIL, "cross": CROSS, "hip": [450, 470], "verts": verts}
 out = os.path.join(ROOT, "film", "assets", "brand", "elephant-rig.js")
 open(out, "w").write("window.U2C_RIG=" + json.dumps(rig, separators=(",", ":")) + ";\n")
 print("wrote", out)
 if "--debug" in sys.argv:
     art = Image.open(os.path.join(ROOT, "film", "assets", "brand", "elephant.png")).convert("RGBA")
     ov = np.zeros((H, W, 4), np.uint8)
-    ov[..., 0] = (wTL * 255).astype(np.uint8); ov[..., 1] = (wBL * 255).astype(np.uint8); ov[..., 2] = (wH * 255).astype(np.uint8); ov[..., 3] = 140
+    ov[..., 0] = (wTL * 255).astype(np.uint8); ov[..., 1] = (wBL * 255).astype(np.uint8); ov[..., 2] = (np.maximum(wH, wLeg) * 255).astype(np.uint8); ov[..., 3] = 140
     bg = Image.new("RGBA", (W, H), (255, 255, 255, 255)); bg.alpha_composite(art); bg.alpha_composite(Image.fromarray(ov))
     d = ImageDraw.Draw(bg)
     for p_, c in ((PIVOT, "red"), (BAIL, "blue"), (CROSS, "green")): d.ellipse([p_[0] - 6, p_[1] - 6, p_[0] + 6, p_[1] + 6], outline=c, width=3)

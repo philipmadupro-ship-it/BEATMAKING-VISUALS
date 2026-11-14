@@ -12,9 +12,10 @@
 //   --len <s>           15 | 30 | 60 (any; rounded to whole bars)         (default 30)
 //   --start-bar <n>     force the section (song bar number); default = one bar before the first drop that fits
 //   --title <text>      on-screen title (default from the filename)
-//   --out <mp4>         output path (default out/v7/<look>-<stage>-<916|169>-<len>s.mp4)
+//   --out <mp4>         output path (default out/v8/<look>-<stage>-<916|169>-<len>s.mp4)
 //   --stills <t,t,...>  render PNG frames at these seconds instead of a video (fast review)
 //   --filmstrip         also write a filmstrip PNG next to the video
+//   --test pendant      render the 4-bar pendant test (pendant alone) instead of the film
 //   --quality <q>       hyperframes quality for the picture (default: 12 Mbps target)
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -59,9 +60,9 @@ if (tags.date === '{today}') tags.date = today;
 if (args.title) tags.title = String(args.title);
 const tagFile = `data/tags-${look}-${stage}-${aspect}-${id}.js`;
 fs.writeFileSync(path.join(FILM, tagFile), 'window.U2C_TAGS=' + JSON.stringify(tags) + ';\n');
-const comp = `v7-${look}-${stage}-${aspect}-${id}.html`;
-const tpl = fs.readFileSync(path.join(FILM, 'v7', 'template.html'), 'utf8')
-  .replaceAll('{{W}}', W).replaceAll('{{H}}', H).replaceAll('{{DUR}}', D.duration).replaceAll('{{STAGE}}', stage).replaceAll('{{LOOK}}', look)
+const comp = `v8-${look}${args.test ? '-test-' + args.test : ''}-${stage}-${aspect}-${id}.html`;
+const tpl = fs.readFileSync(path.join(FILM, 'v8', 'template.html'), 'utf8')
+  .replaceAll('{{W}}', W).replaceAll('{{H}}', H).replaceAll('{{DUR}}', args.test ? +(Math.min(D.duration, 4 * 4 * D.beat)).toFixed(6) : D.duration).replaceAll('{{TEST}}', args.test || '').replaceAll('{{STAGE}}', stage).replaceAll('{{LOOK}}', look)
   .replaceAll('{{ASPECT}}', aspect).replaceAll('{{DATA}}', `data/${id}.js`).replaceAll('{{TAGS}}', tagFile).replaceAll('{{RES}}', aspect === '169' ? 'landscape' : 'portrait');
 fs.writeFileSync(path.join(FILM, comp), tpl);
 
@@ -76,18 +77,19 @@ if (args.stills) {
   pg.on('pageerror', (e) => console.error('pageerror', e.message));
   await pg.goto(`http://127.0.0.1:${srv.address().port}/${comp}`, { waitUntil: 'load' });
   await pg.evaluate(() => window.U2C6.ready);
-  const dir = path.resolve(args.out || path.join(ROOT, 'out', 'v7', 'stills', `${look}-${stage}-${aspect}-${len}`));
+  const dir = path.resolve(args.out || path.join(ROOT, 'out', 'v8', 'stills', `${look}-${stage}-${aspect}-${len}`));
   fs.mkdirSync(dir, { recursive: true });
   for (const t of String(args.stills).split(',').map(Number)) {
     await pg.evaluate((tt) => window.U2C6.renderAt(tt), t);
     const f = path.join(dir, `t-${t.toFixed(2)}.png`); await (await pg.$('#stage')).screenshot({ path: f }); console.log(f);
   }
+  if (args.trace) { const tr = await pg.evaluate((n) => Array.from({ length: n }, (_, f) => window.U2C6.trace(f / 30)), Math.round(4 * 4 * D.beat * 30)); fs.writeFileSync(path.join(dir, 'trace-model.json'), JSON.stringify({ beat: D.beat, fps: 30, W, H, pts: tr })); }
   if (args.schedule) fs.writeFileSync(path.join(dir, 'schedule.json'), JSON.stringify(await pg.evaluate(() => ({ schedule: window.U2C6.schedule(), shots: window.U2C6.shots })), null, 1));
   await br.close(); srv.close(); process.exit(0);
 }
 
 // 3b. video: HyperFrames renders the picture; ffmpeg muxes the mastered clip (AAC 320k / 48 kHz)
-const out = path.resolve(args.out || path.join(ROOT, 'out', 'v7', `${look}-${stage}-${aspect}-${Math.round(len)}s.mp4`));
+const out = path.resolve(args.out || path.join(ROOT, 'out', 'v8', args.test ? `test-${args.test}-${stage}-4bars.mp4` : `${look}-${stage}-${aspect}-${Math.round(len)}s.mp4`));
 fs.mkdirSync(path.dirname(out), { recursive: true });
 const tmp = path.join(FILM, 'renders', `${path.basename(out, '.mp4')}-video.mp4`);
 const env = { ...process.env, HYPERFRAMES_NO_TELEMETRY: '1', DO_NOT_TRACK: '1', HYPERFRAMES_NO_UPDATE_CHECK: '1' };
@@ -99,7 +101,7 @@ const lo = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', out, '-af', 'e
 const s = lo.slice(lo.lastIndexOf('Summary:'));
 console.log(`${out}  ${((Date.now() - t0) / 1000).toFixed(0)} s  I ${s.match(/I:\s+(-?[\d.]+)/)[1]} LUFS  TP ${s.match(/Peak:\s+(-?[\d.]+)/)[1]} dBTP  section: song bars ${D.song.startBar}-${D.song.startBar + D.bars - 1}`);
 if (args.filmstrip) {
-  const fs_ = out.replace(/\.mp4$/, '-filmstrip.png'), dir = path.join(ROOT, 'out', 'v7', 'filmstrips'); fs.mkdirSync(dir, { recursive: true });
+  const fs_ = out.replace(/\.mp4$/, '-filmstrip.png'), dir = path.join(ROOT, 'out', 'v8', 'filmstrips'); fs.mkdirSync(dir, { recursive: true });
   const dst = path.join(dir, path.basename(fs_));
   run(path.join(ROOT, 'tools', 'filmstrip.sh'), [out, dst, aspect === '169' ? '6' : '8', len >= 60 ? '4' : '2'], { quiet: true });
   console.log(dst);
