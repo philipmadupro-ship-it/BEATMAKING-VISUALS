@@ -157,6 +157,11 @@ own composition: `node tools/sync_web.mjs` copies `src/v8/*`, `src/cues/{schema,
 assets into `film/v9/` (+ `SYNCED.json`, sha256 per file; `render.mjs` warns when out of sync). `film/v9/template.html`
 registers the HyperFrames timeline, `film/v9/boot.mjs` imports `createFilm` and draws `film.render(ctx, t, {ev, tags})`
 on every `hf-seek`, with the native analysis adapted by `src/v8/data.js fromNative()`.
+v10 (meters v2): the sync also copies `src/analysis/{meterstreams,msspec,dsp,stereo,truepeak}.js` + `src/export/audio.js`;
+`tools/meterdata.mjs <id>` (run by `render.mjs` when the data file lacks them) computes the scope / polar-level / level /
+M-S streams from the mastered clip WAV with `meterstreams.js` (the same code the web analysis runs) and stores them,
+base64 per typed array, as `meters` in `film/data/<id>.js`; `clipdata.py` adds `frame.bandDb` and writes the
+goniometer side as (r − l)/√2 (+S = right).
 
 ```
 node render.mjs --cues sheet.json [--beat x.wav --title T --aspect 9:16 --len 30] [--stills t,..] [--filmstrip]

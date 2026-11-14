@@ -8,11 +8,16 @@ src/analysis/analysis.worker.js
 src/analysis/clipdata.js
 src/analysis/dsp.js
 src/analysis/index.js
+src/analysis/meterstreams.js
+src/analysis/msspec.js
 src/analysis/stereo.js
 src/analysis/structure.js
 src/analysis/truepeak.js
 src/cues/generate.js
+src/cues/markers.js
+src/cues/ops.js
 src/cues/schema.js
+src/cues/snap.js
 src/cues/store.js
 src/engine/clip.js
 src/engine/clock.js
@@ -42,6 +47,7 @@ src/v8/film.js
 src/v8/lab.js
 src/v8/layout.js
 src/v8/links.js
+src/v8/meterlib.js
 src/v8/meters.js
 src/v8/registry.js
 src/v8/tags.js
