@@ -24,7 +24,7 @@ export const LAYOUT = {
 export const WINDOW_IDS = ['chains', 'session', 'elephant', 'eq', 'spectrum', 'loud', 'stereo', 'spectro', 'surface'];
 /** What a window shows (its content can be swapped per window in the cue sheet). */
 export const CONTENT = { chains: 'logo', session: 'waveform', clock: 'clock', bands: 'bands', elephant: 'pendant', eq: 'eq', spectrum: 'spectrum', loud: 'loudness', stereo: 'stereo', spectro: 'spectrogram', surface: 'surface' };
-export const CONTENT_KINDS = ['logo', 'waveform', 'clock', 'bands', 'pendant', 'eq', 'spectrum', 'loudness', 'stereo', 'spectrogram', 'surface'];
+export const CONTENT_KINDS = ['logo', 'waveform', 'clock', 'bands', 'pendant', 'eq', 'spectrum', 'loudness', 'stereo', 'spectrogram', 'surface', 'levels', 'ghost'];
 export const WINDOW_LABELS = { chains: 'Logo (chains.dll)', session: 'Waveform (session.exe)', clock: 'Clock', bands: 'Bands', elephant: 'Pendant (elephant.sys)', eq: 'EQ', spectrum: 'Spectrum', loud: 'Loudness', stereo: 'Stereo', spectro: 'Spectrogram', surface: 'Surface 3D' };
 /** Windows that are already open at frame 0 (the rest step in on the half beats of the build bar). */
 export const FIRST_OPEN = { exe: ['chains', 'session', 'elephant'], lab: ['chains', 'session', 'elephant'], scope: ['chains', 'elephant', 'loud'] };

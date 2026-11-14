@@ -14,16 +14,23 @@ const col = (path, label, def) => ({ path, label, kind: 'color', default: def })
 
 /** Meter settings per content kind (applies to every window showing that kind). */
 export const METER_PROPS = {
-  spectrum: [['floor', 'Range (dB below 0)', 90, 30, 120, 1, 'dB'], ['trail', 'Trail', 0.22, 0, 1, 0.01, 's'], ['smooth', 'Smoothing', 1, 1, 12, 1, 'frames'], ['hold', 'Peak hold', true]],
-  spectrogram: [['window', 'Time window', 8, 1, 16, 0.5, 's'], ['gamma', 'Alpha curve (Aurora v^g)', 0.56, 0.2, 1.5, 0.01, '']],
-  eq: [['range', 'Gain range (±)', 15, 6, 30, 1, 'dB'], ['tilt', 'Analyzer tilt', 4.5, 0, 6, 0.1, 'dB/oct']],
-  loudness: [['target', 'Target marker', -14, -24, -6, 0.5, 'LUFS'], ['floor', 'Gauge floor', -36, -60, -18, 1, 'LUFS']],
-  stereo: [['persist', 'Persistence', 0.42, 0.03, 1.5, 0.01, 's'], ['gain', 'Scope gain', 1, 0.25, 4, 0.05, '×']],
+  spectrum: [['mode', 'Display (1/6-oct bars, or M/S overlay)', 'bars', ['bars', 'ms']], ['floor', 'Range (dB below 0)', 90, 30, 120, 1, 'dB'], ['trail', 'Trail', 0.22, 0, 1, 0.01, 's'], ['smooth', 'Smoothing', 1, 1, 12, 1, 'frames'], ['hold', 'Peak hold', true]],
+  spectrogram: [['mode', 'Panes (M + S, or M only)', 'ms', ['ms', 'm']], ['range', 'Range (floor below 0 dBFS)', 90, 40, 120, 1, 'dB'], ['window', 'Time window', 8, 1, 16, 0.5, 's'], ['gamma', 'Alpha curve (Aurora v^g)', 0.56, 0.2, 1.5, 0.01, '']],
+  eq: [['range', 'EQ scale ± (0 = auto: 3/6/12/30)', 0, 0, 30, 1, 'dB'], ['anRange', 'Analyzer range', 90, 60, 120, 30, 'dB'], ['mode', 'Analyzer', 'pre-post', ['pre-post', 'pre', 'off']],
+    ['tilt', 'Analyzer tilt (about 1 kHz)', 4.5, 0, 6, 0.1, 'dB/oct'], ['smoothing', 'Analyzer release', 20, 3, 120, 1, 'dB/s'], ['hold', 'Analyzer peak hold (0 = off)', 1, 0, 10, 0.1, 's'],
+    ['strength', 'Match strength', 50, 0, 100, 5, '%']],
+  loudness: [['layout', 'Layout', 'history', ['history', 'gauge']], ['focus', 'Focus shot shows', 'ghost', ['ghost', 'meter']], ['target', 'Target marker', -14, -24, -6, 0.5, 'LUFS'],
+    ['floor', 'Range (history floor)', -54, -70, -18, 1, 'LUFS'], ['scale', 'LUFS scale', 'linear', ['linear', 'compressed']], ['window', 'History window (0 = whole clip)', 0, 0, 30, 1, 's']],
+  levels: [['mode', 'Mode (peak + RMS 300 ms, or K-system 600 ms)', 'peak-rms', ['peak-rms', 'k20', 'k14', 'k12']], ['scale', 'Scale', 'live', ['live', 'linear']], ['range', 'Range (linear scale)', 60, 24, 96, 1, 'dB'],
+    ['smoothing', 'Peak release', 20, 5, 60, 0.1, 'dB/s'], ['hold', 'Peak hold', 1.5, 0, 10, 0.1, 's'], ['style', 'Bar style', 'auto', ['auto', 'gradient', 'segment']]],
+  ghost: [['history', 'History line length', 4, 1, 16, 0.5, 's']],
+  stereo: [['mode', 'Vectorscope mode', 'sample', ['sample', 'level', 'lissajous']], ['range', 'Radius range (log)', 40, 12, 80, 1, 'dB'], ['persist', 'Persistence (sample / Lissajous)', 0.42, 0.03, 1.5, 0.01, 's'],
+    ['smoothing', 'Polar level release', 12, 1, 60, 0.5, 'dB/s'], ['hold', 'Polar level outline hold', 0.5, 0, 4, 0.05, 's'], ['gain', 'Scope gain', 1, 0.25, 4, 0.05, '×']],
   waveform: [['span', 'Detail window', 2, 1, 8, 1, 'bars']],
   logo: [['span', 'Scope timebase (scope look)', 0.25, 0.0625, 2, 0.0625, 'beats'], ['amp', 'Scope trace gain', 0.2, 0.05, 0.6, 0.01, '']],
   surface: [['rows', 'History rows', 34, 8, 60, 1, '']],
 };
-const meterKey = { spectrum: 'spectrum', spectrogram: 'spectro', eq: 'eq', loudness: 'loud', stereo: 'stereo', waveform: 'session', logo: 'scope', surface: 'surface' };
+const meterKey = { levels: 'levels', bands: 'levels', ghost: 'ghost', spectrum: 'spectrum', spectrogram: 'spectro', eq: 'eq', loudness: 'loud', stereo: 'stereo', waveform: 'session', logo: 'scope', surface: 'surface' };
 export const meterPath = (kind, key) => `meter.${meterKey[kind] || kind}.${key}`;
 
 /**
@@ -56,8 +63,8 @@ export function buildRegistry({ look = 'exe', aspect = '916', stage = 'nigredo',
     el('win.' + id, WINDOW_LABELS[id] || id, 'Windows', [num(`win.${id}.x`, 'X', r[0], -400, 2400, 1, 'px'), num(`win.${id}.y`, 'Y', r[1], -400, 2400, 1, 'px'), num(`win.${id}.w`, 'Width', r[2], 60, 2000, 1, 'px'), num(`win.${id}.h`, 'Height', r[3], 60, 2000, 1, 'px'),
       bool(`win.${id}.visible`, 'Visible (key = open / close)', true), num(`win.${id}.open`, 'Opens at', openBeat(look, aspect, id), -2, bars * 4, 0.125, 'beats'),
       en(`win.${id}.content`, 'Shows', c, CONTENT_KINDS), col(`win.${id}.accent`, 'Accent', S.hot)]); }
-  const kinds = [...new Set(ids.map((id) => CONTENT[id]))];
-  for (const k of kinds) if (METER_PROPS[k]) el('meter.' + k, `Meter · ${k}`, 'Meters', METER_PROPS[k].map(([key, label, def, min, max, step, unit]) => (typeof def === 'boolean' ? bool(meterPath(k, key), label, def) : num(meterPath(k, key), label, def, min, max, step, unit))));
+  const kinds = [...new Set(ids.flatMap((id) => (CONTENT[id] === 'bands' ? ['levels'] : CONTENT[id] === 'loudness' ? ['loudness', 'levels', 'ghost'] : [CONTENT[id]])))];
+  for (const k of kinds) if (METER_PROPS[k]) el('meter.' + k, `Meter · ${k}`, 'Meters', METER_PROPS[k].map(([key, label, def, min, max, step, unit]) => (Array.isArray(min) ? en(meterPath(k, key), label, def, min) : typeof def === 'boolean' ? bool(meterPath(k, key), label, def) : num(meterPath(k, key), label, def, min, max, step, unit))));
   const flat = flattenTags(mergeDeep(DEFAULT_TAGS, tags)), groups = {};
   for (const [p, v] of Object.entries(flat)) { const g = p.split('.')[0]; (groups[g] = groups[g] || []).push({ path: 'tag.' + p, label: p, kind: 'text', default: String(v) }); }
   for (const [g, props] of Object.entries(groups)) el('tag.' + g, `Tags · ${g}`, 'Tags', props);
