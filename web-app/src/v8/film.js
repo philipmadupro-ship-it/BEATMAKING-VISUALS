@@ -75,7 +75,10 @@ export function createFilm({ D, assets, aspect = '916' }) {
     [2, (L2) => (L2.session ? 'session' : 'chains'), (r, cr, t, n, Sx) => { const x = cr[0] + cr[2] * 0.52, y = LY.session ? cr[1] + cr[3] - 64 : cr[1] + 40; c.fillStyle = rgba(Sx.card, 0.85); c.fillRect(x - 8, y - 22, Math.min(cr[2] * 0.48, 480), 70); lab.crossed(c, tag('notes.loud_old'), x, y - 4, Sx, 22); lab.hand(c, tag('notes.loud_new'), x + 4, y + 38, 30, Sx.hot, t, 11); }],
     [3, () => 'spectrum', (r, cr, t, n, Sx) => { const x = cr[0] + cr[2] * 0.1, y = cr[1] + cr[3] * 0.5; lab.arrow(c, [[x + 150, y - 70], [x + 70, y - 50], [x + 14, y]], Sx.hot, t, 5, n, 2.6); lab.hand(c, tag('notes.spectrum'), x + 140, y - 80, 32, Sx.hot, t, 6); }],
     [4, () => 'session', (r, cr, t, n, Sx) => { lab.ring(c, cr[0] + cr[2] * 0.25, cr[1] + 60, 80, 30, Sx.hot, t, 9, n); lab.hand(c, tag('notes.wave'), cr[0] + cr[2] * 0.25 + 100, cr[1] + 74, 32, Sx.hot, t, 10, -0.02); }],
-    [5, () => 'stereo', (r, cr, t, n, Sx) => { lab.hand(c, tag('notes.gonio'), cr[0] + 4, cr[1] + 26, 28, Sx.hot, t, 12); }],
+    [5, () => 'stereo', (r, cr, t, n, Sx) => {   // v10: the note sits in the imager's title strip (left of the mode label), sized to fit, so it never crosses the scope
+      const s = tag('notes.gonio'), mode = { level: 'POLAR LEVEL', lissajous: 'LISSAJOUS' }[L.meter('stereo', 'mode', 'sample')] || 'POLAR SAMPLE';
+      c.save(); L.font(c, L.floorSize(c, 18), L.MONO, 500); const lw = c.measureText(mode).width; L.font(c, 28, L.HAND, 700); const w28 = c.measureText(s).width; c.restore();
+      const sz = clamp(28 * (cr[2] - 44 - 8 - lw - 16) / w28, 12, 28); lab.hand(c, s, cr[0] + 4, cr[1] + 26, sz, Sx.hot, t, 12, 0); }],
     [6, () => 'loud', (r, cr, t, n, Sx) => { lab.stamp(c, tag('stamps.clock'), cr[0] + 70, cr[1] + cr[3] - 34, -0.12, Sx.stamp, 22); }],
     [7, () => 'eq', (r, cr, t, n, Sx) => { lab.hand(c, tag('notes.eq'), cr[0] + cr[2] - 8, cr[1] + cr[3] - 64, 30, Sx.hot, t, 13, -0.03, 'right'); }],
     [9, () => 'surface', (r, cr, t, n, Sx) => { lab.hand(c, '← the drop, folded', cr[0] + 8, cr[1] + cr[3] - 20, 28, Sx.hot, t, 14); }],

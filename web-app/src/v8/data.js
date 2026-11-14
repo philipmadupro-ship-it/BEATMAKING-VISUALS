@@ -25,6 +25,16 @@ export function fromNative(N) {
   const tone = Array.isArray(N.wave.tone[0]) ? N.wave.tone : Array.from({ length: N.wave.tone.length / 2 }, (_, i) => [N.wave.tone[2 * i], N.wave.tone[2 * i + 1]]);
   const D = { ...N, spectro: b64(N.spectro), gonioS: i8(N.gonioS), gonioM: i8(N.gonioM), wave: { cps: N.wave.cps, tone },
     wave2: { cps: N.wave2.cps, n: N.wave2.n, data: i8(N.wave2.b64) } };
+  // per-frame scalar series as typed arrays (the meters use subarray etc.); Float64 keeps the native values exact
+  if (N.frame) { D.frame = { ...N.frame }; for (const k of Object.keys(D.frame)) { const a = D.frame[k]; if (Array.isArray(a) && typeof a[0] === 'number') D.frame[k] = Float64Array.from(a); } }
+  if (N.meters) Object.assign(D, unpackStreams(N.meters, b64));   // meters v2 streams (u2c-motion tools/meterdata.mjs)
   if (N.wave3) D.wave3 = { cps: N.wave3.cps, n: N.wave3.n, sr: N.wave3.sr, spc: N.wave3.spc, data: new Int16Array(b64(N.wave3.b64).buffer) };
   return D;
+}
+const TYPED = { Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Float32Array, Float64Array };
+/** Inverse of analysis/meterstreams.js packStreams: {"$t": type, "b64"} records -> typed arrays, recursively. */
+export function unpackStreams(o, b64) {
+  if (o && typeof o === 'object' && o.$t && typeof o.b64 === 'string') return new TYPED[o.$t](b64(o.b64).buffer);
+  if (o && typeof o === 'object') { const r = Array.isArray(o) ? [] : {}; for (const k of Object.keys(o)) r[k] = unpackStreams(o[k], b64); return r; }
+  return o;
 }
