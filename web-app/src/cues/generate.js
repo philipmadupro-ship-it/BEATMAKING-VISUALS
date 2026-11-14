@@ -4,7 +4,7 @@
 // per section (drop 9 deg, else 4.6; RUBEDO 9.8 / 5), the logo cycling IN/OUT over 2 bars with a hero bar on the
 // first drop, a 1-frame invert on the drop downbeat, glitch off. Every generated track is marked auto: it is rebuilt
 // when the analysis, the section, the look or the stage changes, until the user edits it.
-import { emptySheet, newId } from './schema.js';
+import { emptySheet, newId, defaultEase } from './schema.js';
 import { FOCUS_PLAN, LAYOUT, CONTENT } from '../v8/layout.js';
 import { stageOf } from '../v8/core.js';
 
@@ -15,7 +15,7 @@ export const PRESETS = {
   tour: { name: 'Meter tour', blurb: 'a different meter featured every 2 bars, pushes on bar lines' },
 };
 const key = (b, v, extra = {}) => ({ id: newId(), b, v, ...extra });
-const track = (path, kind, lane, keys) => ({ id: newId('t'), path, kind, lane, auto: true, keys });
+const track = (path, kind, lane, keys) => ({ id: newId('t'), path, kind, lane, auto: true, keys: keys.map((k) => ({ ...k, ease: k.ease || defaultEase(kind) })) });
 
 /**
  * generateSheet({bars, labels (per clip bar), look, stage, aspect, preset, title}) -> internal sheet.

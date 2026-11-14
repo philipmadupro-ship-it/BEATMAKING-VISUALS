@@ -1,0 +1,52 @@
+# Every file the published page needs (relative to web-app/, the page is index.html).
+# Generated from the module graph of src/main.js (static imports, dynamic imports, the analysis worker) + the
+# assets it fetches. External: Google Fonts (stylesheet) and jsDelivr (gsap@3.15.0, wavesurfer.js@7.12.12,
+# mediabunny@1.62.1, exact versions, all optional with fallbacks). The downloads capability is used through
+# window.claude.use('downloads') with a plain <a download> fallback (src/export/save.js).
+index.html
+src/analysis/analysis.worker.js
+src/analysis/clipdata.js
+src/analysis/dsp.js
+src/analysis/index.js
+src/analysis/stereo.js
+src/analysis/structure.js
+src/analysis/truepeak.js
+src/cues/generate.js
+src/cues/schema.js
+src/cues/store.js
+src/engine/clip.js
+src/engine/clock.js
+src/engine/render.js
+src/export/audio.js
+src/export/captions.js
+src/export/offline.js
+src/export/recorder.js
+src/export/save.js
+src/lib/cdn.js
+src/main.js
+src/state.js
+src/ui/cuetimeline.js
+src/ui/exporter.js
+src/ui/grid.js
+src/ui/inspector.js
+src/ui/motion.js
+src/ui/panels.js
+src/ui/studio.js
+src/ui/timeline.js
+src/util/draw.js
+src/v8/assets.js
+src/v8/brand.js
+src/v8/core.js
+src/v8/data.js
+src/v8/film.js
+src/v8/lab.js
+src/v8/layout.js
+src/v8/links.js
+src/v8/meters.js
+src/v8/registry.js
+src/v8/tags.js
+src/styles.css
+assets/u2c-links.png
+assets/u2c-links-edge.png
+assets/elephant.png
+assets/elephant-rig.json

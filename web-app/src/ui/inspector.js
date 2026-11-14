@@ -70,7 +70,7 @@ export function createInspector(app, root) {
     const sel = tl() ? tl().selected() : [];
     root.innerHTML = sel.length ? keyView(sel) : elementView();
     root.dataset.mode = sel.length ? 'key' : 'element';
-    document.body.classList.toggle('has-sel', sel.length > 0);
+    document.body.classList.toggle('has-sel', sel.length > 0); if (app.studio && app.studio.sheetSync) app.studio.sheetSync();
   }
   // ---------------------------------------------------------------- events
   function setKeyField(f, val) {

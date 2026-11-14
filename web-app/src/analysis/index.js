@@ -39,10 +39,14 @@ export function analyzeBuffer(buffer, meta, { onQuick, onProgress } = {}) {
 }
 export async function decodeFile(file, ac) { const ab = await file.arrayBuffer(); return await ac.decodeAudioData(ab); }
 export function metaFromFilename(name) {
-  const base = name.replace(/\.[^.]+$/, ''); const m = base.match(/(\d{2,3})\s?bpm/i); const bpm = m && +m[1] >= 60 && +m[1] <= 200 ? +m[1] : null;
-  const title = base.replace(/_+/g, ' ').replace(/\s*\(?\d{2,3}\s?bpm\)?\s*/i, ' ').replace(/\s+/g, ' ').trim() || base;
+  const base = name.replace(/\.[^.]+$/, ''); const m = base.match(/(?:^|[^\d])(\d{2,3})\s?(?:bpm)?(?![\d])/i); const bpm = m && +m[1] >= 60 && +m[1] <= 200 && /bpm|[-_ ]\d{2,3}$/i.test(base) ? +m[1] : null;
+  // title: drop BPM and key tokens ("-fmin-128", "_140bpm", "F#m") and separators
+  const isBpm = (w) => { const q = w.match(/^(\d{2,3})(bpm)?$/i); return !!q && +q[1] >= 60 && +q[1] <= 200; };
+  const words = base.split(/[-_\s]+/).filter((w) => w && !isBpm(w) && !/^[a-g](#|b|s)?(m|min|maj|minor|major)$/i.test(w) && !/^bpm$/i.test(w));
+  const title = words.join(' ').trim() || base;
   return { name, title, bpm, bpmSource: bpm ? 'from file name' : 'detected' };
 }
+
 /** 16-bar 140 BPM trap sketch in F# minor, rendered offline so the app opens with something to look at. */
 export async function synthDemo() {
   const bpm = 140, spb = 60 / bpm, bars = 16, sr = 44100, dur = bars * 4 * spb + .2;

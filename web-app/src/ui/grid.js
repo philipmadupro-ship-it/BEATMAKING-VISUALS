@@ -10,7 +10,7 @@ export function createGrid(app) {
   $('#gridStage').innerHTML = STAGE_IDS.map((id) => `<button data-stage="${id}" aria-pressed="${id === app.store.project.stage}">${STAGES[id].name.slice(0, 3)}</button>`).join('');
   $$('#gridStage button').forEach((b) => (b.onclick = () => { app.actions.setStage(b.dataset.stage); $$('#gridStage button').forEach((x) => x.setAttribute('aria-pressed', x === b)); sheets(); }));
   $$('#gridAspect button').forEach((b) => (b.onclick = () => { $$('#gridAspect button').forEach((x) => x.setAttribute('aria-pressed', x === b)); aspect = b.dataset.a; build(); }));
-  function sheets() { if (!entry || !entry.ready) return; for (const c of cards) c.sheet = generateSheet({ bars: entry.bars, labels: entry.labels, look: c.id, stage: app.store.project.stage, aspect }); }
+  function sheets() { if (!entry || !entry.ready) return; for (const c of cards) { c.sheet = generateSheet({ bars: entry.bars, labels: entry.labels, look: c.id, stage: app.store.project.stage, aspect }); c.sheet.base['result.on'] = false; } }  // cards loop: keep the bench live
   function build() {
     const tr = app.store.session.track; if (!tr) return; box.innerHTML = ''; cards = []; const { W, H } = ASPECTS[aspect];
     const cw = aspect === '916' ? 300 : 400, ch = Math.round(cw * H / W); surf = makeSurface(cw, ch);

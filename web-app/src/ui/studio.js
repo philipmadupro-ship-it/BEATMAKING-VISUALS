@@ -129,5 +129,5 @@ export function createStudio(app) {
   }
   requestAnimationFrame(frame);
   app.store.subscribe((st, keys) => { markDirty(); if (keys.some((k) => /project\.(inT|outT)/.test(k))) readouts(); });
-  return { layout, setAspectUI, readouts, markDirty, setPlayIcon, surf };
+  return { layout, setAspectUI, readouts, markDirty, setPlayIcon, surf, sheetSync };
 }

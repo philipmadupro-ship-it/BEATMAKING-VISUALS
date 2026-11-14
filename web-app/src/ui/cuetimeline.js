@@ -18,7 +18,7 @@ export function createCueTimeline(app, cv) {
   const g = cv.getContext('2d'), st = { ppb: 24, scroll: 0, vscroll: 0, sel: new Set(), focusRow: 0, loop: null, playhead: 0, collapsed: false, hover: null };
   let W = 0, H = 0, dpr = 1, drag = null, dirty = true, colors = null, rows = [];
   const cues = app.cues, P = () => app.store.project, tr = () => app.store.session.track;
-  const HEAD = () => (st.collapsed ? 58 : 176), RULER = 22, SECT = 14, ROW = () => (st.collapsed ? 64 : 27), TOP = RULER + SECT;
+  const HEAD = () => (st.collapsed ? 58 : 176), RULER = 22, SECT = 14, ROW = () => (st.collapsed ? 64 : 24), TOP = RULER + SECT;
   const bars = () => { const t = tr(); return t ? Math.max(1, Math.round((P().outT - P().inT) / t.barDur)) : 16; };
   const totalBeats = () => bars() * 4, BEAT = () => (tr() ? tr().spb : 0.5);
   const snapGrid = () => SNAPS[P().timeline.snap] ?? 1;
@@ -40,8 +40,8 @@ export function createCueTimeline(app, cv) {
     const p = reg().byPath[row.path], t = { id: newId('t'), path: row.path, kind: (p && p.kind) || row.kind, lane: laneOf(row.path), keys: [] };
     cues.sheet.tracks.push(t); row.track = t; return t;
   }
-  const allKeys = () => { const o = []; for (const r of rows) if (r.track) for (const k of r.track.keys) o.push([r, k]); return o; };
-  const findKey = (id) => { for (const r of rows) if (r.track) { const k = r.track.keys.find((x) => x.id === id); if (k) return [r, k]; } return null; };
+  const allKeys = () => { buildRows(); const o = []; for (const r of rows) if (r.track) for (const k of r.track.keys) o.push([r, k]); return o; };
+  const findKey = (id) => { buildRows(); for (const r of rows) if (r.track) { const k = r.track.keys.find((x) => x.id === id); if (k) return [r, k]; } return null; };
   // ---------------------------------------------------------------- layout
   function resize() { const r = cv.getBoundingClientRect(); dpr = Math.min(2, devicePixelRatio || 1); W = Math.max(200, r.width); H = Math.max(80, r.height);
     if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); } dirty = true; }
@@ -244,7 +244,7 @@ export function createCueTimeline(app, cv) {
     setLoopIn() { const b = snapBeat(st.playhead, snapGrid() || .25); st.loop = { a: b, b: st.loop && st.loop.b > b ? st.loop.b : Math.min(totalBeats(), b + 16) }; dirty = true; app.actions.loopChanged && app.actions.loopChanged(); },
     setLoopOut() { const b = snapBeat(st.playhead, snapGrid() || .25); st.loop = { a: st.loop && st.loop.a < b ? st.loop.a : Math.max(0, b - 16), b }; dirty = true; app.actions.loopChanged && app.actions.loopChanged(); },
     clearLoop() { st.loop = null; dirty = true; app.actions.loopChanged && app.actions.loopChanged(); },
-    focusRowOf(path) { buildRows(); const i = rows.findIndex((r) => r.path === path); if (i >= 0) { st.focusRow = i; const y = rowY(i); if (y < TOP || y + ROW() > H) { st.vscroll += y - TOP - ROW(); clampScroll(); } dirty = true; } return i; },
+    focusRowOf(path) { buildRows(); const i = rows.findIndex((r) => r.path === path); if (i >= 0) { st.focusRow = i; const y = rowY(i); if (y < TOP || y + ROW() > H) st.vscroll += y - TOP - ROW(); resize(); clampScroll(); dirty = true; } return i; },
     bbt: (b) => beatsToBbt(b),
   };
   return api;

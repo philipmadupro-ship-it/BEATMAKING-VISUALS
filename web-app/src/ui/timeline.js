@@ -25,7 +25,7 @@ export function createTimeline(app) {
         const me = ws; let added = false;
         const addRegions = () => { if (added || ws !== me) return; added = true; const p = app.store.project;
           // song structure: one marker per 4-bar phrase (song bar number + label), drops brighter
-          tr.song.phrases.forEach(q => { const t = tr.song.bar1 + (q.bar - 1) * tr.barDur; if (t < tr.duration) regions.addRegion({ start: t, content: mkLabel(q.bar + ' ' + q.label), color: q.label === 'drop' ? 'rgba(236,236,236,.85)' : 'rgba(160,160,160,.35)', drag: false, resize: false }); });
+          let last = ''; tr.song.phrases.forEach(q => { const t = tr.song.bar1 + (q.bar - 1) * tr.barDur; if (q.label === last) return; last = q.label; if (t < tr.duration) regions.addRegion({ start: t, content: mkLabel(q.bar + ' ' + q.label), color: q.label === 'drop' ? 'rgba(236,236,236,.85)' : 'rgba(160,160,160,.35)', drag: false, resize: false }); });
           clip = regions.addRegion({ id: 'clip', start: p.inT, end: p.outT, color: 'rgba(200,200,200,.16)', drag: true, resize: true, minLength: tr.barDur * .99 });
           ws.setTime(app.clock.time()); };
         ws.once('ready', addRegions); ws.once('decode', addRegions); setTimeout(addRegions, 400);
