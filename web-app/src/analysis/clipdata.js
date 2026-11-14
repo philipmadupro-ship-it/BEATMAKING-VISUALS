@@ -8,7 +8,8 @@
 //    clip start, true peak (4x oversampled) running max
 //  - 1/6-octave spectrum (61 bands, 8192-pt Hann, sine-calibrated dBFS) with 24 dB/s fall and a 1 s peak hold
 //  - 128-bin log spectrogram column (20 Hz..20 kHz), octave balance vs pink + tilt, 6 band energies
-//  - correlation (0.3 s smoothing) and width, 160 goniometer points (S, M)
+//  - correlation (0.3 s smoothing) and width, 160 goniometer points (S = (r-l)/√2, +S = right; M = (l+r)/√2) and the
+//    full 8 kHz L/R scope stream
 // Plus kick/snare/hat onsets (band spectral flux) quantised to the 16th grid, a 200 col/s tone map, a 400 col/s
 // min/max/rms waveform (int8) and the whole-song overview.
 import { makeFFT } from './dsp.js';
@@ -149,7 +150,7 @@ export function clipData({ L, R, sr, inT, bars, beat, fps = 30, target = -14, tp
     // goniometer points over the frame's samples
     const v0 = Math.max(0, c - Math.floor(sr * dt)), v1 = Math.max(c - 1, v0);
     for (let q = 0; q < GON; q++) { const i = Math.min(n - 1, Math.floor(v0 + (v1 - v0) * q / (GON - 1))), l = cL[i], r = cR[i];
-      gonioS[f * GON + q] = clampv(Math.round((l - r) / Math.SQRT2 * 127 / .8), -127, 127); gonioM[f * GON + q] = clampv(Math.round((l + r) / Math.SQRT2 * 127 / .8), -127, 127); }
+      gonioS[f * GON + q] = clampv(Math.round((r - l) / Math.SQRT2 * 127 / .8), -127, 127); gonioM[f * GON + q] = clampv(Math.round((l + r) / Math.SQRT2 * 127 / .8), -127, 127); }
     if (progress && f % 120 === 0) progress(f / NF * .8);
   }
   for (let j = 0; j < 6; j++) { const col6 = []; for (let f = 0; f < NF; f++) col6.push(bandRaw[f * 6 + j]); col6.sort((a, b) => a - b); const p98 = percentile(col6, .98) || 1e-30;
@@ -165,15 +166,18 @@ export function clipData({ L, R, sr, inT, bars, beat, fps = 30, target = -14, tp
   for (let i = 0; i < cols2; i++) { const a = Math.floor(i * cw2), b = Math.max(a + 1, Math.floor((i + 1) * cw2));
     [cL, cR].forEach((ch, k) => { let mn = Infinity, mx = -Infinity, s = 0; for (let j = a; j < b; j++) { const v = ch[j]; if (v < mn) mn = v; if (v > mx) mx = v; s += v * v; }
       w2[i * 6 + k * 3] = clampv(Math.round(mn * 127), -127, 127); w2[i * 6 + k * 3 + 1] = clampv(Math.round(mx * 127), -127, 127); w2[i * 6 + k * 3 + 2] = clampv(Math.round(Math.sqrt(s / (b - a)) * 127), -127, 127); }); }
+  // 8 kHz L/R scope stream (every sample of the scope rate, Int16, 1/16384 per step): the stereo scope plots all of them
+  const dec = Math.max(1, Math.round(sr / 8000)), ns = Math.floor(n / dec), scL = new Int16Array(ns), scR = new Int16Array(ns);
+  for (let i = 0; i < ns; i++) { scL[i] = clampv(Math.round(cL[i * dec] * 16384), -32767, 32767); scR[i] = clampv(Math.round(cR[i * dec] * 16384), -32767, 32767); }
   let tpMax = 0; for (let b = 0; b < nTB; b++) tpMax = Math.max(tpMax, tpRun[b]);
   const summary = { I: Math.round(LO.integrated() * 100) / 100, LRA: Math.round(LO.lra() * 100) / 100, TP: Math.round(20 * Math.log10(tpMax || 1e-12) * 100) / 100, gainDb: Math.round(gainDb * 100) / 100 };
   if (progress) progress(1);
   return { fps, frames: NF, duration: dur, bars, beat, bpm: 60 / beat, inT, frame: F, oct6: OCT6.map(v => Math.round(v * 100) / 100), oct1: OCT1, bandNames: BAND_NAMES,
-    spectroBins: SPEC_BINS, spectro, gonioN: GON, gonioS, gonioM, onsets: ons, wave: { cps: CPS, tone }, wave2: { cps: CPS2, n: cols2, data: w2 }, summary };
+    spectroBins: SPEC_BINS, spectro, gonioN: GON, gonioS, gonioM, scope: { rate: sr / dec, scale: 1 / 16384, L: scL, R: scR }, onsets: ons, wave: { cps: CPS, tone }, wave2: { cps: CPS2, n: cols2, data: w2 }, summary };
 }
 
 /** Typed arrays of a clipData result, for postMessage transfer lists. */
 export function transferables(d) {
-  const t = [d.spectro.buffer, d.gonioS.buffer, d.gonioM.buffer, d.wave.tone.buffer, d.wave2.data.buffer];
+  const t = [d.spectro.buffer, d.gonioS.buffer, d.gonioM.buffer, d.scope.L.buffer, d.scope.R.buffer, d.wave.tone.buffer, d.wave2.data.buffer];
   for (const k in d.frame) t.push(d.frame[k].buffer); return t;
 }

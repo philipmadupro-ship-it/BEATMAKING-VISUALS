@@ -17,6 +17,7 @@ const { analyzeMono } = await import(path.join(ROOT, 'src/analysis/dsp.js'));
 const { makeTrack, mixdown } = await import(path.join(ROOT, 'src/analysis/index.js'));
 const { meters } = await import(path.join(ROOT, 'src/engine/meters.js'));
 const { clipData, OCT6 } = await import(path.join(ROOT, 'src/analysis/clipdata.js'));
+const ML = await import(path.join(ROOT, 'src/v8/meterlib.js'));
 
 const DIR = process.env.METERS_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'u2c-meters-'));
 const TOL = { peak: .5, rms: .5, lufs: .5, tp: .5 };
@@ -129,6 +130,29 @@ for (const k of ['sine1k', 'pink', 'outphase', 'clipped']) {
     ok('v8 sine1k: 1/6-oct spectrum peak = the 1 kHz band at -18 dBFS', Math.abs(OCT6[i] - 1000) < 1 && Math.abs(sp[i] + 18) <= .5, `band ${OCT6[i].toFixed(0)} Hz at ${sp[i]} dB`); }
   if (k === 'pink') { const M = clipData({ L, R, sr: buf.sampleRate, inT: 0, bars: 4, beat: .5, target: -14 });
     ok('v8 pink: mastered clip reads -14 LUFS integrated, TP <= -1 dBTP', Math.abs(M.summary.I + 14) <= .1 && M.summary.TP <= -1 + 1e-6, `I ${M.summary.I} · TP ${M.summary.TP} · gain ${M.summary.gainDb} dB`); }
+}
+
+// ---- 6. stereo scope geometry (METERS-SPEC §0.3 bug: side axis mirrored, abs() fold). Synthetic 48 kHz signals,
+// 2 s, through clipData's 8 kHz scope stream and the scope maths the renderer uses (meterlib.polarSample/lissajous).
+const rng = (seed) => () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296 * 2 - 1; };
+const SYN = (() => { const sr = 48000, n = sr * 2, a = rng(11), b = rng(29), x = new Float32Array(n), y = new Float32Array(n); for (let i = 0; i < n; i++) { x[i] = 0.5 * a(); y[i] = 0.5 * b(); }
+  const z = new Float32Array(n), neg = x.map((v) => -v);
+  return { sr, sig: { mono: [x, x], hardL: [x, z], hardR: [z, x], anti: [x, neg], wide: [x, y] } }; })();
+const synClip = {};
+for (const [k, [Lc, Rc]] of Object.entries(SYN.sig)) synClip[k] = clipData({ L: Lc, R: Rc, sr: SYN.sr, inT: 0, bars: 1, beat: 0.5, target: 'off' });
+const deg = (r) => r * 180 / Math.PI;
+for (const [k, D] of Object.entries(synClip)) {
+  const sc = D.scope, th = [], xs = [], ys = [], lj = [];
+  for (let i = 800; i < sc.L.length - 800; i++) { const l = sc.L[i] * sc.scale, r = sc.R[i] * sc.scale, p = ML.polarSample(l, r, 40); if (!p) continue; th.push(deg(p[2])); xs.push(p[0]); ys.push(p[1]); lj.push(ML.lissajous(l, r, 1)); }
+  const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length, sd = (a) => { const m = mean(a); return Math.sqrt(mean(a.map((v) => (v - m) ** 2))); };
+  const info = `θ mean ${mean(th).toFixed(1)}° sd ${sd(th).toFixed(1)}° · x̄ ${mean(xs).toFixed(3)} ȳ ${mean(ys).toFixed(3)} · n ${th.length}`;
+  if (k === 'mono') ok('scope mono: vertical line (θ = 0°)', th.every((v) => Math.abs(v) < 1) && Math.abs(mean(xs)) < 0.01, info);
+  if (k === 'hardL') ok('scope hard-L: one line leaning LEFT (θ = -45°, every x <= 0)', th.every((v) => Math.abs(v + 45) < 1) && xs.every((v) => v <= 0) && mean(xs) < -0.3 && lj.every(([X, Y]) => Math.abs(X + Y) < 1e-3 * Math.abs(Y) + 1e-4), info);
+  if (k === 'hardR') ok('scope hard-R: one line leaning RIGHT (θ = +45°, every x >= 0)', th.every((v) => Math.abs(v - 45) < 1) && xs.every((v) => v >= 0) && mean(xs) > 0.3 && lj.every(([X, Y]) => Math.abs(X - Y) < 1e-3 * Math.abs(Y) + 1e-4), info);
+  if (k === 'anti') ok('scope anti-phase: horizontal (|θ| = 90°, y = 0)', th.every((v) => Math.abs(Math.abs(v) - 90) < 1) && ys.every((v) => Math.abs(v) < 0.02), info);
+  if (k === 'wide') { const left = xs.filter((v) => v < 0).length / xs.length;
+    ok('scope wide noise: fills both sides symmetrically (θ sd > 30°, |θ̄| < 5°)', sd(th) > 30 && Math.abs(mean(th)) < 5 && left > 0.4 && left < 0.6, `${info} · left ${(left * 100).toFixed(0)} %`); }
+  if (k === 'hardL') { let wrong = 0, tot = 0; for (let i = 0; i < D.gonioS.length; i++) { if (D.gonioM[i] > 2) { tot++; if (D.gonioS[i] > 0) wrong++; } } ok('gonio points hard-L: side <= 0 where mid > 0 (+S = right)', tot > 100 && wrong === 0, `${wrong}/${tot} on the wrong side`); }
 }
 fs.writeFileSync(path.join(DIR, 'results.json'), JSON.stringify(table.map(({ k, A, F, N }) => ({ k, app: { peak: A.peak, rms: A.rms, lufs: A.lufs, tp: A.tp, corr: A.corr, clip: A.clip, eq: A.eq }, ffmpeg: F, numpy: N })), null, 1));
 const fails = results.filter(r => !r.pass).length;

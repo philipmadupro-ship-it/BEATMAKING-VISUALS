@@ -6,6 +6,7 @@
 // - Loudness: Kollide-frames style instrument (segmented 270 deg arc gauge, sub-gauges, numeric cells).
 // - Spectrogram / stereo / surface: methods after Aurora by Joe Croskey (AGPL-3.0). Ideas and parameters only were
 //   re-implemented; no Aurora code is used.
+import * as ML from './meterlib.js';
 export function createMeters(L) {
   const { D, F, FPS, NF, BEAT, BAR, T, U, rgba, mix, text, fmt, tc, bbt, fidx, clamp, lerp, hash, SANS, MONO } = L;
   const M = {};
@@ -119,6 +120,7 @@ export function createMeters(L) {
   };
 
   const M8 = M;
+  const SC = D.scope, scopeSpan = (ff) => { const e = Math.min(SC.L.length, Math.floor(ff / FPS * SC.rate)); return [Math.max(0, e - Math.round(SC.rate / FPS)), e]; };
   const cr = (v) => Math.round(v) + 0.5;
   const tickF = (t) => fidx(Math.floor(t / (BEAT / 2)) * (BEAT / 2));   // display tick: the frame at the last half beat
   M8.tickF = tickF;
@@ -255,8 +257,11 @@ export function createMeters(L) {
     const dens = new Float32Array(G * G), Tp = Math.max(1 / FPS, L.meter('stereo', 'persist', 0.42)), gain = L.meter('stereo', 'gain', 1), keep = Math.round(Tp * FPS);
     for (let back = 0; back <= keep; back++) {
       const ff = f - back; if (ff < 0) break; const age = back / FPS, wgt = Math.exp(-age / (0.31 * Tp)) * (1 - age / Tp);
-      for (let i = 0; i < N; i++) {
-        const sx = clamp(L.GS[ff * N + i] / 127 * gain, -1, 1), my = Math.min(1, Math.abs(L.GM[ff * N + i] / 127 * gain)), gx = (sx * 0.5 + 0.5) * (G - 2), gy = (1 - my) * (G - 2), ix = Math.min(G - 2, Math.floor(gx)), iy = Math.min(G - 2, Math.floor(gy)), fx = gx - ix, fy = gy - iy;
+      const [a0, a1] = scopeSpan(ff);
+      for (let i = a0; i < a1; i++) {
+        // +s = right; negative mid is point-reflected (m, s) -> (-m, -s), never abs(m): one-sided content stays one-sided
+        const p = ML.polarSample(SC.L[i] * SC.scale * gain, SC.R[i] * SC.scale * gain, 40); if (!p) continue;
+        const gx = (p[0] * 0.5 + 0.5) * (G - 2), gy = (1 - p[1]) * (G - 2), ix = Math.min(G - 2, Math.floor(gx)), iy = Math.min(G - 2, Math.floor(gy)), fx = gx - ix, fy = gy - iy;
         dens[iy * G + ix] += wgt * (1 - fx) * (1 - fy); dens[iy * G + ix + 1] += wgt * fx * (1 - fy); dens[(iy + 1) * G + ix] += wgt * (1 - fx) * fy; dens[(iy + 1) * G + ix + 1] += wgt * fx * fy;
       }
     }
