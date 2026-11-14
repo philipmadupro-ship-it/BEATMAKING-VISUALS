@@ -2,12 +2,14 @@
 import { analyzeMono, makeGrid } from './dsp.js';
 import { hash } from '../util/draw.js';
 import { stereoFeatures } from './stereo.js';
+import { songStructure } from './structure.js';
+import { clipData, songFacts } from './clipdata.js';
 export function makeTrack(a, meta, bpm, t0, stereo = null) {
   const g = makeGrid(a, bpm ?? a.bpmDetected, t0);
-  return Object.freeze({ ...a, ...g, stereo, meta: Object.freeze({ ...meta }), bpmSource: meta.bpmSource || 'detected' });
+  return Object.freeze({ ...a, ...g, song: songStructure(a, g), stereo, meta: Object.freeze({ ...meta }), bpmSource: meta.bpmSource || 'detected' });
 }
 /** New immutable track with a different grid (BPM edit / downbeat nudge). */
-export function regrid(track, bpm, t0, source = 'edited') { return Object.freeze({ ...track, ...makeGrid(track, bpm, t0), bpmSource: source }); }
+export function regrid(track, bpm, t0, source = 'edited') { const g = makeGrid(track, bpm, t0); return Object.freeze({ ...track, ...g, song: songStructure(track, g), bpmSource: source }); }
 export function mixdown(buffer) { const len = buffer.length, nc = buffer.numberOfChannels, mono = new Float32Array(len); for (let c = 0; c < nc; c++) { const d = buffer.getChannelData(c); for (let i = 0; i < len; i++) mono[i] += d[i] / nc; } return mono; }
 let worker = null, jobId = 0;
 function getWorker() { if (worker !== null) return worker; try { worker = new Worker(new URL('./analysis.worker.js', import.meta.url), { type: 'module' }); } catch (e) { console.warn('[u2c] worker unavailable, analysing on the main thread', e); worker = false; } return worker; }
@@ -32,7 +34,7 @@ export function analyzeBuffer(buffer, meta, { onQuick, onProgress } = {}) {
     const done = () => { w.removeEventListener('error', onErr); };
     w.addEventListener('error', onErr);
     const res0 = res; res = v => { done(); res0(v); }; const rej0 = rej; rej = e => { done(); rej0(e); };
-    w.postMessage({ mono, sr, duration, id, ...LR }); // copied, not transferred: kept for the main-thread fallback
+    w.postMessage({ mono, sr, duration, id, key: bufKey(buffer), ...LR }); // copied, not transferred: kept for the main-thread fallback
   });
 }
 export async function decodeFile(file, ac) { const ab = await file.arrayBuffer(); return await ac.decodeAudioData(ab); }
@@ -62,4 +64,27 @@ export async function synthDemo() {
     if (full) { for (const i of (b % 2 ? [0,3,7,10] : [0,7,10,14])) kick(T + i * s16); snare(T + 2 * spb); if (b % 4 === 3) snare(T + 3.75 * spb); }
     if (full || brk) bass(T, RT[b % 4], spb * 2.2); }
   return oc.startRendering();
+}
+
+// ---- per-section v8 clip data (worker, main-thread fallback). Keyed by the AudioBuffer so the worker keeps its channels.
+const KEYS = new WeakMap(); let nextKey = 0;
+const bufKey = b => { let k = KEYS.get(b); if (!k) { k = 'b' + (++nextKey); KEYS.set(b, k); } return k; };
+const factsCache = new WeakMap();
+function channels(buffer) { const L = buffer.getChannelData(0), R = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : L; return { L, R }; }
+/** Clip data for [inT, inT + bars] of `buffer` (see clipdata.js). opts: {inT, bars, beat, fps, target, onProgress}. */
+export function requestClipData(buffer, { inT, bars, beat, fps = 30, target = -14, onProgress } = {}) {
+  const job = { inT, bars, beat, fps, target }, w = getWorker();
+  const local = () => { const { L, R } = channels(buffer), sr = buffer.sampleRate; let f = factsCache.get(buffer); if (!f) { f = songFacts(L, R, sr); factsCache.set(buffer, f); }
+    const D = clipData({ L, R, sr, ...job }); D.srcLufs = f.srcLufs; D.overview = f.overview; return D; };
+  if (!w) return new Promise(res => setTimeout(() => res(local()), 0));
+  const id = ++jobId, key = bufKey(buffer);
+  return new Promise((resolve) => {
+    const on = e => { const d = e.data; if (d.id !== id) return;
+      if (d.stage === 'progress') { onProgress && onProgress(d.p); return; }
+      if (d.stage === 'need-audio') { const { L, R } = channels(buffer); w.postMessage({ type: 'clip', id, key, ...job, L: L.slice(), R: R.slice(), sr: buffer.sampleRate }); return; }
+      w.removeEventListener('message', on);
+      if (d.stage === 'clip') resolve(d.D); else { console.warn('[u2c] clip data in the worker failed, using the main thread', d.message); resolve(local()); } };
+    w.addEventListener('message', on);
+    w.postMessage({ type: 'clip', id, key, ...job });
+  });
 }

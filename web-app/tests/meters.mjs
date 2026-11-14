@@ -16,6 +16,7 @@ const { stereoFeatures } = await import(path.join(ROOT, 'src/analysis/stereo.js'
 const { analyzeMono } = await import(path.join(ROOT, 'src/analysis/dsp.js'));
 const { makeTrack, mixdown } = await import(path.join(ROOT, 'src/analysis/index.js'));
 const { meters } = await import(path.join(ROOT, 'src/engine/meters.js'));
+const { clipData, OCT6 } = await import(path.join(ROOT, 'src/analysis/clipdata.js'));
 
 const DIR = process.env.METERS_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'u2c-meters-'));
 const TOL = { peak: .5, rms: .5, lufs: .5, tp: .5 };
@@ -114,6 +115,20 @@ for (const k of ['sine1k', 'pink', 'hardleft', 'outphase', 'silence', 'clipped']
   }
   if (k === 'pink') ok('pink: EQ envelope flat vs the pink reference', A.eq.every(b => Math.abs(b.db) <= 1.5) && A.maxRel <= 3, `nodes ${A.eq.map(b => b.db.toFixed(1)).join(' / ')} dB · worst bin 60 Hz-12 kHz ${A.maxRel.toFixed(1)} dB`);
   if (k === 'silence') ok('silence: meters at the floor (−∞)', A.peak.every(v => v <= -100) && A.rms.every(v => v <= -100) && A.lufsM <= -70 && A.silent && A.tp <= -100, `peak ${fmt(A.peak[0])} · rms ${fmt(A.rms[0])} · LUFS-M ${fmt(A.lufsM)} · TP ${fmt(A.tp)}`);
+}
+// ---- 5. v8 clip meters (src/analysis/clipdata.js, the data behind the EXE / LAB / SCOPE looks) on the same signals:
+// 4 bars at 120 BPM from t = 0, ungained ('off') and mastered to -14 LUFS
+for (const k of ['sine1k', 'pink', 'outphase', 'clipped']) {
+  const f = path.join(DIR, k + '.wav'), F = ffmpegRef(f), buf = readWav(f), L = buf.getChannelData(0), R = buf.getChannelData(1);
+  const D = clipData({ L, R, sr: buf.sampleRate, inT: 0, bars: 4, beat: .5, target: 'off' }), last = D.frames - 1;
+  ok(`v8 ${k}: clip integrated LUFS ±${TOL.lufs} LU`, near(D.summary.I, F.lufs, TOL.lufs), `clip ${fmt(D.summary.I)} · ebur128 ${fmt(F.lufs)} · LUFS-S at the end ${D.frame.S[last]}`);
+  ok(`v8 ${k}: clip true peak ±${TOL.tp} dB`, near(D.summary.TP, F.tp, TOL.tp), `clip ${fmt(D.summary.TP)} dBTP · ebur128 ${fmt(F.tp)} dBTP`);
+  const want = { sine1k: 1, pink: 0, outphase: -1, clipped: 1 }[k];
+  ok(`v8 ${k}: smoothed correlation ${want}`, Math.abs(D.frame.corr[last] - want) <= .1, `corr ${D.frame.corr[last]}`);
+  if (k === 'sine1k') { const mid = D.frames >> 1, sp = D.frame.spec.subarray(mid * 61, mid * 61 + 61), i = sp.indexOf(Math.max(...sp));
+    ok('v8 sine1k: 1/6-oct spectrum peak = the 1 kHz band at -18 dBFS', Math.abs(OCT6[i] - 1000) < 1 && Math.abs(sp[i] + 18) <= .5, `band ${OCT6[i].toFixed(0)} Hz at ${sp[i]} dB`); }
+  if (k === 'pink') { const M = clipData({ L, R, sr: buf.sampleRate, inT: 0, bars: 4, beat: .5, target: -14 });
+    ok('v8 pink: mastered clip reads -14 LUFS integrated, TP <= -1 dBTP', Math.abs(M.summary.I + 14) <= .1 && M.summary.TP <= -1 + 1e-6, `I ${M.summary.I} · TP ${M.summary.TP} · gain ${M.summary.gainDb} dB`); }
 }
 fs.writeFileSync(path.join(DIR, 'results.json'), JSON.stringify(table.map(({ k, A, F, N }) => ({ k, app: { peak: A.peak, rms: A.rms, lufs: A.lufs, tp: A.tp, corr: A.corr, clip: A.clip, eq: A.eq }, ffmpeg: F, numpy: N })), null, 1));
 const fails = results.filter(r => !r.pass).length;

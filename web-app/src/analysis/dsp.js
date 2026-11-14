@@ -2,7 +2,7 @@
 export const BAND_NAMES = ['sub', 'bass', 'lowMid', 'mid', 'hi', 'air'];
 export const NB = 6, NS = 48;
 const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x);
-function makeFFT(N) {
+export function makeFFT(N) {
   const rev = new Uint32Array(N), lg = Math.log2(N);
   for (let i = 0; i < N; i++) { let r = 0; for (let b = 0; b < lg; b++) r |= ((i >> b) & 1) << (lg - 1 - b); rev[i] = r; }
   const co = new Float32Array(N / 2), si = new Float32Array(N / 2);
@@ -88,7 +88,7 @@ export function analyzeMono(mono, sr, duration, opts = {}) {
   const K = pick(fLo, fr, 1.45, .12, .1), Sn = pick(fMid.map((v, i) => v * .6 + fHi[i] * .4), fr, 1.5, .14, .1), Hh = pick(fHi, fr, 1.3, .08, .06);
   const env = new Float32Array(nF); for (let i = 0; i < nF; i++) env[i] = K.norm[i] + .7 * Sn.norm[i] + .3 * Hh.norm[i];
   { const W = Math.round(fr * .5), ps = new Float64Array(nF + 1); for (let i = 0; i < nF; i++) ps[i + 1] = ps[i] + env[i]; const tmp = env.slice(); for (let i = 0; i < nF; i++) { const a = Math.max(0, i - W), b = Math.min(nF, i + W + 1); env[i] = Math.max(0, tmp[i] - (ps[b] - ps[a]) / (b - a)); } }
-  const bpm = detectBpm(env, fr);
+  const bpm = refineBpm(env, fr, detectBpm(env, fr)), beatPhase = attackPhase(mono, sr, env, fr, bpm);
   let best = -2, key = 'C maj'; for (let r = 0; r < 12; r++) { const rot = [...Array(12)].map((_, i) => chroma[(i + r) % 12]); const cM = corr(rot, KMAJ), cm = corr(rot, KMIN); if (cM > best) { best = cM; key = KEYS[r] + ' maj'; } if (cm > best) { best = cm; key = KEYS[r] + ' min'; } }
   // overview peaks + a 4 kHz scope signal for oscilloscope templates
   const cols = 2400, pkMin = new Float32Array(cols), pkMax = new Float32Array(cols); let gm = 1e-6;
@@ -97,7 +97,59 @@ export function analyzeMono(mono, sr, duration, opts = {}) {
   const dec = Math.max(1, Math.round(sr / 4000)), scopeRate = sr / dec, scope = new Float32Array(Math.floor(len / dec));
   for (let i = 0; i < scope.length; i++) scope[i] = mono[i * dec] / gm;
   return { duration, sampleRate: sr, fps: fr, frames: nF, bandCount: NB, bandNames: BAND_NAMES, bands, specBins: NS, spec, rms: rmsN, rmsRaw: rms, rmsRef: rp, lowSlow, centroid,
-    kicks: K.list, snares: Sn.list, hats: Hh.list, kickEnv: K.norm, onsetEnv: env, bpmDetected: bpm, key, peaks: { cols, min: pkMin, max: pkMax }, scope, scopeRate, specP, specStereo: stereo };
+    kicks: K.list, snares: Sn.list, hats: Hh.list, kickEnv: K.norm, onsetEnv: env, bpmDetected: bpm, beatPhase, key, peaks: { cols, min: pkMin, max: pkMax }, scope, scopeRate, specP, specStereo: stereo };
+}
+/**
+ * Tempo by grid scoring (ported from the v8 native analysis, tools/beatgrid.py): the autocorrelation estimate and its
+ * metrical relatives (2/3, 3/2, 2, 1/2, 4/3, 3/4) plus the integer BPMs around them are candidates; each is scored by how
+ * strongly its beat grid lands on onsets (mean onset strength on the grid / mean strength, best phase). A half-time winner
+ * (< 90 BPM) yields to its double when the double still scores >= 50 %. Then fine-tuned +-0.1 BPM.
+ */
+export function refineBpm(env, fr, bpm0) {
+  const n = env.length; let mean = 0; for (let i = 0; i < n; i++) mean += env[i]; mean = mean / n || 1e-9;
+  const at = x => { const i = Math.floor(x), f = x - i; return i + 1 < n ? env[i] + (env[i + 1] - env[i]) * f : 0; };
+  const score = (bpm, ph) => { const p = 60 * fr / bpm; let s = 0, k = 0; for (let x = ph; x < n - 1; x += p) { s += at(x); k++; } return s / Math.max(1, k) / mean; };
+  const best = (bpm, lo, hi, step) => { let b = -1, bp = 0; for (let ph = lo; ph < hi; ph += step) { const s = score(bpm, ph); if (s > b) { b = s; bp = ph; } } return [b, bp]; };
+  const cands = new Set(); for (const k of [1, 2 / 3, 3 / 2, 2, .5, 4 / 3, 3 / 4]) { const c = bpm0 * k; if (c >= 60 && c <= 200) for (const v of [Math.round(c * 1000) / 1000, Math.round(c), Math.round(c) - 1, Math.round(c) + 1]) cands.add(v); }
+  const scored = [...cands].map(c => { const [s, ph] = best(c, 0, 60 * fr / c, fr * .001); return [s, c, ph]; }).sort((a, b) => b[0] - a[0]);
+  let [s0, bpm, ph] = scored[0];
+  for (const [s2, c2, p2] of scored) if (bpm < 90 && Math.abs(c2 - 2 * bpm) < .6 && s2 >= .5 * s0) { bpm = c2; ph = p2; break; }
+  let fb = [-1, bpm]; for (let b = bpm - .1; b <= bpm + .1001; b += .01) { const [s] = best(b, Math.max(0, ph - fr * .01), ph + fr * .01, fr * .0005); if (s > fb[0]) fb = [s, b]; }
+  bpm = fb[1]; if (Math.abs(bpm - Math.round(bpm)) < .03) bpm = Math.round(bpm);
+  return Math.round(bpm * 100) / 100;
+}
+/**
+ * Beat phase, sample-accurate (v8 tools/beatgrid.py): coarse phase from the onset envelope, then on every grid beat
+ * the attack of the high band (> 1.5 kHz, 0.3 ms envelope, first crossing of 50 % of the local peak within +-30 ms);
+ * the median offset moves the grid (two passes, the second within +-20 ms). Returns the first beat time in seconds.
+ */
+export function attackPhase(mono, sr, env, fr, bpm) {
+  const p = 60 / bpm, pF = fr * p, n = env.length; let bp = 0, bs = -1;
+  for (let ph = 0; ph < pF; ph += .25) { let s = 0; for (let x = ph; x < n - 1; x += pF) { const i = Math.floor(x), f = x - i; s += env[i] + (env[i + 1] - env[i]) * f; } if (s > bs) { bs = s; bp = ph; } }
+  // the onset envelope frame i covers samples [i*hop, i*hop + N): its centre is ~ (i + 2) hops for N = 4 hops
+  let ph0 = (bp + 1.5) / fr;
+  const len = mono.length, w = 2 * Math.PI * 1500 / sr, cw = Math.cos(w), al = Math.sin(w) / (2 * Math.SQRT1_2), a0 = 1 + al;
+  const hp = new Float32Array(len), B = [(1 + cw) / 2 / a0, -(1 + cw) / a0, (1 + cw) / 2 / a0], A1 = -2 * cw / a0, A2 = (1 - al) / a0;
+  for (let pass = 0; pass < 2; pass++) { let x1 = 0, x2 = 0, y1 = 0, y2 = 0; const src = pass ? hp : mono; for (let i = 0; i < len; i++) { const x = src[i], y = B[0] * x + B[1] * x1 + B[2] * x2 - A1 * y1 - A2 * y2; x2 = x1; x1 = x; y2 = y1; y1 = y; hp[i] = y; } }
+  const m = Math.max(1, Math.round(.0003 * sr)), envx = new Float32Array(len); let acc = 0;
+  for (let i = 0; i < len; i++) { acc += Math.abs(hp[i]); if (i >= m) acc -= Math.abs(hp[i - m]); envx[i] = acc / m; }
+  const med = arr => { const s = arr.slice().sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
+  const attack = (t0, win) => { const i0 = Math.round((t0 - win) * sr), i1 = Math.round((t0 + win) * sr); if (i0 < 0 || i1 >= len) return null;
+    let pk = 0; for (let i = i0; i < i1; i++) if (envx[i] > pk) pk = envx[i];
+    const ref = []; for (let i = Math.max(0, i0 - Math.floor(sr / 4)); i < i1; i += 16) ref.push(envx[i]); if (pk < 4 * med(ref)) return null;
+    for (let i = i0; i < i1; i++) if (envx[i] >= .5 * pk) return i / sr; return null; };
+  for (const win of [.03, .02]) { const offs = []; for (let g = ph0; g < len / sr - .05; g += p) { const a = attack(g, win); if (a != null) offs.push(a - g); } if (offs.length >= 8) ph0 += med(offs); }
+  return ((ph0 % p) + p) % p;
+}
+/** Which beat (0..3) after the first beat is the downbeat: sections start on the "1" with big beat-to-beat energy
+ *  changes (drops count fully, rises half), and the first sounding beat earns a bonus (v8 tools/beatgrid.py). */
+export function downbeatOffset(a, b0, spb) {
+  const fr = a.fps, n = a.frames, E = [];
+  for (let t = b0; t + spb <= a.duration; t += spb) { const i0 = Math.max(0, Math.floor(t * fr)), i1 = Math.min(n, Math.floor((t + spb) * fr)); let s = 0; for (let i = i0; i < i1; i++) s += a.rmsRaw[i] * a.rmsRaw[i]; E.push(10 * Math.log10(s / Math.max(1, i1 - i0) + 1e-12)); }
+  if (E.length < 8) return 0;
+  const dE = E.slice(1).map((v, i) => v - E[i]), sorted = dE.map(Math.abs).sort((x, y) => x - y), thr = sorted[Math.floor(sorted.length * .95)] || 0, first = Math.max(0, E.findIndex(v => v > -50));
+  let best = 0, bs = -1; for (let off = 0; off < 4; off++) { let sc = 0; dE.forEach((d, i) => { if (Math.abs(d) >= thr && (i + 1) % 4 === off) sc += Math.abs(d) * (d < 0 ? 1 : .5); }); if (first % 4 === off) sc += 10; if (sc > bs) { bs = sc; best = off; } }
+  return best;
 }
 export function detectBpm(env, fr) {
   const nF = env.length, nUse = Math.min(nF, Math.round(fr * 150)), minL = Math.max(1, Math.floor(60 * fr / 185)), maxL = Math.ceil(60 * fr / 68), acN = maxL * 4 + 4, ac = new Float64Array(acN);
@@ -115,8 +167,10 @@ export function makeGrid(a, bpm, t0) {
   bpm = clamp(+bpm || 120, 40, 250); const spb = 60 / bpm, fr = a.fps, spbF = fr * spb, env = a.onsetEnv, n = a.frames, bar = 4 * spb;
   if (t0 == null) {
     let bp = 0, bs = -1; for (let ph = 0; ph < spbF; ph += .5) { let s = 0; for (let x = ph; x < n; x += spbF) s += env[Math.round(x)] || 0; if (s > bs) { bs = s; bp = ph; } }
-    let bj = 0, bjs = -1; for (let j = 0; j < 4; j++) { let s = 0; for (let x = bp + j * spbF; x < n; x += 4 * spbF) s += a.kickEnv[Math.round(x)] || 0; if (s > bjs) { bjs = s; bj = j; } }
-    t0 = (((bp + bj * spbF) / fr) % bar + bar) % bar;
+    // the sample-accurate phase from the analysis when this is the analysed tempo
+    let b0 = a.beatPhase != null && Math.abs(bpm - a.bpmDetected) < .005 ? a.beatPhase : bp / fr;
+    b0 = ((b0 % spb) + spb) % spb;
+    t0 = b0 + downbeatOffset(a, b0, spb) * spb;
   }
   t0 = ((t0 % bar) + bar) % bar;
   const nBars = Math.max(1, Math.floor((a.duration - t0) / bar + 1e-6));
