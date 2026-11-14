@@ -15,6 +15,10 @@
 import { makeFFT } from './dsp.js';
 import { kCoeffs } from '../export/audio.js';
 import { truePeakRange } from './truepeak.js';
+import { CLIP_LEVEL } from './stereo.js';
+import { stereoSpectra } from './msspec.js';
+import { polarLevels } from '../v8/meterlib.js';
+export const POLAR_N = 90;
 
 export const OCT6 = Array.from({ length: 61 }, (_, i) => 1000 * 2 ** ((i - 34) / 6));
 export const OCT1 = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
@@ -123,7 +127,7 @@ export function clipData({ L, R, sr, inT, bars, beat, fps = 30, target = -14, tp
   const plan1 = bandPlan(OCT1.map(f => [f / Math.SQRT2, f * Math.SQRT2]), df, nb), BANDS = [[20, 60], [60, 150], [150, 500], [500, 2000], [2000, 6000], [6000, 20000]].map(([lo, hi]) => [Math.ceil(lo / df - 1e-9), Math.min(nb, Math.ceil(hi / df - 1e-9))]);
   const lx = OCT1.map(f => Math.log2(f / 1000)), lxm = lx.reduce((a, b) => a + b) / lx.length, lxv = lx.reduce((a, b) => a + (b - lxm) ** 2, 0);
   const F = { M: new Float32Array(NF), S: new Float32Array(NF), I: new Float32Array(NF), LRA: new Float32Array(NF), TP: new Float32Array(NF), corr: new Float32Array(NF), width: new Float32Array(NF),
-    spec: new Float32Array(NF * 61), hold: new Float32Array(NF * 61), bal: new Float32Array(NF * 10), tilt: new Float32Array(NF), bands: new Float32Array(NF * 6) };
+    spec: new Float32Array(NF * 61), hold: new Float32Array(NF * 61), bal: new Float32Array(NF * 10), tilt: new Float32Array(NF), bands: new Float32Array(NF * 6), bandDb: new Float32Array(NF * 6) };
   const spectro = new Uint8Array(NF * SPEC_BINS), gonioS = new Int8Array(NF * GON), gonioM = new Int8Array(NF * GON), bandRaw = new Float64Array(NF * 6);
   const specS = new Float64Array(61).fill(-100), hold = new Float64Array(61).fill(-100), hage = new Float64Array(61), lv = new Float64Array(61), col = new Float64Array(SPEC_BINS), oc = new Float64Array(10);
   const r1 = v => Math.round(v * 10) / 10, fin = v => (Number.isFinite(v) ? r1(v) : -99);
@@ -154,6 +158,7 @@ export function clipData({ L, R, sr, inT, bars, beat, fps = 30, target = -14, tp
     if (progress && f % 120 === 0) progress(f / NF * .8);
   }
   for (let j = 0; j < 6; j++) { const col6 = []; for (let f = 0; f < NF; f++) col6.push(bandRaw[f * 6 + j]); col6.sort((a, b) => a - b); const p98 = percentile(col6, .98) || 1e-30;
+    for (let f = 0; f < NF; f++) F.bandDb[f * 6 + j] = Math.round(Math.max(-120, pdb(bandRaw[f * 6 + j])) * 10) / 10;
     for (let f = 0; f < NF; f++) F.bands[f * 6 + j] = Math.round(clampv(Math.sqrt(bandRaw[f * 6 + j] / p98), 0, 1.5) * 1000) / 1000; }
   // onsets on the clip, quantised to the 16th grid
   const q16 = beat / 4, ons = { kick: onsets(mono, sr, 30, 120, 1024, 128, false, .3, .2, dur, q16), snare: onsets(mono, sr, 1500, 5000, 1024, 128, true, .4, .2, dur, q16), hat: onsets(mono, sr, 7000, 16000, 512, 64, true, .35, .06, dur, q16) };
@@ -169,15 +174,29 @@ export function clipData({ L, R, sr, inT, bars, beat, fps = 30, target = -14, tp
   // 8 kHz L/R scope stream (every sample of the scope rate, Int16, 1/16384 per step): the stereo scope plots all of them
   const dec = Math.max(1, Math.round(sr / 8000)), ns = Math.floor(n / dec), scL = new Int16Array(ns), scR = new Int16Array(ns);
   for (let i = 0; i < ns; i++) { scL[i] = clampv(Math.round(cL[i * dec] * 16384), -32767, 32767); scR[i] = clampv(Math.round(cR[i * dec] * 16384), -32767, 32767); }
+  // polar level: per frame, energy per 2° sector of the scope samples (dB re the frame's sample count)
+  const polar = new Float32Array(NF * POLAR_N), pv = new Float32Array(POLAR_N), srate = sr / dec;
+  for (let f = 1; f < NF; f++) { const e = Math.min(ns, Math.floor(f * dt * srate)), a = Math.max(0, e - Math.round(srate * dt)); polarLevels(scL, scR, a, e, POLAR_N, pv, 1 / 16384); for (let j = 0; j < POLAR_N; j++) polar[f * POLAR_N + j] = Math.round(pv[j] * 10) / 10; }
+  polar.fill(-150, 0, POLAR_N);
+  // level meters: 1 ms blocks of sample peak, mean square and clip flags (2+ consecutive samples at full scale)
+  const LR = 1000, nLv = Math.floor(n * LR / sr), lev = { rate: LR, n: nLv, pkL: new Float32Array(nLv), pkR: new Float32Array(nLv), msL: new Float32Array(nLv), msR: new Float32Array(nLv), clipL: new Uint8Array(nLv), clipR: new Uint8Array(nLv) };
+  [[cL, lev.pkL, lev.msL, lev.clipL], [cR, lev.pkR, lev.msR, lev.clipR]].forEach(([ch, PK, MS, CLP]) => { let run = 0;
+    for (let b = 0; b < nLv; b++) { const a = Math.round(b * sr / LR), e = Math.round((b + 1) * sr / LR); let p = 0, q = 0;
+      for (let i = a; i < e; i++) { const v = Math.abs(ch[i]); if (v > p) p = v; q += v * v; run = v >= CLIP_LEVEL ? run + 1 : 0; if (run >= 2) CLP[b] = 1; }
+      PK[b] = p; MS[b] = q / Math.max(1, e - a); } });
+  if (progress) progress(0.93);
+  const ms = stereoSpectra({ L: cL, R: cR, sr, NF, fps, bars, barLen: Math.round(BAR * sr) });
   let tpMax = 0; for (let b = 0; b < nTB; b++) tpMax = Math.max(tpMax, tpRun[b]);
   const summary = { I: Math.round(LO.integrated() * 100) / 100, LRA: Math.round(LO.lra() * 100) / 100, TP: Math.round(20 * Math.log10(tpMax || 1e-12) * 100) / 100, gainDb: Math.round(gainDb * 100) / 100 };
   if (progress) progress(1);
   return { fps, frames: NF, duration: dur, bars, beat, bpm: 60 / beat, inT, frame: F, oct6: OCT6.map(v => Math.round(v * 100) / 100), oct1: OCT1, bandNames: BAND_NAMES,
-    spectroBins: SPEC_BINS, spectro, gonioN: GON, gonioS, gonioM, scope: { rate: sr / dec, scale: 1 / 16384, L: scL, R: scR }, onsets: ons, wave: { cps: CPS, tone }, wave2: { cps: CPS2, n: cols2, data: w2 }, summary };
+    spectroBins: SPEC_BINS, spectro, gonioN: GON, gonioS, gonioM, scope: { rate: sr / dec, scale: 1 / 16384, L: scL, R: scR }, polar, polarN: POLAR_N, lv: lev, ms, onsets: ons, wave: { cps: CPS, tone }, wave2: { cps: CPS2, n: cols2, data: w2 }, summary };
 }
 
 /** Typed arrays of a clipData result, for postMessage transfer lists. */
 export function transferables(d) {
-  const t = [d.spectro.buffer, d.gonioS.buffer, d.gonioM.buffer, d.scope.L.buffer, d.scope.R.buffer, d.wave.tone.buffer, d.wave2.data.buffer];
+  const t = [d.spectro.buffer, d.gonioS.buffer, d.gonioM.buffer, d.scope.L.buffer, d.scope.R.buffer, d.polar.buffer, d.wave.tone.buffer, d.wave2.data.buffer];
+  for (const k of ['pkL', 'pkR', 'msL', 'msR', 'clipL', 'clipR']) t.push(d.lv[k].buffer);
+  for (const k of ['spectroM', 'spectroS', 'widthSpec', 'bandWidth', 'anSpec', 'ltas']) t.push(d.ms[k].buffer);
   for (const k in d.frame) t.push(d.frame[k].buffer); return t;
 }

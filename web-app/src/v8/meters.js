@@ -220,73 +220,147 @@ export function createMeters(L) {
     ctx.restore();
   };
 
-  // ---------------------------------------------------------------- SPECTROGRAM: LUT, alpha v^0.56, 8 s window
+  // ---------------------------------------------------------------- SPECTROGRAM: stacked M and S panes, one LUT, one dB scale
+  // M = (L+R)/2 and S = (L-R)/2 band power from the L/R hop STFT (analysis/msspec.js). Both panes share the floor and
+  // the ceiling (0 dBFS), so S honestly reads darker than M; a mono mix leaves the S pane empty.
   const specCache = {};
-  M8.spectro = (ctx, S, r, t, k) => {
-    const [x, y, w, h0] = r, n = D.spectroBins, gam = L.meter('spectro', 'gamma', 0.56), key = [S.spec.join(), S.ink, S.card, S.grey, gam].join('|'), h = h0 - 30; reveal(ctx, x, y, w, h0, k);
-    if (!specCache[key]) { const ks = Object.keys(specCache); if (ks.length > 6) delete specCache[ks[0]];
-      const hx = (v) => [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
-      const A = hx(S.spec[1]), B = hx(S.spec[2]), C = hx(S.spec[3]), I = hx(S.ink), P0 = hx(S.card), mid = 0.52, LUT = [];
-      for (let i = 0; i < 256; i++) {
-        const v = i / 255; let col;
-        if (v < 0.18) col = P0.map((c0, j) => lerp(c0, A[j], v / 0.18)); else if (v < mid) col = A.map((c0, j) => lerp(c0, B[j], (v - 0.18) / (mid - 0.18))); else col = B.map((c0, j) => lerp(c0, C[j], (v - mid) / (1 - mid)));
-        if (v > 0.76) col = col.map((c0, j) => lerp(c0, I[j], 0.18 * (v - 0.76) / 0.24));
-        if (S.grey) { const g = Math.round((col[0] + col[1] + col[2]) / 3); col = [g, g, g]; }
-        LUT.push([...col.map(Math.round), v < 0.015 ? 0 : 255 * Math.pow(v, gam)]);
-      }
-      const c = document.createElement('canvas'); c.width = NF; c.height = n; const g = c.getContext('2d'), im = g.createImageData(NF, n);
-      for (let f = 0; f < NF; f++) for (let b = 0; b < n; b++) {
-        const db = L.SPECTRO[f * n + b] / 255 * 100 - 100, q = LUT[Math.round(clamp((db + 90) / 90) * 255)], o4 = ((n - 1 - b) * NF + f) * 4;
-        im.data[o4] = q[0]; im.data[o4 + 1] = q[1]; im.data[o4 + 2] = q[2]; im.data[o4 + 3] = q[3];
-      }
-      g.putImageData(im, 0, 0); specCache[key] = c;
+  const hx3 = (v) => [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
+  function specLUT(S, gam) {
+    const A = hx3(S.spec[1]), B = hx3(S.spec[2]), C = hx3(S.spec[3]), I = hx3(S.ink), P0 = hx3(S.card), mid = 0.52, LUT = [];
+    for (let i = 0; i < 256; i++) {
+      const v = i / 255; let col;
+      if (v < 0.18) col = P0.map((c0, j) => lerp(c0, A[j], v / 0.18)); else if (v < mid) col = A.map((c0, j) => lerp(c0, B[j], (v - 0.18) / (mid - 0.18))); else col = B.map((c0, j) => lerp(c0, C[j], (v - mid) / (1 - mid)));
+      if (v > 0.76) col = col.map((c0, j) => lerp(c0, I[j], 0.18 * (v - 0.76) / 0.24));
+      if (S.grey) { const g = Math.round((col[0] + col[1] + col[2]) / 3); col = [g, g, g]; }
+      LUT.push([...col.map(Math.round), v < 0.015 ? 0 : 255 * Math.pow(v, gam)]);
     }
-    const WIN = L.meter('spectro', 'window', 8), f = fidx(t), span = Math.round(WIN * FPS), f0 = f - span, sx = Math.max(0, f0), sw = f + 1 - sx, dx = x + w * (sx - f0) / span;
-    ctx.fillStyle = S.card; ctx.fillRect(x, y, w, h);
-    ctx.imageSmoothingEnabled = true; if (sw > 0) ctx.drawImage(specCache[key], sx, 0, sw, n, dx, y, x + w - dx, h);
-    for (const [s, fq] of [['10k', 10000], ['1k', 1000], ['100', 100]]) { const Yy = Math.round(y + h * (1 - Math.log(fq / 20) / Math.log(1000))) + 0.5; ctx.strokeStyle = rgba(S.ink, 0.16); ctx.beginPath(); ctx.moveTo(x, Yy); ctx.lineTo(x + w, Yy); ctx.stroke(); lbl(ctx, S, s, x + w - 4, Yy - 13, { align: 'right', a: 0.7 }); }
-    for (let b = Math.ceil((t - WIN) / BAR); b * BAR <= t; b++) { const X = x + w * (b * BAR - (t - WIN)) / WIN; if (X < x + 20) continue; ctx.fillStyle = rgba(S.ink, 0.4); ctx.fillRect(Math.round(X), y + h, 1, 8); if (b % 2 === 0 && X < x + w - 80) lbl(ctx, S, String(D.song.startBar + b), X + 4, y + h + 16, { a: 0.55 }); }
+    return LUT;
+  }
+  function specImage(src, n, LUT, floor) {
+    const c = document.createElement('canvas'); c.width = NF; c.height = n; const g = c.getContext('2d'), im = g.createImageData(NF, n);
+    for (let f = 0; f < NF; f++) for (let b = 0; b < n; b++) {
+      const db = src[f * n + b] / 255 * 100 - 100, q = LUT[Math.round(clamp((db + floor) / floor) * 255)], o4 = ((n - 1 - b) * NF + f) * 4;
+      im.data[o4] = q[0]; im.data[o4 + 1] = q[1]; im.data[o4 + 2] = q[2]; im.data[o4 + 3] = q[3];
+    }
+    g.putImageData(im, 0, 0); return c;
+  }
+  M8.spectro = (ctx, S, r, t, k) => {
+    const [x, y, w, h0] = r, MS = D.ms, n = 128, gam = L.meter('spectro', 'gamma', 0.56), floor = L.meter('spectro', 'range', 90), mode = L.meter('spectro', 'mode', 'ms'), h = h0 - 30; reveal(ctx, x, y, w, h0, k);
+    const key = [S.spec.join(), S.ink, S.card, S.grey, gam, floor].join('|');
+    if (!specCache[key]) { const ks = Object.keys(specCache); if (ks.length > 6) delete specCache[ks[0]]; const LUT = specLUT(S, gam); specCache[key] = { M: specImage(MS.spectroM, n, LUT, floor), S: specImage(MS.spectroS, n, LUT, floor) }; }
+    const img = specCache[key], WIN = L.meter('spectro', 'window', 8), f = fidx(t), span = Math.round(WIN * FPS), f0 = f - span, sx = Math.max(0, f0), sw = f + 1 - sx;
+    const panes = mode === 'm' ? [['M', img.M, y, h]] : [['M', img.M, y, (h - 2) / 2], ['S', img.S, y + (h - 2) / 2 + 2, (h - 2) / 2]];
+    for (const [nm, im, py, ph] of panes) {
+      const dx = x + w * (sx - f0) / span;
+      ctx.fillStyle = S.card; ctx.fillRect(x, py, w, ph);
+      ctx.imageSmoothingEnabled = true; if (sw > 0) ctx.drawImage(im, sx, 0, sw, n, dx, py, x + w - dx, ph);
+      for (const fq of [100, 1000, 10000]) { const Yy = Math.round(py + ph * (1 - Math.log(fq / 20) / Math.log(1000))) + 0.5; ctx.strokeStyle = rgba(S.ink, 0.14); ctx.beginPath(); ctx.moveTo(x, Yy); ctx.lineTo(x + w, Yy); ctx.stroke(); }
+      lbl(ctx, S, nm, x + 8, py + 13, { size: 18, w: 700, a: 0.8 });
+      if (nm === 'M') for (const [s, fq] of [['1k', 1000], ['100', 100]]) lbl(ctx, S, s, x + w - 4, Math.round(py + ph * (1 - Math.log(fq / 20) / Math.log(1000))) + 12, { size: 16, align: 'right', a: 0.6 });
+    }
+    for (let b = Math.ceil((t - WIN) / BAR); b * BAR <= t; b++) { const X = x + w * (b * BAR - (t - WIN)) / WIN; if (X < x + 20) continue; ctx.fillStyle = rgba(S.ink, 0.4); ctx.fillRect(Math.round(X), y + h, 1, 8); if (b % 2 === 0 && X < x + w - 120) lbl(ctx, S, String(D.song.startBar + b), X + 4, y + h + 16, { a: 0.55 }); }
     lbl(ctx, S, 'now', x + w, y + h + 16, { align: 'right', a: 0.7 });
     ctx.restore();
   };
 
-  // ---------------------------------------------------------------- STEREO: M/S density scope, 0.42 s persistence + correlation
-  M8.stereo = (ctx, S, r, t, k) => {
+  // ---------------------------------------------------------------- IMAGER: vectorscope (polar sample / polar level / Lissajous),
+  // vertical correlation bar, balance bar, per-band width numerics and the mirrored per-frequency width strip.
+  // Original layout and colours (stage palettes); the measurement grammar follows a free imaging plug-in's manual.
+  const IMG = { NIGREDO: ['#8a8a8a', '#ffffff', '#ffffff', '#c8c8c8'], ALBEDO: ['#6e4433', '#1a1917', '#1a1917', '#a8432e'], CITRINITAS: ['#6e4433', '#f0d79a', '#f0d79a', '#e0475f'], RUBEDO: ['#5a1020', '#ff9be0', '#a35cf0', '#e0475f'] };
+  const imgCols = (S) => { const p = IMG[S.name] || [S.sig1, S.ink, S.ink, S.hot]; return { lo: p[0], hi: p[1], mid: p[2], neg: S.grey ? '#c8c8c8' : S.hot === p[3] ? p[3] : S.hot }; };
+  function hatch(ctx, x, y, w, h, col) { ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.beginPath(); for (let d = -h; d < w + h; d += 4) { ctx.moveTo(x + d, y + h); ctx.lineTo(x + d + h, y); } ctx.stroke(); ctx.restore(); }
+  const GD = 320;
+  function splat(dens, X, Y, wgt) {   // X, Y in 0..GD-2 (bilinear splat)
+    const ix = Math.min(GD - 2, Math.max(0, Math.floor(X))), iy = Math.min(GD - 2, Math.max(0, Math.floor(Y))), fx = clamp(X - ix), fy = clamp(Y - iy);
+    dens[iy * GD + ix] += wgt * (1 - fx) * (1 - fy); dens[iy * GD + ix + 1] += wgt * fx * (1 - fy); dens[(iy + 1) * GD + ix] += wgt * (1 - fx) * fy; dens[(iy + 1) * GD + ix + 1] += wgt * fx * fy;
+  }
+  function densImage(dens, C, rows) {
+    const oc = M8._oc || (M8._oc = document.createElement('canvas')); oc.width = GD; oc.height = rows; const og = oc.getContext('2d'), im = og.createImageData(GD, rows), a = hx3(C.lo), b = hx3(C.hi);
+    for (let j = 1; j < rows - 1; j++) for (let i = 1; i < GD - 1; i++) {
+      const d = dens[j * GD + i]; if (d <= 0) continue; const nb = dens[j * GD + i - 1] + dens[j * GD + i + 1] + dens[(j - 1) * GD + i] + dens[(j + 1) * GD + i];
+      const al = 1 - Math.exp(-(d + 0.085 * nb) * 1.36), o4 = (j * GD + i) * 4, m = clamp(d * 0.5);
+      im.data[o4] = lerp(a[0], b[0], m); im.data[o4 + 1] = lerp(a[1], b[1], m); im.data[o4 + 2] = lerp(a[2], b[2], m); im.data[o4 + 3] = 255 * al;
+    }
+    og.putImageData(im, 0, 0); return oc;
+  }
+  M8.imager = (ctx, S, r, t, k) => {
     const [x0, y0, w, h] = r; reveal(ctx, x0, y0, w, h, k);
-    const f = fidx(t), N = D.gonioN, G = 200, R = Math.min(w * 0.46, (h - 90) * 0.95), cx = x0 + w / 2, cy = y0 + R + 30;
-    const dens = new Float32Array(G * G), Tp = Math.max(1 / FPS, L.meter('stereo', 'persist', 0.42)), gain = L.meter('stereo', 'gain', 1), keep = Math.round(Tp * FPS);
-    for (let back = 0; back <= keep; back++) {
-      const ff = f - back; if (ff < 0) break; const age = back / FPS, wgt = Math.exp(-age / (0.31 * Tp)) * (1 - age / Tp);
-      const [a0, a1] = scopeSpan(ff);
-      for (let i = a0; i < a1; i++) {
-        // +s = right; negative mid is point-reflected (m, s) -> (-m, -s), never abs(m): one-sided content stays one-sided
-        const p = ML.polarSample(SC.L[i] * SC.scale * gain, SC.R[i] * SC.scale * gain, 40); if (!p) continue;
-        const gx = (p[0] * 0.5 + 0.5) * (G - 2), gy = (1 - p[1]) * (G - 2), ix = Math.min(G - 2, Math.floor(gx)), iy = Math.min(G - 2, Math.floor(gy)), fx = gx - ix, fy = gy - iy;
-        dens[iy * G + ix] += wgt * (1 - fx) * (1 - fy); dens[iy * G + ix + 1] += wgt * fx * (1 - fy); dens[(iy + 1) * G + ix] += wgt * (1 - fx) * fy; dens[(iy + 1) * G + ix + 1] += wgt * fx * fy;
-      }
+    const f = fidx(t), tf = tickF(t), C = imgCols(S), mode = L.meter('stereo', 'mode', 'sample'), range = L.meter('stereo', 'range', 40), gain = L.meter('stereo', 'gain', 1);
+    const stripH = Math.round(clamp(h * 0.25, 54, 110)), barW = 8, corrX = x0 + w - 44, top = y0 + 34, scopeBot = y0 + h - stripH - 34;
+    const R = Math.max(30, Math.min((corrX - 30 - x0) / 2 - 6, scopeBot - top)), cx = x0 + (corrX - 24 - x0) / 2 + 4, cy = top + R;
+    // grid: half-disc (sample / level) or rotated square (Lissajous), ±45° safe lines, centre tick
+    ctx.strokeStyle = rgba(S.ink, 0.2); ctx.lineWidth = 1;
+    if (mode === 'lissajous') {
+      const q = R * 0.5, mx = cx, my = cy - R * 0.5;
+      ctx.beginPath(); ctx.moveTo(mx, my - q * 1.0); ctx.lineTo(mx + q, my); ctx.lineTo(mx, my + q); ctx.lineTo(mx - q, my); ctx.closePath(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx - q / 2, my - q / 2); ctx.lineTo(mx + q / 2, my + q / 2); ctx.moveTo(mx + q / 2, my - q / 2); ctx.lineTo(mx - q / 2, my + q / 2); ctx.moveTo(mx, my - q); ctx.lineTo(mx, my + q); ctx.stroke();
+      lbl(ctx, S, 'L', mx - q / 2 - 12, my - q / 2 - 10, { size: 18, align: 'center', a: 0.7 }); lbl(ctx, S, 'R', mx + q / 2 + 12, my - q / 2 - 10, { size: 18, align: 'center', a: 0.7 });
+    } else {
+      ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, 2 * Math.PI); ctx.stroke();
+      ctx.beginPath(); for (const a of [-Math.PI / 4, Math.PI / 4]) { ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(a) * R, cy - Math.cos(a) * R); } ctx.stroke();
+      ctx.strokeStyle = rgba(S.ink, 0.35); ctx.beginPath(); ctx.moveTo(cx - R, cr(cy)); ctx.lineTo(cx + R, cr(cy)); ctx.moveTo(cr(cx), cy); ctx.lineTo(cr(cx), cy - 6); ctx.stroke();
+      ctx.strokeStyle = rgba(S.ink, 0.1); ctx.beginPath(); ctx.arc(cx, cy, R * 0.5, Math.PI, 2 * Math.PI); ctx.stroke();   // -range/2 dB ring
+      lbl(ctx, S, 'L', cx - R - 4, cy - 12, { size: 18, align: 'right', a: 0.7 }); lbl(ctx, S, 'R', cx + R + 4, cy - 12, { size: 18, a: 0.7 });
     }
-    const oc = M8._oc || (M8._oc = document.createElement('canvas')); oc.width = G; oc.height = G; const og = oc.getContext('2d'), im = og.createImageData(G, G);
-    const hx = (v) => [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)], c1 = hx(S.ink), c2 = hx(S.sig1);
-    for (let j = 1; j < G - 1; j++) for (let i = 1; i < G - 1; i++) {
-      const d = dens[j * G + i], nb = dens[j * G + i - 1] + dens[j * G + i + 1] + dens[(j - 1) * G + i] + dens[(j + 1) * G + i];
-      const a = 1 - Math.exp(-(d + 0.085 * nb) * 1.36), o4 = (j * G + i) * 4, m = clamp(d * 0.6);
-      im.data[o4] = lerp(c2[0], c1[0], m); im.data[o4 + 1] = lerp(c2[1], c1[1], m); im.data[o4 + 2] = lerp(c2[2], c1[2], m); im.data[o4 + 3] = 255 * a;
+    // clipped samples in this frame: the rim lights in the over colour
+    let clip = false; { const lv = D.lv, b1 = Math.min(lv.n, Math.floor(f / FPS * lv.rate)), b0 = Math.max(0, b1 - Math.round(lv.rate / FPS)); for (let b = b0; b < b1; b++) if (lv.clipL[b] || lv.clipR[b]) clip = true; }
+    if (clip && mode !== 'lissajous') { ctx.strokeStyle = C.neg; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, 2 * Math.PI); ctx.stroke(); ctx.lineWidth = 1; }
+    if (mode === 'level') {
+      // rays of per-sector level: fill (instant attack, release `smoothing` dB/s) + outline (hold, 3 dB/s)
+      const PN = D.polarN, rel = L.meter('stereo', 'smoothing', 12), hold = L.meter('stereo', 'hold', 0.5), rho = (db) => clamp(1 + db / range, 0, 1);
+      const fill = [], out = [];
+      for (let j = 0; j < PN; j++) { const g = (ff) => D.polar[ff * PN + j] + 20 * Math.log10(gain); fill.push(rho(ML.releaseAt(g, f, FPS, rel, -range - 1))); out.push(rho(ML.releaseAt(g, f, FPS, 3, -range - 1, hold))); }
+      const P = (j, v) => { const th = -Math.PI / 2 + (j + 0.5) / PN * Math.PI; return [cx + R * v * Math.sin(th), cy - R * v * Math.cos(th)]; };
+      ctx.beginPath(); ctx.moveTo(cx, cy); for (let j = 0; j < PN; j++) { const p = P(j, fill[j]); ctx.lineTo(p[0], p[1]); } ctx.closePath(); ctx.fillStyle = rgba(C.mid, 0.55); ctx.fill();
+      for (let j = 0; j < PN; j += 1) if (fill[j] > 0.02) { const p = P(j, fill[j]); ctx.strokeStyle = rgba(C.hi, 0.5); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(p[0], p[1]); ctx.stroke(); }
+      ctx.beginPath(); for (let j = 0; j < PN; j++) { const p = P(j, out[j]); j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); } ctx.strokeStyle = rgba(C.hi, 0.95); ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.stroke(); ctx.lineWidth = 1;
+    } else {
+      // dots: every 8 kHz sample of the last `persist` s, weight exp(-age/(0.31 T))·(1 - age/T), splatted into a density
+      const dens = M8._dens || (M8._dens = new Float32Array(GD * GD)); dens.fill(0);
+      const Tp = Math.max(1 / FPS, L.meter('stereo', 'persist', 0.42)), keep = Math.round(Tp * FPS), liss = mode === 'lissajous', sc = SC.scale * gain;
+      let g = 1; if (liss) { const peakAt = (ff) => { const [a0, a1] = scopeSpan(ff); let m = 0; for (let i = a0; i < a1; i++) m = Math.max(m, Math.abs(SC.L[i]), Math.abs(SC.R[i])); return 20 * Math.log10(Math.max(1e-6, m * sc)); };
+        g = 0.9 / Math.max(0.075, 10 ** (ML.releaseAt(peakAt, f, FPS, 6, -24) / 20)); }
+      const rows = liss ? GD : GD / 2;
+      for (let back = 0; back <= keep; back++) { const ff = f - back; if (ff < 0) break; const age = back / FPS, wgt = Math.exp(-age / (0.31 * Tp)) * (1 - age / Tp); if (wgt <= 0) continue; const [a0, a1] = scopeSpan(ff);
+        for (let i = a0; i < a1; i++) { const l = SC.L[i] * sc, rr = SC.R[i] * sc;
+          if (liss) { const [X, Y] = ML.lissajous(l, rr, g * 0.5); splat(dens, (X + 0.5) * (GD - 2), (0.5 - Y) * (GD - 2), wgt); }
+          else { const p = ML.polarSample(l, rr, range); if (p) splat(dens, (p[0] * 0.5 + 0.5) * (GD - 2), (1 - p[1]) * (rows - 2), wgt); } } }
+      const oc = densImage(dens, C, rows); ctx.imageSmoothingEnabled = true;
+      if (liss) ctx.drawImage(oc, 0, 0, GD, GD, cx - R * 0.5, cy - R, R, R);
+      else ctx.drawImage(oc, 0, 0, GD, GD / 2, cx - R, cy - R, 2 * R, R);
     }
-    og.putImageData(im, 0, 0);
-    ctx.strokeStyle = rgba(S.ink, 0.2); ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, 2 * Math.PI); ctx.stroke();
-    for (const a of [Math.PI * 1.25, Math.PI * 1.5, Math.PI * 1.75]) { ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke(); }
-    ctx.beginPath(); ctx.moveTo(cx - R, cy + 0.5); ctx.lineTo(cx + R, cy + 0.5); ctx.stroke();
-    ctx.imageSmoothingEnabled = true; ctx.drawImage(oc, cx - R, cy - R, 2 * R, R);
-    lbl(ctx, S, 'M', cx, cy - R - 14, { align: 'center', a: 0.8, w: 700 }); lbl(ctx, S, 'L', cx - R * 0.8, cy - R * 0.8, { align: 'center', a: 0.6 }); lbl(ctx, S, 'R', cx + R * 0.8, cy - R * 0.8, { align: 'center', a: 0.6 });
-    const c = F.corr[tickF(t)], by = y0 + h - 18, bx = x0 + 34, bw = w - 68, X = (v) => bx + bw * (v + 1) / 2;
-    ctx.fillStyle = rgba(S.ink, 0.4); ctx.fillRect(Math.round(bx), Math.round(by), Math.round(bw), 1);
-    for (const v of [-1, 0, 1]) ctx.fillRect(Math.round(X(v)), Math.round(by - 6), 1, 12);
-    ctx.fillStyle = c < 0 ? S.hot : S.ink; ctx.fillRect(Math.round(Math.min(X(0), X(F.corr[f]))), Math.round(by - 2), Math.round(Math.abs(X(F.corr[f]) - X(0))), 5);
-    ctx.strokeStyle = S.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X(F.corr[f]), by + 0.5, 7, 0, 7); ctx.stroke(); ctx.lineWidth = 1;
-    lbl(ctx, S, '−1', bx - 6, by, { align: 'right', a: 0.55 }); lbl(ctx, S, '+1', bx + bw + 6, by, { a: 0.55 });
-    lbl(ctx, S, `corr ${c >= 0 ? '+' : '−'}${Math.abs(c).toFixed(2)}`, x0 + w, by - 30, { align: 'right', a: 0.95 });
-    lbl(ctx, S, `w ${F.width[tickF(t)].toFixed(2)}`, x0, by - 30, { a: 0.7 });
+    lbl(ctx, S, { sample: 'POLAR SAMPLE', level: 'POLAR LEVEL', lissajous: 'LISSAJOUS' }[mode] || 'POLAR SAMPLE', x0 + 6, y0 + 14, { size: 18, a: 0.6 });
+    // vertical correlation bar: +1 top, 0 mid, -1 bottom; fill 0 -> value, marker 8x2
+    const c1 = top, c2 = scopeBot, cyM = (c1 + c2) / 2, Yc = (v) => cyM - (c2 - c1) / 2 * clamp(v, -1, 1), cv = F.corr[f];
+    ctx.fillStyle = rgba(S.ink, 0.35); ctx.fillRect(corrX + barW / 2, c1, 1, c2 - c1);
+    for (const v of [1, 0, -1]) ctx.fillRect(corrX + barW / 2 - 3, Math.round(Yc(v)), 7, 1);
+    const fy0 = Math.min(Yc(0), Yc(cv)), fh = Math.abs(Yc(cv) - Yc(0));
+    if (cv >= 0) { ctx.fillStyle = rgba(C.mid, 0.9); ctx.fillRect(corrX, fy0, barW, fh); } else if (S.grey) hatch(ctx, corrX, fy0, barW, fh, C.neg); else { ctx.fillStyle = C.neg; ctx.fillRect(corrX, fy0, barW, fh); }
+    ctx.fillStyle = cv < 0 ? C.neg : S.ink; ctx.fillRect(corrX - 2, Math.round(Yc(cv)) - 1, barW + 4, 2);
+    lbl(ctx, S, '+1', corrX + barW + 4, c1 + 4, { size: 15, a: 0.5 }); lbl(ctx, S, '0', corrX + barW + 4, cyM, { size: 15, a: 0.5 }); lbl(ctx, S, '−1', corrX + barW + 4, c2 - 4, { size: 15, a: 0.5 });
+    const ct = F.corr[tf]; lbl(ctx, S, `${ct >= 0 ? '+' : '−'}${Math.abs(ct).toFixed(2)}`, x0 + w - 2, scopeBot + 18, { size: 18, align: 'right', a: 0.95, col: ct < 0 ? C.neg : S.ink });
+    // balance bar under the scope: ±6 dB, 3 s window, negative = left louder
+    const bx = x0 + 58, bw = corrX - 70 - bx, by = scopeBot + 16, bal = ML.balanceAt(D.lv, f / FPS, 3), Xb = (v) => bx + bw * (clamp(v, -6, 6) + 6) / 12;
+    ctx.fillStyle = rgba(S.ink, 0.12); ctx.fillRect(bx, by, bw, 4); ctx.fillStyle = rgba(S.ink, 0.5); ctx.fillRect(Math.round(Xb(0)), by - 3, 1, 10);
+    ctx.fillStyle = rgba(C.mid, 0.9); ctx.fillRect(Math.min(Xb(0), Xb(bal)), by, Math.abs(Xb(bal) - Xb(0)), 4); ctx.fillStyle = S.ink; ctx.fillRect(Math.round(Xb(bal)) - 1, by - 3, 2, 10);
+    lbl(ctx, S, 'BAL', x0 + 6, by + 2, { size: 15, a: 0.6 }); lbl(ctx, S, 'L', bx - 2, by + 16, { size: 13, a: 0.4 }); lbl(ctx, S, 'R', bx + bw + 2, by + 16, { size: 13, a: 0.4, align: 'right' });
+    M8.widthStrip(ctx, S, [x0, y0 + h - stripH, w, stripH], t, C);
     ctx.restore();
+  };
+  M8.stereo = M8.imager;
+  // mirrored per-frequency width W(f) = PS/(PM+PS) about a centre line (a mono mix is a flat line), log f 20 Hz..20 kHz,
+  // crossover splits at the analysis bands with per-band width % (ticked on the half beat)
+  M8.widthStrip = (ctx, S, r, t, C = imgCols(S)) => {
+    const [x, y, w, h] = r, MS = D.ms, nW = MS.wBins, f = fidx(t), tf = tickF(t), cy = y + h * 0.42, hh = h * 0.36, Xf = (fq) => x + w * Math.log(fq / 20) / Math.log(1000);
+    ctx.fillStyle = rgba(S.ink, 0.05); ctx.fillRect(x, y, w, h * 0.84); ctx.fillStyle = rgba(S.ink, 0.35); ctx.fillRect(x, Math.round(cy), w, 1);
+    const pts = []; for (let j = 0; j < nW; j++) pts.push([Xf(20 * 1000 ** ((j + 0.5) / nW)), MS.widthSpec[f * nW + j] / 255]);
+    ctx.beginPath(); pts.forEach(([X, v], i) => (i ? ctx.lineTo(X, cy - v * hh) : ctx.moveTo(X, cy - v * hh))); for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(pts[i][0], cy + pts[i][1] * hh); ctx.closePath();
+    ctx.fillStyle = rgba(C.mid, 0.35); ctx.fill(); ctx.strokeStyle = S.ink; ctx.lineWidth = 1.25; ctx.lineJoin = 'round'; ctx.stroke(); ctx.lineWidth = 1;
+    const xo = MS.xover, edges = [20, ...xo, 20000];
+    ctx.strokeStyle = rgba(S.ink, 0.4); ctx.setLineDash([2, 3]); ctx.beginPath(); for (const fq of xo) { const X = cr(Xf(fq)); ctx.moveTo(X, y); ctx.lineTo(X, y + h * 0.84); } ctx.stroke(); ctx.setLineDash([]);
+    for (let b = 0; b < 4; b++) { const xa = Xf(edges[b]), xb = Xf(edges[b + 1]), v = MS.bandWidth[tf * 4 + b];
+      lbl(ctx, S, `${Math.round(v)}%`, (xa + xb) / 2, y + h - 10, { size: 16, align: 'center', a: 0.9, maxW: xb - xa - 6 }); }
+    lbl(ctx, S, 'W', x + 4, y + 12, { size: 14, a: 0.55 });
   };
 
   // ---------------------------------------------------------------- SCOPE: L/R traces, sample-accurate (wave2), triggered on the beat

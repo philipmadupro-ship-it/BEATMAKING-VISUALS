@@ -154,6 +154,33 @@ for (const [k, D] of Object.entries(synClip)) {
     ok('scope wide noise: fills both sides symmetrically (θ sd > 30°, |θ̄| < 5°)', sd(th) > 30 && Math.abs(mean(th)) < 5 && left > 0.4 && left < 0.6, `${info} · left ${(left * 100).toFixed(0)} %`); }
   if (k === 'hardL') { let wrong = 0, tot = 0; for (let i = 0; i < D.gonioS.length; i++) { if (D.gonioM[i] > 2) { tot++; if (D.gonioS[i] > 0) wrong++; } } ok('gonio points hard-L: side <= 0 where mid > 0 (+S = right)', tot > 100 && wrong === 0, `${wrong}/${tot} on the wrong side`); }
 }
+
+// ---- 7. imager: spectral M/S per bin, width per frequency / per band, polar level sectors, M/S spectrogram panes
+{ const fr = 30, mid = (D, n) => (a) => a.subarray(fr * n, fr * n + n), lvl = (v) => v / 2.55 - 100;
+  const W = (D) => [...mid(D, D.ms.wBins)(D.ms.widthSpec)].slice(8, 60).map((v) => v / 255), BW = (D) => [...mid(D, 4)(D.ms.bandWidth)];
+  const MSb = (D) => { const m = [...mid(D, 128)(D.ms.spectroM)].slice(40, 120).map(lvl), q = [...mid(D, 128)(D.ms.spectroS)].slice(40, 120).map(lvl); return [m.reduce((a, b) => a + b) / m.length, q.reduce((a, b) => a + b) / q.length]; };
+  const pol = (D) => { const p = [...D.polar.subarray(fr * 90, fr * 90 + 90)]; const j = p.indexOf(Math.max(...p)); return [j, p]; };
+  const m = synClip.mono, hl = synClip.hardL, hr = synClip.hardR, an = synClip.anti, wd = synClip.wide;
+  ok('imager mono: S = 0 per bin (W = 0, band width 0 %, S pane at the floor)', W(m).every((v) => v === 0) && BW(m).every((v) => v === 0) && MSb(m)[1] <= -99, `W max ${Math.max(...W(m)).toFixed(2)} · bands ${BW(m).join('/')} · M ${MSb(m)[0].toFixed(1)} S ${MSb(m)[1].toFixed(1)} dB`);
+  ok('imager hard-L: M = S per bin (W = 0.5, band width 100 %)', W(hl).every((v) => Math.abs(v - 0.5) < 0.01) && BW(hl).every((v) => Math.abs(v - 100) < 1) && Math.abs(MSb(hl)[0] - MSb(hl)[1]) < 0.5, `W ${Math.min(...W(hl)).toFixed(3)}..${Math.max(...W(hl)).toFixed(3)} · bands ${BW(hl).join('/')} · M ${MSb(hl)[0].toFixed(1)} S ${MSb(hl)[1].toFixed(1)}`);
+  ok('imager hard-L vs mono: M and S each -6 dB', Math.abs(MSb(m)[0] - MSb(hl)[0] - 6.02) < 0.3, `mono M ${MSb(m)[0].toFixed(2)} · hard-L M ${MSb(hl)[0].toFixed(2)} S ${MSb(hl)[1].toFixed(2)} dB`);
+  ok('imager anti-phase: M = 0 per bin (W = 1, M pane at the floor)', W(an).every((v) => v === 1) && MSb(an)[0] <= -99 && BW(an).every((v) => v >= 999), `W min ${Math.min(...W(an)).toFixed(2)} · M ${MSb(an)[0].toFixed(1)} S ${MSb(an)[1].toFixed(1)} dB`);
+  const wW = W(wd), wMean = wW.reduce((a, b) => a + b) / wW.length;
+  ok('imager wide (uncorrelated) noise: W ≈ 0.5, band width ≈ 100 %', Math.abs(wMean - 0.5) < 0.05 && BW(wd).every((v) => Math.abs(v - 100) < 15), `W mean ${wMean.toFixed(3)} · bands ${BW(wd).join('/')}`);
+  const [jm] = pol(m), [jl] = pol(hl), [jr] = pol(hr), [, pa] = pol(an);
+  ok('polar level: mono -> centre sector, hard-L -> -45°, hard-R -> +45°, anti -> the ±90° edges', jm === 45 && jl === 22 && jr === 67 && Math.max(pa[0], pa[89]) > -20 && pa.slice(5, 85).every((v) => v <= -150), `sectors ${jm} / ${jl} / ${jr} · anti edges ${pa[0].toFixed(1)} ${pa[89].toFixed(1)}`);
+}
+// the real beat (if present): the imager responds to its stereo content (S present, width between mono and anti-phase)
+const BEAT = '/home/user/u2c-motion/audio/atelmansion-3c-fmin-128.wav';
+let realClip = null;
+if (fs.existsSync(BEAT)) {
+  const buf = readWav(BEAT), sr = buf.sampleRate, L0 = buf.getChannelData(0), R0 = buf.getChannelData(1), inT = 32 * 4 * 0.46875 + 0.00025;
+  realClip = clipData({ L: L0, R: R0, sr, inT, bars: 8, beat: 0.46875, target: -14 });
+  const D = realClip, ms = D.ms, nf = D.frames; let wS = 0, wN = 0, sAct = 0; const bw = [0, 0, 0, 0];
+  for (let f = 30; f < nf; f++) { for (let j = 0; j < ms.wBins; j++) { wS += ms.widthSpec[f * ms.wBins + j] / 255; wN++; } for (let b = 0; b < 4; b++) bw[b] += ms.bandWidth[f * 4 + b] / (nf - 30); for (let i = 0; i < 128; i++) if (ms.spectroS[f * 128 + i] > 100) sAct++; }
+  const sideOK = sAct > 0.05 * (nf - 30) * 128, wMean = wS / wN;
+  ok('real beat: imager shows real stereo (S pane active, 0.02 < W̄ < 0.5, low band narrowest)', sideOK && wMean > 0.02 && wMean < 0.5 && bw[0] < bw[2], `S active ${(100 * sAct / ((nf - 30) * 128)).toFixed(0)} % of cells · W̄ ${wMean.toFixed(3)} · band width ${bw.map((v) => v.toFixed(0) + '%').join(' / ')}`);
+}
 fs.writeFileSync(path.join(DIR, 'results.json'), JSON.stringify(table.map(({ k, A, F, N }) => ({ k, app: { peak: A.peak, rms: A.rms, lufs: A.lufs, tp: A.tp, corr: A.corr, clip: A.clip, eq: A.eq }, ffmpeg: F, numpy: N })), null, 1));
 const fails = results.filter(r => !r.pass).length;
 console.log(`\n${results.length - fails}/${results.length} passed · signals + results in ${DIR}`);
