@@ -82,7 +82,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     [7, () => 'eq', (r, cr, t, n, Sx) => { lab.hand(c, tag('notes.eq'), cr[0] + cr[2] - 8, cr[1] + cr[3] - 64, 30, Sx.hot, t, 13, -0.03, 'right'); },
       (cr) => { const w = handW(tag('notes.eq'), 30); return [cr[0] + cr[2] - 12 - w, cr[1] + cr[3] - 64 - 30, w + 8, 40]; }],
     [9, () => 'surface', (r, cr, t, n, Sx) => { lab.hand(c, '← the drop, folded', cr[0] + 8, cr[1] + cr[3] - 20, 28, Sx.hot, t, 14); }],
-    [9, () => 'spectro', (r, cr, t, n, Sx) => { lab.hand(c, 'kick every beat ↓', cr[0] + 34, cr[1] + 30, 28, Sx.hot, t, 15);   // v10: clear of the M pane label }],
+    [9, () => 'spectro', (r, cr, t, n, Sx) => { lab.hand(c, 'kick every beat ↓', cr[0] + 34, cr[1] + 30, 28, Sx.hot, t, 15); }],   // v10: x clear of the M pane label
   ];
   // width of a handwritten note at a size; the imager note is sized to fit the title strip left of the mode label
   // (16..28 px) and sits there so it never crosses the scope
