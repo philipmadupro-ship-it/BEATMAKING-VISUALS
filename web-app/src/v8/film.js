@@ -54,6 +54,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   function camera() {
     const s = ev.shot(b), A = framing(s.from), Bf = framing(s.to), u = s.u, zm = V('camera.zoom', 1);
+    L.shotTo = s.to;   // meters can switch to their focus-shot version when the camera is on their window
     return { x: lerp(A.x, Bf.x, u) + V('camera.x', 0), y: lerp(A.y, Bf.y, u) + V('camera.y', 0), z: lerp(A.z, Bf.z, u) * zm };
   }
   // ---------------------------------------------------------------- attention: the window this beat is about
@@ -168,14 +169,15 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   const BODY = { logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),
     eq: (cr, t, k, Sx) => M.eq(c, Sx, cr, t, k), spectrum: (cr, t, k, Sx) => M.spectrum(c, Sx, cr, t, k), loudness: (cr, t, k, Sx) => M.loud(c, Sx, cr, t, k), stereo: (cr, t, k, Sx) => M.stereo(c, Sx, cr, t, k),
-    spectrogram: (cr, t, k, Sx) => M.spectro(c, Sx, cr, t, k), surface: (cr, t, k, Sx) => M.surface(c, Sx, cr, t, k) };
+    spectrogram: (cr, t, k, Sx) => M.spectro(c, Sx, cr, t, k), surface: (cr, t, k, Sx) => M.surface(c, Sx, cr, t, k),
+    levels: (cr, t, k, Sx) => M.levels(c, Sx, cr, t, k), ghost: (cr, t, k, Sx) => M.ghost(c, Sx, cr, t, k) };
   function card(id, t, att) {
     const r = LY[id], n = openStep(id, t); if (n <= 0) return;
     const acc = V(`win.${id}.accent`, null), Sx = acc && acc !== S.hot ? Object.assign({}, S, { hot: acc }) : S;
     const cr = chrome(id, r, n, t, Sx, att === id && t >= BEAT); if (!cr) return;
     const k = n >= 6 ? 1 : n === 5 ? 0.66 : n === 4 ? 0.33 : 0;
     c.save(); c.beginPath(); c.rect(r[0] + 1, r[1] + 1, r[2] - 2, r[3] - 2); c.clip();
-    if (k > 0) (BODY[contentOf(id)] || BODY.spectrum)(cr, t, k, Sx);
+    L.curWin = id; if (k > 0) (BODY[contentOf(id)] || BODY.spectrum)(cr, t, k, Sx);
     if (n >= 6 && V('notes.on', true)) for (const nt of notes()) if (nt.id === id && t >= T(nt.b)) nt.fn(r, cr, t, steps(t, nt.b, 4, U.s16), Sx);
     c.restore();
     if (n >= 6 && V('furniture.on', true)) furniture(id, r, t, Sx);

@@ -59,7 +59,7 @@ export function balanceAt(lv, t, win = 3) {
  * RMS: 20·log10 √(mean x²) over the rectangular window ending at t. Max: running sample peak since the clip start.
  * Clip: any two consecutive samples at full scale so far (latched).
  */
-export function levelAt(lv, ch, t, { rel = 20, hold = 1.5, rmsWin = 0.3, fps = 30, floor = -150 } = {}) {
+export function levelAt(lv, ch, t, { rel = 20, hold = 1.5, rmsWin = 0.3, fps = 30, floor = -150, running = true } = {}) {
   const P = ch ? lv.pkR : lv.pkL, MS = ch ? lv.msR : lv.msL, CL = ch ? lv.clipR : lv.clipL, rate = lv.rate;
   const b1 = clamp(Math.floor(t * rate + 1e-6), 0, lv.n), bF = Math.max(0, b1 - Math.round(rate / fps));
   const per = 1 / rate, back = Math.ceil((hold + (0 - floor) / rel) * rate) + 1;
@@ -72,7 +72,7 @@ export function levelAt(lv, ch, t, { rel = 20, hold = 1.5, rmsWin = 0.3, fps = 3
   }
   const w = Math.max(1, Math.round(rmsWin * rate)), r0 = Math.max(0, b1 - w); let s = 0; for (let b = r0; b < b1; b++) s += MS[b];
   const rms = b1 > 0 ? Math.max(floor, dB(s / w)) : floor;
-  let mx = 0, clip = false; for (let b = 0; b < b1; b++) { if (P[b] > mx) mx = P[b]; if (CL[b]) clip = true; }
+  let mx = 0, clip = false; if (running) for (let b = 0; b < b1; b++) { if (P[b] > mx) mx = P[b]; if (CL[b]) clip = true; }
   return { pk: Math.max(floor, pk), hold: Math.max(floor, hd), rms, max: Math.max(floor, dBa(mx)), clip };
 }
 /** Meter mode -> RMS window and calibration (K-system: 600 ms, +3.01 dB sine calibration, 0 at -K dBFS). */

@@ -50,7 +50,8 @@ for k, (l, r) in sig.items():
     corr = 0.0 if min(el, er) < 1e-12 else float(np.sum(l * r) / np.sqrt(el * er))
     P = (np.abs(np.fft.rfft(l)) ** 2 + np.abs(np.fft.rfft(r)) ** 2); f = np.fft.rfftfreq(n, 1 / sr)
     out[k] = {'peak': [db(np.max(np.abs(l))), db(np.max(np.abs(r)))], 'rms': [db(np.sqrt(np.mean(l * l))), db(np.sqrt(np.mean(r * r)))],
-              'corr': corr, 'peakHz': float(f[np.argmax(P)]) if P.max() > 0 else None}
+              'corr': corr, 'peakHz': float(f[np.argmax(P)]) if P.max() > 0 else None,
+              'rms300': [db(np.sqrt(np.mean(c[int(4.7 * sr):int(5.0 * sr)] ** 2))) for c in (l, r)], 'rms600': [db(np.sqrt(np.mean(c[int(4.4 * sr):int(5.0 * sr)] ** 2))) for c in (l, r)]}
 json.dump(out, open(f'{d}/numpy.json', 'w'))
 `;
 fs.writeFileSync(path.join(DIR, 'gen.py'), PY);
@@ -61,11 +62,13 @@ const NP = JSON.parse(fs.readFileSync(path.join(DIR, 'numpy.json'), 'utf8'));
 function ffmpegRef(file) {
   const run = af => { const r = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', file, '-af', af, '-f', 'null', '-'], { encoding: 'utf8' }); return r.stderr; };
   const e = run('ebur128=peak=true'), sum = e.slice(e.lastIndexOf('Summary:'));
+  const log = [...e.matchAll(/t:\s*([\d.]+)\s+TARGET.*?M:\s*(-?[\d.]+|-inf)\s+S:\s*(-?[\d.]+|-inf)/g)].map((m) => [+m[1], +m[2], +m[3]]);
   const num = (re, s) => { const m = s.match(re); return m ? (/inf/i.test(m[1]) ? -Infinity : +m[1]) : NaN; };
   const lufs = num(/I:\s+(-?[\d.]+|-inf)\s+LUFS/, sum), tp = num(/True peak:\s+Peak:\s+(-?[\d.]+|-inf)\s+dBFS/, sum);
   const a = run('astats=measure_overall=none'), ch = a.split(/Channel: \d+/).slice(1);
   const pk = ch.map(s => num(/Peak level dB:\s+(-?[\d.]+|-inf)/, s)), rms = ch.map(s => num(/RMS level dB:\s+(-?[\d.]+|-inf)/, s));
-  return { lufs, tp, peak: pk, rms };
+  const lra = num(/LRA:\s+(-?[\d.]+)\s+LU/, sum);
+  return { lufs, tp, peak: pk, rms, log, lra };
 }
 
 // ---- 3. the app's analysis + meters on the same files
@@ -222,6 +225,33 @@ json.dump(out, open(sys.argv[2], 'w'))
   ok('EQ analyzer: 8192 Hann hop 1024, coherent scaling: bin-centred -6.02 dBFS sine reads -6 ±0.5 dB at its frequency', Math.abs(pk + 6.02) <= 0.5 && Math.abs(Math.log2(fj / fz)) < 0.02, `peak ${pk} dB at ${fj.toFixed(1)} Hz (sine ${fz.toFixed(1)} Hz)`);
   if (realClip) { const Dm = realClip, nT = Dm.ms.ltasN, lt = ML.ltasGrid(nT).map((_, i) => { let p = 0; for (let k = 0; k < Dm.bars; k++) p += 10 ** (Dm.ms.ltas[k * nT + i] / 10); return 10 * Math.log10(p / Dm.bars); });
     const fit = ML.fitMatch(ML.ltasGrid(nT), lt); ok('real beat: the match EQ fit gives 1-4 bands within ±6 dB from the measured LTAS', fit.length >= 1 && fit.length <= 4 && fit.every((b) => Math.abs(b.g) <= 6 && b.q >= 0.5 && b.q <= 4), fit.map((b) => `${b.type} ${b.f} Hz ${b.g} dB Q ${b.q}`).join(' · ')); }
+}
+
+// ---- 9. DAW level meters + loudness window, from the clip's 1 ms blocks (meterlib.levelAt) and the per-frame LUFS:
+// against astats (sample peak), numpy (300 / 600 ms RMS), ebur128 (momentary / short-term per 100 ms, LRA) and the
+// ballistics' own definitions (20 dB/s release, 1.5 s hold, latched clip lamp)
+for (const k of ['sine1k', 'pink', 'hardleft', 'clipped']) {
+  const f = path.join(DIR, k + '.wav'), Fr = ffmpegRef(f), N = NP[k], buf = readWav(f), D = clipData({ L: buf.getChannelData(0), R: buf.getChannelData(1), sr: buf.sampleRate, inT: 0, bars: 4, beat: 0.5, target: 'off' });
+  const end = D.duration - 0.001, lv = [0, 1].map((c) => ML.levelAt(D.lv, c, end)), at5 = [0, 1].map((c) => ML.levelAt(D.lv, c, 5)), k5 = [0, 1].map((c) => ML.levelAt(D.lv, c, 5, { rmsWin: 0.6 }));
+  ok(`levels ${k}: max peak L/R vs astats ±${TOL.peak} dB`, [0, 1].every((c) => near(lv[c].max, Fr.peak[c], TOL.peak)), `app ${fmt(lv[0].max)}/${fmt(lv[1].max)} · astats ${fmt(Fr.peak[0])}/${fmt(Fr.peak[1])}`);
+  ok(`levels ${k}: RMS 300 ms / 600 ms at 5 s vs numpy ±${TOL.rms} dB`, [0, 1].every((c) => near(at5[c].rms, N.rms300[c], TOL.rms) && near(k5[c].rms, N.rms600[c], TOL.rms)), `300 ms ${fmt(at5[0].rms)}/${fmt(at5[1].rms)} · numpy ${fmt(N.rms300[0])}/${fmt(N.rms300[1])} · 600 ms ${fmt(k5[0].rms)} · numpy ${fmt(N.rms600[0])}`);
+  ok(`levels ${k}: clip lamp ${k === 'clipped' ? 'on' : 'off'} (latched)`, lv.some((v) => v.clip) === (k === 'clipped'));
+  // LUFS momentary / short-term per frame vs ebur128's 100 ms log (frames at t = 2..7.9 s), and LRA
+  let worst = 0, cnt = 0; for (const [tt, m, st] of Fr.log) { if (tt < 3.05 || tt > 7.95) continue; const fi = Math.round(tt * D.fps); if (Math.abs(fi / D.fps - tt) > 1e-4) continue; worst = Math.max(worst, Math.abs(D.frame.M[fi] - m), Math.abs(D.frame.S[fi] - st)); cnt++; }
+  ok(`loudness ${k}: LUFS-M / LUFS-S per frame vs ebur128 log ±${TOL.lufs} LU`, cnt >= 10 && worst <= TOL.lufs, `${cnt} frames · worst ${worst.toFixed(2)} LU`);
+  if (k === 'sine1k') { const cf = Math.max(at5[0].pk, at5[1].pk) - at5[0].rms; ok('ghost sine1k: crest = peak - RMS = 3.01 dB', Math.abs(cf - 3.01) <= 0.2, `crest ${cf.toFixed(2)} dB`); }
+  if (k === 'pink') { const lra = clipData({ L: buf.getChannelData(0), R: buf.getChannelData(1), sr: buf.sampleRate, inT: 0, bars: 5, beat: 0.5, target: 'off' }).summary.LRA; ok('loudness pink: LRA vs ebur128 ±1 LU', Math.abs(lra - Fr.lra) <= 1, `app ${lra} · ebur128 ${Fr.lra} LU`); }
+}
+{ // ballistics on a burst: -6 dBFS 1 kHz for 1 s, then silence
+  const sr = 48000, n = sr * 4, x = new Float32Array(n); for (let i = 0; i < sr; i++) x[i] = 0.5 * Math.sin(2 * Math.PI * 1000 * i / sr);
+  const D = clipData({ L: x, R: x, sr, inT: 0, bars: 2, beat: 0.5, target: 'off' }), at = (t, o) => ML.levelAt(D.lv, 0, t, o);
+  const p = -6.02, a = at(1.5), b = at(2.2), c = at(3.0), want = p - 20 * (1.5 - 1 / 30 - 1.0);
+  ok('ballistics: peak release 20 dB/s (frame shows the max over its interval)', Math.abs(a.pk - want) < 0.3, `t 1.5 s: ${a.pk.toFixed(2)} dB, expected ${want.toFixed(2)}`);
+  ok('ballistics: hold 1.5 s, then falls at 20 dB/s', Math.abs(b.hold - p) < 0.1 && Math.abs(c.hold - (p - 20 * 0.5)) < 0.3, `t 2.2 s: hold ${b.hold.toFixed(2)} · t 3.0 s: ${c.hold.toFixed(2)} (expected ${(p - 10).toFixed(2)})`);
+  const k14 = ML.levelAt(D.lv, 0, 0.9, { rmsWin: 0.6 }).rms + ML.modeSpec('k14').cal;
+  ok('K-14 mode: 600 ms RMS + 3.01 dB reads the sine peak level (-6.0 dBFS)', Math.abs(k14 - p) < 0.15, `K RMS ${k14.toFixed(2)} dBFS → K-14 ${(k14 + 14).toFixed(2)}`);
+  const sc = [[6, 1], [0, 0.912], [-18, 0.592], [-60, 0]].every(([d, v]) => Math.abs(ML.dbPos(d) - v) < 1e-9) && Math.abs(ML.dbPos(-3) - (0.805 + 0.107 / 2)) < 1e-9;
+  ok('meter scale: the measured Live 12 table (+6 / 0 / -18 / -60 and interpolation)', sc);
 }
 fs.writeFileSync(path.join(DIR, 'results.json'), JSON.stringify(table.map(({ k, A, F, N }) => ({ k, app: { peak: A.peak, rms: A.rms, lufs: A.lufs, tp: A.tp, corr: A.corr, clip: A.clip, eq: A.eq }, ffmpeg: F, numpy: N })), null, 1));
 const fails = results.filter(r => !r.pass).length;
