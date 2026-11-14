@@ -1,0 +1,38 @@
+// Look tables of the v8 composition (u2c-motion film/v8/film.js): window layouts per look and aspect (world =
+// the screen, the overview is zoom 1), windows that are already open at frame 0, the v8 focus plan, chrome names.
+export const LOOKS = ['exe', 'lab', 'scope'];
+export const LOOK_NAMES = { exe: 'EXE', lab: 'LAB', scope: 'SCOPE' };
+export const LOOK_BLURB = { exe: 'OS desktop · window chrome · wires', lab: 'graph-paper notebook · tape · stamps', scope: 'instrument rack · CRT oscilloscope' };
+export const ASPECTS = { '916': { W: 1080, H: 1920, label: '9:16 · 1080×1920', platform: 'Reels / TikTok / Shorts' }, '169': { W: 1920, H: 1080, label: '16:9 · 1920×1080', platform: 'YouTube' } };
+export const LAYOUT = {
+  exe: { '916': { session: [24, 86, 1032, 330], chains: [24, 432, 640, 470], clock: [680, 432, 376, 226], bands: [680, 674, 376, 228],
+    elephant: [24, 918, 520, 620], eq: [560, 918, 496, 302], spectrum: [560, 1236, 496, 302], loud: [24, 1554, 340, 290], stereo: [380, 1554, 330, 290], spectro: [726, 1554, 330, 290] },
+    '169': { session: [24, 76, 900, 300], chains: [24, 392, 900, 420], elephant: [940, 76, 480, 736], eq: [1436, 76, 460, 300], spectrum: [1436, 392, 460, 420],
+    loud: [24, 828, 340, 220], stereo: [380, 828, 330, 220], spectro: [726, 828, 400, 220], clock: [1142, 828, 360, 220], bands: [1518, 828, 378, 220] } },
+  lab: { '916': { chains: [24, 86, 1032, 500], session: [24, 602, 544, 300], elephant: [584, 602, 472, 640], spectrum: [24, 918, 544, 324],
+    eq: [24, 1258, 544, 300], loud: [584, 1258, 472, 300], stereo: [24, 1574, 344, 270], spectro: [384, 1574, 344, 270], clock: [744, 1574, 312, 270] },
+    '169': { chains: [24, 76, 900, 440], session: [24, 532, 900, 260], elephant: [940, 76, 480, 716], spectrum: [1436, 76, 460, 340], eq: [1436, 432, 460, 360],
+    loud: [24, 808, 420, 240], stereo: [460, 808, 360, 240], spectro: [836, 808, 584, 240], clock: [1436, 808, 460, 240] } },
+  scope: { '916': { chains: [24, 86, 1032, 760], elephant: [24, 862, 470, 660], eq: [510, 862, 546, 322], spectrum: [510, 1200, 546, 322],
+    loud: [24, 1538, 340, 306], stereo: [380, 1538, 330, 306], surface: [726, 1538, 330, 306] },
+    '169': { chains: [24, 76, 1000, 640], elephant: [1040, 76, 400, 640], eq: [1456, 76, 440, 312], spectrum: [1456, 404, 440, 312],
+    loud: [24, 732, 420, 316], stereo: [460, 732, 380, 316], surface: [856, 732, 584, 316], spectro: [1456, 732, 440, 316] } },
+};
+/** Every window id any look uses, in a stable order. */
+export const WINDOW_IDS = ['chains', 'session', 'clock', 'bands', 'elephant', 'eq', 'spectrum', 'loud', 'stereo', 'spectro', 'surface'];
+/** What a window shows (its content can be swapped per window in the cue sheet). */
+export const CONTENT = { chains: 'logo', session: 'waveform', clock: 'clock', bands: 'bands', elephant: 'pendant', eq: 'eq', spectrum: 'spectrum', loud: 'loudness', stereo: 'stereo', spectro: 'spectrogram', surface: 'surface' };
+export const CONTENT_KINDS = ['logo', 'waveform', 'clock', 'bands', 'pendant', 'eq', 'spectrum', 'loudness', 'stereo', 'spectrogram', 'surface'];
+export const WINDOW_LABELS = { chains: 'Logo (chains.dll)', session: 'Waveform (session.exe)', clock: 'Clock', bands: 'Bands', elephant: 'Pendant (elephant.sys)', eq: 'EQ', spectrum: 'Spectrum', loud: 'Loudness', stereo: 'Stereo', spectro: 'Spectrogram', surface: 'Surface 3D' };
+/** Windows that are already open at frame 0 (the rest step in on the half beats of the build bar). */
+export const FIRST_OPEN = { exe: ['chains', 'session', 'clock', 'bands', 'elephant'], lab: ['chains', 'session', 'elephant'], scope: ['chains', 'elephant', 'loud'] };
+/** v8 focus plan (clip bar, window, hold bars). */
+export const FOCUS_PLAN = { exe: [[3, 'chains', 2], [7, 'eq', 2], [11, 'elephant', 2]], lab: [[3, 'elephant', 2], [7, 'spectrum', 2], [11, 'chains', 1]], scope: [[3, 'eq', 2], [7, 'elephant', 2], [11, 'chains', 2]] };
+export const SCOPE_NAMES = { chains: 'CH1/CH2 · CHAIN', elephant: 'PENDANT', eq: 'PARAM EQ', spectrum: 'SPECTRUM', loud: 'LOUDNESS', stereo: 'STEREO', surface: 'SURFACE', spectro: 'SPECTROGRAM', session: 'SESSION', clock: 'CLOCK', bands: 'BANDS' };
+/** Boot terminal rect per look (9:16); 16:9 uses a right-hand column. */
+export const BOOT_RECT = { exe: [548, 930, 516, 300], lab: [16, 930, 560, 300], scope: [502, 880, 562, 300] };
+/** Default open beat of a window in a look (-2 = already open at frame 0). */
+export function openBeat(look, aspect, id) {
+  const ids = Object.keys(LAYOUT[look][aspect]), first = FIRST_OPEN[look];
+  if (first.includes(id)) return -2; const rest = ids.filter((x) => !first.includes(x)), i = rest.indexOf(id); return i < 0 ? -2 : 0.5 + i * 0.5;
+}
