@@ -61,6 +61,13 @@ export function createStudio(app) {
   $$('#snapSeg button').forEach((b) => (b.onclick = () => { app.store.set({ project: { timeline: { snap: b.dataset.s } } }); syncSnap(); tl().markDirty(); })); syncSnap();
   $('#undoBtn').onclick = () => app.cues.undo(); $('#redoBtn').onclick = () => app.cues.redo();
   $('#zoomIn').onclick = () => tl().zoomBy(1.5); $('#zoomOut').onclick = () => tl().zoomBy(1 / 1.5); $('#zoomFit').onclick = () => tl().fit();
+  // magnet (object snapping), compact lanes, graph editor, ripple a bar
+  const syncTools = () => { const t = P().timeline; $('#magnetBtn').setAttribute('aria-pressed', t.magnet !== false); $('#compactBtn').setAttribute('aria-pressed', !!tl().compact); $('#graphBtn').setAttribute('aria-pressed', !!tl().state.graph); };
+  $('#magnetBtn').onclick = () => { app.store.set({ project: { timeline: { magnet: P().timeline.magnet === false } } }); syncTools(); };
+  $('#compactBtn').onclick = () => { tl().setCompact(!tl().compact); requestAnimationFrame(syncTools); };
+  $('#graphBtn').onclick = () => { tl().toggleGraph(); syncTools(); };
+  $('#ripInBtn').onclick = () => tl().rippleBar(1); $('#ripOutBtn').onclick = () => tl().rippleBar(-1);
+  app.cues.subscribe(() => requestAnimationFrame(syncTools)); requestAnimationFrame(syncTools);
   $('#lanesBtn').onclick = () => { const c = !tl().state.collapsed; app.store.set({ project: { timeline: { collapsed: c } } }); tl().setCollapsed(c); $('#lanesBtn').setAttribute('aria-pressed', c); };
   $('#addTrackBtn').onclick = () => { tl().clearSel(); $('.tabs [data-tab="inspect"]').click(); const s = $('#insp [data-k="element"]'); if (s) { s.focus(); try { s.showPicker && s.showPicker(); } catch (_) {} } };
   const ps = $('#presetSel'); ps.innerHTML = '<option value="">Preset…</option>' + Object.entries(PRESETS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
@@ -91,6 +98,7 @@ export function createStudio(app) {
     const T = tl(), grid = SNAPS[P().timeline.snap] || .25, tr = track();
     const seekB = (b) => app.actions.seek(P().inT + Math.round(clamp(b, 0, (P().outT - P().inT) / tr.spb) * tr.spb * 30) / 30);
     if (mod && k === 'c') { if (T.copy()) e.preventDefault(); return; }
+    if (mod && (k === 'v' || k === 'V') && e.shiftKey) { if (T.pasteAttributes()) e.preventDefault(); return; }
     if (mod && k === 'v') { if (T.paste()) e.preventDefault(); return; }
     if (mod && k === 'd') { e.preventDefault(); T.duplicate(); return; }
     if (mod && k === 'a') { e.preventDefault(); T.selectAll(); return; }
@@ -110,6 +118,18 @@ export function createStudio(app) {
     else if (k === '-' || k === '_') T.zoomBy(1 / 1.5);
     else if (k === 'Home') seekB(0);
     else if (k === 'End') seekB(1e9);
+    else if (k === '[' || k === ']' || k === '{' || k === '}') { e.preventDefault(); const d = k === ']' || k === '}' ? 1 : -1; if (e.shiftKey) T.navMarker(d); else T.navKey(d, null, e.altKey); }
+    else if (k === 'm' || k === 'M') T.addMarker();
+    else if (k === 'z' || k === 'Z') { if (e.shiftKey) T.zoomToLoop(); else T.zoomToSelection(); }
+    else if (k === '\\') T.fit();
+    else if (k === 'g' || k === 'G') T.toggleLaneHeight();
+    else if (k === 'e' || k === 'E') { T.toggleGraph(); syncTools(); }
+    else if (k === 'q' || k === 'Q') T.quantise(e.shiftKey ? 'grid' : 'markers', 1);
+    else if (k === 'b' || k === 'B') T.cycleInterp();
+    else if (k === 'n' || k === 'N') { app.store.set({ project: { timeline: { magnet: P().timeline.magnet === false } } }); syncTools(); }
+    else if (k === 'r' || k === 'R') T.rippleBar(e.shiftKey ? -1 : 1);
+    else if (k === 't' || k === 'T') { const r = T.rows()[T.state.focusRow]; if (r && !r.summary) T.setTarget(r.path, !(r.track && r.track.target)); }
+    else if (k === ';') T.toggleKey();
     else if (k === ',' || k === '.') { const f = (k === '.' ? 1 : -1) / 30; app.actions.seek(clamp(app.clock.time() + f, P().inT, P().outT - 1 / 30)); }
   });
   // ---- loop
@@ -124,10 +144,10 @@ export function createStudio(app) {
     tl().setTime(t - p.inT);
     if (app.clock.playing || dirty) { dirty = false; info = {}; app.renderFrame(t, surf, p, tr, { info }); $('#measuring').textContent = info.look ? '' : 'measuring the section…'; if (pick) showPick();
       app.timeline.setTime(t, !app.clock.playing); app.inspector.tick && app.inspector.tick(); }
-    tl().draw();
+    tl().draw(); if (!app.clock.playing) app.inspector.tick && app.inspector.tick();
     if (now - lastUI > 40 || !app.clock.playing) { lastUI = now; $('#tc').textContent = fmtTC(Math.max(0, t - p.inT)); $('#barPill').textContent = tl().bbt(Math.max(0, (t - p.inT) / tr.spb)); }
   }
   requestAnimationFrame(frame);
   app.store.subscribe((st, keys) => { markDirty(); if (keys.some((k) => /project\.(inT|outT)/.test(k))) readouts(); });
-  return { layout, setAspectUI, readouts, markDirty, setPlayIcon, surf, sheetSync };
+  return { layout, setAspectUI, readouts, markDirty, setPlayIcon, surf, sheetSync, syncTools };
 }

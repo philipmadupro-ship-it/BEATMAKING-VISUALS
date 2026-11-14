@@ -20,6 +20,8 @@ export function createCueStore() {
     tags(date) { const t = mergeDeep(DEFAULT_TAGS, sheet.tags); if (t.date === '{today}') t.date = date; return t; },
     /** Mutate the sheet through fn(sheet); one undo step. */
     edit(fn, label = 'edit') { past.push(snap()); if (past.length > 300) past.shift(); future = []; fn(sheet); rebuild(); save(); notify(label); },
+    /** View-state changes (lane height, targeting): saved with the sheet but not an undo step. */
+    touch(fn, label = 'view') { fn(sheet); rebuild(); save(); notify(label); },
     /** Live edits (drags): begin() snapshots once, preview() mutates without history, commit() records the step. */
     begin() { if (!pending) pending = snap(); },
     preview(fn) { fn(sheet); rebuild(); notify('preview'); },

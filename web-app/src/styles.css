@@ -41,7 +41,7 @@ kbd{font:500 10px var(--mono);border:1px solid var(--line-2);border-radius:var(-
 .seg button:last-child{border-right:0}
 .seg button[aria-pressed="true"]{color:var(--on-accent);background:var(--accent)}
 .ib{width:34px;height:34px;border-radius:var(--radius);border:1px solid var(--line-2);background:transparent;display:grid;place-items:center;font:600 13px var(--mono);color:var(--fg)}
-.ib.sm{width:28px;height:28px;font-size:12px}.ib.sm#zoomFit{width:auto;padding:0 8px}
+.ib.sm{width:28px;height:28px;font-size:12px}.ib.sm#zoomFit,.ib.sm.wide{width:auto;padding:0 8px;font:500 11px var(--mono)}
 .ib[aria-pressed="true"]{border-color:var(--accent);background:var(--tint)}
 .ib:disabled{opacity:.35}
 .inp{width:100%;min-width:0;background:var(--bg);border:1px solid var(--line-2);border-radius:var(--radius);padding:7px 9px;font-size:13px}
@@ -121,7 +121,8 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
 #tlFallback{display:block;width:100%;height:56px;touch-action:none;cursor:crosshair}
 .songbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:2px 0}
 .songbar .hint{margin-left:auto}
-.cuebar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0}
+.cuebar{display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 0}
+.cuebar .inrow{gap:4px}#presetSel{max-width:104px}.cuebar .btn.small{padding:4px 7px}.cuebar .ib.sm.wide{padding:0 6px}.cuebar .sep{margin:0 2px}
 .cuewrap{flex:1;min-height:90px;position:relative;border:1px solid var(--line-2)}
 #cueCv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
 #cueCv:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
@@ -173,6 +174,22 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
 .kf{all:unset;cursor:pointer;width:22px;height:22px;display:grid;place-items:center;font-size:12px;color:var(--faint);border:1px solid transparent}
 .kf:hover,.kf:focus-visible{border-color:var(--line-2);color:var(--fg)}
 .kf.on{color:var(--fg)}.kf.here{color:var(--accent)}
+/* effect controls: element groups, scrubby labels, mini key strips, pattern tools */
+.fx{border-top:1px solid var(--line-2)}.fx>summary{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;cursor:pointer;font:600 12px var(--sans);list-style:none}
+.fx>summary::-webkit-details-marker{display:none}.fx>summary::before{content:"";width:6px;height:6px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:rotate(-45deg);margin-right:2px;transition:transform .15s}
+.fx[open]>summary::before{transform:rotate(45deg)}.fx>summary span:first-of-type{flex:1}
+.fx .prop:first-child{border-top:0}.prop.anim .prop-h .lbl{color:var(--fg)}
+.lbl.scrub{cursor:ew-resize;text-decoration:underline dotted var(--line-2);text-underline-offset:3px;touch-action:none;user-select:none}.lbl.scrub:hover{color:var(--fg)}
+body.scrubbing,body.scrubbing *{cursor:ew-resize!important;user-select:none}
+.kstrip{position:relative;height:14px;border:1px solid var(--line);background:var(--lane,rgba(255,255,255,.025))}
+.kstrip i{position:absolute;top:3px;width:7px;height:7px;margin-left:-3.5px;background:var(--fg);transform:rotate(45deg);cursor:pointer}
+.kstrip i.bz{border-radius:50%;transform:none}.kstrip i.hd{transform:none}.kstrip i.on{background:var(--accent);outline:1px solid var(--fg)}
+.kstrip i::after{content:"";position:absolute;inset:-6px}
+.kstrip b{position:absolute;top:-1px;bottom:-1px;width:1px;background:var(--accent);pointer-events:none}
+.tools{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line-2);padding-top:10px}.tool-h{color:var(--fg)}
+.tools input.qstr{width:80px;flex:none}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.keynav .hint{min-width:44px;text-align:center}
 /* ---- bottom sheet (phone inspector) */
 .sheet{display:none}
 .pop{position:absolute;right:0;top:52px;z-index:20;width:min(440px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line-2);padding:16px;display:flex;flex-direction:column;gap:10px}
@@ -188,7 +205,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
   .stage{flex:none;height:46vh;min-height:280px}
   .dock{height:auto;border-top:1px solid var(--line-2)}
   .dock-grip{display:none}
-  .cuewrap{flex:none;height:calc(64px + 38px)}
+  .cuewrap{flex:none;height:calc(64px + 51px)}
   .keys{display:none}
   .panel{border-left:0;border-top:1px solid var(--line)}
   .pane{overflow:visible}
@@ -209,7 +226,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
   .cuebar .seg button{padding:5px 7px}
   .stage-bar .ctrls #fsBtn,.stage-bar .ctrls #zoomSeg{display:none}
   .vol{display:none}
-  #creditsBtn,#cueImport,#cueExport,#zoomIn,#zoomOut,.cuebar .sep{display:none}
+  #creditsBtn,#cueImport,#cueExport,#zoomIn,#zoomOut,#ripInBtn,#ripOutBtn,#graphBtn,#compactBtn,.cuebar .sep{display:none}
   .proj input{font-size:14px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}.btn:active,.seg button:active,.ib:active{transform:none}}

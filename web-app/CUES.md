@@ -41,6 +41,33 @@ Each track animates one **property path**. Keys carry `v` (the value) and, by ki
 | `event` | `true` | instantaneous (one frame) | |
 
 Eases: `step`, `linear`, `easeInOut` (power2.inOut), `expoOut`, `backOut`.
+
+### Interpolation types and bezier handles (optional, added in the same version 1)
+A `number`, `color` or `shot` key may carry `ty` (the segment from this key to the next):
+
+| `ty` | curve | glyph in the editor |
+|---|---|---|
+| `hold` | step (holds until the next key) | square |
+| `linear` | straight line | diamond |
+| `bezier` | cubic through this key's `ob` and the next key's `ib` | circle |
+| `auto` | monotone curve through the neighbours (Fritsch-Carlson; flat at the ends, never overshoots) | circle with a dot |
+
+Handles live in the segment's unit square, like CSS `cubic-bezier()`: `ob: [x1, y1]` with x1 in 0..1, `ib: [x2 - 1, y2 - 1]`
+with x in -1..0 (stored on the key the segment arrives at). y is a fraction of the value change and may overshoot
+(`backOut`-like). x is clamped, so the curve is a function of time; the evaluator solves x(t) = u with Newton steps and
+falls back to bisection. A shot key's bezier shapes its own push (`ob` and `ib` both on the key). Keys without `ty`
+evaluate exactly as before from `ease`; a key that has `ty` still writes the nearest named `ease`
+(hold → `step`, linear → `linear`, bezier/auto → a close named ease), so a reader that only knows `ease` (the native
+plan mode) renders a close approximation. Ease presets in the editor: Hold, Linear, Ease in-out, Ease in, Ease out,
+Expo out, Back out, Hit (fast in, slow out), Snap (late, hard), Auto bezier; named ones keep the exact v1 curve.
+
+### Lane flags and markers (optional)
+Tracks may carry `lock` (not editable in the timeline), `solo` (while any track is soloed, only soloed tracks evaluate:
+preview AND export), `target` (track targeting) and `h` (lane height in px). Only flags that are set are written.
+The sheet may carry `markers: [{ "at": "3.1.0", "label": "drop", "kind": "cue" }]` (`kind`: cue, drop, hit, note).
+Analysis markers (downbeats, beats, kick / snare / hat onsets quantised to the 16th grid, section starts) are derived
+from the analysis at load and are not stored. **Migration on load**: `parseSheet` drops invalid `ty`, clamps handle x
+ranges, ignores unknown fields, sorts markers; a sheet without any of these fields is a plain v1 sheet.
 Before a track's first key the property has its **base** value (`base[path]`), else the look's default.
 A track with `"mute": true` is ignored. `"auto": true` marks a track generated from the analysis: it is rebuilt when the
 section, the look or the stage changes, until someone edits it.
@@ -90,11 +117,39 @@ logo cycle 2 bars, a 1-frame invert on the first drop downbeat, glitch off. Pres
 
 ## Editor
 Lanes: Camera, Meter / focus, Look, Stage, Logo (cycle, hero), Pendant, Text, FX (flash, glitch), then every property
-track added from Inspect. Double-click a lane to add a key; click / Shift-click / drag a marquee to select; drag to move
-(Alt: no snap), drag a clip's right edge to resize, drag a number key up or down to change it.
+track added from Inspect, grouped per element (a group of two or more lanes folds into one summary row with the chevron).
+Double-click a lane to add a key; click / Shift-click / drag a marquee to select; drag to move, drag a clip's right
+edge to resize, drag a number key up or down to change it.
+
+- **Markers**: a strip under the sections: downbeats, beats, kicks (triangles, size = strength), snares (squares), hats,
+  section starts and the sheet's own markers (flags). Click the strip to jump to a marker; click its header to cycle the
+  density (Fewer, More, All, Off). M adds a marker at the playhead; a selected marker is edited in the inspector.
+- **Snapping**: the Snap buttons set the grid; the magnet (N) also pulls to markers, other keys, the playhead, the loop
+  and bar lines within 7 px (marker > key > playhead/loop > bar). A dashed line shows the snap point. Alt drags free.
+- **Lanes**: header = chevron, name, ‹ ◆ › (previous key, add / remove a key at the playhead, next key), target (square),
+  solo S, lock (padlock, hatched lane), mute M. G or a double-click on the name toggles a tall lane; drag a lane's bottom
+  edge or Alt+wheel on its header to size it. Compact lanes (toolbar) shrink rows to 16 px; on a laptop the editor goes
+  compact automatically and folds the groups you never opened, so every lane is on screen.
+- **Curves**: number lanes draw the evaluated curve (the playback evaluator, sampled every 2 px); tall lanes fill under
+  it and show bezier handles for selected keys (drag; the opposite handle follows unless Alt). E opens the graph view:
+  the focused number lane fills the timeline. B cycles hold → linear → bezier → auto.
+- **Pattern tools** (inspector, with keys selected): Quantise to markers or the grid with a strength (Q / Shift+Q),
+  Stamp the selection on every beat, offbeat, bar, 2 bars, section, kick, snare or marker (in the loop, else the whole
+  video), Paste attributes (Shift+Cmd+V: the copied key's interpolation and handles), Save as a key preset. With nothing
+  selected the inspector is the Effect Controls: element groups, ◆ / ‹ › per property, scrubby labels (drag sideways,
+  Shift ×10), a mini key strip per animated property aligned with the timeline, key presets (at the playhead or stamped).
+- **Ripple**: R inserts a bar at the playhead's bar, Shift+R deletes it (keys inside are removed); later keys and the
+  sheet markers move by 4 beats. **Targeting**: the square in a lane header (Shift-click: all / none) or T; with nothing
+  selected, ] [, ;, Q, R and single-lane paste act on the targeted lanes.
+- **Zoom**: + / − (Ctrl+wheel), Z zoom to the selection (else the loop), Shift+Z the loop, \ fit; the minimap bar at the
+  bottom shows the whole video: drag the viewport to pan, its edges to zoom.
+
 Keys: Space play/pause · J reverse shuttle (×2 per press) · K stop · L play · I / O loop in / out · S split · Delete ·
-← → nudge by the grid (Shift: a bar) · ↑ ↓ value · Cmd/Ctrl+Z undo · Shift+Cmd/Ctrl+Z redo · Cmd+C / V / D / A ·
-+ / − zoom · , / . one frame · Home / End. Autosaved per beat in localStorage; Import / Export JSON in the toolbar.
+← → nudge by the grid (Shift: a bar) · ↑ ↓ value · [ ] previous / next key (Alt: any lane) · Shift+[ ] previous / next
+marker · ; key at the playhead · M marker · Q / Shift+Q quantise · B interpolation · G lane height · E graph · Z / Shift+Z
+zoom · \ fit · N magnet · R / Shift+R ripple a bar · T target · Cmd/Ctrl+Z undo · Shift+Cmd/Ctrl+Z redo ·
+Cmd+C / V / D / A · Shift+Cmd+V paste attributes · + / − zoom · , / . one frame · Home / End.
+Autosaved per beat in localStorage; Import / Export JSON in the toolbar.
 
 ## Native CLI (`--cues file.json`): implemented (v9)
 One cue sheet drives both renderers, with ONE copy of the look code. `u2c-motion` (branch v9) renders the web app's
