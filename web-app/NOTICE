@@ -1,0 +1,9 @@
+U2C Studio third-party credits (v11 meters)
+
+- Gain-reduction meter (src/v8/meterlib.js grStatic / grCurve): the soft-knee static curve and the decoupled smooth peak
+  detector follow the published formulas of D. Giannoulis, M. Massberg, J. D. Reiss, "Digital Dynamic Range Compressor
+  Design - A Tutorial and Analysis", J. Audio Eng. Soc. 60(6), 2012. Re-implemented from the paper; no code copied.
+- Level meter idioms (ballistics, peak hold, clip lamps): studied in steinbergmedia/vstgui (BSD-3-Clause,
+  https://github.com/steinbergmedia/vstgui). No vstgui source is included.
+- Stereo imager: the Ozone Imager vectorscope is a visual reference only (iZotope); no third-party code or assets.
+- ozone-mastering-suite (MIT) was consulted for ideas; no code copied.

@@ -154,3 +154,47 @@ export function fitMatch(freqs, ltasDb, { tilt = 4.5, strength = 0.5, max = 4, f
 /** Histogram of a value list in `step` bins between lo and hi. */
 export function histogram(vals, lo, hi, step = 0.5) { const n = Math.ceil((hi - lo) / step), h = new Float32Array(n); for (const v of vals) if (v > lo && v <= hi) h[Math.min(n - 1, Math.floor((v - lo) / step))]++; return h; }
 export const easeOut3 = (u) => 1 - (1 - clamp(u, 0, 1)) ** 3;
+
+// ---------------------------------------------------------------- gain reduction (bus compressor / limiter on the clip)
+// Feed-forward log-domain compressor after Giannoulis, Massberg & Reiss, "Digital Dynamic Range Compressor Design - A
+// Tutorial and Analysis" (JAES 60(6), 2012; published formulas): soft-knee static curve, then the smooth decoupled
+// peak detector on the level-corrected signal. Run on the clip's 1 ms blocks, so it is the gain a real compressor on
+// this audio would apply (it dips on the kick, recovers between hits). Pure and deterministic.
+/** Static gain computer: gain change in dB (<= 0) for input level x dB. T threshold, R ratio, W knee width (dB). */
+export function grStatic(x, T, R, W = 0) {
+  if (2 * (x - T) < -W) return 0;
+  if (W > 0 && 2 * Math.abs(x - T) <= W) return (1 / R - 1) * (x - T + W / 2) ** 2 / (2 * W);
+  return (1 / R - 1) * (x - T);
+}
+/** Detector level per block in dB: 'peak' = max |x| of L/R; 'rms' = 10·log10 of the L/R mean square. */
+export function grDetector(lv, det = 'peak') {
+  const n = lv.n, x = new Float32Array(n);
+  for (let b = 0; b < n; b++) x[b] = det === 'rms' ? dB((lv.msL[b] + lv.msR[b]) / 2) : dBa(Math.max(lv.pkL[b], lv.pkR[b]));
+  return x;
+}
+/** Auto threshold: `over` dB below the level the loudest `q` of blocks exceed (so the hits, not the bed, cross it). */
+export function grAutoThresh(x, q = 0.02, over = 6) {
+  const v = Array.from(x).filter((d) => d > -100).sort((a, b) => a - b); if (!v.length) return -20;
+  return v[Math.min(v.length - 1, Math.floor((1 - q) * v.length))] - over;
+}
+/**
+ * Gain-reduction curve (dB <= 0, one value per 1 ms block). opts: thresh (dB; null = auto), ratio, knee (dB),
+ * attack / release (ms), det ('peak' | 'rms').
+ */
+export function grCurve(lv, { thresh = null, ratio = 4, knee = 6, attack = 1, release = 120, det = 'peak' } = {}) {
+  const x = grDetector(lv, det), T = thresh == null ? grAutoThresh(x) : thresh, n = lv.n, out = new Float32Array(n), rate = lv.rate || 1000;
+  const aA = Math.exp(-1 / (Math.max(0.05, attack) * 1e-3 * rate)), aR = Math.exp(-1 / (Math.max(1, release) * 1e-3 * rate));
+  let y1 = 0, yL = 0;
+  for (let b = 0; b < n; b++) {
+    const xl = -grStatic(x[b], T, ratio, knee);           // level correction >= 0
+    y1 = Math.max(xl, aR * y1 + (1 - aR) * xl); yL = aA * yL + (1 - aA) * y1;
+    out[b] = -yL;
+  }
+  out.thresh = T; return out;
+}
+/** GR shown in the video frame ending at t: the deepest value over (t - 1/fps, t] (like the peak meter's frame max). */
+export function grAt(gr, t, fps = 30, rate = 1000) {
+  const b1 = clamp(Math.floor(t * rate + 1e-6), 0, gr.length), b0 = Math.max(0, b1 - Math.round(rate / fps)); let g = 0;
+  for (let b = b0; b < b1; b++) if (gr[b] < g) g = gr[b];
+  return g;
+}

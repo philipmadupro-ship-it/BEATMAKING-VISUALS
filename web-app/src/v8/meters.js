@@ -7,28 +7,16 @@
 // - Spectrogram / stereo / surface: methods after Aurora by Joe Croskey (AGPL-3.0). Ideas and parameters only were
 //   re-implemented; no Aurora code is used.
 import * as ML from './meterlib.js';
+import { createLevelView } from './levelview.js';
+import { createImagerView } from './imagerview.js';
+import { createWaveView, createWaveLODs } from './waveview.js';
 export function createMeters(L) {
   const { D, F, FPS, NF, BEAT, BAR, T, U, rgba, mix, text, fmt, tc, bbt, fidx, clamp, lerp, hash, SANS, MONO } = L;
   const M = {};
   // ---------------------------------------------------------------- waveform LODs (v9): level 0 = D.wave3 (int16, ~2400
   // col/s, spc samples per column) or D.wave2 (int8, 400 col/s); every next level merges 4 columns. col(ta, tb, ch) ->
   // min/max/rms over the source columns the pixel spans (and the exact clip-sample range they cover, for the test).
-  const WV = (() => {
-    const src = D.wave3 || { cps: D.wave2.cps, n: D.wave2.n, spc: 0, data: D.wave2.data }, FS = D.wave3 ? 32767 : 127, n0 = src.n, lv = [];
-    const l0 = { cps: src.cps, n: n0, k: 1, mn: [new Float32Array(n0), new Float32Array(n0)], mx: [new Float32Array(n0), new Float32Array(n0)], ms: [new Float32Array(n0), new Float32Array(n0)], c: null };
-    for (let i = 0; i < n0; i++) for (let ch = 0; ch < 2; ch++) { const q = i * 6 + ch * 3, r = src.data[q + 2] / FS; l0.mn[ch][i] = src.data[q] / FS; l0.mx[ch][i] = src.data[q + 1] / FS; l0.ms[ch][i] = r * r; }
-    lv.push(l0);
-    while (lv[lv.length - 1].n > 64) { const p = lv[lv.length - 1], n = Math.ceil(p.n / 4), o = { cps: p.cps / 4, n, k: p.k * 4, mn: [new Float32Array(n), new Float32Array(n)], mx: [new Float32Array(n), new Float32Array(n)], ms: [new Float32Array(n), new Float32Array(n)] };
-      for (let i = 0; i < n; i++) for (let ch = 0; ch < 2; ch++) { let mn = 1e9, mx = -1e9, s = 0, c = 0; for (let j = i * 4; j < Math.min(p.n, i * 4 + 4); j++) { const w = Math.min(p.k, n0 - j * p.k); mn = Math.min(mn, p.mn[ch][j]); mx = Math.max(mx, p.mx[ch][j]); s += p.ms[ch][j] * w; c += w; } o.mn[ch][i] = mn; o.mx[ch][i] = mx; o.ms[ch][i] = s / c; }
-      lv.push(o); }
-    const col = (ta, tb, ch) => {
-      let l = 0; const need = (tb - ta) * lv[0].cps; while (l < lv.length - 1 && need / lv[l + 1].k >= 4) l++;
-      const V = lv[l], i0 = clamp(Math.floor(ta * V.cps + 1e-9), 0, V.n - 1), i1 = clamp(Math.max(i0, Math.ceil(tb * V.cps - 1e-9) - 1), 0, V.n - 1);
-      let mn = 1e9, mx = -1e9, s = 0, c = 0; for (let i = i0; i <= i1; i++) { const w = Math.min(V.k, n0 - i * V.k); if (V.mn[ch][i] < mn) mn = V.mn[ch][i]; if (V.mx[ch][i] > mx) mx = V.mx[ch][i]; s += V.ms[ch][i] * w; c += w; }
-      return { mn, mx, rms: Math.sqrt(s / c), lod: l, s0: i0 * V.k * src.spc, s1: Math.min(n0, (i1 + 1) * V.k) * src.spc };
-    };
-    return { lv, col, spc: src.spc, sr: src.sr || 0 };
-  })();
+  const WV = createWaveLODs(L);   // v11: waveview.js (LODs, columns, 3-band colour, centred playhead)
   M.wave = WV;
   const X20 = (f, x, w) => x + w * Math.log(f / 20) / Math.log(1000);
   const lbl = (ctx, S, s, x, y, o = {}) => text(ctx, s, x, y, { size: o.size || 22, col: rgba(o.col || S.ink, o.a == null ? 0.7 : o.a), align: o.align, w: o.w || 500, ls: o.ls == null ? 0 : o.ls, base: o.base, maxW: o.maxW });
@@ -37,78 +25,7 @@ export function createMeters(L) {
   // ---------------------------------------------------------------- SESSION: arrangement-view inspired, sample-accurate
   // clip header, whole-song overview with the clip bracket, bar ruler, warp ticks on transients, L/R lanes drawn from
   // 400 columns/s min/max/rms (1 px columns, crisp), onset lane, playhead. The detail window shows 2 bars.
-  M.session = (ctx, S, r, t, k) => {
-    const [x, y, w, h] = r; reveal(ctx, x, y, w, h, k);
-    const song = D.song, W2 = L.W2, cps = D.wave2.cps;
-    const hh = 34; ctx.fillStyle = rgba(S.sig1, S.name === 'ALBEDO' ? 0.2 : 0.26); ctx.fillRect(x, y, w, hh); ctx.fillStyle = S.sig1; ctx.fillRect(x, y, 5, hh);
-    const rw = lbl(ctx, S, `${Math.round(D.bpm)} BPM · ${D.key}`, x + w - 10, y + hh / 2 + 1, { align: 'right', a: 0.85 }) || 0;   // the title yields to the tempo / key
-    text(ctx, `${L.tag('title')} · ${L.tag('experiment')}`, x + 14, y + hh / 2 + 1, { size: 22, w: 700, col: S.ink, maxW: Math.min(w * 0.58, w - 24 - rw - 18) });
-    // overview (whole track) + sections + clip bracket + song playhead
-    const oy = y + hh + 8, oh = 36, sx = (st) => x + w * st / song.duration;
-    for (const q of song.phrases) { const a0 = song.bar1 + (q.bar - 1) * BAR, a1 = a0 + q.bars * BAR; if (a0 > song.duration) continue; ctx.fillStyle = rgba(q.label === 'drop' ? S.sig2 : S.rule, q.label === 'drop' ? 0.18 : 0.06); ctx.fillRect(sx(a0), oy, sx(Math.min(a1, song.duration)) - sx(a0) - 1, oh); }
-    const ov = song.overview; ctx.fillStyle = rgba(S.ink, 0.55);
-    for (let i = 0; i < ov.length; i++) { const v = ov[i] / 1000 * oh * 0.46; ctx.fillRect(x + w * i / ov.length, oy + oh / 2 - v, Math.max(1, w / ov.length), v * 2); }
-    const c0 = sx(song.startTime), c1 = sx(song.startTime + D.duration);
-    ctx.strokeStyle = S.hot; ctx.lineWidth = 2; ctx.strokeRect(c0, oy - 2, c1 - c0, oh + 4); ctx.lineWidth = 1;
-    ctx.fillStyle = S.hot; ctx.fillRect(Math.round(sx(song.startTime + t)), oy - 4, 2, oh + 8);
-    // ruler over the detail window (2 bars, playhead at 25 %)
-    const ry = oy + oh + 6, rh = 28, span = L.meter('session', 'span', 2) * BAR, t0 = t - 0.25 * span, tx = (tt) => x + w * (tt - t0) / span;
-    ctx.strokeStyle = rgba(S.ink, 0.35); ctx.beginPath(); ctx.moveTo(x, ry + rh + 0.5); ctx.lineTo(x + w, ry + rh + 0.5); ctx.stroke();
-    for (let b = Math.floor(t0 / BEAT) - 1; b * BEAT < t0 + span + BEAT; b++) {
-      const X = Math.round(tx(b * BEAT)) + 0.5; if (X < x || X > x + w) continue; const isBar = ((b % 4) + 4) % 4 === 0;
-      ctx.strokeStyle = rgba(S.ink, isBar ? 0.8 : 0.35); ctx.beginPath(); ctx.moveTo(X, ry + (isBar ? 0 : 16)); ctx.lineTo(X, ry + rh); ctx.stroke();
-      if (isBar && X < x + w - 40) lbl(ctx, S, String(song.startBar + b / 4), X + 5, ry + 11, { w: 700, a: 0.95 });
-    }
-    // warp-marker ticks on the quantised kick + snare transients
-    const wy = ry + rh + 2;
-    for (const [kind, col] of [['kick', S.sig2], ['snare', S.ink]]) for (const [, s, tq] of D.onsets[kind]) { const X = tx(tq); if (X < x || X > x + w) continue; ctx.fillStyle = rgba(col, tq <= t ? 1 : 0.4); ctx.beginPath(); ctx.moveTo(X - 6, wy); ctx.lineTo(X + 6, wy); ctx.lineTo(X, wy + 9); ctx.fill(); }
-    // L / R lanes, Ableton-grade: one column per DEVICE pixel (zoom-aware), min/max peak envelope + RMS body from the
-    // finest LOD that still has >= 1 source column per pixel, crisp 1-px outline, bar / beat grid behind, transient
-    // markers at the measured (unquantised) onsets, played part in the stage colour by tone, unplayed dimmed.
-    const ly = wy + 12, onH = 26, laneH = (y + h - ly - onH - 6) / 2, m = ctx.getTransform(), dpx = Math.max(1e-3, Math.hypot(m.a, m.b)), nc = Math.max(1, Math.round(w * dpx)), cwp = w / nc;
-    const dbg = L.waveDebug ? (L.waveDebug.cols = [], L.waveDebug.skip = [], L.waveDebug) : null;
-    if (dbg) Object.assign(dbg, { x, w, nc, dpx, laneH, lanes: [], sr: WV.sr, spc: WV.spc, lod0cps: WV.lv[0].cps });
-    const snap = (v) => Math.round(v * dpx) / dpx;
-    for (let ch = 0; ch < 2; ch++) {
-      const top0 = ly + laneH * ch, cy = snap(top0 + laneH / 2), sc = laneH * 0.47;
-      ctx.fillStyle = rgba(S.sig1, S.name === 'ALBEDO' ? 0.05 : 0.07); ctx.fillRect(x, top0 + 2, w, laneH - 4);
-      // grid behind the waveform: bars strong, beats faint, 16ths as short ticks at the lane edge
-      for (let q = Math.floor(t0 / (BEAT / 4)) - 1; q * BEAT / 4 < t0 + span + BEAT; q++) {
-        const X = snap(tx(q * BEAT / 4)); if (X < x || X > x + w) continue; const isBar = ((q % 16) + 16) % 16 === 0, isBeat = ((q % 4) + 4) % 4 === 0;
-        ctx.fillStyle = rgba(S.ink, isBar ? 0.26 : isBeat ? 0.12 : 0.1); ctx.fillRect(X, isBeat ? top0 + 2 : top0 + laneH - 8, 1 / dpx, isBeat ? laneH - 4 : 6); if (dbg && isBeat) dbg.skip.push(X);
-      }
-      const cols = new Float32Array(nc * 3);
-      for (let px = 0; px < nc; px++) {
-        const ta = t0 + span * px / nc, tb = t0 + span * (px + 1) / nc; if (tb <= 0 || ta >= D.duration) { cols[px * 3] = NaN; continue; }
-        const q = WV.col(Math.max(0, ta), Math.min(D.duration, tb), ch); cols[px * 3] = q.mn; cols[px * 3 + 1] = q.mx; cols[px * 3 + 2] = q.rms;
-        const X = x + px * cwp, played = ta <= t, wi = Math.min(D.wave.tone.length - 1, Math.floor(ta * D.wave.cps)), tone = D.wave.tone[Math.max(0, wi)] || [50, 10];
-        const col = played ? mix(S.waveHi, S.waveLo, clamp(tone[0] / 100 - tone[1] / 120 + 0.3), 1) : rgba(S.dim, 0.75);
-        const yT = snap(cy - q.mx * sc), hT = Math.max(1 / dpx, snap((q.mx - q.mn) * sc));
-        // RMS body: the +-rms band around zero, clipped to the column's [min, max] (a column that sits above zero stays inside)
-        const rHi = Math.min(q.rms, q.mx), rLo = Math.max(-q.rms, q.mn), yR = snap(cy - rHi * sc), hR = snap((rHi - rLo) * sc);
-        ctx.fillStyle = col; ctx.globalAlpha = played ? 0.5 : 0.32; ctx.fillRect(X, yT, cwp, hT);
-        if (hR > 0) { ctx.globalAlpha = played ? 1 : 0.6; ctx.fillRect(X, yR, cwp, hR); }
-        // crisp 1-device-px caps on the peak envelope (top + bottom of the column)
-        ctx.globalAlpha = played ? 0.95 : 0.5; ctx.fillRect(X, yT, cwp, 1 / dpx); ctx.fillRect(X, yT + hT - 1 / dpx, cwp, 1 / dpx);
-        if (dbg) dbg.cols.push({ px, ch, X, mn: q.mn, mx: q.mx, rms: q.rms, s0: q.s0, s1: q.s1, lod: q.lod, yT, hT });
-      }
-      ctx.globalAlpha = 1;
-      ctx.globalAlpha = 1;
-      ctx.lineWidth = 1; ctx.fillStyle = rgba(S.ink, 0.22); ctx.fillRect(x, cy, w, 1 / dpx);
-      // transient markers: the measured onset (not the quantised one), a small flag on the lane top + a hairline
-      for (const [kind, colr] of [['kick', S.sig2], ['snare', S.ink]]) for (const [tr] of D.onsets[kind]) { const X = snap(tx(tr)); if (X < x || X > x + w) continue;
-        ctx.fillStyle = rgba(colr, tr <= t ? 0.5 : 0.25); ctx.fillRect(X, top0 + 2, 1 / dpx, laneH - 4); ctx.fillStyle = rgba(colr, tr <= t ? 0.95 : 0.5); ctx.beginPath(); ctx.moveTo(X, top0 + 2); ctx.lineTo(X + 7, top0 + 2); ctx.lineTo(X, top0 + 11); ctx.fill(); if (dbg) dbg.skip.push(X); }
-      lbl(ctx, S, ch ? 'R' : 'L', x + 6, top0 + 16, { w: 700, a: 0.8 });
-      if (dbg) dbg.lanes.push({ ch, top: top0, h: laneH, cy, sc });
-    }
-    // onset lane: kick / snare / hat as tick marks, the one just hit in the accent
-    const oy2 = y + h - onH;
-    [['kick', 0, S.sig2], ['snare', 1, S.ink], ['hat', 2, S.dim]].forEach(([kind, i, col]) => { for (const [, s, tq] of D.onsets[kind]) { const X = tx(tq); if (X < x || X > x + w) continue; const hit = tq <= t && t - tq < BEAT / 4; ctx.fillStyle = hit ? S.hot : rgba(col, tq <= t ? 1 : 0.35); ctx.fillRect(Math.round(X), oy2 + i * 9, hit ? 4 : 2, 7); } });
-    const PX = Math.round(tx(t)); if (dbg) dbg.playX = PX; ctx.fillStyle = S.hot; ctx.fillRect(PX, ry - 2, 2, y + h - ry + 2);
-    ctx.beginPath(); ctx.moveTo(PX - 8, ry - 4); ctx.lineTo(PX + 10, ry - 4); ctx.lineTo(PX + 1, ry + 6); ctx.fill();
-    text(ctx, bbt(t), PX + 10, ly + 14, { size: 22, w: 700, col: S.hot });
-    ctx.restore();
-  };
+  M.session = createWaveView(L, M, { lbl, reveal }).session;
 
   // ---------------------------------------------------------------- SPECTRUM: v6 look (1/6-oct bars, peak hold, line) + Aurora-method trail
   M.spectrum = (ctx, S, r, t, k) => {
@@ -300,36 +217,8 @@ export function createMeters(L) {
     for (const [d, s] of pri) { const yy = Yt(d); if (yy < y - 2 || yy > y + h + 2 || used.some((u) => Math.abs(u - yy) < fs + 1)) continue;
       lbl(ctx, S, s, x + 7, yy, { size: o.size || 15, a: s === '0' ? 0.95 : 0.6, w: s === '0' ? 700 : 400 }); used.push(yy); }
   }
-  M8.levels = (ctx, S, r, t, k, opt = {}) => {
-    const [x, y, w, h] = r; if (!opt.noReveal) reveal(ctx, x, y, w, h, k);
-    const o = levOpts(), sc = levScale(o), st0 = L.meter('levels', 'style', 'auto'), style = st0 === 'auto' ? (S.grey ? 'segment' : 'gradient') : st0, compact = opt.compact || w < 140, tf = tickF(t);
-    const vL = levRead(0, t, o), vR = levRead(1, t, o), rd = [levRead(0, tf / FPS, o), levRead(1, tf / FPS, o)];
-    // short windows: one-line readout (PK and RMS side by side) and no band names, so the bars keep their height
-    const lampH = 10, fs18 = L.floorSize(ctx, 18), oneLine = h < 300, cellH = compact ? 0 : oneLine ? fs18 + 12 : Math.max(52, 2 * fs18 + 10), top = y + cellH + lampH + 8;
-    const bandLbl = !compact && !oneLine, foot = opt.foot ?? (bandLbl ? L.floorSize(ctx, 14) + 6 : 0), bh = y + h - top - foot - 4;
-    const bw = compact ? Math.max(8, Math.min(12, (w - 40) / 2 - 1)) : clamp(w * 0.045, 12, 20), gap = 2, bx = x + (compact ? 2 : 6);
-    [vL, vR].forEach((v, ch) => { const X = bx + ch * (bw + gap); levBar(ctx, S, X, top, bw, bh, sc, v, style);
-      ctx.fillStyle = v.clip ? S.hot : rgba(S.ink, 0.12); ctx.fillRect(X, top - lampH - 4, bw, lampH); if (v.clip && S.grey) hatch(ctx, X, top - lampH - 4, bw, lampH, S.bg); });
-    levTicks(ctx, S, bx + 2 * bw + gap + 3, top, bh, sc);
-    if (!compact) {   // readouts above the pair: peak max (red cell when >= -0.1 dBFS) and RMS
-      const cw = oneLine ? w * 0.4 - 6 : w * 0.34, cx0 = x + 6;
-      const mx = Math.max(rd[0].max, rd[1].max), hot = mx >= -0.1 || rd[0].clip || rd[1].clip;
-      if (hot) { ctx.fillStyle = rgba(S.hot, 0.16); ctx.fillRect(cx0, y, cw, cellH); }
-      ctx.strokeStyle = rgba(S.ink, 0.4); ctx.strokeRect(cr(cx0), cr(y), Math.round(cw), Math.round(cellH));
-      const rr = 10 * Math.log10((10 ** (rd[0].rms / 10) + 10 ** (rd[1].rms / 10)) / 2), kk = o.kmode ? o.K : 0;
-      const pkS = mx < -140 ? '−∞' : fmt(mx + kk), rmS = rr < -140 ? '−∞' : fmt(rr + kk);
-      if (oneLine) { text(ctx, pkS, cx0 + cw * 0.48, y + cellH / 2, { size: 20, w: 700, col: hot ? S.hot : S.ink, align: 'right', maxW: cw * 0.46 }); text(ctx, rmS, cx0 + cw - 6, y + cellH / 2, { size: 20, col: rgba(S.ink, 0.7), align: 'right', maxW: cw * 0.46 }); }
-      else { text(ctx, pkS, cx0 + cw - 6, y + cellH * 0.3, { size: 24, w: 600, col: hot ? S.hot : S.ink, align: 'right', maxW: cw - 10 }); text(ctx, rmS, cx0 + cw - 6, y + cellH * 0.74, { size: 20, col: rgba(S.ink, 0.7), align: 'right', maxW: cw - 10 });
-        lbl(ctx, S, o.kmode ? `K${o.K}` : 'PK', cx0 + 5, y + cellH * 0.3, { size: 14, a: 0.5 }); lbl(ctx, S, 'RMS', cx0 + 5, y + cellH * 0.74, { size: 14, a: 0.5 }); }
-      // band meters: dBFS band power (sine-referenced, 8192-pt) on the same scale, hold line per band
-      const names = ['SB', 'LO', 'LM', 'MD', 'HM', 'AR'], b0 = x + w * 0.42, bw2 = (x + w - 48 - b0) / 6, f = fidx(t);
-      names.forEach((nm, i) => { const get = (ff) => F.bandDb[ff][i], v = { pk: get(f), rms: get(f), hold: ML.releaseAt(get, f, FPS, o.rel, -150, o.hold) }, X = b0 + i * bw2 + 2;
-        levBar(ctx, S, X, top, bw2 - 6, bh, sc, v, style); if (bandLbl && L.floorSize(ctx, 14) * 1.3 <= bw2) lbl(ctx, S, nm, X + (bw2 - 6) / 2, y + h - 10, { size: 14, align: 'center', a: 0.6 }); });
-      levTicks(ctx, S, x + w - 44, top, bh, sc);
-      lbl(ctx, S, oneLine ? 'BANDS' : 'BANDS dBFS', b0, y + cellH / 2, { size: 14, a: 0.5 });
-    }
-    if (!opt.noReveal) ctx.restore();
-  };
+  // v11: level meters live in levelview.js (peak / RMS ballistics, GR from the envelope, LEDs, LUFS bars)
+  M8.levels = createLevelView(L, M8, { levOpts, levRead, levScale, levBar, levTicks, hatch, lbl, reveal, cr, zonesOf }).levels;
   M8.bands = (ctx, S, r, t, k) => M8.levels(ctx, S, r, t, k);
 
   // ---------------------------------------------------------------- LOUDNESS: strip meter + LUFS history + histogram + cells
@@ -475,107 +364,10 @@ export function createMeters(L) {
   };
 
   // ---------------------------------------------------------------- IMAGER: vectorscope (polar sample / polar level / Lissajous),
-  // vertical correlation bar, balance bar, per-band width numerics and the mirrored per-frequency width strip.
-  // Original layout and colours (stage palettes); the measurement grammar follows a free imaging plug-in's manual.
-  const IMG = { NIGREDO: ['#8a8a8a', '#ffffff', '#c8c8c8', '#c8c8c8'], ALBEDO: ['#6e4433', '#1a1917', '#3a2a22', '#a8432e'], CITRINITAS: ['#6e4433', '#f0d79a', '#d79a35', '#e0475f'], RUBEDO: ['#5a1020', '#ff9be0', '#a35cf0', '#e0475f'] };
-  const imgCols = (S) => { const p = IMG[S.name] || [S.sig1, S.ink, S.ink, S.hot]; return { lo: p[0], hi: p[1], mid: p[2], neg: S.grey ? '#c8c8c8' : S.hot === p[3] ? p[3] : S.hot }; };
+  // v11: the stereo imager (Ozone-style vectorscope, correlation, balance, 4-band width) lives in imagerview.js
   function hatch(ctx, x, y, w, h, col) { ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.beginPath(); for (let d = -h; d < w + h; d += 4) { ctx.moveTo(x + d, y + h); ctx.lineTo(x + d + h, y); } ctx.stroke(); ctx.restore(); }
-  const GD = 320;
-  function splat(dens, X, Y, wgt) {   // X, Y in 0..GD-2 (bilinear splat)
-    const ix = Math.min(GD - 2, Math.max(0, Math.floor(X))), iy = Math.min(GD - 2, Math.max(0, Math.floor(Y))), fx = clamp(X - ix), fy = clamp(Y - iy);
-    dens[iy * GD + ix] += wgt * (1 - fx) * (1 - fy); dens[iy * GD + ix + 1] += wgt * fx * (1 - fy); dens[(iy + 1) * GD + ix] += wgt * (1 - fx) * fy; dens[(iy + 1) * GD + ix + 1] += wgt * fx * fy;
-  }
-  function densImage(dens, C, rows) {
-    const oc = M8._oc || (M8._oc = document.createElement('canvas')); oc.width = GD; oc.height = rows; const og = oc.getContext('2d'), im = og.createImageData(GD, rows), a = hx3(C.lo), b = hx3(C.hi), c = hx3(C.mid);
-    for (let j = 1; j < rows - 1; j++) for (let i = 1; i < GD - 1; i++) {
-      const d = dens[j * GD + i]; if (d <= 0) continue; const nb = dens[j * GD + i - 1] + dens[j * GD + i + 1] + dens[(j - 1) * GD + i] + dens[(j + 1) * GD + i];
-      // density low -> high through the stage's mid stop (Rubedo: oxblood -> violet -> pink), alpha saturates fast
-      const al = 1 - Math.exp(-(d + 0.085 * nb) * 2.2), o4 = (j * GD + i) * 4, m = clamp(Math.sqrt(d * 0.7)), u = m < 0.5 ? m * 2 : (m - 0.5) * 2, p0 = m < 0.5 ? a : c, p1 = m < 0.5 ? c : b;
-      im.data[o4] = lerp(p0[0], p1[0], u); im.data[o4 + 1] = lerp(p0[1], p1[1], u); im.data[o4 + 2] = lerp(p0[2], p1[2], u); im.data[o4 + 3] = 255 * al;
-    }
-    og.putImageData(im, 0, 0); return oc;
-  }
-  M8.imager = (ctx, S, r, t, k) => {
-    const [x0, y0, w, h] = r; reveal(ctx, x0, y0, w, h, k);
-    const f = fidx(t), tf = tickF(t), C = imgCols(S), mode = L.meter('stereo', 'mode', 'sample'), range = L.meter('stereo', 'range', 40), gain = L.meter('stereo', 'gain', 1);
-    const stripH = Math.round(clamp(h * 0.25, 54, 110)), barW = 8, corrX = x0 + w - 44, top = y0 + 34, scopeBot = y0 + h - stripH - 34;
-    const R = Math.max(30, Math.min((corrX - 30 - x0) / 2 - 6, scopeBot - top)), cx = x0 + (corrX - 24 - x0) / 2 + 4, cy = top + R;
-    // grid: half-disc (sample / level) or rotated square (Lissajous), ±45° safe lines, centre tick
-    ctx.strokeStyle = rgba(S.ink, 0.2); ctx.lineWidth = 1;
-    if (mode === 'lissajous') {
-      const q = R * 0.5, mx = cx, my = cy - R * 0.5;
-      ctx.beginPath(); ctx.moveTo(mx, my - q * 1.0); ctx.lineTo(mx + q, my); ctx.lineTo(mx, my + q); ctx.lineTo(mx - q, my); ctx.closePath(); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(mx - q / 2, my - q / 2); ctx.lineTo(mx + q / 2, my + q / 2); ctx.moveTo(mx + q / 2, my - q / 2); ctx.lineTo(mx - q / 2, my + q / 2); ctx.moveTo(mx, my - q); ctx.lineTo(mx, my + q); ctx.stroke();
-      lbl(ctx, S, 'L', mx - q / 2 - 12, my - q / 2 - 10, { size: 18, align: 'center', a: 0.7 }); lbl(ctx, S, 'R', mx + q / 2 + 12, my - q / 2 - 10, { size: 18, align: 'center', a: 0.7 });
-    } else {
-      ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, 2 * Math.PI); ctx.stroke();
-      ctx.beginPath(); for (const a of [-Math.PI / 4, Math.PI / 4]) { ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(a) * R, cy - Math.cos(a) * R); } ctx.stroke();
-      ctx.strokeStyle = rgba(S.ink, 0.35); ctx.beginPath(); ctx.moveTo(cx - R, cr(cy)); ctx.lineTo(cx + R, cr(cy)); ctx.moveTo(cr(cx), cy); ctx.lineTo(cr(cx), cy - 6); ctx.stroke();
-      ctx.strokeStyle = rgba(S.ink, 0.1); ctx.beginPath(); ctx.arc(cx, cy, R * 0.5, Math.PI, 2 * Math.PI); ctx.stroke();   // -range/2 dB ring
-      lbl(ctx, S, 'L', cx - R - 4, cy - 12, { size: 18, align: 'right', a: 0.7 }); lbl(ctx, S, 'R', cx + R + 4, cy - 12, { size: 18, a: 0.7 });
-    }
-    // clipped samples in this frame: the rim lights in the over colour
-    let clip = false; { const lv = D.lv, b1 = Math.min(lv.n, Math.floor(f / FPS * lv.rate)), b0 = Math.max(0, b1 - Math.round(lv.rate / FPS)); for (let b = b0; b < b1; b++) if (lv.clipL[b] || lv.clipR[b]) clip = true; }
-    if (clip && mode !== 'lissajous') { ctx.strokeStyle = C.neg; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, 2 * Math.PI); ctx.stroke(); ctx.lineWidth = 1; }
-    if (mode === 'level') {
-      // rays of per-sector level: fill (instant attack, release `smoothing` dB/s) + outline (hold, 3 dB/s)
-      const PN = D.polarN, rel = L.meter('stereo', 'smoothing', 12), hold = L.meter('stereo', 'hold', 0.5), rho = (db) => clamp(1 + db / range, 0, 1);
-      const fill = [], out = [];
-      for (let j = 0; j < PN; j++) { const g = (ff) => D.polar[ff * PN + j] + 20 * Math.log10(gain); fill.push(rho(ML.releaseAt(g, f, FPS, rel, -range - 1))); out.push(rho(ML.releaseAt(g, f, FPS, 3, -range - 1, hold))); }
-      const P = (j, v) => { const th = -Math.PI / 2 + (j + 0.5) / PN * Math.PI; return [cx + R * v * Math.sin(th), cy - R * v * Math.cos(th)]; };
-      ctx.beginPath(); ctx.moveTo(cx, cy); for (let j = 0; j < PN; j++) { const p = P(j, fill[j]); ctx.lineTo(p[0], p[1]); } ctx.closePath(); ctx.fillStyle = rgba(C.mid, 0.55); ctx.fill();
-      for (let j = 0; j < PN; j += 1) if (fill[j] > 0.02) { const p = P(j, fill[j]); ctx.strokeStyle = rgba(C.hi, 0.5); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(p[0], p[1]); ctx.stroke(); }
-      ctx.beginPath(); for (let j = 0; j < PN; j++) { const p = P(j, out[j]); j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); } ctx.strokeStyle = rgba(C.hi, 0.95); ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.stroke(); ctx.lineWidth = 1;
-    } else {
-      // dots: every 8 kHz sample of the last `persist` s, weight exp(-age/(0.31 T))·(1 - age/T), splatted into a density
-      const dens = M8._dens || (M8._dens = new Float32Array(GD * GD)); dens.fill(0);
-      const Tp = Math.max(1 / FPS, L.meter('stereo', 'persist', 0.42)), keep = Math.round(Tp * FPS), liss = mode === 'lissajous', sc = SC.scale * gain;
-      let g = 1; if (liss) { const peakAt = (ff) => { const [a0, a1] = scopeSpan(ff); let m = 0; for (let i = a0; i < a1; i++) m = Math.max(m, Math.abs(SC.L[i]), Math.abs(SC.R[i])); return 20 * Math.log10(Math.max(1e-6, m * sc)); };
-        g = 0.9 / Math.max(0.075, 10 ** (ML.releaseAt(peakAt, f, FPS, 6, -24) / 20)); }
-      const rows = liss ? GD : GD / 2;
-      for (let back = 0; back <= keep; back++) { const ff = f - back; if (ff < 0) break; const age = back / FPS, wgt = Math.exp(-age / (0.31 * Tp)) * (1 - age / Tp); if (wgt <= 0) continue; const [a0, a1] = scopeSpan(ff);
-        for (let i = a0; i < a1; i++) { const l = SC.L[i] * sc, rr = SC.R[i] * sc;
-          if (liss) { const [X, Y] = ML.lissajous(l, rr, g * 0.5); splat(dens, (X + 0.5) * (GD - 2), (0.5 - Y) * (GD - 2), wgt); }
-          else { const p = ML.polarSample(l, rr, range); if (p) splat(dens, (p[0] * 0.5 + 0.5) * (GD - 2), (1 - p[1]) * (rows - 2), wgt); } } }
-      const oc = densImage(dens, C, rows); ctx.imageSmoothingEnabled = true;
-      if (liss) ctx.drawImage(oc, 0, 0, GD, GD, cx - R * 0.5, cy - R, R, R);
-      else ctx.drawImage(oc, 0, 0, GD, GD / 2, cx - R, cy - R, 2 * R, R);
-    }
-    { const ml = { sample: 'POLAR SAMPLE', level: 'POLAR LEVEL', lissajous: 'LISSAJOUS' }[mode] || 'POLAR SAMPLE';   // the mode label yields to a handwritten note in the strip
-      ctx.save(); L.font(ctx, L.floorSize(ctx, 18), MONO, 500); const lw = ctx.measureText(ml).width; ctx.restore(); const q = [corrX - 8 - lw, y0, lw, 24];
-      if (!(L.avoid || []).some((o) => q[0] < o[0] + o[2] && o[0] < q[0] + q[2] && q[1] < o[1] + o[3] && o[1] < q[1] + q[3])) lbl(ctx, S, ml, corrX - 8, y0 + 14, { size: 18, a: 0.6, align: 'right' }); }
-    // vertical correlation bar: +1 top, 0 mid, -1 bottom; fill 0 -> value, marker 8x2
-    const c1 = top, c2 = scopeBot, cyM = (c1 + c2) / 2, Yc = (v) => cyM - (c2 - c1) / 2 * clamp(v, -1, 1), cv = F.corr[f];
-    ctx.fillStyle = rgba(S.ink, 0.35); ctx.fillRect(corrX + barW / 2, c1, 1, c2 - c1);
-    for (const v of [1, 0, -1]) ctx.fillRect(corrX + barW / 2 - 3, Math.round(Yc(v)), 7, 1);
-    const fy0 = Math.min(Yc(0), Yc(cv)), fh = Math.abs(Yc(cv) - Yc(0));
-    if (cv >= 0) { ctx.fillStyle = rgba(C.mid, 0.9); ctx.fillRect(corrX, fy0, barW, fh); } else if (S.grey) hatch(ctx, corrX, fy0, barW, fh, C.neg); else { ctx.fillStyle = C.neg; ctx.fillRect(corrX, fy0, barW, fh); }
-    ctx.fillStyle = cv < 0 ? C.neg : S.ink; ctx.fillRect(corrX - 2, Math.round(Yc(cv)) - 1, barW + 4, 2);
-    lbl(ctx, S, '+1', corrX + barW + 4, c1 + 4, { size: 15, a: 0.5 }); lbl(ctx, S, '0', corrX + barW + 4, cyM, { size: 15, a: 0.5 }); lbl(ctx, S, '−1', corrX + barW + 4, c2 - 4, { size: 15, a: 0.5 });
-    const ct = F.corr[tf]; lbl(ctx, S, `${ct >= 0 ? '+' : '−'}${Math.abs(ct).toFixed(2)}`, x0 + w - 2, scopeBot + 18, { size: 18, align: 'right', a: 0.95, col: ct < 0 ? C.neg : S.ink });
-    // balance bar under the scope: ±6 dB, 3 s window, negative = left louder
-    const bx = x0 + 58, bw = corrX - 70 - bx, by = scopeBot + 16, bal = ML.balanceAt(D.lv, f / FPS, 3), Xb = (v) => bx + bw * (clamp(v, -6, 6) + 6) / 12;
-    ctx.fillStyle = rgba(S.ink, 0.12); ctx.fillRect(bx, by, bw, 4); ctx.fillStyle = rgba(S.ink, 0.5); ctx.fillRect(Math.round(Xb(0)), by - 3, 1, 10);
-    ctx.fillStyle = rgba(C.mid, 0.9); ctx.fillRect(Math.min(Xb(0), Xb(bal)), by, Math.abs(Xb(bal) - Xb(0)), 4); ctx.fillStyle = S.ink; ctx.fillRect(Math.round(Xb(bal)) - 1, by - 3, 2, 10);
-    lbl(ctx, S, 'BAL', x0 + 6, by + 2, { size: 15, a: 0.6 });
-    M8.widthStrip(ctx, S, [x0, y0 + h - stripH, w, stripH], t, C);
-    ctx.restore();
-  };
+  { const IV = createImagerView(L, M8, { lbl, reveal, cr, hatch, tickF }); M8.imager = IV.imager; M8.widthStrip = IV.widthStrip; }
   M8.stereo = M8.imager;
-  // mirrored per-frequency width W(f) = PS/(PM+PS) about a centre line (a mono mix is a flat line), log f 20 Hz..20 kHz,
-  // crossover splits at the analysis bands with per-band width % (ticked on the half beat)
-  M8.widthStrip = (ctx, S, r, t, C = imgCols(S)) => {
-    const [x, y, w, h] = r, MS = D.ms, nW = MS.wBins, f = fidx(t), tf = tickF(t), cy = y + h * 0.42, hh = h * 0.36, Xf = (fq) => x + w * Math.log(fq / 20) / Math.log(1000);
-    ctx.fillStyle = rgba(S.ink, 0.05); ctx.fillRect(x, y, w, h * 0.84); ctx.fillStyle = rgba(S.ink, 0.35); ctx.fillRect(x, Math.round(cy), w, 1);
-    const pts = []; for (let j = 0; j < nW; j++) pts.push([Xf(20 * 1000 ** ((j + 0.5) / nW)), MS.widthSpec[f * nW + j] / 255]);
-    ctx.beginPath(); pts.forEach(([X, v], i) => (i ? ctx.lineTo(X, cy - v * hh) : ctx.moveTo(X, cy - v * hh))); for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(pts[i][0], cy + pts[i][1] * hh); ctx.closePath();
-    ctx.fillStyle = rgba(C.mid, 0.35); ctx.fill(); ctx.strokeStyle = S.ink; ctx.lineWidth = 1.25; ctx.lineJoin = 'round'; ctx.stroke(); ctx.lineWidth = 1;
-    const xo = MS.xover, edges = [20, ...xo, 20000];
-    ctx.strokeStyle = rgba(S.ink, 0.4); ctx.setLineDash([2, 3]); ctx.beginPath(); for (const fq of xo) { const X = cr(Xf(fq)); ctx.moveTo(X, y); ctx.lineTo(X, y + h * 0.84); } ctx.stroke(); ctx.setLineDash([]);
-    for (let b = 0; b < 4; b++) { const xa = Xf(edges[b]), xb = Xf(edges[b + 1]), v = MS.bandWidth[tf * 4 + b];
-      lbl(ctx, S, `${Math.round(v)}%`, (xa + xb) / 2, y + h - 10, { size: 16, align: 'center', a: 0.9, maxW: xb - xa - 6 }); }
-    lbl(ctx, S, 'W', x + 4, y + 12, { size: 14, a: 0.55 });
-  };
 
   // ---------------------------------------------------------------- SCOPE: L/R traces, sample-accurate (wave2), triggered on the beat
     const W2 = L.W2;
