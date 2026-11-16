@@ -12,7 +12,7 @@ Code: `web-app/src/v8/film.js` (`framing`, `camera`, `attention`, `bracket`), `s
 - A shot key lands on a **bar line** (`"N.1.0"`). 1/2-beat cuts only for 1 bar into a drop or a fill.
 - Hold: quiet 2-4 bars, groove 1-2, drop 1 (inserts on beats allowed). First composition holds >= 2 bars. Last bar = first frame's composition (loop).
 - Rhythm: wide -> push to ONE meter (1-2 bars) -> wide -> another; ~50-60 % logo-visible time.
-- Section choice (default sheet): a section change within 1 bar of the push picks drop -> `chains`, build -> `eq`, break -> `elephant`; else the look's rotation `FOCUS_PLAN` (exe: chains, eq, elephant). Pushes at clip bars 3, 7, 11 (keys `4.1.0`, `8.1.0`, `12.1.0`), hold 2, never within 2 bars of the end.
+- Section choice (default sheet): a section change within 1 bar of the push picks `SECTION_PUSH[look]` (v12 exe: drop -> `spectrum`, build -> `session` (waveform), break -> `stereo` (imager); lab/scope: drop -> chains, build -> spectrum, break -> elephant); else the look's rotation `FOCUS_PLAN` (v12 exe: session, spectrum, stereo, loud; no EQ window exists). exe has no logo/pendant window: the hero is a front layer and is hidden (hard) during a push to `loud` / `stereo`. Pushes at clip bars 3, 7, 11 (keys `4.1.0`, `8.1.0`, `12.1.0`), hold 2, never within 2 bars of the end.
 - Attention bracket (`focus.featured` auto) hops per beat only while wide (z < 1.05).
 
 ## Edit
