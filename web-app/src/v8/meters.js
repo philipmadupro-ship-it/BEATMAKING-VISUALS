@@ -221,7 +221,7 @@ export function createMeters(L) {
   // ---------------------------------------------------------------- IMAGER: vectorscope (polar sample / polar level / Lissajous),
   // v11: the stereo imager (Ozone-style vectorscope, correlation, balance, 4-band width) lives in imagerview.js
   function hatch(ctx, x, y, w, h, col) { ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.beginPath(); for (let d = -h; d < w + h; d += 4) { ctx.moveTo(x + d, y + h); ctx.lineTo(x + d + h, y); } ctx.stroke(); ctx.restore(); }
-  { const IV = createImagerView(L, M8, { lbl, reveal, cr, hatch, tickF }); M8.imager = IV.imager; M8.widthStrip = IV.widthStrip; }
+  { const IV = createImagerView(L, M8, { lbl, reveal, cr, hatch, tickF }); M8.imager = IV.imager; }
   M8.stereo = M8.imager;
 
   // ---------------------------------------------------------------- SCOPE: L/R traces, sample-accurate (wave2), triggered on the beat

@@ -34,6 +34,12 @@ export function createFilm({ D, assets, aspect = '916' }) {
       srcLufs: fmt(D.srcLufs != null ? D.srcLufs : -10.7), lra: D.summary.LRA.toFixed(1), tp: fmt(D.summary.TP), bars: String(NB) });
     L.tagVars({ producer: tag('producer'), experiment: tag('experiment'), today: tag('date') }); L.tagVars({ date: tag('date') });
   }
+  // v13 logo glow / cover pulse: ONE envelope from the analysed kicks: full strength on the kick's own frame (sharp attack, no ramp),
+  // then a smooth exponential decay (cue logo.decay, default 0.17 s), never a hard off (the tail is carried to 1.6 s).
+  const KICKS = D.onsets.kick.map((o) => [Math.max(0.55, Math.min(1, o[1])), Math.ceil(o[2] * FPS - 1e-6)]).sort((p, q) => p[1] - q[1]);
+  function glowAt(f, tau = V('logo.decay', 0.17)) {
+    let m = 0; for (let i = KICKS.length - 1; i >= 0; i--) { const d = (f - KICKS[i][1]) / FPS; if (d < 0) continue; if (d > 1.6) break; m = Math.max(m, KICKS[i][0] * Math.exp(-d / tau)); } return m;
+  }
   const WIN = (id) => tag('windows.' + (id === 'chains' ? 'logo' : id === 'session' ? 'wave' : id === 'stereo' ? 'gonio' : id)) || id;
 
   // ---------------------------------------------------------------- windows: rect, open steps, content
@@ -80,7 +86,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // grows over steps 4..6. No title bar, no window buttons: one hairline label in the UI voice, top left. The logo and
   // the pendant windows carry no label (the art is the label). The exe and lab looks share the glass; lab keeps faint
   // graph paper inside, scope adds a recessed CRT screen. API for content code: V11-SHELL-API.md.
-  const NO_LABEL = new Set(['logo', 'pendant']);
+  const NO_LABEL = new Set(['logo', 'pendant', 'cover']);
   const PAD = 20, LABEL_H = port ? 46 : 40;
   /** Content rect of window id for its rect r (also used by the camera framing and the API). */
   function contentRect(id, r) {
@@ -119,7 +125,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
       M.trace(c, Sx, [x, y, w, h - 40], t, { span: BEAT * V(meterPath('logo', 'span'), 0.25), amp: V(meterPath('logo', 'amp'), 0.2), lanes: [[0, 0.3, Sx.sig1], [1, 0.72, Sx.sig2]] });
     }
     const s = BR.logo(c, Sx, [x, y, w, h - (LOOK === 'scope' ? 40 : 34)], t, { cycle: C, mode: V('logo.mode', 'cycle'), hero, scale: V('logo.scale', 1),
-      glow: V('logo.glow', 1) * (0.35 + 0.8 * kickEnv[fidx(t)]), bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
+      glow: V('logo.glow', 1), kickI: glowAt(fidx(t)), pulse: glowAt(fidx(t)), bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
     if (LOOK === 'scope') text(c, `${(BEAT * 1000 * V(meterPath('logo', 'span'), 0.25) / 10).toFixed(1)} ms/div`, x + w, y + h - 14, { size: 18, col: rgba(Sx.ink, 0.5), align: 'right', maxW: w * 0.4 });   // real timebase only (v11)
     c.restore();
   }
@@ -146,23 +152,19 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // The pendant's chain hangs from the bottom of the U (LOGO_AT, logo px), so the chain sim's anchor follows the logo (its
   // kick punch and the hero.* offsets); the beat pushes still start at that hand. The hero is drawn after every window into its
   // own layer (same pixels + camera transform as the frame) and composited over them with a soft two-part shadow.
-  const LOGO_AT = [180, 582], LGW = 887, LGH = 647;
   const HERO_HIDE = new Set(['loud', 'stereo']);   // a push to the levels / imager is a clear view of that window (hard cut, no fade)
+  // v13: the hero is the U2C logo alone, centred on its bounding box in the stage card (cx, cy = the card's centre).
   function heroGeom(t) {
-    const H0 = HERO[aspect], k = V('hero.scale', 1), s = (H0.logoW / LGW) * V('logo.scale', 1) * k, cx = H0.cx + V('hero.x', 0), cy = H0.cy + V('hero.y', 0);
-    const isHero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), punch = 1 + 0.012 * kickEnv[fidx(t)] * (isHero ? 2 : 1);
-    return { s, cx, cy, ax: cx + (LOGO_AT[0] - LGW / 2) * s * punch + V('pendant.x', 0), ay: cy + (LOGO_AT[1] - LGH / 2) * s * punch + V('pendant.y', 0),
-      len: H0.chain * k * (V('pendant.chain', 0.3) / 0.3), size: H0.eleph * k * V('pendant.size', 1) };
+    const H0 = HERO[aspect], k = V('hero.scale', 1), st = LY.stage || LAYOUT.exe[aspect].stage, bb = BR.logoBBox(), w = H0.logoW * V('logo.scale', 1) * k;
+    return { cx: st[0] + st[2] / 2 + V('hero.x', 0), cy: st[1] + st[3] / 2 + V('hero.y', 0), w, s: w / bb.w, bb };
   }
   // v12: the hero logo dwells fully threaded between an IN and an OUT (logo.hold bars, default 10 -> a 48-beat period, ~80 % complete);
   // the break sits around beat 28-36, clear of the usual stills at 10 s and 18 s
   const HOLD = (C) => (LOOK === 'exe' && V('hero.on', true) ? Math.round(V('logo.hold', 10) * 4) : 0), HOLD_OFF = 16;
   function heroArt(cx, t) {   // draws into ctx cx (world transform already set)
-    const g = heroGeom(t), hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4));
-    BR.logo(cx, S, [g.cx - (LGW * g.s + 30) / 2, g.cy + 8 - (LGH * g.s + 40) / 2, LGW * g.s + 30, LGH * g.s + 40], t, { cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero, scale: 1,
-      glow: V('logo.glow', 1) * (0.35 + 0.8 * kickEnv[fidx(t)]), bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
-    const ch = BR.drawChainFx(cx, S, g.ax, g.ay, g.len, t);
-    BR.elephant(cx, S, ch.end[0], ch.end[1], g.size, t, ch.ang[ch.ang.length - 1]);
+    const g = heroGeom(t), hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4)), I = glowAt(fidx(t));
+    BR.logo(cx, S, [0, 0, 0, 0], t, { at: { cx: g.cx, cy: g.cy, w: g.w }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero,
+      glow: V('logo.glow', 1), kickI: I, pulse: I, bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
   }
   let HL = null;
   const mkCanvas = (w, h) => { const q = document.createElement('canvas'); q.width = Math.max(1, Math.ceil(w)); q.height = Math.max(1, Math.ceil(h)); return q; };
@@ -178,18 +180,52 @@ export function createFilm({ D, assets, aspect = '916' }) {
     sx.setTransform(1, 0, 0, 1, 0, 0); sx.globalCompositeOperation = 'source-over'; sx.clearRect(0, 0, HL.s.width, HL.s.height); sx.drawImage(HL.a, 0, 0, HL.s.width, HL.s.height);
     sx.globalCompositeOperation = 'source-in'; sx.fillStyle = light ? rgba(S.ink, 1) : '#000'; sx.fillRect(0, 0, HL.s.width, HL.s.height); sx.globalCompositeOperation = 'source-over';
     // soft dark vignette under the hero (reads in front): a radial pool behind the logo + pendant, in the same world transform
-    { const g = heroGeom(t), cyv = g.cy + (HERO[aspect].chain + g.size * 0.9) * 0.45 - 20, rx = g.s * LGW * 0.72, ry = rx * 1.15;
+    { const g = heroGeom(t), cyv = g.cy, rx = g.w * 0.62, ry = rx * 0.8;
       main.save(); main.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z)); main.translate(g.cx, cyv); main.scale(1, ry / rx);
-      const rg = main.createRadialGradient(0, 0, rx * 0.15, 0, 0, rx), va = V('hero.vignette', 0.8) * (light ? 0.35 : 1), vc = light ? '40,40,40' : '0,0,0';
+      const rg = main.createRadialGradient(0, 0, rx * 0.15, 0, 0, rx), va = V('hero.vignette', 0.7) * (light ? 0.35 : 1), vc = light ? '40,40,40' : '0,0,0';
       rg.addColorStop(0, `rgba(${vc},${va})`); rg.addColorStop(0.55, `rgba(${vc},${va * 0.55})`); rg.addColorStop(1, `rgba(${vc},0)`);
       main.fillStyle = rg; main.fillRect(-rx, -rx, 2 * rx, 2 * rx); main.restore(); }
     main.save(); main.setTransform(1, 0, 0, 1, 0, 0); main.imageSmoothingEnabled = true; main.imageSmoothingQuality = 'high';
     for (const [dx, dy, bl, a] of [[10, 34, 16, 0.5], [4, 12, 5, 0.34]]) { main.filter = `blur(${bl * px}px)`; main.globalAlpha = a * (light ? 0.6 : 1) * V('hero.shadow', 1); main.drawImage(HL.s, dx * px, dy * px, cv.width, cv.height); }
     main.filter = 'none'; main.globalAlpha = 1; main.drawImage(HL.a, 0, 0); main.restore();
   }
+  // ---------------------------------------------------------------- v13 stage: cover card + 16-step beat grid (under the hero logo)
+  // The cover (cover-0, the beat's own, greys in Nigredo) fills the card (object-fit cover, the same pixels the intro's match-cut ends on),
+  // kick pulse = scale 1 + 0.012 I and a small brightness lift (no fade). L.coverRect = the card rect, set every frame.
+  function stepGrid(x, y, w, h, t, Sx, I) {
+    const pad = port ? 22 : 18, H0 = port ? 30 : 24, gw = w - 2 * pad, gx = x + pad, gy = y + h - pad - H0, gap = 4, big = port ? 12 : 10;
+    const cw = (gw - 3 * big - 12 * gap) / 16, Q = BEAT / 4, q16 = Math.floor(t / Q + 1e-6), cur = ((q16 % 16) + 16) % 16, barq = q16 - cur, gl = V('stepgrid.glow', 1), light = L.isLight(Sx);
+    c.fillStyle = rgba(light ? Sx.card : Sx.bg, light ? 0.5 : 0.5); c.fill(L.rr(gx - 12, gy - 10, gw + 24, H0 + 34, 14));
+    for (let i = 0; i < 16; i++) {
+      const X = gx + i * (cw + gap) + Math.floor(i / 4) * (big - gap), qq = barq + i, isK = kickAt.has(qq), isS = snrAt.has(qq);
+      let age = t - qq * Q; if (age < -1e-6) age += BAR;   // seconds since this step last sounded
+      const lit = Math.exp(-Math.max(0, age) / 0.12), m = isK ? 1 : isS ? 0.82 : 0.42, ink = Sx.ink;
+      const base = isK ? 0.2 : isS ? 0.15 : 0.08, a = clamp(base + m * lit * gl, 0, 1);
+      if (isK && lit > 0.05) { c.fillStyle = rgba(ink, 0.18 * lit * gl); c.fill(L.rr(X - 3, gy - 3, cw + 6, H0 + 6, 7)); }
+      c.fillStyle = rgba(ink, a); c.fill(L.rr(X, gy, cw, H0, 5));
+      if (i === cur) { c.strokeStyle = rgba(Sx.hot, 0.95); c.lineWidth = 1.6; c.stroke(L.rr(X - 1, gy - 1, cw + 2, H0 + 2, 6)); c.lineWidth = 1; }
+      // markers under the step: filled dot = a kick lands here in this bar, ring = snare
+      if (isK || isS) { c.beginPath(); c.arc(X + cw / 2, gy + H0 + 12, 3, 0, 2 * Math.PI); if (isK) { c.fillStyle = rgba(ink, 0.8); c.fill(); } else { c.strokeStyle = rgba(ink, 0.7); c.stroke(); } }
+    }
+  }
+  function coverBody(cr, t, k, Sx) {
+    const r = L.winRect, [x, y, w, h] = r, rad = V('glass.radius', 22), I = glowAt(fidx(t)) * V('cover.pulse', 1), cv = INTRO.coverCanvas ? INTRO.coverCanvas(0, Sx) : null;
+    L.coverRect = r; L.coverRadius = rad;
+    c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip(); c.clip(L.rr(x, y, w, h, rad));
+    if (cv) { const z = 1 + 0.012 * I, sc = Math.max(w, h) / cv.width * z; c.drawImage(cv, x + w / 2 - cv.width * sc / 2, y + h / 2 - cv.height * sc / 2, cv.width * sc, cv.height * sc); }
+    else { c.fillStyle = Sx.card; c.fillRect(x, y, w, h); }
+    const dim = V('cover.dim', 1), light = L.isLight(Sx);
+    c.fillStyle = rgba(light ? Sx.card : Sx.bg, 0.5 * dim); c.fillRect(x, y, w, h);   // calm the cover so the logo reads on top
+    const gr = c.createLinearGradient(0, y + h * 0.55, 0, y + h); gr.addColorStop(0, rgba(Sx.bg, 0)); gr.addColorStop(1, rgba(Sx.bg, 0.6 * dim)); c.fillStyle = gr; c.fillRect(x, y, w, h);
+    if (I > 0.02) { c.fillStyle = rgba(light ? Sx.bg : '#ffffff', 0.07 * I); c.fillRect(x, y, w, h); }   // kick lift, a brightness step that decays (no fade in)
+    const tl = c.createLinearGradient(0, y, 0, y + h * 0.3); tl.addColorStop(0, rgba('#ffffff', 0.1)); tl.addColorStop(1, rgba('#ffffff', 0)); c.fillStyle = tl; c.fillRect(x, y, w, h * 0.3);
+    if (V('stepgrid.on', true) && k >= 1) stepGrid(x, y, w, h, t, Sx, I);
+    c.restore();
+    c.strokeStyle = rgba(Sx.ink, 0.38); c.lineWidth = 1.2; c.stroke(L.rr(x + 0.6, y + 0.6, w - 1.2, h - 1.2, rad)); c.lineWidth = 1;
+  }
   // v12: spectrum + spectrogram calls are wrapped here so the merge can switch them to SV.draw / SG.draw(ctx, rect, frame, opts)
   const drawSpectrum = (cr, t, k, Sx) => M.spectrum(c, Sx, cr, t, k), drawSpectrogram = (cr, t, k, Sx) => M.spectro(c, Sx, cr, t, k);
-  const BODY = { logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),
+  const BODY = { cover: coverBody, logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),
     eq: (cr, t, k, Sx) => M.eq(c, Sx, cr, t, k), spectrum: drawSpectrum, loudness: (cr, t, k, Sx) => M.loud(c, Sx, cr, t, k), stereo: (cr, t, k, Sx) => M.stereo(c, Sx, cr, t, k),
     spectrogram: drawSpectrogram, surface: (cr, t, k, Sx) => M.surface(c, Sx, cr, t, k),
     levels: (cr, t, k, Sx) => M.levels(c, Sx, cr, t, k), ghost: (cr, t, k, Sx) => M.ghost(c, Sx, cr, t, k) };
@@ -288,7 +324,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     LOOK = LAYOUT[look] ? look : 'exe';
     const over = {}; for (const k of STAGE_COLOR_KEYS) { const v = V('stage.' + k, null); if (v) over[k] = v; }
     S = stageOf(stage, over); LY = {}; IDS = Object.keys(LAYOUT[LOOK][aspect]); for (const id of IDS) LY[id] = rectOf(id);
-    setVars();
+    setVars(); L.pendantMark = LOOK === 'exe' ? (ctx, Sx, cx, cy, d) => BR.elephantMark(ctx, Sx, cx, cy, d, d) : null;
   }
   function pendulum() {
     BR.pendulum((k) => { const st = ev.value('stage', k, 'nigredo'); return ev.value('pendant.amp', k, stageOf(st).swingDeg.calm); }, V('pendant.period', 2), V('pendant.react', 0.32),
@@ -340,7 +376,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     for (const id of IDS) { const o = winOpen(id); if (o >= 0) for (let q = 0; q < 6; q++) add(o + q * U.t32, `open ${id} step ${q + 1}`); }
     const ra = resultAt(); for (let q = 0; q < 6; q++) add(ra + q * 0.5, `result line ${q + 1}`);
     for (const [bb, w] of BR.logoEvents(0, NB * 4, Math.max(4, Math.round(V('logo.cycle', 2) * 4)), HOLD(), HOLD_OFF)) add(bb, w);
-    for (let k = 0; k < NB * 4; k++) add(k * V('pendant.period', 2) / 2, 'pendant swing extreme');
+    if (LOOK === 'exe') for (let q = 0; q < NB * 16; q++) add(q / 4, 'step grid step (16th)');
     if (V('logo.runner', true)) for (let q = 0; q < NB * 16; q++) add(q / 4, 'logo runner step (16th)');
     for (const k of ev.keysIn('fx.flash', 0, NB * 4)) add(k.b, '1-frame invert');
     for (const k of ev.keysIn('text.cue', 0, NB * 4)) add(k.b, `text cue "${String(k.v).slice(0, 24)}"`);

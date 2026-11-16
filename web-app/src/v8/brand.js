@@ -100,11 +100,24 @@ export function createBrand(L, assets) {
       LINKS.push({ n: an.length, paths, head, tail, ps });
     }
   }
+  // v13: the logo is centred on its own bounding box (opaque pixels of the full-link edge art), not on the 887 x 647 art canvas.
+  let BBOX = null;
+  B.logoBBox = () => {
+    if (BBOX) return BBOX;
+    const LW = 887, LH = 647, cv = document.createElement('canvas'); cv.width = LW; cv.height = LH; const g = cv.getContext('2d', { willReadFrequently: true });
+    for (const p of A.links.pieces) g.drawImage(assets.edge, p.ax, p.ay, p.aw, p.ah, p.x, p.y, p.w, p.h);
+    const d = g.getImageData(0, 0, LW, LH).data; let x0 = LW, y0 = LH, x1 = 0, y1 = 0;
+    for (let y = 0; y < LH; y++) for (let x = 0; x < LW; x++) if (d[(y * LW + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 <= x0) { x0 = 0; y0 = 0; x1 = LW; y1 = LH; }
+    return (BBOX = { x0, y0, x1: x1 + 1, y1: y1 + 1, w: x1 + 1 - x0, h: y1 + 1 - y0, cx: (x0 + x1 + 1) / 2, cy: (y0 + y1 + 1) / 2 });
+  };
+  /** o.at = {cx, cy, w}: the bbox centre lands exactly on (cx, cy) and the bbox is w px wide; else it is fitted into r and centred. */
   B.logo = (ctx, S, r, t, o = {}) => {
     if (!LINKS) buildLinks();
-    const art = B.art(S), [x, y, w, h] = r, LW = 887, LH = 647, sc = Math.min((w - 30) / LW, (h - 40) / LH) * (o.scale || 1);
-    const kick = kickEnv[fidx(t)], punch = 1 + 0.012 * kick * (o.hero ? 2 : 1);
-    ctx.save(); ctx.translate(x + w / 2, y + h / 2 - 8); ctx.scale(sc * punch, sc * punch); ctx.translate(-LW / 2, -LH / 2);
+    const art = B.art(S), [x, y, w, h] = r, bb = B.logoBBox();
+    const sc = o.at ? o.at.w / bb.w : Math.min((w - 30) / bb.w, (h - 40) / bb.h) * (o.scale || 1), cx0 = o.at ? o.at.cx : x + w / 2, cy0 = o.at ? o.at.cy : y + h / 2;
+    const kick = kickEnv[fidx(t)], punch = 1 + 0.012 * (o.pulse != null ? o.pulse : kick) * (o.hero ? 2 : 1);
+    ctx.save(); ctx.translate(cx0, cy0); ctx.scale(sc * punch, sc * punch); ctx.translate(-bb.cx, -bb.cy);
     const ph = B.logoPhase(t, o.cycle || 8, o.hero ? 'hero' : o.mode || 'cycle', o.dwell || 0, o.off || 0), solid = [0, 0, 0];
     for (const p of A.links.pieces) { const m = ph[p.k][0]; ctx.globalAlpha = m === 2 ? 0.28 : 0.6; ctx.drawImage(art.edge, p.ax, p.ay, p.aw, p.ah, p.x, p.y, p.w, p.h); }
     ctx.globalAlpha = 1;
@@ -139,16 +152,16 @@ export function createBrand(L, assets) {
       if (lit >= 0) { ctx.save(); ctx.clip(Lk.paths[lit]); for (const p of Lk.ps) ctx.drawImage(art.lit, p.ax, p.ay, p.aw, p.ah, p.x, p.y, p.w, p.h); ctx.restore(); }
       draws.push([Lk, clip, lit]);
     }
-    if (G) drawGlow(ctx, S, art, draws, o.glow, o.bloom || 0);
+    if (G) drawGlow(ctx, S, art, draws, o.glow, o.bloom || 0, o.kickI);
     ctx.restore();
     return solid;
   };
   // GLOW (v9): the solid links (and, hotter, the lit link) at 1/4 resolution, blurred, added back over the logo.
   // Strength = glow x (rest + kick envelope + drop bloom); the kick envelope decays over 140 ms and the bloom over two
   // beats, so it breathes with the beat and never strobes. Stays grey in NIGREDO; ALBEDO (paper) gets an accent halo.
-  const GP = 64, GS = 0.25; let GL = null;
+  const GP = 110, GS = 0.25; let GL = null;
   function glowCtx() { if (!GL) { const mk = () => { const c = document.createElement('canvas'); c.width = Math.ceil((887 + 2 * GP) * GS); c.height = Math.ceil((647 + 2 * GP) * GS); return c; }; GL = { a: mk(), b: mk(), c: mk() }; } return GL; }
-  function drawGlow(ctx, S, art, draws, amt, bloom) {
+  function drawGlow(ctx, S, art, draws, amt, bloom, kickI) {
     const g = GL.a.getContext('2d'), W0 = GL.a.width, H0 = GL.a.height;
     g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, W0, H0); g.setTransform(GS, 0, 0, GS, GP * GS, GP * GS);
     for (const [Lk, clip, lit] of draws) {
@@ -159,6 +172,12 @@ export function createBrand(L, assets) {
     if (paper || !S.grey) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = paper ? S.hot : S.sig1; g.fillRect(0, 0, W0, H0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
     const blur = (dst, r) => { const d = dst.getContext('2d'); d.setTransform(1, 0, 0, 1, 0, 0); d.clearRect(0, 0, W0, H0); d.filter = `blur(${r}px)`; d.drawImage(GL.a, 0, 0); d.filter = 'none'; return dst; };
     const put = (cv, a) => { ctx.save(); ctx.globalCompositeOperation = paper ? 'source-over' : 'lighter'; ctx.globalAlpha = clamp(a); ctx.drawImage(cv, -GP, -GP, cv.width / GS, cv.height / GS); ctx.restore(); };
+    if (kickI != null) {   // v13: amt = rest level only; the kick intensity (sharp attack, exp decay) drives alpha AND bloom radius, no hard off
+      const I = clamp(kickI, 0, 1.2), k = paper ? 0.35 : 0.55;
+      put(blur(GL.b, 2.2 + 1.4 * bloom + 3.2 * I), amt * (0.35 + 0.8 * I) * k);
+      if (I + bloom > 0.01) put(blur(GL.c, 7 + 5 * bloom + 9 * I), amt * (I * 0.75 + bloom) * (paper ? 0.25 : 0.5));
+      return;
+    }
     put(blur(GL.b, 2.2 + 1.2 * bloom), amt * (paper ? 0.35 : 0.55));
     if (bloom > 0.01) put(blur(GL.c, 7 + 5 * bloom), amt * bloom * (paper ? 0.25 : 0.5));
   }
@@ -265,6 +284,11 @@ export function createBrand(L, assets) {
   B.tracePts = (ax, ay, size, t, len) => {
     const rg = A.rig, sc = size / rg.w, P = rg.pivot, sw = B.swing(t), g = B.chainGeom(ax, ay, len == null ? size * 0.32 : len, t), bc = rot([345, 316], P, sw.th);
     return { hand: g.pts[0], pivot: g.end, joints: g.pts, links: g.ang, body: [g.end[0] + (bc[0] - P[0]) * sc, g.end[1] + (bc[1] - P[1]) * sc], th: sw.th };
+  };
+  /** v13: the pendant as a STATIC logotype mark (the rest-pose art, no chain, no swing), fitted into a w x h box centred on (cx, cy). */
+  B.elephantMark = (ctx, S, cx, cy, w, h) => {
+    const img = B.art(S).eleph, iw = A.rig.w, ih = A.rig.h, sc = Math.min(w / iw, h / ih);
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(img, 0, 0, iw, ih, cx - iw * sc / 2, cy - ih * sc / 2, iw * sc, ih * sc); ctx.restore();
   };
   B.elephant = (ctx, S, ax, ay, size, t, lastLink) => {
     const rg = A.rig, sc = size / rg.w, P = rg.pivot, sw = B.swing(t), img = B.art(S).eleph;

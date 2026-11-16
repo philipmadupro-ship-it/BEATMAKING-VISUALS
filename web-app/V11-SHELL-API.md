@@ -29,3 +29,10 @@ Unchanged stage palettes (`stageOf`): Nigredo pure greys, Albedo beige, Citrinit
 
 ## On-screen text
 Only the title, credit and real readouts remain (`tags.js`: `hud.*`, `result.*`, window labels). Removed: boot terminal, handwritten notes, stamps, specimen tags, wires, tape, attention bracket, big words, CTA line. Window labels are plain names (`windows.*` tags).
+
+## v13 stage (middle compartment) API, for the intro match-cut
+- `layout.js COVER_RECT[aspect]` = `[x, y, w, h]` (world px, exe look): 9:16 `[334, 502, 412, 744]`, 16:9 `[1172, 92, 704, 306]`. The cover-0 image fills it **object-fit: cover** (square cover, scaled to `max(w, h)`, centred), clipped to a rounded rect, radius `glass.radius` (22). Overridable per cue sheet via `win.stage.x/y/w/h`.
+- At runtime `L.coverRect` / `L.coverRadius` (film core `L`) hold the live rect (set each frame the stage card draws). The card is a normal glass window (`stage`, content kind `cover`), open at frame 0 of the lab (`FIRST_OPEN.exe`), so it is already there on the cut frame; the camera-shot id `stage` also works for pushes.
+- The cover is `INTRO.coverCanvas(0, S)` (greys in Nigredo) with a 0.5 scrim, a bottom gradient and the step grid, so the match-cut should end on the same image slightly darker; cover kick pulse scale = 1 + 0.012 I (I = the logo-glow envelope).
+- Logo: centred on its bbox at the card centre (`BR.logo(..., {at: {cx, cy, w}})`, `BR.logoBBox()`); `HERO[aspect].logoW` = 384 / 300.
+- Static pendant mark: `L.pendantMark(ctx, S, cx, cy, d)` (exe only), drawn by the imager in a ring at `L.portholeRect = [cx, cy, R]`; no chain, no swing.

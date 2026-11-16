@@ -22,11 +22,15 @@ const V10_LAYOUT = {
 // exe (U2C.EXE) v12: final rects. Back layer = the meter windows (slightly smaller, dimmer glass); the hero (logo +
 // pendant) is a front layer (HERO below) drawn by film.js, so it has no window of its own.
 const EXE12 = {
-  '916': { session: [32, 112, 1016, 366], loud: [32, 502, 290, 744], stereo: [748, 502, 300, 744], spectro: [32, 1270, 1016, 200], spectrum: [32, 1494, 1016, 316] },
-  '169': { session: [44, 92, 1100, 262], spectro: [44, 378, 1100, 190], spectrum: [44, 592, 1100, 412], loud: [1172, 620, 340, 384], stereo: [1528, 620, 348, 384] },
+  // v13: the middle compartment ('stage': cover card + centred logo + 16-step grid) sits between LEVELS and IMAGER (9:16) /
+  // above them in the right column (16:9). The imager carries the static pendant mark where BAND WIDTH used to be.
+  '916': { session: [32, 112, 1016, 366], stage: [334, 502, 412, 744], loud: [32, 502, 272, 744], stereo: [776, 502, 272, 744], spectro: [32, 1270, 1016, 200], spectrum: [32, 1494, 1016, 316] },
+  '169': { session: [44, 92, 1100, 262], spectro: [44, 378, 1100, 190], spectrum: [44, 592, 1100, 412], stage: [1172, 92, 704, 306], loud: [1172, 420, 300, 584], stereo: [1496, 420, 380, 584] },
 };
-/** Hero (front layer) geometry per aspect: logo centre (cx, cy), logo width, chain length, pendant width (px at scale 1). */
-export const HERO = { '916': { cx: 530, cy: 672, logoW: 480, chain: 150, eleph: 340 }, '169': { cx: 1524, cy: 228, logoW: 360, chain: 85, eleph: 255 } };
+/** Hero = the U2C logo only (front layer, centred on its bbox in the stage card): width in px at scale 1. The centre is the stage rect's centre. */
+export const HERO = { '916': { logoW: 384 }, '169': { logoW: 300 } };
+/** v13 match-cut API: the cover card rect (world px, exe look) the cover-0 image fills (object-fit: cover, corner radius 22). */
+export const COVER_RECT = { '916': EXE12['916'].stage, '169': EXE12['169'].stage };
 // v11 shell: more air. The v10 tables are mapped from their frame (x 24..W-24, y 86|76..bottom) into a frame with wider
 // margins and a clear band for the HUD at the top and bottom, then every window is inset so neighbours sit ~30 px apart
 // (the glass shadows need the gap). FRAME[aspect] = [x0, y0, x1, y1] of the window area; HUD_BAND = its top/bottom bands.
@@ -45,13 +49,13 @@ function airy(rects, aspect) {
 export const LAYOUT = { exe: EXE12, ...Object.fromEntries(Object.entries(V10_LAYOUT).map(([look, A]) => [look, Object.fromEntries(Object.entries(A).map(([asp, R]) => [asp, airy(R, asp)]))])) };
 
 /** Every window id any look uses, in a stable order. */
-export const WINDOW_IDS = ['session', 'chains', 'elephant', 'spectrum', 'loud', 'stereo', 'spectro', 'surface', 'eq'];   // eq: legacy (v12 has no EQ window)
+export const WINDOW_IDS = ['session', 'chains', 'elephant', 'spectrum', 'loud', 'stereo', 'spectro', 'surface', 'eq', 'stage'];   // eq: legacy (v12 has no EQ window)
 /** What a window shows (its content can be swapped per window in the cue sheet). */
-export const CONTENT = { chains: 'logo', session: 'waveform', clock: 'clock', bands: 'bands', elephant: 'pendant', eq: 'eq', spectrum: 'spectrum', loud: 'loudness', stereo: 'stereo', spectro: 'spectrogram', surface: 'surface' };
-export const CONTENT_KINDS = ['logo', 'waveform', 'clock', 'bands', 'pendant', 'eq', 'spectrum', 'loudness', 'stereo', 'spectrogram', 'surface', 'levels', 'ghost'];
-export const WINDOW_LABELS = { chains: 'Logo (chains.dll)', session: 'Waveform (session.exe)', clock: 'Clock', bands: 'Bands', elephant: 'Pendant (elephant.sys)', eq: 'EQ', spectrum: 'Spectrum', loud: 'Loudness', stereo: 'Imager', spectro: 'Spectrogram', surface: 'Surface 3D' };
+export const CONTENT = { chains: 'logo', session: 'waveform', clock: 'clock', bands: 'bands', elephant: 'pendant', eq: 'eq', spectrum: 'spectrum', loud: 'loudness', stereo: 'stereo', spectro: 'spectrogram', surface: 'surface', stage: 'cover' };
+export const CONTENT_KINDS = ['logo', 'waveform', 'clock', 'bands', 'pendant', 'eq', 'spectrum', 'loudness', 'stereo', 'spectrogram', 'surface', 'levels', 'ghost', 'cover'];
+export const WINDOW_LABELS = { chains: 'Logo (chains.dll)', session: 'Waveform (session.exe)', clock: 'Clock', bands: 'Bands', elephant: 'Pendant (elephant.sys)', eq: 'EQ', spectrum: 'Spectrum', loud: 'Loudness', stereo: 'Imager', spectro: 'Spectrogram', surface: 'Surface 3D', stage: 'Cover + logo (stage)' };
 /** Windows that are already open at frame 0 (the rest step in on the half beats of the build bar). */
-export const FIRST_OPEN = { exe: ['session', 'loud', 'stereo'], lab: ['chains', 'session', 'elephant'], scope: ['chains', 'elephant', 'loud'] };
+export const FIRST_OPEN = { exe: ['session', 'stage', 'loud', 'stereo'], lab: ['chains', 'session', 'elephant'], scope: ['chains', 'elephant', 'loud'] };
 /** v8 focus plan (clip bar, window, hold bars). */
 export const FOCUS_PLAN = { exe: [[3, 'session', 2], [7, 'spectrum', 2], [11, 'stereo', 2], [15, 'loud', 1]], lab: [[3, 'elephant', 2], [7, 'spectrum', 2], [11, 'chains', 1]], scope: [[3, 'spectrum', 2], [7, 'elephant', 2], [11, 'chains', 2]] };
 /** v12: the window a section's push goes to (drop / build / break), per look; falls back to the plan rotation when the look lacks it. */

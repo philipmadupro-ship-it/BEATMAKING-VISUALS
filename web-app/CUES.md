@@ -198,3 +198,10 @@ one key). Tags: `tags.js` defaults <- `sheet.tags` <- `{title, date}` (`--title`
 Parity: `node tools/parity.mjs <dir>` exports the studio's default sheet and renders frames with this code; native
 stills of the same sheet differ by 0 (bit-identical, same browser build) when fed the same analysis
 (`tools/parity_diff.py`). Frames from the studio's own in-browser analysis differ only where the analyses differ.
+
+### v13 compose (stage compartment, logo glow, imager)
+- Window `stage` (exe): `win.stage.*` rect/open/visible; content `cover`. New keys: `cover.pulse` (x, cover kick scale + brightness lift, default 1), `cover.dim` (x, scrim, 1), `stepgrid.on` (bool), `stepgrid.glow` (x, 1), `logo.decay` (s, glow decay time constant, default 0.17).
+- Logo glow: strength = `logo.glow` x (0.35 + 0.8 I); I jumps to the kick's strength on the kick's own frame and decays exponentially (`logo.decay`), never a hard off; the bloom radius (blur) follows I. The logo punch scale uses the same I.
+- 16-step grid (bottom of the stage card): the step of the current 16th lights (crisp hot outline), kick steps (filled dot) brightest, snare steps (ring dot) next, from the onset analysis of the bar; each lit step decays over ~120 ms.
+- Hero = the U2C logo only, centred on its bbox in the stage card (`hero.x/y` offsets, `hero.scale`). The pendant is no longer in the hero (`pendant.*` still drives the pendant test card and the lab/scope elephant windows).
+- Imager (stereo): BAND WIDTH and WIDTH removed; a static pendant mark in a ring + thin inner ring fills the freed space (exe).

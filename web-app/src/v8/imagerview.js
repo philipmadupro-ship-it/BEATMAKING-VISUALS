@@ -3,8 +3,7 @@
 //   POLAR LEVEL   half disc, petals: per-sector level (instant attack, slow release) as a filled polygon, radial spikes,
 //                 and a held outline;
 //   LISSAJOUS     rotated square (L / R on the diagonals), dots with a connected trail of the newest samples;
-// plus the vertical correlation bar (+1 .. -1, a square marker), the L .. R balance line with its dot, and 4-band width
-// (the clip's M/S analysis, crossovers 120 Hz / 1.2 kHz / 6 kHz). Everything comes from the real per-bin M/S data
+// plus the correlation bar, the L .. R balance line with its dot, and (v13) the static pendant mark in a ring (L.pendantMark). Everything comes from the real per-bin M/S data
 // (analysis/stereo.js, msspec.js) and the 8 kHz L/R scope stream; nothing is decorative.
 import * as ML from './meterlib.js';
 import { hexRgb } from './core.js';
@@ -42,16 +41,15 @@ export function createImagerView(L, M8, H) {
     const [x0, y0, w, h] = r; reveal(ctx, x0, y0, w, h, k);
     const f = fidx(t), tf = tickF(t), C = imgCols(S), range = L.meter('stereo', 'range', 40), gain = L.meter('stereo', 'gain', 1), ink = (a) => rgba(S.ink, a);
     const fz = (s) => L.floorSize(ctx, s), small = h < 460, LH = fz(22);
-    // v12 stack, top to bottom: the half disc (as wide as the window allows, at the top), the width strip, the per-band width
-    // bar graph, balance, correlation. The strip and the bar graph share whatever height is left, so the window fills evenly.
+    // v13 stack, top to bottom: the half disc (as wide as the window allows), CORR, BAL, then the static pendant mark in a
+    // circular frame in whatever height is left (no BAND WIDTH, no WIDTH strip). Too little room (small windows): no mark.
     const rowH = Math.max(34, LH + 12), gap = 10, top = y0 + LH + 8, below = LH * 1.7, R0 = (w - 16) / 2 - 4;
-    const R = Math.max(40, Math.min(R0, h - (top - y0) - below - 2 * rowH - 4 * gap - 50)), cx = x0 + w / 2, cy = top + R;
-    const FREE = h - (cy + below - y0) - 2 * rowH - 4 * gap;   // free height for strip + bar graph
-    let stripH = 0, railH = 0;
-    if (FREE >= 150) { stripH = Math.min(FREE * 0.36, 150); railH = FREE - stripH - gap; } else if (FREE >= 64) railH = FREE;
-    let yy = cy + below + gap; const yy_strip = yy; if (stripH) yy += stripH + gap; const railY = yy; if (railH) yy += railH + gap;
-    if (!railH) yy += Math.max(0, y0 + h - (yy + 2 * rowH + gap)) * 0.45;   // no bar graph room: spread the corr / bal rows into the leftover height
-    const corY = yy, balY = corY + rowH + gap;
+    const wantD = Math.min(w - 12, 236), fixed = (top - y0) + below + 2 * rowH + 4 * gap;
+    let R = Math.max(40, Math.min(R0, h - fixed - 20)), Dm = Math.min(wantD, h - fixed - R - 16);
+    if (Dm < 110 || !L.pendantMark) { Dm = 0; R = Math.max(40, Math.min(R0, h - fixed + gap)); }
+    const cx = x0 + w / 2, cy = top + R, balY = y0 + h - 12 - rowH, corY = balY - rowH - gap;   // CORR + BAL anchored to the bottom
+    const mkTop = cy + below, mkH = corY - gap - mkTop, mkCx = cx, mkCy = mkTop + mkH / 2, mkR = Dm / 2;
+    if (Dm) L.portholeRect = [mkCx, mkCy, mkR];
     // ---- density
     const CELL = R >= 150 ? 2 : 1.5, gw = Math.ceil(2 * R / CELL) + 2, gh = Math.ceil(R / CELL) + 2, gk = gw + 'x' + gh;
     let G = GRID[gk]; if (!G) { G = GRID[gk] = { acc: new Float32Array(gw * gh), cv: document.createElement('canvas') }; G.cv.width = gw; G.cv.height = gh; G.im = G.cv.getContext('2d').createImageData(gw, gh); }
@@ -90,7 +88,7 @@ export function createImagerView(L, M8, H) {
     const lb = (s, X, Y, o = {}) => lbl(ctx, S, s, X, Y, { size: 22, align: 'center', a: 0.75, ...o }), q45 = (R + LH * 0.75) * ML.SQ;
     lb('M', cx, cy - R - LH * 0.55); lb('L', cx - q45, cy - q45 - 2); lb('R', cx + q45, cy - q45 - 2);
     lb('−S', cx - R + 3, cy + LH * 0.75, { align: 'left' }); lb('+S', cx + R - 3, cy + LH * 0.75, { align: 'right' });
-    for (const dB of (R < 150 ? [-20] : [-10, -30])) lb(String(dB).replace('-', '−'), cx + R * (1 + dB / range) - 4, cy + LH * 0.75, { a: 0.45, size: 20, maxW: R * 0.23 });
+    for (const dB of (R < 190 ? [-20] : [-10, -30])) lb(String(dB).replace('-', '−'), cx + R * (1 + dB / range) - 4, cy + LH * 0.75, { a: 0.45, size: 20, maxW: R * 0.23 });
     // ---- correlation: a horizontal bar -1 .. +1, the value ticked (half beat) as a number, the last 0.5 s as ghost ticks
     const bx0 = x0 + 8 + LH * 3.2, bx1 = x0 + w - 8 - LH * 3.6, Xc = (v) => bx0 + (bx1 - bx0) * (clamp(v, -1, 1) + 1) / 2, cv = F.corr[f], ct = F.corr[tf], cyb = corY + rowH / 2;
     lbl(ctx, S, 'CORR', x0 + 6, cyb, { size: 22, a: 0.7 });
@@ -107,15 +105,13 @@ export function createImagerView(L, M8, H) {
     ctx.fillStyle = ink(0.12); ctx.fillRect(bx0, Math.round(byc) - 3, bx1 - bx0, 6); ctx.fillStyle = ink(0.4); for (const v of [-6, -3, 0, 3, 6]) ctx.fillRect(Math.round(Xb(v)), Math.round(byc) - (v === 0 ? 10 : 6), 1, v === 0 ? 20 : 12);
     ctx.fillStyle = rgba(C.mid, 0.55); ctx.fillRect(Math.min(Xb(0), Xb(bal)), Math.round(byc) - 3, Math.abs(Xb(bal) - Xb(0)), 6); ctx.fillStyle = S.ink; ctx.fillRect(Math.round(Xb(bal)) - 2, Math.round(byc) - 9, 4, 18);
     text(ctx, Math.abs(bal) < 0.05 ? '0.0 dB' : `${bal < 0 ? 'L' : 'R'} ${Math.abs(bal).toFixed(1)} dB`, x0 + w - 6, byc, { size: 24, w: 600, align: 'right', col: S.ink, maxW: LH * 4.2 });
-    if (stripH) { const sy = yy_strip; widthStrip(ctx, S, [x0 + 8 + LH * 3.2, sy, w - 16 - LH * 3.2, stripH], t, C); lbl(ctx, S, 'WIDTH', x0 + 6, sy + stripH / 2, { size: 22, a: 0.7, maxW: LH * 3.1 }); }
-    // ---- per-band width bar graph: four vertical bars (0 .. 200 %, the 100 % tick), the value above, the band edges below
-    if (railH) { const MS = D.ms, cw = (w - 6) / 4, edges = ['<120', '<1.2K', '<6K', '<20K'], top2 = railY + LH * 1.05, bot2 = railY + railH - LH * 0.95;
-      lbl(ctx, S, 'BAND WIDTH', x0 + 6, railY + LH * 0.35, { size: 20, a: 0.5, maxW: w - 12 });
-      for (let b = 0; b < 4; b++) { const v = MS.bandWidth[tf * 4 + b], bx = x0 + 3 + b * cw + 6, bw0 = cw - 12, u = clamp(v / 200), hh = Math.max(1, (bot2 - top2) * u);
-        ctx.fillStyle = ink(0.1); ctx.fillRect(bx, top2, bw0, bot2 - top2); ctx.fillStyle = rgba(C.mid, 0.9); ctx.fillRect(bx, bot2 - hh, bw0, hh); ctx.fillStyle = rgba(C.hi, 0.9); ctx.fillRect(bx, bot2 - hh, bw0, 2);
-        ctx.fillStyle = ink(0.45); ctx.fillRect(bx - 2, Math.round((top2 + bot2) / 2), bw0 + 4, 1);
-        text(ctx, `${Math.round(v)}%`, bx + bw0 / 2, bot2 - hh - LH * 0.45, { size: 22, w: 600, col: S.ink, maxW: bw0 + 8, align: 'center' });
-        lbl(ctx, S, edges[b], bx + bw0 / 2, railY + railH - LH * 0.3, { size: 16, a: 0.5, maxW: cw - 2, align: 'center' }); } }
+    // ---- the pendant, a STATIC mark in a ring with a thin inner ring (circle in a circle); the art is the rest-pose elephant
+    if (Dm) { const rg = ctx.createRadialGradient(mkCx, mkCy - mkR * 0.25, mkR * 0.1, mkCx, mkCy, mkR);
+      rg.addColorStop(0, rgba(S.ink, 0.1)); rg.addColorStop(1, rgba(S.ink, 0.02));
+      ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(mkCx, mkCy, mkR, 0, 2 * Math.PI); ctx.fill();
+      ctx.strokeStyle = ink(0.55); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(mkCx, mkCy, mkR - 1, 0, 2 * Math.PI); ctx.stroke();
+      ctx.strokeStyle = ink(0.22); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(mkCx, mkCy, mkR - 10, 0, 2 * Math.PI); ctx.stroke();
+      if (L.pendantMark) L.pendantMark(ctx, S, mkCx, mkCy, (mkR - 14) * 2); }
     ctx.restore();
   }
 
@@ -125,7 +121,7 @@ export function createImagerView(L, M8, H) {
     const f = fidx(t), tf = tickF(t), C = imgCols(S), mode = L.meter('stereo', 'mode', 'sample'), range = L.meter('stereo', 'range', 40), gain = L.meter('stereo', 'gain', 1);
     const fs = L.floorSize(ctx, 15), liss = mode === 'lissajous', hair = 1;
     // 4-band width rail along the bottom (real, ticked per frame), then the L..R balance line, then the scope
-    const railH = Math.round(clamp(h * 0.2, 52, 76)), balY = y0 + h - railH - 10, corrX = x0 + w - 40, top = y0 + 30, scopeBot = balY - 12;
+    const balY = y0 + h - 12, corrX = x0 + w - 40, top = y0 + 30, scopeBot = balY - 12;
     const avail = scopeBot - top, R = Math.max(30, Math.min((corrX - 24 - x0) / 2, liss ? avail / 2 : avail)), cx = x0 + (corrX - 14 - x0) / 2 + 6;
     const cy = liss ? top + avail / 2 : Math.min(scopeBot, top + R + (avail - R) * 0.5);   // half disc sits on its baseline
     const ink = (a) => rgba(S.ink, a);
@@ -185,23 +181,7 @@ export function createImagerView(L, M8, H) {
     const bx = x0 + 6, bw = corrX - 14 - bx, bal = ML.balanceAt(D.lv, f / FPS, 3), Xb = (v) => bx + bw * (clamp(v, -6, 6) + 6) / 12;
     ctx.fillStyle = ink(0.25); ctx.fillRect(bx, Math.round(balY), bw, 1); ctx.fillStyle = ink(0.5); ctx.fillRect(Math.round(Xb(0)), balY - 3, 1, 7);
     ctx.fillStyle = S.ink; ctx.fillRect(Math.round(Xb(bal)) - 2, Math.round(balY) - 2, 4, 5);
-    // ---- 4-band width: crossovers 120 Hz / 1.2 kHz / 6 kHz; a bar per band (0 .. 200 %), the percentage under it
-    const MS = D.ms, ry = y0 + h - railH, cw = (w - 6) / 4, edges = ['20–120', '120–1.2k', '1.2k–6k', '6k–20k'];
-    for (let b = 0; b < 4; b++) {
-      const v = MS.bandWidth[tf * 4 + b], bx0 = x0 + 3 + b * cw + 6, bw0 = cw - 12, u = clamp(v / 200), by = ry + 8;
-      ctx.fillStyle = ink(0.1); ctx.fillRect(bx0, by, bw0, 4); ctx.fillStyle = rgba(C.mid, 0.9); ctx.fillRect(bx0, by, Math.max(1, bw0 * u), 4); ctx.fillStyle = ink(0.45); ctx.fillRect(Math.round(bx0 + bw0 / 2), by - 2, 1, 8);
-      text(ctx, `${Math.round(v)}%`, bx0, ry + 28, { size: 17, w: 600, col: S.ink, maxW: bw0 });
-      lbl(ctx, S, edges[b], bx0, ry + railH - 4, { size: 13, a: 0.5, maxW: bw0 });
-    }
     ctx.restore();
   }
-  // mirrored per-frequency width W(f) = PS/(PM+PS) about a centre line (a mono mix is a flat line), log f 20 Hz..20 kHz
-  function widthStrip(ctx, S, r, t, C = imgCols(S)) {
-    const [x, y, w, h] = r, MS = D.ms, nW = MS.wBins, f = fidx(t), cy = y + h * 0.5, hh = h * 0.4, Xf = (fq) => x + w * Math.log(fq / 20) / Math.log(1000);
-    ctx.fillStyle = rgba(S.ink, 0.35); ctx.fillRect(x, Math.round(cy), w, 1);
-    const pts = []; for (let j = 0; j < nW; j++) pts.push([Xf(20 * 1000 ** ((j + 0.5) / nW)), MS.widthSpec[f * nW + j] / 255]);
-    ctx.beginPath(); pts.forEach(([X, v], i) => (i ? ctx.lineTo(X, cy - v * hh) : ctx.moveTo(X, cy - v * hh))); for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(pts[i][0], cy + pts[i][1] * hh);
-    ctx.closePath(); ctx.fillStyle = rgba(C.mid, 0.35); ctx.fill(); ctx.strokeStyle = S.ink; ctx.lineWidth = 1.25; ctx.lineJoin = 'round'; ctx.stroke(); ctx.lineWidth = 1;
-  }
-  return { imager, widthStrip };
+  return { imager };
 }
