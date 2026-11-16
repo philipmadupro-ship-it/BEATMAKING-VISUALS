@@ -99,7 +99,7 @@ export function createCore(D) {
   function runsOf(s, o) {
     const mix = !o.fam || o.mix, out = [];
     for (const m of s.match(RUN) || [s]) {
-      if (m === '@') out.push([m, 'fb']); else if (mix && /^[+\-\u2212]?\d/.test(m)) out.push([m, 'num']); else out.push([m, 'main']);
+      if (m === '@' || m === '%') out.push([m, 'fb']); else if (mix && /^[+\-\u2212]?\d/.test(m)) out.push([m, 'num']); else out.push([m, 'main']);
     }
     return out;
   }

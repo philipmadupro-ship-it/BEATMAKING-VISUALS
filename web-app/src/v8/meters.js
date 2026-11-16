@@ -267,7 +267,6 @@ export function createMeters(L) {
       ctx.fillStyle = S.card; ctx.fillRect(x, py, w, ph);
       ctx.imageSmoothingEnabled = true; if (sw > 0) ctx.drawImage(im, sx, 0, sw, n, dx, py, x + w - dx, ph);
       for (const fq of [100, 1000, 10000]) { const Yy = Math.round(py + ph * (1 - Math.log(fq / 20) / Math.log(1000))) + 0.5; ctx.strokeStyle = rgba(S.ink, 0.14); ctx.beginPath(); ctx.moveTo(x, Yy); ctx.lineTo(x + w, Yy); ctx.stroke(); }
-      lbl(ctx, S, nm, x + 8, py + 13, { size: 18, w: 700, a: 0.8 });
       if (nm === 'M') for (const [s, fq] of [['1k', 1000], ['100', 100]]) lbl(ctx, S, s, x + w - 4, Math.round(py + ph * (1 - Math.log(fq / 20) / Math.log(1000))) + 12, { size: 16, align: 'right', a: 0.6 });
     }
     for (let b = Math.ceil((t - WIN) / BAR); b * BAR <= t; b++) { const X = x + w * (b * BAR - (t - WIN)) / WIN; if (X < x + 20) continue; ctx.fillStyle = rgba(S.ink, 0.4); ctx.fillRect(Math.round(X), y + h, 1, 8); if (b % 2 === 0 && X < x + w - 120) lbl(ctx, S, String(D.song.startBar + b), X + 4, y + h + 16, { a: 0.55 }); }
