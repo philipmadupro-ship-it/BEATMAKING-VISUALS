@@ -50,15 +50,15 @@ export function hexRgb(hex) { let c = HX.get(hex); if (!c) { const n = parseInt(
 export function rgba(hex, a) { const c = hexRgb(hex); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
 export function mix(h1, h2, k, a = 1) { const x = hexRgb(h1), y = hexRgb(h2), c = [0, 1, 2].map((i) => Math.round(lerp(x[i], y[i], clamp(k)))); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
 // v11 type system: three voices. DISPLAY (Akira Expanded, stand-in Unbounded 800) for the title and the end card; UI
-// (Synkopy, the user's "Sknopy"; stand-in Space Grotesk) for window labels and the credit; MONO (JetBrains Mono) for every number. The brand
+// (Synkopy, the user's "Sknopy"; stand-in Space Grotesk) for window labels and the credit; MONO = Akira Expanded, sized down, for every number (text() mixes the faces per run). The brand
 // files are optional @font-face slots in assets/fonts/fonts.css: a missing file falls through to the stand-in, so the
 // fonts swap by dropping the files in. Canvas font strings take these stacks as the family list.
-export const FONT = { display: '"Akira Expanded", "Unbounded", sans-serif', ui: '"Synkopy", "Space Grotesk", sans-serif', mono: '"JetBrains Mono", monospace' };
+export const FONT = { display: '"Akira Expanded", "Unbounded", sans-serif', ui: '"Synkopy", "Space Grotesk", sans-serif', mono: '"Akira Expanded", "Unbounded", sans-serif', fallback: '"Space Grotesk", "Helvetica Neue", Arial, sans-serif' };
 export const DISPLAY = FONT.display, UI = FONT.ui;
-export const SANS = FONT.ui, MONO = '"JetBrains Mono"', SERIF = '"Instrument Serif"', HAND = '"Caveat"';
+export const SANS = FONT.ui, MONO = FONT.mono, NUM_SCALE = 0.74, SERIF = '"Instrument Serif"', HAND = '"Caveat"';
 /** Font faces the renderer waits for before the first frame (web main.js + native boot.mjs). */
 export const FONT_LOADS = ['800 40px "Akira Expanded"', '800 40px "Unbounded"', '600 40px "Unbounded"', '400 22px "Synkopy"', '500 22px "Synkopy"', '400 22px "Space Grotesk"', '500 22px "Space Grotesk"',
-  '600 22px "Space Grotesk"', '700 22px "Space Grotesk"', '400 22px "JetBrains Mono"', '500 22px "JetBrains Mono"', '700 22px "JetBrains Mono"', '800 22px "JetBrains Mono"', '700 24px "Caveat"'];
+  '600 22px "Space Grotesk"', '700 22px "Space Grotesk"', '700 24px "Caveat"'];
 /** Resolve once every face above is loaded or known missing (a missing brand file resolves too). */
 export function loadFonts(doc = globalThis.document, sample = 'ATELMANSION 3 Atelmansion prod. 0123456789 Hz dB LUFS') {
   if (!doc || !doc.fonts) return Promise.resolve([]);
@@ -93,13 +93,28 @@ export function createCore(D) {
   // legibility floor: no type smaller than MIN_PX on screen at the overview (camera zoom 1) on a 1080-wide frame
   const view = { camZ: 1, base: 1 };
   const floorSize = (ctx, size) => { const m = ctx.getTransform(), sc = Math.hypot(m.a, m.b) / (view.camZ * view.base) || 1; return Math.max(size, MIN_PX / sc); };
+  // v11.1 one text helper for the whole film. Default ("mix"): numbers (6, -18.4, 128, 09.1.1, 1.2k) in Akira Expanded sized NUM_SCALE x down, words and units in
+  // Synkopy, "@" in the fallback face (Synkopy draws it as "e"). An explicit o.fam draws one face (title, labels), still routing "@" to the fallback.
+  const RUN = /[+\-\u2212]?\d[\d.,:]*|@|[^@]+?(?=[+\-\u2212]?\d|@|$)/g;
+  function runsOf(s, o) {
+    const mix = !o.fam || o.mix, out = [];
+    for (const m of s.match(RUN) || [s]) {
+      if (m === '@') out.push([m, 'fb']); else if (mix && /^[+\-\u2212]?\d/.test(m)) out.push([m, 'num']); else out.push([m, 'main']);
+    }
+    return out;
+  }
   function text(ctx, s, x, y, o = {}) {
     s = String(s);
-    font(ctx, floorSize(ctx, o.size || 12), o.fam || MONO, o.w || 400, o.style || ''); ctx.letterSpacing = (o.ls || 0) + 'px';
-    ctx.textAlign = o.align || 'left'; ctx.textBaseline = o.base || 'middle'; ctx.fillStyle = o.col || '#fff';
-    if (o.maxW) { const w0 = ctx.measureText(s).width; if (w0 > o.maxW) { ctx.save(); ctx.translate(x, y); ctx.scale(o.maxW / w0, 1); ctx.fillText(s, 0, 0); ctx.restore(); ctx.letterSpacing = '0px'; return o.maxW; } }
-    ctx.fillText(s, x, y);
-    const w = ctx.measureText(s).width; ctx.letterSpacing = '0px'; return w;
+    const size = floorSize(ctx, o.size || 12), w = o.w || 400, mainFam = o.fam && !o.mix ? o.fam : UI, runs = runsOf(s, o), ls = (o.ls || 0) + 'px';
+    const fam = (r) => r === 'num' ? FONT.mono : r === 'fb' ? FONT.fallback : mainFam, px = (r) => r === 'num' ? size * NUM_SCALE : size;
+    const wt = (r) => r === 'num' ? 400 : r === 'fb' ? 500 : w;
+    const meas = () => { let t = 0; for (const [str, r] of runs) { font(ctx, px(r), fam(r), wt(r), o.style || ''); ctx.letterSpacing = ls; t += ctx.measureText(str).width; } return t; };
+    const w0 = meas(); let sc = 1; if (o.maxW && w0 > o.maxW) sc = o.maxW / w0;
+    const tw = w0 * sc, x0 = o.align === 'right' ? x - tw : o.align === 'center' ? x - tw / 2 : x;
+    ctx.save(); ctx.translate(x0, y); if (sc !== 1) ctx.scale(sc, 1);
+    ctx.textAlign = 'left'; ctx.textBaseline = o.base || 'middle'; ctx.fillStyle = o.col || '#fff';
+    let cx = 0; for (const [str, r] of runs) { font(ctx, px(r), fam(r), wt(r), o.style || ''); ctx.letterSpacing = ls; ctx.fillText(str, cx, 0); cx += ctx.measureText(str).width; }
+    ctx.restore(); ctx.letterSpacing = '0px'; return tw;
   }
   const fmt = (v, d = 1) => (v <= -69 ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d));
   const tc = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `${String(m).padStart(2, '0')}:${s.toFixed(2).padStart(5, '0')}`; };

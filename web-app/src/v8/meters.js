@@ -163,10 +163,6 @@ export function createMeters(L) {
     ctx.fillStyle = S.hot; ctx.fillRect(Math.round(X(t)), gy, 1, gh);
     // time ruler: bars
     for (let b = Math.ceil(t0 / BAR); b * BAR <= t0 + span; b++) { const xx = X(b * BAR); if (xx < gx || xx > gx + gw) continue; ctx.fillStyle = rgba(S.ink, 0.3); ctx.fillRect(Math.round(xx), gy + gh, 1, 6); }
-    { // ruler labels: the start label only when it clears 'now' (early in the clip 'now' sits on it)
-      const s0 = win > 0 ? `−${win} s` : 'clip', cw14 = 0.62 * L.floorSize(ctx, 14), xn = X(t), nr = xn > gx + gw - 30, nL = nr ? xn - 3 * cw14 : xn - 1.5 * cw14;
-      if (gx + s0.length * cw14 + 6 < nL) lbl(ctx, S, s0, gx, gy + gh + 14, { size: 14, a: 0.5 });
-      lbl(ctx, S, 'now', Math.max(xn, gx + 1.5 * cw14), gy + gh + 14, { size: 14, a: 0.6, align: nr ? 'right' : 'center' }); }
     // sideways histogram of short-term, 0.5 LU bins over the clip so far
     const hx0 = x + w - hw, hist = ML.histogram(Array.from(F.S.subarray(1, f + 1)), fl, 0, 0.5), hm = Math.max(1, ...hist);
     ctx.fillStyle = rgba(S.ink, 0.06); ctx.fillRect(hx0, gy, hw, gh);
@@ -275,7 +271,6 @@ export function createMeters(L) {
       if (nm === 'M') for (const [s, fq] of [['1k', 1000], ['100', 100]]) lbl(ctx, S, s, x + w - 4, Math.round(py + ph * (1 - Math.log(fq / 20) / Math.log(1000))) + 12, { size: 16, align: 'right', a: 0.6 });
     }
     for (let b = Math.ceil((t - WIN) / BAR); b * BAR <= t; b++) { const X = x + w * (b * BAR - (t - WIN)) / WIN; if (X < x + 20) continue; ctx.fillStyle = rgba(S.ink, 0.4); ctx.fillRect(Math.round(X), y + h, 1, 8); if (b % 2 === 0 && X < x + w - 120) lbl(ctx, S, String(D.song.startBar + b), X + 4, y + h + 16, { a: 0.55 }); }
-    lbl(ctx, S, 'now', x + w, y + h + 16, { align: 'right', a: 0.7 });
     ctx.restore();
   };
 

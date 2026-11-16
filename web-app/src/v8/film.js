@@ -140,8 +140,6 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const R = Math.min(170, h * 0.3) + len; c.strokeStyle = rgba(Sx.ink, 0.5); c.setLineDash([4, 5]); c.beginPath(); c.arc(ax, ay, R, Math.PI / 2 - sw.amp, Math.PI / 2 + sw.amp); c.stroke(); c.setLineDash([]);
     for (const a of [-sw.amp, sw.amp]) { c.strokeStyle = rgba(Sx.ink, 0.6); c.beginPath(); c.moveTo(ax - Math.sin(a) * (R - 8), ay + Math.cos(a) * (R - 8)); c.lineTo(ax - Math.sin(a) * (R + 8), ay + Math.cos(a) * (R + 8)); c.stroke(); }
     c.beginPath(); c.moveTo(ax - Math.sin(sw.th) * (R - 14), ay + Math.cos(sw.th) * (R - 14)); c.lineTo(ax - Math.sin(sw.th) * (R + 14), ay + Math.cos(sw.th) * (R + 14)); c.strokeStyle = Sx.hot; c.lineWidth = 3; c.stroke(); c.lineWidth = 1;
-    const deg = sw.th * 180 / Math.PI;   // v11: the specimen tag and the handwritten angle are gone; one real readout
-    text(c, `${deg >= 0 ? '+' : '−'}${Math.abs(deg).toFixed(1)}°`, x + w - 6, y + 14, { size: 20, col: rgba(Sx.ink, 0.6), align: 'right' });
     c.restore();
   }
   const BODY = { logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),

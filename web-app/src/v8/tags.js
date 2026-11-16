@@ -4,7 +4,7 @@
 export const DEFAULT_TAGS = {
  "title": "{title}",
  "producer": "@uche2crazy",
- "experiment": "EXP-03",
+ "experiment": "",
  "date": "{today}",
  "windows": {
   "logo": "chain",
