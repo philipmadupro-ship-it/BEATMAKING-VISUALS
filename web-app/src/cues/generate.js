@@ -69,14 +69,19 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
   const flash = preset === 'calm' ? [] : (preset === 'drop' ? dropBars : dropBars.slice(0, 1).length ? dropBars.slice(0, 1) : [NB >= 8 ? 5 : 1]).map((d) => (NB >= 8 && d < 2 ? d + 4 : d)).filter((d) => d < NB).map((d) => key(d * 4, true));
   sheet.tracks.push(track('fx.flash', 'event', 'fx', flash));
   sheet.tracks.push(track('fx.glitch', 'clip', 'fx', []));
-  // v11 intro (2 bars at the clip start): the cover-flow starts on cover-4 and steps monotonically toward cover-0
-  // (4 → 3 → 2 → 1 → 0), one card per beat, each eased snap (half a beat of travel) LANDING ON beats 3, 4, 5, 6; the selection
-  // brackets step in at beat 6, then a hard push-in (exponential zoom, accelerating) that cuts into the lab on the downbeat of bar 3.
+  // v11/v13 intro (2 bars at the clip start). START (v13): nothing is static: on beat 1 (t = 0) the cards fan out of one stack and the player
+  // rises into place (intro.enter, linear 0 -> 1 over beats 0-2; the shapes are in intro.js: the fan lands on beat 2, the player on beat 3).
+  // The cover-flow starts on cover-4 and steps monotonically toward cover-0 (4 -> 3 -> 2 -> 1 -> 0), one card per beat, each eased snap
+  // (half a beat of travel) LANDING ON beats 4, 5, 6, 7 (index 3..6 from 0); the selection brackets step in at beat 7 (index 6) and the push
+  // (ZOOM INTO THE PROJECT) runs from there to the downbeat of bar 3: exponential zoom, EASE-IN (cubic-bezier(.7,0,1,1)): the speed peaks
+  // exactly at the cut, where the lab opens on the same cover card (match cut) and dollies out (intro.open, default 2 beats, speed peaks at
+  // the cut too): one move through the cover, with streak copies on both sides.
   if (NB >= 8) {
     const IL = 2, land = IL * 4 - 2, v0 = 4, idx = [key(0, v0, { ease: 'step' })];
     for (let k = 1; k <= 4; k++) { idx.push(key(land - 4 + k - 0.5, v0 - (k - 1), { ease: 'easeInOut' })); idx.push(key(land - 4 + k, v0 - k, { ease: 'step' })); }
     sheet.tracks.push(track('intro.index', 'number', 'stage', idx));
-    sheet.tracks.push(track('intro.push', 'number', 'stage', [key(land, 0, { ty: 'bezier', ob: [0.62, 0], ease: 'easeInOut' }), key(IL * 4, 1, { ib: [-0.12, 0], ease: 'step' })]));
+    sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(0, 0, { ease: 'linear' }), key(2, 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.push', 'number', 'stage', [key(land, 0, { ty: 'bezier', ob: [0.7, 0], ease: 'easeInOut' }), key(IL * 4, 1, { ib: [0, 0], ease: 'step' })]));
   }
   return sheet;
 }

@@ -28,7 +28,8 @@ function kickTransient(D) {
   if (D.be) {
     const { n, nb, q } = D.be, at = (i, j) => q[i * nb + j] / 2 - 120, ex = new Float32Array(n); let slow = Math.max(at(0, 0), at(0, 1));
     for (let i = 0; i < n; i++) { const db = Math.max(at(i, 0), at(i, 1)); ex[i] = Math.max(0, db - slow); slow += (db - slow) * ks; }
-    for (let f = 0; f < NF; f++) { let m = 0; const a = Math.max(0, Math.floor((f - 1) / fps * 1000) + 1), b = Math.min(n - 1, Math.floor(f / fps * 1000 + 1e-6)); for (let i = a; i <= b; i++) if (ex[i] > m) m = ex[i]; out[f] = clampv(m / B.liftSens, 0, 1); }
+    // v13: each frame reads its OWN interval [f, f+1)/fps (v12 read the previous one: a frame late)
+    for (let f = 0; f < NF; f++) { let m = 0; const a = Math.max(0, Math.floor(f / fps * 1000 + 1e-6)), b = Math.min(n - 1, Math.floor((f + 1) / fps * 1000 - 1e-6)); for (let i = a; i <= b; i++) if (ex[i] > m) m = ex[i]; out[f] = clampv(m / B.liftSens, 0, 1); }
   } else {
     const bd = D.frame.bandDb, g = (f, j) => (bd[f] && bd[f].length != null ? bd[f][j] : bd[f * 6 + j]); let slow = Math.max(g(0, 0), g(0, 1));
     for (let f = 0; f < NF; f++) { const db = Math.max(g(f, 0), g(f, 1)); out[f] = clampv((db - slow) / B.liftSens, 0, 1); slow += (db - slow) * (1 - Math.exp(-1 / (fps * B.slowMs / 1000))); }

@@ -63,7 +63,9 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function camera() {
     const s = ev.shot(b), A = framing(s.from), Bf = framing(s.to), u = s.u, zm = V('camera.zoom', 1);
     L.shotTo = s.to;   // meters can switch to their focus-shot version when the camera is on their window
-    return { x: lerp(A.x, Bf.x, u) + V('camera.x', 0), y: lerp(A.y, Bf.y, u) + V('camera.y', 0), z: lerp(A.z, Bf.z, u) * zm };
+    const cam = { x: lerp(A.x, Bf.x, u) + V('camera.x', 0), y: lerp(A.y, Bf.y, u) + V('camera.y', 0), z: lerp(A.z, Bf.z, u) * zm };
+    // v13 (intro agent): the lab opens ON the cover (match cut from the intro push) and dollies out; L.openFx drives the streak copies + hides the HUD
+    const op = IB ? INTRO.openCam(b, ev, IB, cam, { W, H, look: LOOK, aspect }) : null; L.openFx = op; return op ? { x: op.x, y: op.y, z: op.z } : cam;
   }
   // ---------------------------------------------------------------- attention: the window this beat is about
   const kickAt = new Set(D.onsets.kick.map((o) => Math.round(o[2] / BEAT * 4))), snrAt = new Set(D.onsets.snare.map((o) => Math.round(o[2] / BEAT * 4)));
@@ -267,7 +269,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // covers a pushed-in window.
   function hud(t, s) {
     if (!V('hud.on', true)) return;
-    if (s && (s.to !== 'wide' || s.from !== 'wide')) return;
+    if (s && (s.to !== 'wide' || s.from !== 'wide') || L.openFx) return;
     const hv = { tc: tc(t), bbt: bbt(t), songBar: String(D.song.startBar + Math.floor(t / BAR)) }, [, t1, b0] = HUD_BAND[aspect];
     const m = port ? 52 : 52, top = t1 / 2 + 4, bot = (b0 + H) / 2 - 2, dim = rgba(S.ink, 0.55);
     text(c, tag('hud.left', hv), m, top, { size: port ? 24 : 22, fam: DISPLAY, w: 800, col: S.ink, ls: 0.5, maxW: W * 0.55 });
@@ -349,8 +351,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c.setTransform(scale, 0, 0, scale, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
     if (opts.test) { L.view.camZ = 1; L.view.base = scale; testMode(opts.test, t); c.setTransform(1, 0, 0, 1, 0, 0); return { look: LOOK, stage: S.name, test: opts.test }; }
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
-      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H }); c.setTransform(scale, 0, 0, scale, 0, 0); textCues(t); textures(t); flash(t); c.setTransform(1, 0, 0, 1, 0, 0);
-      return { look: LOOK, stage: S.name, intro: true };
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect }); c.setTransform(scale, 0, 0, scale, 0, 0); textCues(t); textures(t); flash(t); c.setTransform(1, 0, 0, 1, 0, 0);
+      return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
     }
     const cam = camera(), z = cam.z; L.view.camZ = z; L.view.base = scale;
     c.fillStyle = S.bg; c.fillRect(0, 0, W, H);
@@ -361,6 +363,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
     if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16));
+    if (L.openFx) INTRO.streak(c, L.openFx.px, L.openFx.py, L.openFx.dl);   // v13 intro: directional streak copies on the opening dolly-out
     result(t); hud(t, ev.shot(b)); textCues(t); textures(t);
     flash(t);
     glitch(t, scale);

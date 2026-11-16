@@ -113,7 +113,7 @@ export function createWaveView(L, M, H) {
     const dbg = L.waveDebug ? (L.waveDebug.cols = [], L.waveDebug.skip = [], L.waveDebug) : null;
     if (dbg) Object.assign(dbg, { x, w, nc, dpx, laneH, lanes: [], sr: WV.sr, spc: WV.spc, lod0cps: WV.lv[0].cps });
     // kick flash (decays over 120 ms) and beat pulse (decays over ~1/3 beat) for the played-side brightening and the playhead
-    let flash = 0; if (!dbg) for (const [tr] of D.onsets.kick) { if (tr > t) break; const a = 1 - (t - tr) / 0.12; if (a > flash) flash = a; } flash = flash * flash;
+    let flash = 0; if (!dbg) for (const [tr0, , tq0] of D.onsets.kick) { const tr = L.kickT(tr0, tq0); if (tr > t) continue; const a = 1 - (t - tr) / 0.12; if (a > flash) flash = a; } flash = flash * flash;
     const bph = (((t / BEAT) % 1) + 1) % 1, pulse = dbg ? 0 : Math.exp(-bph * 7);
     const snap = (v) => Math.round(v * dpx) / dpx, PX = Math.round(tx(t)), look = dbg ? 'exact' : L.meter('session', 'look', 'envelope');   // the accuracy test renders 'exact'
     for (let ch = 0; ch < 2; ch++) {

@@ -8,11 +8,36 @@
 //   intro.on (bool, 0 = no intro)   intro.length (bars)   intro.index (carousel position in cards, eased keys)
 //   intro.push (0..1 push-in, exponential zoom)   intro.zoom (max zoom, 0 = fill the frame)   intro.select (bool: corner brackets)
 //   intro.player.scale / intro.player.opacity (1 / 1; keyframeable, default static)
+//   v13: intro.enter (0..1, default keys 0 -> 1 over beats 0..2): the START. On beat 1 the player rises into place and the cards fan out of
+//        one stack into the carousel (staggered, a small overshoot that settles on the beat; nothing is ever static).
+//   v13: intro.open (beats, default 2): the lab opens ON the cover: the camera starts at the cover-fill zoom (the exact frame the intro push
+//        ends on: a match cut), then dollies out to the wide shot, landing on the beat. Both halves of the zoom carry directional streak
+//        copies (a radial motion blur, deterministic, no fades). The cover's rect in the lab is coverTarget(): the lab's `L.coverRect`
+//        (compose agent: the glass card in the middle compartment behind the logo) or, until it exists, the compartment centre rect.
 // Deterministic: draw(t) is a pure function of t, the sheet and the clip data (no state between frames except caches).
 import { clamp, lerp, hexRgb, FONT } from './core.js';
+import { LAYOUT, HERO } from './layout.js';
 
 export const INTRO_DISPLAY = FONT.display, INTRO_UI = FONT.ui;   // the shell's font tokens; drop the brand files in assets/fonts to swap
 export const COVER_N = 5, TW = 600, TH = 738;   // card texture: square cover (TW) + caption plate (TH - TW)
+const GAP_CARD = 14;   // inset of the fallback cover rect inside the compartment (px at scale 1)
+/**
+ * THE single parameter of the match cut: the rect [x, y, w, h] (frame px at camera zoom 1) the cover card occupies in the lab.
+ * Preference: L.coverRect (array or function, set by the lab composition when it draws the cover card in the middle compartment),
+ * else the centre rect of the compartment between LEVELS and IMAGER (exe 9:16), else a square on the hero position.
+ */
+export function coverTarget(L, look, aspect) {
+  const cr = L && L.coverRect, r = typeof cr === 'function' ? cr() : cr;
+  if (r && r.length === 4 && r.every(Number.isFinite)) return r;
+  const R = (LAYOUT[look] || LAYOUT.exe)[aspect] || LAYOUT.exe['916'];
+  if (R.loud && R.stereo && aspect === '916') {
+    const x0 = R.loud[0] + R.loud[2] + GAP_CARD, x1 = R.stereo[0] - GAP_CARD, y0 = Math.max(R.loud[1], R.stereo[1]), y1 = Math.min(R.loud[1] + R.loud[3], R.stereo[1] + R.stereo[3]);
+    return [x0, y0, x1 - x0, y1 - y0];
+  }
+  const h = HERO[aspect] || HERO['916'], sz = h.logoW * 1.25; return [h.cx - sz / 2, h.cy - sz / 2, sz, sz];
+}
+/** Zoom that makes a rect w x h fill the W x H frame (object-fit: cover). */
+const fillZoom = (w, h, W, H) => Math.max(W / w, H / h);
 
 // ---------------------------------------------------------------- assets (covers + the two display fonts, all optional)
 const img = (src) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
@@ -48,6 +73,25 @@ function boxBlur(d, w, h, r) {   // separable box blur on RGBA ImageData, 3 pass
       for (let y = 0; y < h; y++) { d[(y * w + x) * 4 + ch] = acc / n; acc += t[(Math.min(h - 1, y + r + 1) * w + x) * 4 + ch] - t[(Math.max(0, y - r) * w + x) * 4 + ch]; } }
   }
 }
+
+
+// ---------------------------------------------------------------- directional motion blur (radial streak copies about the zoom pivot)
+// The frame is snapshotted and re-drawn n times, each copy scaled by up to exp(dl) about the pivot (px, py) at 1/(k+1) alpha, i.e. the
+// equal-weight average of n sub-frame renders of the zoom. Copies only ever scale UP, so they cover the frame (no dark edge). Pure function
+// of (frame, dl): deterministic. dl = the natural-log scale change over (almost) one frame time.
+let SNAP = null;
+export function streak(c, px, py, dl) {
+  if (!(dl > 0.004)) return;
+  const cv = c.canvas, sc = c.getTransform().a;
+  if (!SNAP || SNAP.width !== cv.width || SNAP.height !== cv.height) SNAP = mk(cv.width, cv.height);
+  const g = SNAP.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, SNAP.width, SNAP.height); g.drawImage(cv, 0, 0);
+  const n = clamp(Math.ceil(dl / 0.012) + 1, 2, 16), PX = px * sc, PY = py * sc;
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.imageSmoothingEnabled = true;
+  for (let k = 1; k < n; k++) { const s = Math.exp(dl * k / (n - 1)); c.globalAlpha = 1 / (k + 1); c.setTransform(s, 0, 0, s, PX * (1 - s), PY * (1 - s)); c.drawImage(SNAP, 0, 0); }
+  c.restore();
+}
+const easeOut3 = (u) => 1 - Math.pow(1 - clamp(u), 3);
+const backOut = (u, k = 1.1) => { u = clamp(u); const c3 = k + 1; return 1 + c3 * Math.pow(u - 1, 3) + k * Math.pow(u - 1, 2); };
 
 /** createIntro(L, assets): the intro's drawing; L = the shared core (v8/core.js createCore), assets = loadIntroAssets() result (or undefined). */
 export function createIntro(L, A = {}) {
@@ -132,22 +176,30 @@ export function createIntro(L, A = {}) {
   /** intro length in beats for the current sheet (0 = off) */
   function beats(ev) { return ev.value('intro.on', 0, true) === false ? 0 : Math.max(0, Math.round(ev.value('intro.length', 0, 2) * 4)); }
 
-  /** Draw the intro at clip time t. o = { S (stage), V (path, default -> value at this beat), ev, tag, W, H, b (beat) } */
+  /** Draw the intro at clip time t. o = { S (stage), V (path, default -> value at this beat), ev, tag, W, H, look, aspect } */
   function draw(c, t, o) {
-    const { S, V, W, H, ev } = o, g = geom(W, H), b = t / BEAT, f = fidx(t), kick = kickEnv[f];
+    const { S, V, W, H, ev } = o, g = geom(W, H), b = t / BEAT, f = fidx(t), kick0 = kickEnv[f];
     const title = o.tag('intro.title') || D.title, credit = o.tag('intro.credit') || 'prod. @uche2crazy', names = o.tag('intro.cards');
-    const pos = V('intro.index', 0), push = clamp(V('intro.push', 0)), zmax = V('intro.zoom', 0) || Math.max(W, H) / g.cw * 1.04;
+    const pos = V('intro.index', 0), push = clamp(V('intro.push', 0)), kick = kick0 * (1 - push);   // the kick punch dies out as the push lands (exact match cut)
+    // v13 match cut: the push ends with the cover filling the frame EXACTLY as the lab's cover card does at the lab's opening zoom
+    const tgt = coverTarget(L, o.look, o.aspect), zf = fillZoom(tgt[2], tgt[3], W, H), zmax = V('intro.zoom', 0) || Math.max(tgt[2], tgt[3]) * zf / g.cw;
+    // v13 start: enter 0 -> 1 over the first 2 beats (linear keys; the shapes live here): the cards fan out of one stack and land on beat 2
+    // (index 1 of the 4), the player rises into place and lands on beat 3. Without the key (old sheets) enter = 1 = the carousel as it was.
+    const enter = clamp(V('intro.enter', 1)), fanU = clamp(enter * 2), playerE = easeOut3(enter), groupS = lerp(0.6, 1, backOut(fanU, 0.8));
     c.fillStyle = S.bg; c.fillRect(0, 0, W, H);
     // blurred bloom of the cards near the centre (pulses with the kick): the light the glass is made of
     const wts = []; for (let i = 0; i < COVER_N; i++) { const od = ((((i - pos + 2.5) % 5) + 5) % 5) - 2.5, w = Math.max(0, 1 - Math.abs(od)); if (w > 0) wts.push([i, w]); }
     // the cover is only a soft, low-intensity glow behind the centre card: every bloom is normalised to the same mean luminance
     // (a bright cover never lifts the frame), kept small, and a vignette to the stage ground closes the edges
-    const bloomA = 0.30 + 0.07 * kick, bs = Math.max(W, H) * 0.62, REF = 0.14;
+    const bloomA = (0.30 + 0.07 * kick) * (0.45 + 0.55 * fanU), bs = Math.max(W, H) * 0.62, REF = 0.14;
     const bloom = (k) => { c.save(); for (const [i, w] of wts) { const bc = bloomCanvas(i, S); c.globalAlpha = clamp(w * bloomA * k * Math.min(1.6, REF / Math.max(0.05, bc.lum))); c.drawImage(bc, g.cx - bs * 0.5, g.cy - bs * 0.5, bs, bs); } c.restore(); };
     c.save();
-    // push-in: exponential zoom about the chosen cover's centre; the pivot glides to the frame centre so the cover ends filling the frame
+    // push-in: exponential zoom about the chosen cover's centre; the pivot glides to the frame centre so the cover ends centred, filling the frame
     const cardH = g.cw * TH / TW, coverCy = g.cy - cardH / 2 + g.cw / 2, Z = Math.exp(Math.log(zmax) * push), gk = ss(push * 1.4);
-    c.translate(lerp(g.cx, W / 2, gk), lerp(coverCy, H / 2, gk)); c.scale(Z, Z); c.translate(-g.cx, -coverCy);
+    const pvx = lerp(g.cx, W / 2, gk), pvy = lerp(coverCy, H / 2, gk);
+    c.translate(pvx, pvy); c.scale(Z, Z); c.translate(-g.cx, -coverCy);
+    // the fan-out also scales the whole group about the carousel centre
+    c.save(); c.translate(g.cx, g.cy); c.scale(groupS, groupS); c.translate(-g.cx, -g.cy);
     bloom(1);
     { const vg = c.createRadialGradient(g.cx, g.cy, bs * 0.12, g.cx, g.cy, bs * 0.5); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, S.bg); c.fillStyle = vg; c.fillRect(g.cx - bs * 0.5 - 2, g.cy - bs * 0.5 - 2, bs + 4, bs + 4); }
     // top readouts (real data): tempo / key and the bar.beat counter
@@ -158,7 +210,9 @@ export function createIntro(L, A = {}) {
     const items = []; for (let i = 0; i < COVER_N; i++) items.push([i, ((((i - pos + 2.5) % 5) + 5) % 5) - 2.5]); items.sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]));
     const d3 = g.cw * 1.6;
     const mtx = c.getTransform(), dev = Math.hypot(mtx.a, mtx.b);   // device px per logical px: strips are ~3 device px wide (cheap in small previews)
-    for (const [i, od] of items) {
+    for (const [i, od0] of items) {
+      // fan-out: the card's offset from the centre grows from 0 (one stack) to its place; outer cards start a touch later, all land with fanU = 1
+      const a00 = Math.abs(od0), fan = backOut(fanU * 1.3 - 0.1 * a00, 0.9), od = od0 * fan;
       const a0 = Math.abs(od), sg = Math.sign(od) || 1, near = 1 - ss(a0 / 0.6);
       const k = (1 - 0.2 * Math.min(a0, 1) - 0.1 * clamp(a0 - 1, 0, 1)) * clamp((2.5 - a0) / 0.4) * (1 + (0.022 * kick) * near);
       if (k <= 0.001) continue;
@@ -180,10 +234,12 @@ export function createIntro(L, A = {}) {
       for (const [px, py, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) { c.moveTo(px + sx * L0, py); c.lineTo(px, py); c.lineTo(px, py + sy * L0); }
       c.stroke();
     }
+    c.restore();   // end of the fan-out group scale
     // ---- player: liquid-glass bar (transport, now-playing pill with cover thumb + title + credit + scrub bar, level bars)
     const ps = V('intro.player.scale', 1), pa = clamp(V('intro.player.opacity', 1));
     if (pa > 0.001) {
-      const [px0, py0, pw0, ph0] = g.pl, pw = pw0 * ps, ph = ph0 * ps, px = px0 + (pw0 - pw) / 2, py = py0 + (ph0 - ph) / 2, v = ps * ph0 / 150, hz = ps;   // v: vertical / type scale, hz: horizontal
+      const psE = ps * (0.88 + 0.12 * playerE), rise = (1 - playerE) * (H - g.pl[1] + 40);   // v13: the player rises from below the frame into place
+      const [px0, py0, pw0, ph0] = g.pl, pw = pw0 * psE, ph = ph0 * psE, px = px0 + (pw0 - pw) / 2, py = py0 + (ph0 - ph) / 2 + rise, v = psE * ph0 / 150, hz = psE;   // v: vertical / type scale, hz: horizontal
       c.save(); c.globalAlpha = pa;
       glass(c, S, bloom, px, py, pw, ph, ph / 2);
       const cy = py + ph / 2, ink = 'rgba(255,255,255,0.92)';
@@ -203,18 +259,37 @@ export function createIntro(L, A = {}) {
       c.restore();
     }
     c.restore();
+    // v13: directional motion blur on the zoom: the scale change over the last frame time (the same exponential zoom at t - 0.9 frame)
+    const pPrev = clamp(ev.value('intro.push', (t - 0.9 / D.fps) / BEAT, 0)), dl = Math.log(zmax) * (push - pPrev);
+    if (dl > 0) streak(c, pvx, pvy, dl);
   }
   // selection brackets: an explicit intro.select key, else they step in where the push starts (first intro.push key)
   function selectKey(ev, b) {
     const k = ev.lastKey('intro.select', b); if (k) return k;
     const pt = ev.tracksOf('intro.push')[0]; return pt && pt.keys.length && b >= pt.keys[0].b - 1e-9 ? { key: { b: pt.keys[0].b, v: true } } : null;
   }
-  /** Events for the sync test / the timeline (beats): the hard cut into the lab and the selection steps. */
+  /**
+   * v13: the lab's opening dolly (the second half of the zoom through the cover). Called by film.camera() with the normal camera `cam`
+   * ({x, y, z}: usually the wide shot) at beat b. During intro.open beats after the cut (default 2) the camera starts framing the cover card
+   * (the coverTarget rect fills the frame: the same picture the intro push ended on) and eases out (cubic ease-out, exponential zoom) to `cam`.
+   * Returns null outside that window, else {x, y, z, dl, px, py}: the camera, the ln-scale change over the last frame (for streak()) and the
+   * screen position of the cover centre (the streak pivot).
+   */
+  function openCam(b, ev, IB, cam, o) {
+    const open = ev.value('intro.open', 0, 2); if (!IB || !(open > 0) || b < IB - 1e-9 || b >= IB + open) return null;
+    const [tx0, ty0, tw, th] = coverTarget(L, o.look, o.aspect), cx = tx0 + tw / 2, cy = ty0 + th / 2, zf = fillZoom(tw, th, o.W, o.H);
+    const e = (bb) => easeOut3((bb - IB) / open), ee = e(b), z = Math.exp(lerp(Math.log(zf), Math.log(cam.z), ee)), x = lerp(cx, cam.x, ee), y = lerp(cy, cam.y, ee);
+    const uu = (b - IB) / open, dl = Math.log(zf / cam.z) * 3 * (1 - uu) * (1 - uu) / open * (0.9 / D.fps / BEAT);   // d(ease)/db x one frame: full blur on the first lab frame too
+    return { x, y, z, dl, px: o.W / 2 + (cx - x) * z, py: o.H / 2 + (cy - y) * z };
+  }
+  /** Events for the sync test / the timeline (beats): the enter, the selection steps, the hard cut into the lab, the dolly-out landing. */
   function events(ev) {
     const out = [], ib = beats(ev); if (!ib) return out;
+    const et = ev.tracksOf('intro.enter')[0]; if (et && et.keys.length > 1) out.push([et.keys[et.keys.length - 1].b, 'intro enter lands (cards fanned, player in place)']);
     out.push([ib, 'intro → lab hard cut']);
     const sk = selectKey(ev, ib); if (sk && sk.key.v) for (let q = 0; q < 4; q++) out.push([sk.key.b + q * U.t32, `intro select bracket step ${q + 1}`]);
+    const op = ev.value('intro.open', 0, 2); if (op > 0) out.push([ib + op, 'lab dolly-out lands']);
     return out;
   }
-  return { draw, beats, events, geom, cardTex, coverCanvas };
+  return { draw, beats, events, geom, cardTex, coverCanvas, openCam, streak, coverTarget: (look, aspect) => coverTarget(L, look, aspect) };
 }
