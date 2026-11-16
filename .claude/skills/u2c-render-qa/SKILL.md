@@ -20,6 +20,8 @@ node render.mjs --engine v8 ...                          # the frozen v8 film
 ```
 No `--cues` = the studio's default sheet generated from the analysis (`--preset calm|drop|tour`). A 30 s 9:16 takes ~10-20 min (software GL): run in the background, log to `out/v9/render-*.log`.
 
+Intro (v11): `--intro off` starts in the lab. sync_web also copies assets/covers (committed) and assets/fonts/AkiraExpanded|Synkopy.* (gitignored, copied only when present). Intro-only preview: render `--len 15` then `ffmpeg -t 3.75` (8 beats at 128 BPM). Work on the native copy of this worktree in a scratch dir, never in /home/user/u2c-motion while other agents use it.
+
 ## 2. Web (U2C Studio)
 Export tab -> Export MP4 (offline WebCodecs). Batch: `python3 -m http.server 8765` in `$WEB`, then `node tools/render-demos.mjs <wav> exe:916`. Export the sheet (toolbar Export JSON or `u2c.cues.toJSON()`) to render natively.
 

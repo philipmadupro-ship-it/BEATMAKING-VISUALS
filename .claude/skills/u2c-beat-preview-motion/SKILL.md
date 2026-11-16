@@ -96,3 +96,6 @@ v9 facts: the native renderer (`/home/user/u2c-motion`, branch v9, `render.mjs -
 - [ ] Camera language (stepped only): wide establishing -> push to ONE window on a bar line -> hold while it acts -> return on a bar line; cut at the onset frame, anticipation in the previous beat.
 - [ ] Audio: offline features to per-frame JSON; attack 5-50 ms / release 120-300 ms from dt; hysteresis + min re-trigger gap; one primary reactor, secondaries <=30%; look-ahead onsets for anticipation.
 - [ ] Pendant: T = 2 beats so swing turn-arounds land on beats (test it); kick-scaled impulses, amplitude cap, 1-2 frame lag, blur on the fast part.
+
+## Intro (v11)
+Beats 0-8: liquid-glass player (transport, now-playing pill with cover thumb, title, credit, scrub bar = real audio position, band levels), cover-flow of 5 glass cards (perspective strips, reflections, kick pulse) stepping one card per beat, landing on cover-0 at beat 6, selection brackets, hard exponential push-in, hard cut to the lab at beat 8. No fades. Code: web-app/src/v8/intro.js (hook in film.js render()).

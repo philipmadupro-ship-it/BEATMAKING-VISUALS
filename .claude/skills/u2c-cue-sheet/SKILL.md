@@ -18,6 +18,9 @@ Spec: `web-app/CUES.md`. Code: `src/cues/schema.js` (parse/serialize/evaluator),
 - Studio: lanes + Inspect (◆ keyframes any registry path); Export / Import JSON in the toolbar.
 - By hand: edit JSON, validate with `node -e "import('/home/user/beatmaking-visuals/web-app/src/cues/adapter-native.mjs').then(m=>m.readCuesFile(require('fs').readFileSync('s.json','utf8')))"` (prints warnings for unknown paths).
 
+## Intro (v11)
+Lane `intro`: `intro.on|length|index|select|push|zoom|player.scale|player.opacity` (see web-app/CUES.md "Intro"). The default sheet (generate.js, bars >= 8) keys the carousel one card per beat landing on beats 1..6 and the push on beats 6..8 (cut on beat 8). Every key sits on the 32nd grid, so sync_test covers it. Native: `node render.mjs --intro on|off` (default on; old sheets without intro tracks get the default ones, `off` removes them).
+
 ## Native
 `cd /home/user/u2c-motion && node render.mjs --cues sheet.json [--look/--stage override] [--stills t,..|--filmstrip]`. The sheet's base look/stage become defaults; explicit flags win (their tracks are replaced by one key). Tags: DEFAULT_TAGS <- sheet.tags <- {title, date} (<- --tags).
 

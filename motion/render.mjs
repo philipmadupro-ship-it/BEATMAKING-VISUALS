@@ -23,6 +23,7 @@
 //                       sheet is generated from the analysis (web-app src/cues/generate.js, same as the studio's default).
 //                       The sheet's base look/stage are the defaults of --look/--stage; flags given explicitly win.
 //   --preset <name>     v9 without --cues: default | calm | drop | tour
+//   --intro on|off      v11: the 2-bar liquid-glass player + cover-flow intro at the clip start (default on; off = start in the lab)
 //   --date <text>       v9: the {date} tag (default: the beat file's date)
 //   --test waveform     v9: the waveform test card (session meter alone); --wave-debug with --stills dumps the columns
 //   --trace             with --stills: dump the per-frame motion trace (v9: hand, every joint + link angle, body)
@@ -90,6 +91,13 @@ if (ENGINE === 'v9') {
   let sheet = cueSheet || generateSheet({ bars: D.bars, labels: clipBarLabels(D), look, stage, aspect, preset: String(args.preset || 'default'), meta: { title: D.title } });
   // explicit --look / --stage flags win over the sheet's tracks
   for (const [p, v] of [['look', look], ['stage', stage]]) { sheet.base[p] = v; for (const tr of sheet.tracks) if (tr.path === p) tr.keys = [{ ...(tr.keys[0] || {}), b: 0, v }]; }
+  // v11 --intro on|off (default on): the 2-bar player + cover-flow intro at the clip start; off = start in the lab (as v10)
+  const introFlag = args.intro === undefined ? null : !/^(off|0|false|no)$/i.test(String(args.intro));
+  if (introFlag === false) { sheet.base['intro.on'] = false; sheet.tracks = sheet.tracks.filter((tr) => !tr.path.startsWith('intro.')); }
+  else if (!args.test && (introFlag === true || sheet.base['intro.on'] !== false) && !sheet.tracks.some((tr) => tr.path === 'intro.index' || tr.path === 'intro.on' && tr.keys.some((k) => k.v === false))) {
+    const gen = generateSheet({ bars: D.bars, labels: clipBarLabels(D), look, stage, aspect, preset: 'default', meta: { title: D.title } });   // sheets from before v11 get the default intro tracks
+    sheet.tracks.push(...gen.tracks.filter((tr) => tr.path.startsWith('intro.')));
+  }
   const cuesTags = {}; if (args.title) cuesTags.title = String(args.title);
   cuesTags.date = args.date ? String(args.date) : (tags.date === '{today}' || !tags.date ? today : tags.date);
   if (args.tags) Object.assign(cuesTags, JSON.parse(fs.readFileSync(path.resolve(String(args.tags)), 'utf8')));

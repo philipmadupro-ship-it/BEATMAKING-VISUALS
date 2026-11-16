@@ -44,6 +44,7 @@ src/v8/brand.js
 src/v8/core.js
 src/v8/data.js
 src/v8/film.js
+src/v8/intro.js
 src/v8/lab.js
 src/v8/layout.js
 src/v8/links.js
@@ -52,6 +53,11 @@ src/v8/meters.js
 src/v8/registry.js
 src/v8/tags.js
 src/styles.css
+assets/covers/cover-0.jpg
+assets/covers/cover-1.jpg
+assets/covers/cover-2.jpg
+assets/covers/cover-3.jpg
+assets/covers/cover-4.jpg
 assets/u2c-links.png
 assets/u2c-links-edge.png
 assets/elephant.png

@@ -1,2 +1,5 @@
 demo/*.mp4
 shots/
+# v11: the two licensed display/UI fonts live on the owner's machine only (the repo is public): never commit them
+assets/fonts/AkiraExpanded.*
+assets/fonts/Synkopy.*

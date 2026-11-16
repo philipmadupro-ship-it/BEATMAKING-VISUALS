@@ -71,6 +71,17 @@ export const DEFAULT_TAGS = {
   "DROP",
   "BPM"
  ],
+ "intro": {
+  "title": "{title}",
+  "credit": "prod. {producer}",
+  "cards": [
+   "{title}",
+   "RUBEDO",
+   "CITRINITAS",
+   "ALBEDO",
+   "NIGREDO"
+  ]
+ },
  "hud": {
   "left": "{experiment} · {stage}",
   "rec": "REC {tc}",

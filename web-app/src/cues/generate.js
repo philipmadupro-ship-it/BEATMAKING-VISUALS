@@ -65,9 +65,21 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
   sheet.tracks.push(track('pendant.amp', 'number', 'pendant', amp));
   sheet.tracks.push(track('text.cue', 'clip', 'text', []));
   // FX: the drop downbeat flash (v8: once per video), glitch opt-in (empty)
-  const flash = preset === 'calm' ? [] : (preset === 'drop' ? dropBars : dropBars.slice(0, 1).length ? dropBars.slice(0, 1) : [1]).filter((d) => d < NB).map((d) => key(d * 4, true));
+  const flash = preset === 'calm' ? [] : (preset === 'drop' ? dropBars : dropBars.slice(0, 1).length ? dropBars.slice(0, 1) : [NB >= 8 ? 2 : 1]).filter((d) => d < NB).map((d) => key(d * 4, true));
   sheet.tracks.push(track('fx.flash', 'event', 'fx', flash));
   sheet.tracks.push(track('fx.glitch', 'clip', 'fx', []));
+  // v11 intro (2 bars at the clip start): the cover-flow steps one card per beat, each eased snap landing ON the beat
+  // (half a beat of travel), 6 cards in the opposite direction ending on cover-0 at beat 6; selection brackets step in
+  // there, then a hard push-in (exponential zoom, accelerating) that cuts into the lab on the downbeat of bar 3.
+  if (NB >= 8) {
+    const IL = 2, land = IL * 4 - 2, v0 = land, idx = [key(0, v0, { ease: 'step' })];
+    for (let k = 1; k <= land; k++) { idx.push(key(k - 0.5, v0 - (k - 1), { ease: 'easeInOut' })); idx.push(key(k, v0 - k, { ease: 'step' })); }
+    sheet.tracks.push(track('intro.on', 'bool', 'intro', [key(0, true)]));
+    sheet.tracks.push(track('intro.length', 'number', 'intro', [key(0, IL, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.index', 'number', 'intro', idx));
+    sheet.tracks.push(track('intro.select', 'bool', 'intro', [key(land, true)]));
+    sheet.tracks.push(track('intro.push', 'number', 'intro', [key(land, 0, { ty: 'bezier', ob: [0.62, 0], ease: 'easeInOut' }), key(IL * 4, 1, { ib: [-0.12, 0], ease: 'step' })]));
+  }
   return sheet;
 }
 
