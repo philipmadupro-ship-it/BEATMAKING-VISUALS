@@ -186,7 +186,7 @@ export function clipData({ L, R, sr, inT, bars, beat, fps = 30, target = -14, tp
 /** Typed arrays of a clipData result, for postMessage transfer lists. */
 export function transferables(d) {
   const t = [d.spectro.buffer, d.gonioS.buffer, d.gonioM.buffer, d.scope.L.buffer, d.scope.R.buffer, d.polar.buffer, d.wave.tone.buffer, d.wave2.data.buffer]; if (d.wave3) t.push(d.wave3.data.buffer);
-  for (const k of ['pkL', 'pkR', 'msL', 'msR', 'clipL', 'clipR']) t.push(d.lv[k].buffer);
+  for (const k of ['pkL', 'pkR', 'msL', 'msR', 'clipL', 'clipR']) t.push(d.lv[k].buffer); if (d.be) t.push(d.be.q.buffer);
   for (const k of ['spectroM', 'spectroS', 'widthSpec', 'bandWidth', 'anSpec', 'ltas']) t.push(d.ms[k].buffer);
   for (const k in d.frame) t.push(d.frame[k].buffer); return t;
 }

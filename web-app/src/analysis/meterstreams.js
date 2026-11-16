@@ -9,6 +9,7 @@
 import { CLIP_LEVEL } from './stereo.js';
 import { stereoSpectra } from './msspec.js';
 import { polarLevels } from '../v8/meterlib.js';
+import { bandEnvStream } from './bandenv.js';   // v11: 1 ms band-limited detector for the dynamic EQ
 export const POLAR_N = 90;
 const clampv = (v, a, b) => (v < a ? a : v > b ? b : v);
 
@@ -25,7 +26,7 @@ export function meterStreams({ L: cL, R: cR, sr, NF, fps, bars, barLen }) {
       for (let i = a; i < e; i++) { const v = Math.abs(ch[i]); if (v > p) p = v; q += v * v; run = v >= CLIP_LEVEL ? run + 1 : 0; if (run >= 2) CLP[b] = 1; }
       PK[b] = p; MS[b] = q / Math.max(1, e - a); } });
   const ms = stereoSpectra({ L: cL, R: cR, sr, NF, fps, bars, barLen });
-  return { scope: { rate: sr / dec, scale: 1 / 16384, L: scL, R: scR }, polar, polarN: POLAR_N, lv: lev, ms };
+  return { scope: { rate: sr / dec, scale: 1 / 16384, L: scL, R: scR }, polar, polarN: POLAR_N, lv: lev, ms, be: bandEnvStream({ L: cL, R: cR, sr }) };
 }
 
 const toB64 = (u8) => { if (typeof Buffer !== 'undefined') return Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength).toString('base64'); let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };

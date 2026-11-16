@@ -1,7 +1,7 @@
 // Render each meter as a still at 1080 px wide (its window scaled up, as in a focus shot) for every stage asked,
 // from the app's own analysis of a real beat. Output: shots/meters/<meter>_<stage>.png (gitignored).
 //   node tools/meter-stills.mjs [audio] [stages=nigredo,rubedo] [meters=...]   (Playwright; serves web-app/ itself)
-// Env: T (clip time in s, default 1/2 of the clip), MODES (e.g. "stereo.mode=level") for extra variants.
+// Env: T (clip time in s, default 1/2 of the clip) or KICK=n OFF=ms (n-th kick onset + ms), MODES (e.g. "stereo.mode=level") for extra variants.
 import { createRequire } from 'node:module'; import fs from 'node:fs'; import path from 'node:path'; import http from 'node:http';
 const require = createRequire(import.meta.url); const { chromium } = require('playwright');
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'), OUT = path.join(ROOT, 'shots/meters');
@@ -31,9 +31,9 @@ for (const stage of STAGES) for (const [name, fn, w, h, over] of JOBS) {
     const M = createMeters(L), sc = 1000 / w, W = 1080, H = Math.round(h * sc + 80), c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
     L.view.camZ = sc; g.fillStyle = S.bg; g.fillRect(0, 0, W, H); g.translate(40, 40); g.scale(sc, sc);
     g.fillStyle = S.card; g.fillRect(0, 0, w, h); g.strokeStyle = S.ink; g.globalAlpha = 0.5; g.strokeRect(0.5, 0.5, w - 1, h - 1); g.globalAlpha = 1;
-    const t = T != null ? T : e.D.duration * 0.5; M[fn](g, S, [8, 8, w - 16, h - 16], t, 1);
+    const t = typeof T === 'string' ? (([k, o]) => e.D.onsets.kick[+k][2] + +o / 1000)(T.slice(4).split(':')) : T != null ? T : e.D.duration * 0.5; M[fn](g, S, [8, 8, w - 16, h - 16], t, 1);
     return c.toDataURL('image/png').split(',')[1];
-  }, [stage, fn, w, h, over, process.env.T ? +process.env.T : null]);
+  }, [stage, fn, w, h, over, process.env.T ? +process.env.T : (process.env.KICK ? 'kick' + process.env.KICK + ':' + (process.env.OFF || 0) : null)]);
   const f = path.join(OUT, `${name}_${stage}.png`); fs.writeFileSync(f, Buffer.from(png, 'base64')); console.log(f);
 }
 // full film frames (1080x1920, exe look): the camera on one window, as in a focus shot, plus the wide bench

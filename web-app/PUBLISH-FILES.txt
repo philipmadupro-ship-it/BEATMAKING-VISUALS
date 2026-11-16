@@ -5,6 +5,7 @@
 # window.claude.use('downloads') with a plain <a download> fallback (src/export/save.js).
 index.html
 src/analysis/analysis.worker.js
+src/analysis/bandenv.js
 src/analysis/clipdata.js
 src/analysis/dsp.js
 src/analysis/index.js
@@ -43,6 +44,7 @@ src/v8/assets.js
 src/v8/brand.js
 src/v8/core.js
 src/v8/data.js
+src/v8/eqview.js
 src/v8/film.js
 src/v8/lab.js
 src/v8/layout.js
