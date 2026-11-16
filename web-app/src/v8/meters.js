@@ -8,6 +8,7 @@
 import * as ML from './meterlib.js';
 import { createLevelView } from './levelview.js';
 import { createImagerView } from './imagerview.js';
+import * as SG from './spectrogramview.js';
 import { createWaveView, createWaveLODs } from './waveview.js';
 import { createEqView } from './eqview.js';
 export function createMeters(L) {
@@ -232,44 +233,10 @@ export function createMeters(L) {
     ctx.restore();
   };
 
-  // ---------------------------------------------------------------- SPECTROGRAM: stacked M and S panes, one LUT, one dB scale
-  // M = (L+R)/2 and S = (L-R)/2 band power from the L/R hop STFT (analysis/msspec.js). Both panes share the floor and
-  // the ceiling (0 dBFS), so S honestly reads darker than M; a mono mix leaves the S pane empty.
-  const specCache = {};
-  const hx3 = (v) => [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
-  function specLUT(S, gam) {
-    const A = hx3(S.spec[1]), B = hx3(S.spec[2]), C = hx3(S.spec[3]), I = hx3(S.ink), P0 = hx3(S.card), mid = 0.52, LUT = [];
-    for (let i = 0; i < 256; i++) {
-      const v = i / 255; let col;
-      if (v < 0.18) col = P0.map((c0, j) => lerp(c0, A[j], v / 0.18)); else if (v < mid) col = A.map((c0, j) => lerp(c0, B[j], (v - 0.18) / (mid - 0.18))); else col = B.map((c0, j) => lerp(c0, C[j], (v - mid) / (1 - mid)));
-      if (v > 0.76) col = col.map((c0, j) => lerp(c0, I[j], 0.18 * (v - 0.76) / 0.24));
-      if (S.grey) { const g = Math.round((col[0] + col[1] + col[2]) / 3); col = [g, g, g]; }
-      LUT.push([...col.map(Math.round), v < 0.015 ? 0 : 255 * Math.pow(v, gam)]);
-    }
-    return LUT;
-  }
-  function specImage(src, n, LUT, floor) {
-    const c = document.createElement('canvas'); c.width = NF; c.height = n; const g = c.getContext('2d'), im = g.createImageData(NF, n);
-    for (let f = 0; f < NF; f++) for (let b = 0; b < n; b++) {
-      const db = src[f * n + b] / 255 * 100 - 100, q = LUT[Math.round(clamp((db + floor) / floor) * 255)], o4 = ((n - 1 - b) * NF + f) * 4;
-      im.data[o4] = q[0]; im.data[o4 + 1] = q[1]; im.data[o4 + 2] = q[2]; im.data[o4 + 3] = q[3];
-    }
-    g.putImageData(im, 0, 0); return c;
-  }
+  // ---------------------------------------------------------------- SPECTROGRAM (v12): spectrogramview.js (Edison-style scrolling heat map)
   M8.spectro = (ctx, S, r, t, k) => {
-    const [x, y, w, h0] = r, MS = D.ms, n = 128, gam = L.meter('spectro', 'gamma', 0.56), floor = L.meter('spectro', 'range', 90), mode = L.meter('spectro', 'mode', 'ms'), h = h0 - 30; reveal(ctx, x, y, w, h0, k);
-    const key = [S.spec.join(), S.ink, S.card, S.grey, gam, floor].join('|');
-    if (!specCache[key]) { const ks = Object.keys(specCache); if (ks.length > 6) delete specCache[ks[0]]; const LUT = specLUT(S, gam); specCache[key] = { M: specImage(MS.spectroM, n, LUT, floor), S: specImage(MS.spectroS, n, LUT, floor) }; }
-    const img = specCache[key], WIN = L.meter('spectro', 'window', 8), f = fidx(t), span = Math.round(WIN * FPS), f0 = f - span, sx = Math.max(0, f0), sw = f + 1 - sx;
-    const panes = mode === 'm' ? [['M', img.M, y, h]] : [['M', img.M, y, (h - 2) / 2], ['S', img.S, y + (h - 2) / 2 + 2, (h - 2) / 2]];
-    for (const [nm, im, py, ph] of panes) {
-      const dx = x + w * (sx - f0) / span;
-      ctx.fillStyle = S.card; ctx.fillRect(x, py, w, ph);
-      ctx.imageSmoothingEnabled = true; if (sw > 0) ctx.drawImage(im, sx, 0, sw, n, dx, py, x + w - dx, ph);
-      for (const fq of [100, 1000, 10000]) { const Yy = Math.round(py + ph * (1 - Math.log(fq / 20) / Math.log(1000))) + 0.5; ctx.strokeStyle = rgba(S.ink, 0.14); ctx.beginPath(); ctx.moveTo(x, Yy); ctx.lineTo(x + w, Yy); ctx.stroke(); }
-      if (nm === 'M') for (const [s, fq] of [['1k', 1000], ['100', 100]]) lbl(ctx, S, s, x + w - 4, Math.round(py + ph * (1 - Math.log(fq / 20) / Math.log(1000))) + 12, { size: 16, align: 'right', a: 0.6 });
-    }
-    for (let b = Math.ceil((t - WIN) / BAR); b * BAR <= t; b++) { const X = x + w * (b * BAR - (t - WIN)) / WIN; if (X < x + 20) continue; ctx.fillStyle = rgba(S.ink, 0.4); ctx.fillRect(Math.round(X), y + h, 1, 8); if (b % 2 === 0 && X < x + w - 120) lbl(ctx, S, String(D.song.startBar + b), X + 4, y + h + 16, { a: 0.55 }); }
+    reveal(ctx, r[0], r[1], r[2], r[3], k);
+    SG.draw(ctx, r, Math.min(NF - 1, Math.max(0, t * FPS)), { S, ms: D.ms, nf: NF, fps: FPS, text, floorSize: L.floorSize, bar: BAR, startBar: D.song.startBar, win: L.meter('spectro', 'window', 8), floor: L.meter('spectro', 'range', 90), gamma: L.meter('spectro', 'gamma', 0.56), mode: L.meter('spectro', 'mode', 'ms') });
     ctx.restore();
   };
 

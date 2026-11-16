@@ -7,6 +7,7 @@
 // (the clip's M/S analysis, crossovers 120 Hz / 1.2 kHz / 6 kHz). Everything comes from the real per-bin M/S data
 // (analysis/stereo.js, msspec.js) and the 8 kHz L/R scope stream; nothing is decorative.
 import * as ML from './meterlib.js';
+import { hexRgb } from './core.js';
 
 const IMG = { NIGREDO: ['#8a8a8a', '#ffffff', '#c8c8c8', '#c8c8c8'], ALBEDO: ['#6e4433', '#1a1917', '#3a2a22', '#a8432e'], CITRINITAS: ['#6e4433', '#f0d79a', '#d79a35', '#e0475f'], RUBEDO: ['#5a1020', '#ff9be0', '#a35cf0', '#e0475f'] };
 export const imgCols = (S) => { const p = IMG[S.name] || [S.sig1, S.ink, S.ink, S.hot]; return { lo: p[0], hi: p[1], mid: p[2], neg: S.grey ? '#c8c8c8' : S.hot === p[3] ? p[3] : S.hot }; };
@@ -22,7 +23,99 @@ export function createImagerView(L, M8, H) {
     ctx.lineTo(P[P.length - 1][0], P[P.length - 1][1]);
   }
 
+
+  // ======================================================================================================================
+  // v12 POLAR SAMPLE: a dense density cloud. Every 8 kHz L/R sample of the last `persist` s is splatted into a half-disc
+  // grid at its real polar position (M up, S sideways, radius = level in dB), decayed by age; colour and alpha follow the
+  // accumulated density (stage ramp, greys in Nigredo). A near-mono beat stays a vertical column; its density, its length
+  // (level) and the held peak ring still move with the music. Nothing is drawn off the data.
+  const DENS = {};
+  function lutFor(S) {
+    const key = [S.name, S.ink, S.card].join('|'); if (DENS[key]) return DENS[key];
+    const C = imgCols(S), A = hexRgb(C.lo), B = hexRgb(C.mid), Z = hexRgb(C.hi), lut = new Uint8ClampedArray(256 * 4);
+    for (let i = 0; i < 256; i++) { const v = i / 255, c = v < 0.5 ? A.map((a, j) => a + (B[j] - a) * v / 0.5) : B.map((b, j) => b + (Z[j] - b) * (v - 0.5) / 0.5);
+      lut[i * 4] = c[0]; lut[i * 4 + 1] = c[1]; lut[i * 4 + 2] = c[2]; lut[i * 4 + 3] = i < 3 ? 0 : 255 * Math.pow(v, 0.55); }
+    return (DENS[key] = lut);
+  }
+  const GRID = {};
+  function imagerSample(ctx, S, r, t, k) {
+    const [x0, y0, w, h] = r; reveal(ctx, x0, y0, w, h, k);
+    const f = fidx(t), tf = tickF(t), C = imgCols(S), range = L.meter('stereo', 'range', 40), gain = L.meter('stereo', 'gain', 1), ink = (a) => rgba(S.ink, a);
+    const fz = (s) => L.floorSize(ctx, s), small = h < 460, LH = fz(22);
+    // rows from the bottom: 4-band width rail, balance, correlation; the disc takes the rest
+    const rowH = Math.max(34, LH + 12), railH = small ? 0 : Math.max(60, LH * 2 + 14), gap = 8;
+    let yy = y0 + h; const railY = yy - railH; yy -= railH + (railH ? gap : 0);
+    const balY = yy - rowH; yy = balY - gap; const corY = yy - rowH; yy = corY - gap;
+    const top = y0 + LH + 8, discAvail = yy - top, R0 = (w - 2 * (LH * 1.4)) / 2, below = LH * 1.7;
+    const R = Math.max(40, Math.min(R0, discAvail - below)), spare = discAvail - (R + below) - gap, stripH = spare >= 56 ? Math.min(spare, 96) : 0;
+    const yy_strip = yy - stripH, cx = x0 + w / 2, cy = top + R + (stripH ? 0 : (spare > 0 ? Math.min(spare * 0.35, 30) : 0));
+    // ---- density
+    const CELL = R >= 150 ? 2 : 1.5, gw = Math.ceil(2 * R / CELL) + 2, gh = Math.ceil(R / CELL) + 2, gk = gw + 'x' + gh;
+    let G = GRID[gk]; if (!G) { G = GRID[gk] = { acc: new Float32Array(gw * gh), cv: document.createElement('canvas') }; G.cv.width = gw; G.cv.height = gh; G.im = G.cv.getContext('2d').createImageData(gw, gh); }
+    const acc = G.acc; acc.fill(0);
+    const Tp = Math.max(1 / FPS, L.meter('stereo', 'persist', 0.42)), keep = Math.min(Math.round(Tp * FPS * 1.6), f), sc = SC.scale * gain, ox = R / CELL + 1, oy = R / CELL + 0.5;
+    for (let back = keep; back >= 0; back--) {
+      const ff = f - back, wgt = Math.exp(-back / FPS / (0.45 * Tp)), [a0, a1] = scopeSpan(ff);
+      for (let i = a0; i < a1; i++) { const p = ML.polarSample(SC.L[i] * sc, SC.R[i] * sc, range); if (!p) continue;
+        const fx = ox + p[0] * R / CELL - 0.5, fy = oy - p[1] * R / CELL - 0.5, gx = Math.floor(fx), gy = Math.floor(fy), ux = fx - gx, uy = fy - gy;
+        if (gx >= 0 && gx < gw - 1 && gy >= 0 && gy < gh - 1) { const o = gy * gw + gx; acc[o] += wgt * (1 - ux) * (1 - uy); acc[o + 1] += wgt * ux * (1 - uy); acc[o + gw] += wgt * (1 - ux) * uy; acc[o + gw + 1] += wgt * ux * uy; } }
+    }
+    const lut = lutFor(S), d = G.im.data, KD = 0.9;
+    for (let i = 0; i < gw * gh; i++) { const v = acc[i], q = (v <= 0 ? 0 : Math.round(255 * (1 - Math.exp(-v * KD)))) * 4; d[i * 4] = lut[q]; d[i * 4 + 1] = lut[q + 1]; d[i * 4 + 2] = lut[q + 2]; d[i * 4 + 3] = lut[q + 3]; }
+    G.cv.getContext('2d').putImageData(G.im, 0, 0);
+    // ---- grid: dB rings, angle spokes (M 0°, L / R ±45°, S ±90°), rim ticks
+    ctx.lineWidth = 1; const arc = (rho) => { ctx.beginPath(); ctx.arc(cx, cy, R * rho, Math.PI, 2 * Math.PI); ctx.stroke(); };
+    ctx.strokeStyle = ink(0.13); for (const dB of [-10, -20, -30]) arc(1 + dB / range);
+    ctx.strokeStyle = ink(0.4); arc(1);
+    const spoke = (deg, a) => { const th = deg * Math.PI / 180; ctx.strokeStyle = ink(a); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(th) * R, cy - Math.cos(th) * R); ctx.stroke(); };
+    spoke(-67.5, 0.07); spoke(-22.5, 0.07); spoke(22.5, 0.07); spoke(67.5, 0.07); spoke(-45, 0.26); spoke(45, 0.26); spoke(0, 0.26);
+    ctx.strokeStyle = ink(0.4); ctx.beginPath(); ctx.moveTo(cx - R, Math.round(cy) + 0.5); ctx.lineTo(cx + R, Math.round(cy) + 0.5); ctx.stroke();
+    ctx.beginPath(); for (let a = -90; a <= 90; a += 15) { const th = a * Math.PI / 180, l = a % 45 === 0 ? 9 : 5; ctx.moveTo(cx + Math.sin(th) * R, cy - Math.cos(th) * R); ctx.lineTo(cx + Math.sin(th) * (R - l), cy - Math.cos(th) * (R - l)); } ctx.stroke();
+    // clip lights the rim
+    let clip = false; { const lv = D.lv, b1 = Math.min(lv.n, Math.floor(f / FPS * lv.rate)), b0 = Math.max(0, b1 - Math.round(lv.rate / FPS)); for (let b = b0; b < b1; b++) if (lv.clipL[b] || lv.clipR[b]) clip = true; }
+    if (clip) { ctx.strokeStyle = C.neg; ctx.lineWidth = 2.5; arc(1); ctx.lineWidth = 1; }
+    // ---- the cloud (clipped to the disc), then the newest frame's own samples as sharp bright dots
+    ctx.save(); ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.arc(cx, cy, R + 0.5, Math.PI, 2 * Math.PI); ctx.closePath(); ctx.clip();
+    ctx.imageSmoothingEnabled = false; ctx.drawImage(G.cv, 0, 0, gw, gh, cx - ox * CELL, cy - oy * CELL, gw * CELL, gh * CELL);
+    { const [a0, a1] = scopeSpan(f); ctx.fillStyle = rgba(C.hi, 0.95); ctx.beginPath(); const ds = Math.max(2, Math.round(R / 100));
+      for (let i = a0; i < a1; i++) { const p = ML.polarSample(SC.L[i] * sc, SC.R[i] * sc, range); if (p) ctx.rect(Math.round(cx + p[0] * R - ds / 2), Math.round(cy - p[1] * R - ds / 2), ds, ds); } ctx.fill(); }
+    // held peak ring (6 dB/s fall after 0.4 s): the level the cloud last reached
+    { const peakAt = (ff) => { const [a0, a1] = scopeSpan(ff); let m = 0; for (let i = a0; i < a1; i++) m = Math.max(m, Math.hypot((SC.L[i] + SC.R[i]) * ML.SQ, (SC.R[i] - SC.L[i]) * ML.SQ)); return 20 * Math.log10(Math.max(1e-6, m * sc)); };
+      const pk = ML.releaseAt(peakAt, f, FPS, 6, -range - 1, 0.4), rho = clamp(1 + pk / range, 0, 1); if (rho > 0.02) { ctx.strokeStyle = rgba(C.hi, 0.7); ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.arc(cx, cy, R * rho, Math.PI * 1.17, Math.PI * 1.83); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; } }
+    ctx.restore();
+    // ---- labels: M on top, L / R on the ±45° spokes, ∓S at the baseline ends, dB on the baseline
+    const lb = (s, X, Y, o = {}) => lbl(ctx, S, s, X, Y, { size: 22, align: 'center', a: 0.75, ...o }), q45 = (R + LH * 0.75) * ML.SQ;
+    lb('M', cx, cy - R - LH * 0.55); lb('L', cx - q45, cy - q45 - 2); lb('R', cx + q45, cy - q45 - 2);
+    lb('−S', cx - R, cy + LH * 0.75); lb('+S', cx + R, cy + LH * 0.75);
+    for (const dB of [-10, -30]) lb(String(dB).replace('-', '−'), cx + R * (1 + dB / range) - 4, cy + LH * 0.75, { a: 0.45, size: 20, maxW: R * 0.23 });
+    // ---- correlation: a horizontal bar -1 .. +1, the value ticked (half beat) as a number, the last 0.5 s as ghost ticks
+    const bx0 = x0 + 8 + LH * 3.2, bx1 = x0 + w - 8 - LH * 3.6, Xc = (v) => bx0 + (bx1 - bx0) * (clamp(v, -1, 1) + 1) / 2, cv = F.corr[f], ct = F.corr[tf], cyb = corY + rowH / 2;
+    lbl(ctx, S, 'CORR', x0 + 6, cyb, { size: 22, a: 0.7 });
+    ctx.fillStyle = ink(0.12); ctx.fillRect(bx0, Math.round(cyb) - 3, bx1 - bx0, 6);
+    ctx.fillStyle = ink(0.4); for (const v of [-1, -0.5, 0, 0.5, 1]) ctx.fillRect(Math.round(Xc(v)), Math.round(cyb) - (v === 0 || Math.abs(v) === 1 ? 10 : 6), 1, v === 0 || Math.abs(v) === 1 ? 20 : 12);
+    const fx0 = Math.min(Xc(0), Xc(cv)), fw = Math.abs(Xc(cv) - Xc(0));
+    if (cv >= 0) { ctx.fillStyle = rgba(C.mid, 0.55); ctx.fillRect(fx0, Math.round(cyb) - 3, fw, 6); } else if (S.grey) hatch(ctx, fx0, Math.round(cyb) - 3, fw, 6, C.neg); else { ctx.fillStyle = rgba(C.neg, 0.7); ctx.fillRect(fx0, Math.round(cyb) - 3, fw, 6); }
+    for (let b = 1; b <= 12; b++) { const v = F.corr[Math.max(0, f - b)]; ctx.fillStyle = ink(0.22 * (1 - b / 13)); ctx.fillRect(Math.round(Xc(v)) - 1, Math.round(cyb) - 7, 2, 14); }
+    ctx.fillStyle = cv < 0 ? C.neg : S.ink; ctx.fillRect(Math.round(Xc(cv)) - 2, Math.round(cyb) - 9, 4, 18);
+    text(ctx, `${ct >= 0 ? '+' : '−'}${Math.abs(ct).toFixed(2)}`, x0 + w - 6, cyb, { size: 26, w: 700, align: 'right', col: ct < 0 ? C.neg : S.ink });
+    // ---- balance: 3 s level balance L .. R (±6 dB), the number in dB
+    const bal = ML.balanceAt(D.lv, f / FPS, 3), Xb = (v) => bx0 + (bx1 - bx0) * (clamp(v, -6, 6) + 6) / 12, byc = balY + rowH / 2;
+    lbl(ctx, S, 'BAL', x0 + 6, byc, { size: 22, a: 0.7 });
+    ctx.fillStyle = ink(0.12); ctx.fillRect(bx0, Math.round(byc) - 3, bx1 - bx0, 6); ctx.fillStyle = ink(0.4); for (const v of [-6, -3, 0, 3, 6]) ctx.fillRect(Math.round(Xb(v)), Math.round(byc) - (v === 0 ? 10 : 6), 1, v === 0 ? 20 : 12);
+    ctx.fillStyle = rgba(C.mid, 0.55); ctx.fillRect(Math.min(Xb(0), Xb(bal)), Math.round(byc) - 3, Math.abs(Xb(bal) - Xb(0)), 6); ctx.fillStyle = S.ink; ctx.fillRect(Math.round(Xb(bal)) - 2, Math.round(byc) - 9, 4, 18);
+    text(ctx, Math.abs(bal) < 0.05 ? '0.0 dB' : `${bal < 0 ? 'L' : 'R'} ${Math.abs(bal).toFixed(1)} dB`, x0 + w - 6, byc, { size: 24, w: 600, align: 'right', col: S.ink, maxW: LH * 4.2 });
+    if (stripH) { const sy = yy_strip; widthStrip(ctx, S, [x0 + 8 + LH * 3.2, sy, w - 16 - LH * 3.2, stripH], t, C); lbl(ctx, S, 'WIDTH', x0 + 6, sy + stripH / 2, { size: 22, a: 0.7, maxW: LH * 3.1 }); }
+    // ---- 4-band width rail
+    if (railH) { const MS = D.ms, cw = (w - 6) / 4, edges = ['20–120', '120–1.2k', '1.2k–6k', '6k–20k'];
+      for (let b = 0; b < 4; b++) { const v = MS.bandWidth[tf * 4 + b], bx = x0 + 3 + b * cw + 6, bw0 = cw - 12, u = clamp(v / 200), by = railY + 4;
+        ctx.fillStyle = ink(0.1); ctx.fillRect(bx, by, bw0, 4); ctx.fillStyle = rgba(C.mid, 0.9); ctx.fillRect(bx, by, Math.max(1, bw0 * u), 4); ctx.fillStyle = ink(0.45); ctx.fillRect(Math.round(bx + bw0 / 2), by - 2, 1, 8);
+        text(ctx, `${Math.round(v)}%`, bx, railY + 4 + LH * 0.95, { size: 24, w: 600, col: S.ink, maxW: bw0 });
+        lbl(ctx, S, edges[b], bx, railY + railH - LH * 0.4, { size: 20, a: 0.5, maxW: bw0 }); } }
+    ctx.restore();
+  }
+
   function imager(ctx, S, r, t, k) {
+    if (L.meter('stereo', 'mode', 'sample') === 'sample') return imagerSample(ctx, S, r, t, k);
     const [x0, y0, w, h] = r; reveal(ctx, x0, y0, w, h, k);
     const f = fidx(t), tf = tickF(t), C = imgCols(S), mode = L.meter('stereo', 'mode', 'sample'), range = L.meter('stereo', 'range', 40), gain = L.meter('stereo', 'gain', 1);
     const fs = L.floorSize(ctx, 15), liss = mode === 'lissajous', hair = 1;

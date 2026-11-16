@@ -298,6 +298,54 @@ for (const k of ['sine1k', 'pink', 'hardleft', 'clipped']) {
     ok('real beat: gain reduction rises on the strong kicks (>= 60 % of kicks with strength >= 0.6: +1 dB between 40 ms before and 50 ms after)', strong.length >= 6 && rise >= 0.6 * strong.length, `${rise}/${strong.length} kicks`);
     ok('real beat: the LO-band detector crosses half of its kick peak within 1.5 frames of the quantised kick time (>= 90 % of the kicks that fire it)', hits.length >= 5 && near >= 0.9 * hits.length, `${near}/${hits.length} · offsets ${hits.map((d) => (d * 1000) | 0).join(' ')} ms`); }
 }
+// ---- 9. spectrogram (v12): the column at frame t is the FFT of the audio at t (numpy STFT, same definition: NFFT 8192 periodic Hann,
+// hop 1024, hops centred in (c - 1/fps, c]; M = (L+R)/2, band power in 128 log bands, dB + 100 stored in uint8) within 0.6 dB, and the
+// kicks show as bright low-frequency columns on the drawn heat-map grid (spectrogramview.js heatPixels).
+if (fs.existsSync(BEAT)) {
+  const SG = await import(path.join(ROOT, 'src/v8/spectrogramview.js'));
+  const buf = readWav(BEAT), sr = buf.sampleRate, inT = 32 * 4 * 0.46875 + 0.00025, beat = 0.46875;
+  const C0 = clipData({ L: buf.getChannelData(0), R: buf.getChannelData(1), sr, inT, bars: 8, beat, target: 'off' }), NFc = C0.frames, ms = C0.ms;
+  const SPY = String.raw`
+import json, sys, numpy as np
+from scipy.io import wavfile
+wav, inT, nbar, beat, out = sys.argv[1], float(sys.argv[2]), int(sys.argv[3]), float(sys.argv[4]), sys.argv[5]
+sr, x = wavfile.read(wav); x = x.astype(np.float64) / (32768.0 if x.dtype == np.int16 else 1.0)
+n = round(nbar * 4 * beat * sr); i0 = round(inT * sr); NF = round(nbar * 4 * beat * 30)
+L = np.zeros(n); R = np.zeros(n); seg = x[i0:i0 + n]; L[:len(seg)] = seg[:, 0]; R[:len(seg)] = seg[:, 1]
+fade = int(0.005 * sr); k = np.arange(fade) / max(1, fade - 1); L[:fade] *= k; R[:fade] *= k; L[n - fade:] *= k[::-1]; R[n - fade:] *= k[::-1]
+N, HOP = 8192, 1024; win = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(N) / N); kPow = 4 / (N * np.sum(win ** 2)); df = sr / N; nb = N // 2 + 1
+def hop(h):
+    s0 = h * HOP - N // 2; idx = np.arange(N) + s0; ok = (idx >= 0) & (idx < n); a = np.where(ok, L[np.clip(idx, 0, n - 1)], 0) * win; b = np.where(ok, R[np.clip(idx, 0, n - 1)], 0) * win
+    return np.abs(np.fft.rfft((a + b) / 2)) ** 2
+frames = sorted(set(list(range(40, NF - 1, 17)) + [NF - 2])); res = {}
+for f in frames:
+    c = f / 30 * sr; a = c - sr / 30; hs = [h for h in range(0, n // HOP + 1) if h * HOP > a and h * HOP <= c]
+    P = np.mean([hop(h) for h in hs], axis=0); row = []
+    for i in range(36, 128):
+        lo, hi = 20 * 1000 ** (i / 128), 20 * 1000 ** ((i + 1) / 128); k0 = int(np.ceil(lo / df - 1e-9)); k1 = min(nb, int(np.ceil(hi / df - 1e-9)))
+        row.append(10 * np.log10(max(P[k0:k1].sum() * kPow, 1e-30)))
+    res[f] = row
+json.dump(res, open(out, 'w'))
+`;
+  fs.writeFileSync(path.join(DIR, 'spg.py'), SPY);
+  const rr = spawnSync('python3', [path.join(DIR, 'spg.py'), BEAT, String(inT), '8', String(beat), path.join(DIR, 'spg.json')], { encoding: 'utf8' });
+  if (rr.status !== 0) ok('spectrogram: numpy reference ran', false, rr.stderr.slice(-300));
+  else {
+    const ref = JSON.parse(fs.readFileSync(path.join(DIR, 'spg.json'), 'utf8')); let n = 0, sum = 0, mx = 0;
+    for (const [f, row] of Object.entries(ref)) row.forEach((db, j) => { if (db < -85) return; const d = Math.abs(ms.spectroM[f * 128 + 36 + j] / 2.55 - 100 - db); n++; sum += d; mx = Math.max(mx, d); });
+    ok('spectrogram: column at frame t = FFT of the audio at t (numpy STFT, M, 92 bands above 105 Hz; mean <= 0.3 dB, max <= 0.6 dB)', n > 1000 && sum / n <= 0.3 && mx <= 0.6, `${n} cells in ${Object.keys(ref).length} frames · mean ${(sum / n).toFixed(3)} dB · max ${mx.toFixed(3)} dB`);
+  }
+  // the drawn grid: kick columns are bright in the low rows (20-110 Hz = bands 0..38 = the bottom 39 rows)
+  const nf = NFc, LUT = SG.specLUT({ spec: ['#060606', '#3a3a3a', '#9a9a9a', '#ffffff'], ink: '#ffffff', card: '#0a0a0a', grey: true }), px = SG.heatPixels(ms.spectroM, nf, 128, LUT, 90);
+  const lowA = (f) => { let a = 0; for (let b = 0; b < 39; b++) a += px[((127 - b) * nf + f) * 4 + 0]; return a / 39; }, hiA = (f) => { let a = 0; for (let b = 100; b < 128; b++) a += px[((127 - b) * nf + f) * 4 + 0]; return a / 28; };
+  const kicks = C0.onsets.kick.filter((k) => k[1] >= 0.6 && k[2] > 0.1 && k[2] < C0.duration - 0.3); let allLow = 0; for (let f = 0; f < nf; f++) allLow += lowA(f) / nf;
+  const bright = kicks.filter(([, , tq]) => { const f = Math.round(tq * 30) + 2; return lowA(f) > allLow * 1.05 && lowA(f) > hiA(f); }), onGrid = kicks.filter(([, , tq]) => { let m = -1, mf = 0; for (let f = Math.round(tq * 30) - 1; f <= Math.round(tq * 30) + 6; f++) if (lowA(f) > m) { m = lowA(f); mf = f; } return mf >= Math.round(tq * 30) - 1 && mf <= Math.round(tq * 30) + 6; });
+  ok('spectrogram grid: kick columns are bright low-frequency columns (>= 80 % of strong kicks: low rows above the clip mean and above the top rows)', kicks.length >= 6 && bright.length >= 0.8 * kicks.length, `${bright.length}/${kicks.length} kicks · low-row mean ${allLow.toFixed(0)}`);
+  // S in the same pixels never exceeds M for a mono-ish mix: shared encoding, S not normalised up
+  let sm = 0, mm = 0; for (let i = 0; i < nf * 128; i++) { sm += ms.spectroS[i]; mm += ms.spectroM[i]; }
+  ok('spectrogram: S shares the M encoding (not normalised up: mean S < mean M on the real beat)', sm < mm, `mean M ${(mm / nf / 128).toFixed(1)} · S ${(sm / nf / 128).toFixed(1)}`);
+}
+
 fs.writeFileSync(path.join(DIR, 'results.json'), JSON.stringify(table.map(({ k, A, F, N }) => ({ k, app: { peak: A.peak, rms: A.rms, lufs: A.lufs, tp: A.tp, corr: A.corr, clip: A.clip, eq: A.eq }, ffmpeg: F, numpy: N })), null, 1));
 const fails = results.filter(r => !r.pass).length;
 console.log(`\n${results.length - fails}/${results.length} passed · signals + results in ${DIR}`);
