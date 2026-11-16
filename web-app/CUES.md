@@ -112,7 +112,7 @@ Exe 9:16 (1080x1920): session 1016x366 at (32,112) · loud 494x596 (32,502) · s
 
 Hero (exe only, v12; `film.js` heroGeom): the logo is centred (bbox-exact) at `layout.js HERO[aspect]` (9:16 cx 540, cy 614, 392 px wide) and the pendant's chain
 hangs from the bottom of the U (logo px 132,588), so the chain-sim hand follows the logo (incl. its kick punch). Keys: `hero.on`, `hero.scale`
-(logo + chain + pendant), `hero.x / hero.y` (px), `hero.shadow` (×), `glass.back` (meter windows pushed back: darker glass, softer edge light, more
+(logo + chain + pendant), `hero.x / hero.y` (px), `hero.shadow` (×), `hero.vignette` (× dark pool under the hero), `logo.hold` (bars the hero logo stays fully threaded between an IN and an OUT, default 10), `glass.back` (meter windows pushed back: darker glass, softer edge light, more
 backdrop blur; 0 = v11 look). `pendant.chain / .size / .x / .y` still scale the chain, the pendant and the hand offset. The hero is drawn over the windows
 with a soft shadow; during a push to `loud` / `stereo` it is hidden (hard) so the pushed meter is clear. Swing extremes are unchanged (anchor-only change).
 

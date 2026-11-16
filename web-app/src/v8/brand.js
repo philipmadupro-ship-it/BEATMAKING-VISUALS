@@ -55,10 +55,17 @@ export function createBrand(L, assets) {
   // logo running out. Letter k threads in during [k u, (k+1) u) (u = C/8), its links appearing in chain order in 8 crisp
   // steps, the newest link lit; it runs out over [C/2 + k u, C/2 + (k+1) u). Whole links only, no dither.
   const STEPS = 8;
-  B.logoPhase = (t, C = 8, mode = 'cycle') => {
+  // v12 dwell: a hero logo stays fully threaded for `dwell` beats between an IN and an OUT (period C + dwell, phase offset `off`
+  // beats); B.cycleBeat maps the beat to the position inside the plain C-beat cycle, so every step stays on the grid.
+  B.cycleBeat = (beat, C = 8, dwell = 0, off = 0) => {
+    if (!(dwell > 0)) return (((beat + C / 2) % C) + C) % C;
+    const P = C + dwell, p = (((beat + off) % P) + P) % P, u = C / 8;
+    return p < C / 2 ? p : p < C / 2 + dwell ? C / 2 - u / 2 : p - dwell;
+  };
+  B.logoPhase = (t, C = 8, mode = 'cycle', dwell = 0, off = 0) => {
     if (mode === 'full' || mode === 'hero') return [[2, STEPS], [2, STEPS], [2, STEPS]];
     if (mode === 'off') return [[0, 0], [0, 0], [0, 0]];
-    const u = C / 8, b = t / BEAT + C / 2, cb = ((b % C) + C) % C, out = [];
+    const u = C / 8, cb = B.cycleBeat(t / BEAT, C, dwell, off), out = [];
     const st = (x) => Math.min(STEPS, Math.floor(x * STEPS + 1e-6) + 1);
     for (let k = 0; k < 3; k++) {
       if (cb >= k * u && cb < (k + 1) * u) out.push([1, st((cb - k * u) / u)]);
@@ -69,7 +76,8 @@ export function createBrand(L, assets) {
     return out;
   };
   /** Scheduled link steps between beats b0 and b1 for a cycle of C beats (for the sync test). */
-  B.logoEvents = (b0, b1, C = 8) => { const ev = [], u = C / 8; for (let c = Math.floor((b0 + C / 2) / C) - 1; c * C - C / 2 < b1; c++) for (let k = 0; k < 3; k++) for (const [ph, nm] of [[k * u, 'IN'], [C / 2 + k * u, 'OUT']]) for (let q = 0; q < STEPS; q++) { const b = c * C - C / 2 + ph + q * u / STEPS; if (b >= b0 - 1e-9 && b < b1) ev.push([b, `logo ${nm} ${'U2C'[k]} link step ${q + 1}`]); } return ev; };
+  B.logoEvents = (b0, b1, C = 8, dwell = 0, off = 0) => { const ev = [], u = C / 8, P = C + dwell; if (!(dwell > 0)) { off = C / 2; }
+    for (let c = Math.floor((b0 + off) / P) - 1; c * P - off < b1; c++) for (let k = 0; k < 3; k++) for (const [ph, nm] of [[k * u, 'IN'], [C / 2 + dwell + k * u, 'OUT']]) for (let q = 0; q < STEPS; q++) { const b = c * P - off + ph + q * u / STEPS; if (b >= b0 - 1e-9 && b < b1) ev.push([b, `logo ${nm} ${'U2C'[k]} link step ${q + 1}`]); } return ev; };
   const SETTLE_T = 0.24, SETTLE_A = 16, SETTLE_W = 2 * Math.PI / 0.2, FALL_T = 0.22, FALL_G = 7000;   // settle duration (s), start height + angular rate (logo px), fall time and gravity (logo px / s^2)
   let LINKS = null;
   function buildLinks() {   // Voronoi of each letter's link anchors on a 3 px grid -> one Path2D per link (row runs merged)
@@ -97,7 +105,7 @@ export function createBrand(L, assets) {
     const art = B.art(S), [x, y, w, h] = r, LW = 887, LH = 647, sc = Math.min((w - 30) / LW, (h - 40) / LH) * (o.scale || 1);
     const kick = kickEnv[fidx(t)], punch = 1 + 0.012 * kick * (o.hero ? 2 : 1);
     ctx.save(); ctx.translate(x + w / 2, y + h / 2 - 8); ctx.scale(sc * punch, sc * punch); ctx.translate(-LW / 2, -LH / 2);
-    const ph = B.logoPhase(t, o.cycle || 8, o.hero ? 'hero' : o.mode || 'cycle'), solid = [0, 0, 0];
+    const ph = B.logoPhase(t, o.cycle || 8, o.hero ? 'hero' : o.mode || 'cycle', o.dwell || 0, o.off || 0), solid = [0, 0, 0];
     for (const p of A.links.pieces) { const m = ph[p.k][0]; ctx.globalAlpha = m === 2 ? 0.28 : 0.6; ctx.drawImage(art.edge, p.ax, p.ay, p.aw, p.ah, p.x, p.y, p.w, p.h); }
     ctx.globalAlpha = 1;
     // the runner (v9): while a letter is fully in, one lit link travels along U -> 2 -> C, one link per 16th note
@@ -107,7 +115,7 @@ export function createBrand(L, assets) {
     // v11 physics on the link steps: a link that threads IN lands with a damped-spring settle (it hangs above its place
     // for the first frame and drops onto it); a link that runs OUT falls under gravity with a little spin. Both start
     // exactly on the step (the grid is unchanged) and last well under a beat.
-    const Cc = o.cycle || 8, uu = Cc / 8, cb0 = (((t / BEAT + Cc / 2) % Cc) + Cc) % Cc, fx = !o.hero && (o.mode || 'cycle') === 'cycle';
+    const Cc = o.cycle || 8, uu = Cc / 8, cb0 = B.cycleBeat(t / BEAT, Cc, o.dwell || 0, o.off || 0), fx = !o.hero && (o.mode || 'cycle') === 'cycle';
     const linkFx = (k, Lk, mode, i, dx, dy, rotA) => {
       const an = A.links.anchors.filter((a) => a[0] === k)[i]; ctx.save(); ctx.translate(an[1] + dx, an[2] + dy); ctx.rotate(rotA); ctx.translate(-an[1], -an[2]); ctx.clip(Lk.paths[i]);
       for (const p of Lk.ps) ctx.drawImage(art.logo, p.ax, p.ay, p.aw, p.ah, p.x, p.y, p.w, p.h); ctx.restore();

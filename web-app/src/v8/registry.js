@@ -51,7 +51,7 @@ export function buildRegistry({ look = 'exe', aspect = '916', stage = 'nigredo',
   el('camera', 'Camera', 'Camera', [{ path: 'camera.shot', label: 'Shot (wide / focus window)', kind: 'shot', default: 'wide', options: wins },
     num('camera.zoom', 'Zoom multiplier', 1, 0.5, 3, 0.01, '×'), num('camera.x', 'Pan X', 0, -600, 600, 1, 'px'), num('camera.y', 'Pan Y', 0, -900, 900, 1, 'px')]);
   el('focus', 'Featured meter', 'Camera', [en('focus.featured', 'Hero window (bracket + lit header)', 'auto', ['auto', 'none', ...ids])]);
-  el('logo', 'Logo chain', 'Brand', [en('logo.mode', 'Mode', 'cycle', ['cycle', 'full', 'off']), num('logo.cycle', 'IN/OUT cycle', 2, 1, 8, 1, 'bars'),
+  el('logo', 'Logo chain', 'Brand', [en('logo.mode', 'Mode', 'cycle', ['cycle', 'full', 'off']), num('logo.cycle', 'IN/OUT cycle', 2, 1, 8, 1, 'bars'), num('logo.hold', 'Hero hold (fully threaded)', 10, 0, 40, 1, 'bars'),
     num('logo.glow', 'Glow (pulses on kicks)', 1, 0, 2, 0.01, '×'), num('logo.bloom', 'Bloom on drops', 1, 0, 2, 0.01, '×'), bool('logo.runner', 'Runner (lit link on 16ths)', true),
     { path: 'logo.hero', label: 'Hero moment', kind: 'clip', default: false }, num('logo.scale', 'Scale', 1, 0.5, 1.5, 0.01, '×')]);
   el('pendant', 'Pendant (elephant)', 'Brand', [num('pendant.amp', 'Amplitude', S.swingDeg.calm, 0, 25, 0.1, '°'), num('pendant.period', 'Period', 2, 1, 8, 0.5, 'beats'),
@@ -59,7 +59,7 @@ export function buildRegistry({ look = 'exe', aspect = '916', stage = 'nigredo',
     num('pendant.links', 'Chain links', 10, 3, 24, 1, ''), num('pendant.wave', 'Chain looseness (joint friction; high = slack)', 0.75, 0.05, 1.5, 0.01, ''), num('pendant.damp', 'Pendulum damping', 0.35, 0.1, 0.9, 0.01, 'ζ'),
     num('pendant.chain', 'Chain length (of the window)', 0.3, 0, 0.6, 0.01, ''), num('pendant.size', 'Size', 1, 0.4, 1.6, 0.01, '×'), num('pendant.x', 'Pivot X offset', 0, -300, 300, 1, 'px'), num('pendant.y', 'Pivot Y offset', 0, -300, 300, 1, 'px')]);
   if (look === 'exe') el('hero', 'Hero (logo + pendant, front layer)', 'Brand', [bool('hero.on', 'Hero on', true), num('hero.scale', 'Scale (logo, chain, pendant)', 1, 0.5, 1.6, 0.01, '×'), num('hero.x', 'Offset X', 0, -400, 400, 1, 'px'),
-    num('hero.y', 'Offset Y', 0, -400, 400, 1, 'px'), num('hero.shadow', 'Shadow', 1, 0, 2, 0.05, '×'), num('glass.back', 'Meter windows pushed back (dim + blur)', 1, 0, 1.5, 0.05, '')]);
+    num('hero.y', 'Offset Y', 0, -400, 400, 1, 'px'), num('hero.shadow', 'Shadow', 1, 0, 2, 0.05, '×'), num('hero.vignette', 'Dark pool under the hero', 0.8, 0, 1.5, 0.05, '×'), num('glass.back', 'Meter windows pushed back (dim + blur)', 1, 0, 1.5, 0.05, '')]);
   el('text', 'Text cues', 'Text', [{ path: 'text.cue', label: 'Text cue', kind: 'clip', default: '' }]);
   el('fx', 'FX', 'Finish', [{ path: 'fx.glitch', label: 'Glitch (opt-in)', kind: 'clip', default: 0, min: 0, max: 1, step: 0.01 }, { path: 'fx.flash', label: '1-frame invert', kind: 'event', default: false },
     num('fx.grain', 'Grain', S.grain, 0, 0.5, 0.01), num('fx.vignette', 'Vignette', S.vignette, 0, 1, 0.01), num('fx.scan', 'Scanlines', 0, 0, 1, 0.01), num('fx.halation', 'Halation (dark stages)', 0.16, 0, 0.6, 0.01)]);

@@ -22,11 +22,11 @@ const V10_LAYOUT = {
 // exe (U2C.EXE) v12: final rects. Back layer = the meter windows (slightly smaller, dimmer glass); the hero (logo +
 // pendant) is a front layer (HERO below) drawn by film.js, so it has no window of its own.
 const EXE12 = {
-  '916': { session: [32, 112, 1016, 366], loud: [32, 502, 494, 596], stereo: [554, 502, 494, 596], spectro: [32, 1122, 1016, 250], spectrum: [32, 1396, 1016, 414] },
-  '169': { session: [44, 92, 1100, 262], spectro: [44, 378, 1100, 190], spectrum: [44, 592, 1100, 412], loud: [1172, 540, 340, 464], stereo: [1528, 540, 348, 464] },
+  '916': { session: [32, 112, 1016, 366], loud: [32, 502, 290, 744], stereo: [748, 502, 300, 744], spectro: [32, 1270, 1016, 200], spectrum: [32, 1494, 1016, 316] },
+  '169': { session: [44, 92, 1100, 262], spectro: [44, 378, 1100, 190], spectrum: [44, 592, 1100, 412], loud: [1172, 620, 340, 384], stereo: [1528, 620, 348, 384] },
 };
 /** Hero (front layer) geometry per aspect: logo centre (cx, cy), logo width, chain length, pendant width (px at scale 1). */
-export const HERO = { '916': { cx: 540, cy: 614, logoW: 392, chain: 86, eleph: 232 }, '169': { cx: 1524, cy: 246, logoW: 400, chain: 78, eleph: 224 } };
+export const HERO = { '916': { cx: 540, cy: 722, logoW: 540, chain: 140, eleph: 230 }, '169': { cx: 1524, cy: 228, logoW: 360, chain: 70, eleph: 190 } };
 // v11 shell: more air. The v10 tables are mapped from their frame (x 24..W-24, y 86|76..bottom) into a frame with wider
 // margins and a clear band for the HUD at the top and bottom, then every window is inset so neighbours sit ~30 px apart
 // (the glass shadows need the gap). FRAME[aspect] = [x0, y0, x1, y1] of the window area; HUD_BAND = its top/bottom bands.

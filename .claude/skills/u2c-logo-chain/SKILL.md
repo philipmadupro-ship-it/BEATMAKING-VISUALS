@@ -33,3 +33,6 @@ On every link step (grid unchanged, `logoPhase` untouched) the link that threads
 - [ ] Break/thread timing unchanged unless asked (`logoPhase` untouched).
 - [ ] Glow visible on kicks, bloom on drop downbeats, no flashing frames (qa_video "no fades" PASS).
 - [ ] Sync + grey tests PASS; synced to native.
+
+## v12 hero dwell
+In the exe hero the logo stays fully threaded between an IN and an OUT: `logo.hold` bars (default 10, period 8 + 40 beats, offset 16 beats, so the break sits at ~13-17 s of a 30 s clip). `B.cycleBeat(beat, C, dwell, off)` maps the beat into the plain cycle, so every link step is still on the grid (`B.logoEvents(b0, b1, C, dwell, off)` feeds the sync test). `logo.hold` 0 = the old continuous cycle.

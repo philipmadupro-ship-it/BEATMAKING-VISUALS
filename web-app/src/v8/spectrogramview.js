@@ -6,7 +6,7 @@
 //  - a thin ruler with bar numbers and beat ticks; the S spectrogram as a thin lane under the plot (mode 'ms') or hidden ('m').
 import { hexRgb, clamp, lerp, rgba } from './core.js';
 
-export const N_BANDS = 128, PLAYHEAD = 0.8;
+export const N_BANDS = 128, PLAYHEAD = 0.8, UP = 4;   // UP: the 128 stored bands are interpolated (in dB) to 128 x UP rows so the map is not blocky
 /** 256-entry RGBA ramp for one stage (v = normalised dB), alpha = v^gamma; greys in Nigredo (S.grey). */
 export function specLUT(S, gam = 0.56) {
   const A = hexRgb(S.spec[1]), B = hexRgb(S.spec[2]), C = hexRgb(S.spec[3]), I = hexRgb(S.ink), P0 = hexRgb(S.card), mid = 0.52, LUT = [];
@@ -31,6 +31,12 @@ export function heatPixels(src, nf, n, LUT, floor) {
   return px;
 }
 const toCanvas = (px, w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); const im = g.createImageData(w, h); im.data.set(px); g.putImageData(im, 0, 0); return c; };
+/** Vertical interpolation of a frames x n uint8 band map to n*up rows (linear in dB, centre-aligned): a smooth, honest upsample of the real bands. */
+export function upRows(src, nf, n, up) {
+  const m = n * up, out = new Uint8Array(nf * m);
+  for (let f = 0; f < nf; f++) for (let r = 0; r < m; r++) { const p = clamp((r + 0.5) / up - 0.5, 0, n - 1), i = Math.floor(p), j = Math.min(n - 1, i + 1), a = p - i; out[f * m + r] = Math.round(src[f * n + i] * (1 - a) + src[f * n + j] * a); }
+  return out;
+}
 /** S lane source: max over groups of `g` bands, so a thin lane never drops a peak. */
 export function poolMax(src, nf, n, g) { const m = n / g, out = new Uint8Array(nf * m); for (let f = 0; f < nf; f++) for (let j = 0; j < m; j++) { let v = 0; for (let i = 0; i < g; i++) v = Math.max(v, src[f * n + j * g + i]); out[f * m + j] = v; } return out; }
 
@@ -38,7 +44,7 @@ const CACHE = new WeakMap();
 function images(ms, nf, S, gam, floor) {
   const key = [S.spec.join(), S.ink, S.card, S.grey, gam, floor].join('|'); let o = CACHE.get(ms); if (!o) CACHE.set(ms, o = {});
   if (!o[key]) { const ks = Object.keys(o); if (ks.length > 6) delete o[ks[0]]; const LUT = specLUT(S, gam);
-    o[key] = { M: toCanvas(heatPixels(ms.spectroM, nf, N_BANDS, LUT, floor), nf, N_BANDS), S: toCanvas(heatPixels(poolMax(ms.spectroS, nf, N_BANDS, 8), nf, N_BANDS / 8, LUT, floor), nf, N_BANDS / 8) }; }
+    o[key] = { M: toCanvas(heatPixels(upRows(ms.spectroM, nf, N_BANDS, UP), nf, N_BANDS * UP, LUT, floor), nf, N_BANDS * UP), S: toCanvas(heatPixels(poolMax(ms.spectroS, nf, N_BANDS, 8), nf, N_BANDS / 8, LUT, floor), nf, N_BANDS / 8) }; }
   return o[key];
 }
 /**
@@ -51,13 +57,13 @@ export function draw(ctx, rect, frame, o) {
   const gl = Math.round(LH * 2.2), rh = Math.round(LH + 8), laneH = mode === 'ms' && h > 150 ? Math.round(clamp(h * 0.12, 20, 30)) : 0, gap = laneH ? 3 : 0;
   const px0 = x + gl, pw = w - gl - 4, ph = h - rh - laneH - gap, py = y, img = images(o.ms, nf, S, o.gamma || 0.56, floor);
   const t = frame / fps, tl = t - win * PLAYHEAD, Xt = (tt) => px0 + pw * (tt - tl) / win, span = win * fps, f0 = frame - span * PLAYHEAD;
-  const plane = (im, ny, yy, hh) => {
+  const plane = (im, ny, yy, hh, smooth) => {
     ctx.fillStyle = S.card; ctx.fillRect(px0, yy, pw, hh);
     const sx = Math.max(0, f0), ex = Math.min(nf, f0 + span); if (ex <= sx) return;
     const dx = px0 + pw * (sx - f0) / span, dw = pw * (ex - sx) / span;
-    ctx.save(); ctx.beginPath(); ctx.rect(px0, yy, pw, hh); ctx.clip(); ctx.imageSmoothingEnabled = false; ctx.drawImage(im, sx, 0, ex - sx, ny, Math.round(dx), yy, Math.round(dx + dw) - Math.round(dx), hh); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(px0, yy, pw, hh); ctx.clip(); ctx.imageSmoothingEnabled = !!smooth; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(im, sx, 0, ex - sx, ny, Math.round(dx), yy, Math.round(dx + dw) - Math.round(dx), hh); ctx.restore();
   };
-  plane(img.M, N_BANDS, py, ph);
+  plane(img.M, N_BANDS * UP, py, ph, true);
   // log frequency axis: faint grid at 20 / 50 / 100 / ... Hz, labels at 100 Hz, 1 kHz, 10 kHz (and 20 Hz / 20 kHz as end stops)
   const Yf = (fq) => py + ph * (1 - Math.log(fq / 20) / Math.log(1000));
   for (const fq of [50, 100, 200, 500, 1000, 2000, 5000, 10000]) { const major = fq === 100 || fq === 1000 || fq === 10000, Yy = Math.round(Yf(fq)) + 0.5; ctx.fillStyle = ink(major ? 0.2 : 0.09); ctx.fillRect(px0, Yy - 0.5, pw, 1); }

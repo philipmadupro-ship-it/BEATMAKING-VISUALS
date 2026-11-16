@@ -146,7 +146,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // The pendant's chain hangs from the bottom of the U (LOGO_AT, logo px), so the chain sim's anchor follows the logo (its
   // kick punch and the hero.* offsets); the beat pushes still start at that hand. The hero is drawn after every window into its
   // own layer (same pixels + camera transform as the frame) and composited over them with a soft two-part shadow.
-  const LOGO_AT = [132, 588], LGW = 887, LGH = 647;
+  const LOGO_AT = [180, 582], LGW = 887, LGH = 647;
   const HERO_HIDE = new Set(['loud', 'stereo']);   // a push to the levels / imager is a clear view of that window (hard cut, no fade)
   function heroGeom(t) {
     const H0 = HERO[aspect], k = V('hero.scale', 1), s = (H0.logoW / LGW) * V('logo.scale', 1) * k, cx = H0.cx + V('hero.x', 0), cy = H0.cy + V('hero.y', 0);
@@ -154,9 +154,12 @@ export function createFilm({ D, assets, aspect = '916' }) {
     return { s, cx, cy, ax: cx + (LOGO_AT[0] - LGW / 2) * s * punch + V('pendant.x', 0), ay: cy + (LOGO_AT[1] - LGH / 2) * s * punch + V('pendant.y', 0),
       len: H0.chain * k * (V('pendant.chain', 0.3) / 0.3), size: H0.eleph * k * V('pendant.size', 1) };
   }
+  // v12: the hero logo dwells fully threaded between an IN and an OUT (logo.hold bars, default 10 -> a 48-beat period, ~80 % complete);
+  // the break sits around beat 28-36, clear of the usual stills at 10 s and 18 s
+  const HOLD = (C) => (LOOK === 'exe' && V('hero.on', true) ? Math.round(V('logo.hold', 10) * 4) : 0), HOLD_OFF = 16;
   function heroArt(cx, t) {   // draws into ctx cx (world transform already set)
     const g = heroGeom(t), hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4));
-    BR.logo(cx, S, [g.cx - (LGW * g.s + 30) / 2, g.cy + 8 - (LGH * g.s + 40) / 2, LGW * g.s + 30, LGH * g.s + 40], t, { cycle: C, mode: V('logo.mode', 'cycle'), hero, scale: 1,
+    BR.logo(cx, S, [g.cx - (LGW * g.s + 30) / 2, g.cy + 8 - (LGH * g.s + 40) / 2, LGW * g.s + 30, LGH * g.s + 40], t, { cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero, scale: 1,
       glow: V('logo.glow', 1) * (0.35 + 0.8 * kickEnv[fidx(t)]), bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
     const ch = BR.drawChainFx(cx, S, g.ax, g.ay, g.len, t);
     BR.elephant(cx, S, ch.end[0], ch.end[1], g.size, t, ch.ang[ch.ang.length - 1]);
@@ -174,6 +177,12 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const sx = HL.s.getContext('2d'), px = scale * z, light = L.isLight(S);
     sx.setTransform(1, 0, 0, 1, 0, 0); sx.globalCompositeOperation = 'source-over'; sx.clearRect(0, 0, HL.s.width, HL.s.height); sx.drawImage(HL.a, 0, 0, HL.s.width, HL.s.height);
     sx.globalCompositeOperation = 'source-in'; sx.fillStyle = light ? rgba(S.ink, 1) : '#000'; sx.fillRect(0, 0, HL.s.width, HL.s.height); sx.globalCompositeOperation = 'source-over';
+    // soft dark vignette under the hero (reads in front): a radial pool behind the logo + pendant, in the same world transform
+    { const g = heroGeom(t), cyv = g.cy + (HERO[aspect].chain + g.size * 0.9) * 0.45 - 20, rx = g.s * LGW * 0.72, ry = rx * 1.15;
+      main.save(); main.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z)); main.translate(g.cx, cyv); main.scale(1, ry / rx);
+      const rg = main.createRadialGradient(0, 0, rx * 0.15, 0, 0, rx), va = V('hero.vignette', 0.8) * (light ? 0.35 : 1), vc = light ? '40,40,40' : '0,0,0';
+      rg.addColorStop(0, `rgba(${vc},${va})`); rg.addColorStop(0.55, `rgba(${vc},${va * 0.55})`); rg.addColorStop(1, `rgba(${vc},0)`);
+      main.fillStyle = rg; main.fillRect(-rx, -rx, 2 * rx, 2 * rx); main.restore(); }
     main.save(); main.setTransform(1, 0, 0, 1, 0, 0); main.imageSmoothingEnabled = true; main.imageSmoothingQuality = 'high';
     for (const [dx, dy, bl, a] of [[10, 34, 16, 0.5], [4, 12, 5, 0.34]]) { main.filter = `blur(${bl * px}px)`; main.globalAlpha = a * (light ? 0.6 : 1) * V('hero.shadow', 1); main.drawImage(HL.s, dx * px, dy * px, cv.width, cv.height); }
     main.filter = 'none'; main.globalAlpha = 1; main.drawImage(HL.a, 0, 0); main.restore();
@@ -330,7 +339,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     for (const [bb, w] of INTRO.events(ev)) add(bb, w);   // v11 intro
     for (const id of IDS) { const o = winOpen(id); if (o >= 0) for (let q = 0; q < 6; q++) add(o + q * U.t32, `open ${id} step ${q + 1}`); }
     const ra = resultAt(); for (let q = 0; q < 6; q++) add(ra + q * 0.5, `result line ${q + 1}`);
-    for (const [bb, w] of BR.logoEvents(0, NB * 4, Math.max(4, Math.round(V('logo.cycle', 2) * 4)))) add(bb, w);
+    for (const [bb, w] of BR.logoEvents(0, NB * 4, Math.max(4, Math.round(V('logo.cycle', 2) * 4)), HOLD(), HOLD_OFF)) add(bb, w);
     for (let k = 0; k < NB * 4; k++) add(k * V('pendant.period', 2) / 2, 'pendant swing extreme');
     if (V('logo.runner', true)) for (let q = 0; q < NB * 16; q++) add(q / 4, 'logo runner step (16th)');
     for (const k of ev.keysIn('fx.flash', 0, NB * 4)) add(k.b, '1-frame invert');
