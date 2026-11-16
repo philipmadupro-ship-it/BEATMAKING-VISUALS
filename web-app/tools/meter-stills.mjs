@@ -9,7 +9,7 @@ const AUDIO = path.resolve(process.argv[2] || ['/home/user/u2c-motion/audio/atel
 const STAGES = (process.argv[3] || 'nigredo,rubedo').split(',');
 // [file name, meter fn, window w, h, overrides]
 const ALL = [['imager-sample', 'imager', 330, 290, { 'stereo.mode': 'sample' }], ['imager-level', 'imager', 330, 290, { 'stereo.mode': 'level' }], ['imager-lissajous', 'imager', 330, 290, { 'stereo.mode': 'lissajous' }],
-  ['spectro-ms', 'spectro', 330, 290, {}], ['eq', 'eq', 496, 302, {}], ['levels', 'levels', 376, 228, {}], ['levels-k14', 'levels', 376, 228, { 'levels.mode': 'k14' }], ['loudness', 'loud', 340, 290, {}], ['ghost', 'ghost', 340, 290, {}], ['spectrum-ms', 'spectrum', 496, 302, { 'spectrum.mode': 'ms' }]];
+  ['spectro-ms', 'spectro', 330, 290, {}], ['eq', 'eq', 496, 302, {}], ['levels', 'levels', 376, 228, {}], ['levels-tall', 'levels', 470, 520, {}], ['levels-sq', 'levels', 400, 400, {}], ['wave-916', 'session', 984, 300, {}], ['wave-wide', 'session', 1000, 220, {}], ['levels-k14', 'levels', 376, 228, { 'levels.mode': 'k14' }], ['loudness', 'loud', 340, 290, {}], ['ghost', 'ghost', 340, 290, {}], ['spectrum-ms', 'spectrum', 496, 302, { 'spectrum.mode': 'ms' }]];
 const WANT = process.argv[4] ? process.argv[4].split(',') : null, JOBS = ALL.filter(([n]) => !WANT || WANT.some((w) => n.startsWith(w)));
 fs.mkdirSync(OUT, { recursive: true });
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg' };
@@ -25,15 +25,15 @@ await page.waitForFunction((b) => { const tr = window.u2c.store.session.track; r
 await page.click('#grid .card >> nth=0'); await page.waitForFunction(() => { const e = window.u2c.clip.current(); return e && e.ready; }, null, { timeout: 180000 });
 await page.evaluate(() => document.fonts.ready);
 for (const stage of STAGES) for (const [name, fn, w, h, over] of JOBS) {
-  const png = await page.evaluate(async ([stage, fn, w, h, over, T]) => {
+  const png = await page.evaluate(async ([stage, fn, w, h, over, SC1, T]) => {
     const { createCore, stageOf } = await import('/src/v8/core.js'), { createMeters } = await import('/src/v8/meters.js');
     const e = window.u2c.clip.current(), L = createCore(e.D), S = stageOf(stage); L.meter = (k, key, d) => (over[k + '.' + key] ?? d); L.tagGet = () => ''; L.curWin = 'loud';
-    const M = createMeters(L), sc = 1000 / w, W = 1080, H = Math.round(h * sc + 80), c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+    const M = createMeters(L), sc = SC1 ? 1 : 1000 / w, W = Math.max(1080, Math.round(w * sc + 80)), H = Math.round(h * sc + 80), c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
     L.view.camZ = sc; g.fillStyle = S.bg; g.fillRect(0, 0, W, H); g.translate(40, 40); g.scale(sc, sc);
     g.fillStyle = S.card; g.fillRect(0, 0, w, h); g.strokeStyle = S.ink; g.globalAlpha = 0.5; g.strokeRect(0.5, 0.5, w - 1, h - 1); g.globalAlpha = 1;
     const t = typeof T === 'string' ? (([k, o]) => e.D.onsets.kick[+k][2] + +o / 1000)(T.slice(4).split(':')) : T != null ? T : e.D.duration * 0.5; M[fn](g, S, [8, 8, w - 16, h - 16], t, 1);
     return c.toDataURL('image/png').split(',')[1];
-  }, [stage, fn, w, h, over, process.env.T ? +process.env.T : (process.env.KICK ? 'kick' + process.env.KICK + ':' + (process.env.OFF || 0) : null)]);
+  }, [stage, fn, w, h, over, process.env.SC1 === '1', process.env.T ? +process.env.T : (process.env.KICK ? 'kick' + process.env.KICK + ':' + (process.env.OFF || 0) : null)]);
   const f = path.join(OUT, `${name}_${stage}.png`); fs.writeFileSync(f, Buffer.from(png, 'base64')); console.log(f);
 }
 // full film frames (1080x1920, exe look): the camera on one window, as in a focus shot, plus the wide bench

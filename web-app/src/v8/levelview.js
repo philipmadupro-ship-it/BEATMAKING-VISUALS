@@ -54,46 +54,57 @@ export function createLevelView(L, M8, H) {
     const vL = levRead(0, t, o), vR = levRead(1, t, o), ledPk = ledAt(D.lv, t, -3), kk = o.kmode ? o.K : 0;
     const grO = { thresh: L.meter('levels', 'grThresh', 0) || null, ratio: L.meter('levels', 'grRatio', 4), release: L.meter('levels', 'grRelease', 120), det: L.meter('levels', 'grDet', 'peak') };
     const gr = grFor(D, grO), grNow = ML.grAt(gr, t, FPS, D.lv.rate);
-    const pad = 6, top = y + pad + 6, bh = y + h - pad - top, bw = compact ? Math.max(6, Math.min(10, (w - 40) / 2 - 1)) : clamp(w * 0.027, 7, 11), gap = 2;
+    const pad = 6, top = y + pad + 6, bh = y + h - pad - top, bw = compact ? Math.max(6, Math.min(10, (w - 40) / 2 - 1)) : clamp(w * 0.05, 7, 26), gap = clamp(w * 0.005, 2, 4);
     if (compact) {   // strip inside the loudness window: bars + scale only
       let cx = x + 2; [vL, vR].forEach((v, ch) => { bar(ctx, S, cx + ch * (bw + gap), top, bw, bh, sc, v, col); lamp(ctx, S, cx + ch * (bw + gap), top - 7, bw, ledPk, v.clip); });
       levTicks(ctx, S, cx + 2 * bw + gap + 3, top, bh, sc, { size: 13 }); if (!opt.noReveal) ctx.restore(); return;
     }
     // type is floored at ~22 px at the overview (core.floorSize), so every size below is measured, not assumed
-    const sW = L.floorSize(ctx, 11), sN = L.floorSize(ctx, 16), nH = sN * NUM, colW = Math.max(sW * 4.7, nH * 5.4) + 4, scaleW = L.floorSize(ctx, 12) * NUM * 2.3 + 8;
+    const sW = L.floorSize(ctx, 11), sN = L.floorSize(ctx, 16), nH = sN * NUM, colW = Math.max(sW * 4.7, nH * 5.4) * (w > 440 ? 1.2 : 1) + 4, scaleW = L.floorSize(ctx, 12) * NUM * 2.3 + 8;
     const rx = x + w - pad - colW, bx = rx - 10 - 2 * bw - gap, sx = bx - scaleW, hx = x + pad, hw = sx - 6 - hx;
     // ---- history panel: level (peak envelope, same scale as the bars) rising from the floor, GR hanging from the top
     const hy = top, hh = bh;
+    // GR strip: its own dB range, fitted to the clip's real GR depth (about 4-6 dB here), so every notch is readable
+    let gd = gr._depth; if (gd == null) { gd = 0; for (let i = 0; i < gr.length; i++) if (-gr[i] > gd) gd = -gr[i]; gr._depth = gd; }
+    const grRange = Math.max(2, Math.ceil(gd * 1.15 + 0.2)), grH = hh > 140 ? clamp(hh * 0.3, 52, 170) : 0, ly0 = hy + (grH ? grH + 5 : 0), lh = hh - (grH ? grH + 5 : 0);
     ctx.save(); ctx.beginPath(); ctx.rect(hx, hy, hw, hh); ctx.clip();
     ctx.fillStyle = rgba(S.ink, 0.04); ctx.fillRect(hx, hy, hw, hh);
-    for (const [d] of sc.ticks) { const yy = Math.round(hy + hh * (1 - sc.pos(d))) + 0.5; ctx.fillStyle = rgba(S.ink, d === 0 ? 0.16 : 0.055); ctx.fillRect(hx, yy, hw, 1); }
+    for (const [d] of sc.ticks) { const yy = Math.round(ly0 + lh * (1 - sc.pos(d))) + 0.5; ctx.fillStyle = rgba(S.ink, d === 0 ? 0.16 : 0.055); ctx.fillRect(hx, yy, hw, 1); }
     const T = WIN_BEATS * L.BEAT, t0 = t - T, ncol = Math.max(24, Math.round(hw * 1.5)), Xc = (i) => hx + hw * (i / ncol);
     const cols = histCols(gr, t0, t, ncol).map((c, i) => (t0 + (i + 1) * T / ncol < 0 ? null : c)), i0 = cols.findIndex((c) => c);
     for (let b = Math.ceil(t0 / L.BEAT); b * L.BEAT <= t; b++) { const xx = Math.round(hx + hw * ((b * L.BEAT - t0) / T)) + 0.5; if (b * L.BEAT < 0) continue; ctx.fillStyle = rgba(S.ink, b % 4 === 0 ? 0.16 : 0.06); ctx.fillRect(xx, hy, 1, hh); }
     if (i0 >= 0) {
       // Pro-L 2 grammar: the input peak trace on top, the output (input + GR) below it, the slab between them is the gain reduction
-      const Yl = (db) => hy + hh * (1 - sc.pos(clamp(db, -140, 6))), last = ncol - 1, Yi = (i) => Yl(cols[i].lvl), Yo = (i) => Yl(cols[i].lvl + cols[i].gr);
-      const g1 = ctx.createLinearGradient(0, hy + hh, 0, hy); g1.addColorStop(0, rgba(col, 0.03)); g1.addColorStop(1, rgba(col, 0.32));
-      ctx.beginPath(); ctx.moveTo(Xc(i0), hy + hh); for (let i = i0; i <= last; i++) ctx.lineTo(Xc(i), Yo(i)); ctx.lineTo(Xc(last), hy + hh); ctx.closePath(); ctx.fillStyle = g1; ctx.fill();
+      const Yl = (db) => ly0 + lh * (1 - sc.pos(clamp(db, -140, 6))), last = ncol - 1, Yi = (i) => Yl(cols[i].lvl), Yo = (i) => Yl(cols[i].lvl + cols[i].gr);
+      const g1 = ctx.createLinearGradient(0, ly0 + lh, 0, ly0); g1.addColorStop(0, rgba(col, 0.03)); g1.addColorStop(1, rgba(col, 0.32));
+      ctx.beginPath(); ctx.moveTo(Xc(i0), ly0 + lh); for (let i = i0; i <= last; i++) ctx.lineTo(Xc(i), Yo(i)); ctx.lineTo(Xc(last), ly0 + lh); ctx.closePath(); ctx.fillStyle = g1; ctx.fill();
       ctx.beginPath(); for (let i = i0; i <= last; i++) ctx.lineTo(Xc(i), Yi(i)); for (let i = last; i >= i0; i--) ctx.lineTo(Xc(i), Yo(i)); ctx.closePath();
-      const g2 = ctx.createLinearGradient(0, hy, 0, hy + hh * 0.5); g2.addColorStop(0, rgba(S.hot, 1)); g2.addColorStop(1, rgba(S.hot, 0.75)); ctx.fillStyle = g2; ctx.fill();
+      const g2 = ctx.createLinearGradient(0, ly0, 0, ly0 + lh * 0.5); g2.addColorStop(0, rgba(S.hot, 1)); g2.addColorStop(1, rgba(S.hot, 0.75)); ctx.fillStyle = g2; ctx.fill();
       ctx.beginPath(); for (let i = i0; i <= last; i++) (i === i0 ? ctx.moveTo(Xc(i), Yi(i)) : ctx.lineTo(Xc(i), Yi(i))); ctx.strokeStyle = rgba(col, 0.75); ctx.lineWidth = 1; ctx.stroke();
+      if (grH) {   // GR history hangs from the top of the strip: 0 dB at the top edge, grRange dB at the bottom
+        const Yg = (i) => hy + grH * clamp(-cols[i].gr / grRange, 0, 1);
+        for (let d = 1; d < grRange; d++) { ctx.fillStyle = rgba(S.ink, 0.07); ctx.fillRect(hx, Math.round(hy + grH * d / grRange), hw, 1); }
+        const g3 = ctx.createLinearGradient(0, hy, 0, hy + grH); g3.addColorStop(0, rgba(S.hot, 0.22)); g3.addColorStop(1, rgba(S.hot, 0.9));
+        ctx.beginPath(); ctx.moveTo(Xc(i0), hy); for (let i = i0; i <= last; i++) ctx.lineTo(Xc(i), Yg(i)); ctx.lineTo(Xc(last), hy); ctx.closePath(); ctx.fillStyle = g3; ctx.fill();
+        ctx.beginPath(); for (let i = i0; i <= last; i++) (i === i0 ? ctx.moveTo(Xc(i), Yg(i)) : ctx.lineTo(Xc(i), Yg(i))); ctx.strokeStyle = rgba(S.ink, 0.85); ctx.lineWidth = 1.2; ctx.stroke();
+      }
     }
+    if (grH) { ctx.fillStyle = rgba(S.ink, 0.22); ctx.fillRect(hx, hy + grH + 2, hw, 1); lbl(ctx, S, 'GR', hx + 5, hy + sW * 0.55 + 3, { size: 11, a: 0.6 }); lbl(ctx, S, '−' + grRange + ' dB', hx + hw - 5, hy + sW * 0.55 + 3, { size: 11, a: 0.6, align: 'right' }); }
     ctx.restore();
     ctx.strokeStyle = rgba(S.ink, 0.2); ctx.lineWidth = 1; ctx.strokeRect(hx + 0.5, hy + 0.5, hw - 1, hh - 1);
     ctx.fillStyle = S.hot; ctx.fillRect(hx + hw - 1.5, hy, 1.5, hh);   // "now" edge
     // ---- bars + scale
-    [vL, vR].forEach((v, ch) => { const X = bx + ch * (bw + gap); bar(ctx, S, X, top, bw, bh, sc, v, col); lamp(ctx, S, X, top - 7, bw, ledPk, v.clip); });
-    levTicks(ctx, S, sx + 2, top, bh, sc, { size: 12 });
+    [vL, vR].forEach((v, ch) => { const X = bx + ch * (bw + gap); bar(ctx, S, X, ly0, bw, lh, sc, v, col); lamp(ctx, S, X, ly0 - 7, bw, ledPk, v.clip); });
+    levTicks(ctx, S, sx + 2, ly0, lh, sc, { size: 12 });
     // ---- readouts: small label (Synkopy) over an Akira numeral; units are group headers so the column stays narrow
     const mx = Math.max(vL.max, vR.max), hold = Math.max(vL.hold, vR.hold), hot = mx >= -0.1 || vL.clip || vR.clip;
     const rows = [['peak', mx < -140 ? '−∞' : fmt(Math.max(vL.pk, vR.pk) + kk), o.kmode ? 'K' + o.K : 'dB', hot ? S.hot : S.ink, 1], ['hold', hold < -140 ? '−∞' : fmt(hold + kk), 'dB', S.ink, 0.78],
       ['GR', grNow < -0.05 ? grNow.toFixed(1) : '0.0', 'dB', S.ink, 0.9], ['S', lufsStr(F.S[f]), 'LUFS', S.ink, 0.95], ['I', lufsStr(F.I[f]), 'LUFS', S.ink, 0.95]];
-    const ih = sW + nH + 10, want = [0, 1, 3, 4, 2];   // fill order by priority: peak, hold, short-term, integrated, GR
+    const ih = sW + nH + 10, want = [0, 2, 3, 4, 1];   // fill order by priority: peak, GR, short-term, integrated, hold
     const show = want.filter((_, n) => (n + 1) * ih <= bh + 4).sort(); let yy = top;
     for (const i of show) { const [name, val, unit, c, al] = rows[i];
       if (i === 3) { ctx.fillStyle = rgba(S.ink, 0.16); ctx.fillRect(rx, yy - 5, colW, 1); }
-      lbl(ctx, S, name, rx, yy + sW * 0.5, { size: 11, a: 0.55 }); lbl(ctx, S, unit, rx + colW, yy + sW * 0.5, { size: 11, a: 0.4, align: 'right' });
+      lbl(ctx, S, name, rx, yy + sW * 0.5, { size: 11, a: 0.55 }); if (unit !== 'dB' || w > 440) lbl(ctx, S, unit, rx + colW, yy + sW * 0.5, { size: 11, a: 0.4, align: 'right' });
       text(ctx, val, rx, yy + sW + nH * 0.55 + 4, { size: 16, w: 700, col: i === 0 ? c : rgba(S.ink, al), maxW: colW });
       yy += ih; }
     if (!opt.noReveal) ctx.restore();
