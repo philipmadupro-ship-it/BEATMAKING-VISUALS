@@ -26,7 +26,7 @@ const EXE12 = {
   '169': { session: [44, 92, 1100, 262], spectro: [44, 378, 1100, 190], spectrum: [44, 592, 1100, 412], loud: [1172, 620, 340, 384], stereo: [1528, 620, 348, 384] },
 };
 /** Hero (front layer) geometry per aspect: logo centre (cx, cy), logo width, chain length, pendant width (px at scale 1). */
-export const HERO = { '916': { cx: 540, cy: 722, logoW: 540, chain: 140, eleph: 230 }, '169': { cx: 1524, cy: 228, logoW: 360, chain: 70, eleph: 190 } };
+export const HERO = { '916': { cx: 530, cy: 672, logoW: 480, chain: 150, eleph: 340 }, '169': { cx: 1524, cy: 228, logoW: 360, chain: 85, eleph: 255 } };
 // v11 shell: more air. The v10 tables are mapped from their frame (x 24..W-24, y 86|76..bottom) into a frame with wider
 // margins and a clear band for the HUD at the top and bottom, then every window is inset so neighbours sit ~30 px apart
 // (the glass shadows need the gap). FRAME[aspect] = [x0, y0, x1, y1] of the window area; HUD_BAND = its top/bottom bands.

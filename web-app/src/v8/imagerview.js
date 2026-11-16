@@ -42,13 +42,16 @@ export function createImagerView(L, M8, H) {
     const [x0, y0, w, h] = r; reveal(ctx, x0, y0, w, h, k);
     const f = fidx(t), tf = tickF(t), C = imgCols(S), range = L.meter('stereo', 'range', 40), gain = L.meter('stereo', 'gain', 1), ink = (a) => rgba(S.ink, a);
     const fz = (s) => L.floorSize(ctx, s), small = h < 460, LH = fz(22);
-    // rows from the bottom: 4-band width rail, balance, correlation; the disc takes the rest
-    const rowH = Math.max(34, LH + 12), railH = small ? 0 : Math.max(60, LH * 2 + 14), gap = 8;
-    let yy = y0 + h; const railY = yy - railH; yy -= railH + (railH ? gap : 0);
-    const balY = yy - rowH; yy = balY - gap; const corY = yy - rowH; yy = corY - gap;
-    const top = y0 + LH + 8, discAvail = yy - top, R0 = (w - 2 * (LH * 1.4)) / 2, below = LH * 1.7;
-    const R = Math.max(40, Math.min(R0, discAvail - below)), spare = discAvail - (R + below) - gap, stripH = spare >= 56 ? Math.min(spare, 96) : 0;
-    const yy_strip = yy - stripH, cx = x0 + w / 2, cy = top + R + (stripH ? 0 : (spare > 0 ? Math.min(spare * 0.35, 30) : 0));
+    // v12 stack, top to bottom: the half disc (as wide as the window allows, at the top), the width strip, the per-band width
+    // bar graph, balance, correlation. The strip and the bar graph share whatever height is left, so the window fills evenly.
+    const rowH = Math.max(34, LH + 12), gap = 10, top = y0 + LH + 8, below = LH * 1.7, R0 = (w - 16) / 2 - 4;
+    const R = Math.max(40, Math.min(R0, h - (top - y0) - below - 2 * rowH - 4 * gap - 50)), cx = x0 + w / 2, cy = top + R;
+    const FREE = h - (cy + below - y0) - 2 * rowH - 4 * gap;   // free height for strip + bar graph
+    let stripH = 0, railH = 0;
+    if (FREE >= 150) { stripH = Math.min(FREE * 0.36, 150); railH = FREE - stripH - gap; } else if (FREE >= 64) railH = FREE;
+    let yy = cy + below + gap; const yy_strip = yy; if (stripH) yy += stripH + gap; const railY = yy; if (railH) yy += railH + gap;
+    if (!railH) yy += Math.max(0, y0 + h - (yy + 2 * rowH + gap)) * 0.45;   // no bar graph room: spread the corr / bal rows into the leftover height
+    const corY = yy, balY = corY + rowH + gap;
     // ---- density
     const CELL = R >= 150 ? 2 : 1.5, gw = Math.ceil(2 * R / CELL) + 2, gh = Math.ceil(R / CELL) + 2, gk = gw + 'x' + gh;
     let G = GRID[gk]; if (!G) { G = GRID[gk] = { acc: new Float32Array(gw * gh), cv: document.createElement('canvas') }; G.cv.width = gw; G.cv.height = gh; G.im = G.cv.getContext('2d').createImageData(gw, gh); }
@@ -86,8 +89,8 @@ export function createImagerView(L, M8, H) {
     // ---- labels: M on top, L / R on the ±45° spokes, ∓S at the baseline ends, dB on the baseline
     const lb = (s, X, Y, o = {}) => lbl(ctx, S, s, X, Y, { size: 22, align: 'center', a: 0.75, ...o }), q45 = (R + LH * 0.75) * ML.SQ;
     lb('M', cx, cy - R - LH * 0.55); lb('L', cx - q45, cy - q45 - 2); lb('R', cx + q45, cy - q45 - 2);
-    lb('−S', cx - R, cy + LH * 0.75); lb('+S', cx + R, cy + LH * 0.75);
-    for (const dB of [-10, -30]) lb(String(dB).replace('-', '−'), cx + R * (1 + dB / range) - 4, cy + LH * 0.75, { a: 0.45, size: 20, maxW: R * 0.23 });
+    lb('−S', cx - R + 3, cy + LH * 0.75, { align: 'left' }); lb('+S', cx + R - 3, cy + LH * 0.75, { align: 'right' });
+    for (const dB of (R < 150 ? [-20] : [-10, -30])) lb(String(dB).replace('-', '−'), cx + R * (1 + dB / range) - 4, cy + LH * 0.75, { a: 0.45, size: 20, maxW: R * 0.23 });
     // ---- correlation: a horizontal bar -1 .. +1, the value ticked (half beat) as a number, the last 0.5 s as ghost ticks
     const bx0 = x0 + 8 + LH * 3.2, bx1 = x0 + w - 8 - LH * 3.6, Xc = (v) => bx0 + (bx1 - bx0) * (clamp(v, -1, 1) + 1) / 2, cv = F.corr[f], ct = F.corr[tf], cyb = corY + rowH / 2;
     lbl(ctx, S, 'CORR', x0 + 6, cyb, { size: 22, a: 0.7 });
@@ -105,12 +108,14 @@ export function createImagerView(L, M8, H) {
     ctx.fillStyle = rgba(C.mid, 0.55); ctx.fillRect(Math.min(Xb(0), Xb(bal)), Math.round(byc) - 3, Math.abs(Xb(bal) - Xb(0)), 6); ctx.fillStyle = S.ink; ctx.fillRect(Math.round(Xb(bal)) - 2, Math.round(byc) - 9, 4, 18);
     text(ctx, Math.abs(bal) < 0.05 ? '0.0 dB' : `${bal < 0 ? 'L' : 'R'} ${Math.abs(bal).toFixed(1)} dB`, x0 + w - 6, byc, { size: 24, w: 600, align: 'right', col: S.ink, maxW: LH * 4.2 });
     if (stripH) { const sy = yy_strip; widthStrip(ctx, S, [x0 + 8 + LH * 3.2, sy, w - 16 - LH * 3.2, stripH], t, C); lbl(ctx, S, 'WIDTH', x0 + 6, sy + stripH / 2, { size: 22, a: 0.7, maxW: LH * 3.1 }); }
-    // ---- 4-band width rail
-    if (railH) { const MS = D.ms, cw = (w - 6) / 4, edges = ['20–120', '120–1.2k', '1.2k–6k', '6k–20k'];
-      for (let b = 0; b < 4; b++) { const v = MS.bandWidth[tf * 4 + b], bx = x0 + 3 + b * cw + 6, bw0 = cw - 12, u = clamp(v / 200), by = railY + 4;
-        ctx.fillStyle = ink(0.1); ctx.fillRect(bx, by, bw0, 4); ctx.fillStyle = rgba(C.mid, 0.9); ctx.fillRect(bx, by, Math.max(1, bw0 * u), 4); ctx.fillStyle = ink(0.45); ctx.fillRect(Math.round(bx + bw0 / 2), by - 2, 1, 8);
-        text(ctx, `${Math.round(v)}%`, bx, railY + 4 + LH * 0.95, { size: 24, w: 600, col: S.ink, maxW: bw0 });
-        lbl(ctx, S, edges[b], bx, railY + railH - LH * 0.4, { size: 20, a: 0.5, maxW: bw0 }); } }
+    // ---- per-band width bar graph: four vertical bars (0 .. 200 %, the 100 % tick), the value above, the band edges below
+    if (railH) { const MS = D.ms, cw = (w - 6) / 4, edges = ['<120', '<1.2K', '<6K', '<20K'], top2 = railY + LH * 1.05, bot2 = railY + railH - LH * 0.95;
+      lbl(ctx, S, 'BAND WIDTH', x0 + 6, railY + LH * 0.35, { size: 20, a: 0.5, maxW: w - 12 });
+      for (let b = 0; b < 4; b++) { const v = MS.bandWidth[tf * 4 + b], bx = x0 + 3 + b * cw + 6, bw0 = cw - 12, u = clamp(v / 200), hh = Math.max(1, (bot2 - top2) * u);
+        ctx.fillStyle = ink(0.1); ctx.fillRect(bx, top2, bw0, bot2 - top2); ctx.fillStyle = rgba(C.mid, 0.9); ctx.fillRect(bx, bot2 - hh, bw0, hh); ctx.fillStyle = rgba(C.hi, 0.9); ctx.fillRect(bx, bot2 - hh, bw0, 2);
+        ctx.fillStyle = ink(0.45); ctx.fillRect(bx - 2, Math.round((top2 + bot2) / 2), bw0 + 4, 1);
+        text(ctx, `${Math.round(v)}%`, bx + bw0 / 2, bot2 - hh - LH * 0.45, { size: 22, w: 600, col: S.ink, maxW: bw0 + 8, align: 'center' });
+        lbl(ctx, S, edges[b], bx + bw0 / 2, railY + railH - LH * 0.3, { size: 16, a: 0.5, maxW: cw - 2, align: 'center' }); } }
     ctx.restore();
   }
 

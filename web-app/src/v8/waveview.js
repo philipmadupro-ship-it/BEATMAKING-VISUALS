@@ -56,20 +56,22 @@ export function createWaveView(L, M, H) {
     const { x, nc, cwp, cy, sc, t, t0, span, dpx } = g, dt = span / nc, bc = bandCols(S);
     const mx = new Float32Array(nc), mn = new Float32Array(nc), ms = new Float32Array(nc), hi = new Float32Array(nc), has = new Uint8Array(nc);
     for (let i = 0; i < nc; i++) { const q = Q[i]; if (q) { has[i] = 1; mx[i] = q.mx; mn[i] = q.mn; ms[i] = q.rms * q.rms; const wi = Math.min(D.wave.tone.length - 1, Math.floor(Math.max(0, t0 + dt * i) * D.wave.cps)); hi[i] = (D.wave.tone[Math.max(0, wi)] || [50, 10])[1] / 100; } }
-    const W = Math.max(1, Math.round(0.009 / dt)), G = Math.max(1, Math.round(0.007 / dt));
+    const W = Math.max(1, Math.round(0.032 / dt)), G = Math.max(1, Math.round(0.007 / dt));   // peak hold >= one cycle of a 30 Hz 808 (32 ms)
     const eMx = new Float32Array(nc), eMn = new Float32Array(nc), rb = new Float32Array(nc), hb = new Float32Array(nc);
     for (let i = 0; i < nc; i++) {
       let a = 0, b = 0; for (let j = Math.max(0, i - W); j <= i; j++) { if (mx[j] > a) a = mx[j]; if (mn[j] < b) b = mn[j]; } eMx[i] = a; eMn[i] = b;
     }
     const sm = (src, dst, r) => { for (let i = 0; i < nc; i++) { let s2 = 0, c = 0; for (let j = Math.max(0, i - r); j <= Math.min(nc - 1, i + r); j++) { const wgt = r + 1 - Math.abs(j - i); s2 += src[j] * wgt; c += wgt; } dst[i] = s2 / c; } };
-    const e2 = new Float32Array(nc), n2 = new Float32Array(nc); sm(eMx, e2, 1); sm(eMn, n2, 1);
-    const r2 = new Float32Array(nc); sm(ms, r2, G * 3); sm(hi, hb, G * 4);
+    const Wf = Math.max(1, Math.round(0.008 / dt)), fMx = new Float32Array(nc), fMn = new Float32Array(nc);   // fast (8 ms) envelope, used only for the kick spikes
+    for (let i = 0; i < nc; i++) { let a = 0, b = 0; for (let j = Math.max(0, i - Wf); j <= i; j++) { if (mx[j] > a) a = mx[j]; if (mn[j] < b) b = mn[j]; } fMx[i] = a; fMn[i] = b; }
+    const e2 = new Float32Array(nc), n2 = new Float32Array(nc); sm(eMx, e2, Math.max(1, Math.round(0.006 / dt))); sm(eMn, n2, Math.max(1, Math.round(0.006 / dt)));
+    const r2 = new Float32Array(nc); sm(ms, r2, G * 6); sm(hi, hb, G * 4);
     for (let i = 0; i < nc; i++) { const rr = Math.sqrt(r2[i]) * 1.0; rb[i] = Math.min(rr, e2[i], -n2[i] || rr); }
     const Xc = (i) => x + (i + 0.5) * cwp, path = (top, bot) => { ctx.beginPath(); let st = -1; for (let i = 0; i < nc; i++) { if (!has[i]) continue; if (st < 0) { st = i; ctx.moveTo(Xc(i), top(i)); } else ctx.lineTo(Xc(i), top(i)); } if (st < 0) return false; for (let i = nc - 1; i >= st; i--) if (has[i]) ctx.lineTo(Xc(i), bot(i)); ctx.closePath(); return true; };
     const PXl = Math.min(g.x + g.w, Math.max(g.x, x + g.w * (t - t0) / span)), fl = g.flash || 0;
     // transient score per column: how far the envelope sits above its own ~0.25 s average (a kick spikes, a bass body does not)
     const cum = new Float64Array(nc + 1); for (let i = 0; i < nc; i++) cum[i + 1] = cum[i] + e2[i]; const rw = Math.max(2, Math.round(0.125 / dt)), trn = new Float32Array(nc);
-    for (let i = 0; i < nc; i++) { const a = Math.max(0, i - rw), b = Math.min(nc, i + rw + 1), av = (cum[b] - cum[a]) / (b - a) + 1e-4; trn[i] = clamp((e2[i] / av - 1.25) / 0.9); }
+    for (let i = 0; i < nc; i++) { const a = Math.max(0, i - rw), b = Math.min(nc, i + rw + 1), av = (cum[b] - cum[a]) / (b - a) + 1e-4; trn[i] = clamp((fMx[i] / av - 1.12) / 0.4); }
     for (const played of [false, true]) {
       ctx.save(); ctx.beginPath(); if (played) ctx.rect(x, g.top0, PXl - x, g.laneH); else ctx.rect(PXl, g.top0, x + g.w - PXl, g.laneH); ctx.clip();
       const k = played ? 0.82 + 0.18 * (1 - fl) : 0.5;
@@ -79,7 +81,7 @@ export function createWaveView(L, M, H) {
       ctx.fillStyle = bc[1]; ctx.globalAlpha = 0.95 * k; if (path((i) => cy - rb[i] * sc, (i) => cy + rb[i] * sc)) ctx.fill();
       ctx.fillStyle = bc[2]; ctx.globalAlpha = 0.9 * k; if (path((i) => cy - rb[i] * sc * clamp(0.06 + hb[i] * 1.3, 0, 0.5), (i) => cy + rb[i] * sc * clamp(0.06 + hb[i] * 1.3, 0, 0.5))) ctx.fill();
       // transients: columns that spike over their surroundings are drawn bright, full height (kicks read as white spikes)
-      ctx.fillStyle = bc[2]; for (let i = 0; i < nc; i++) { if (!has[i] || trn[i] < 0.04) continue; ctx.globalAlpha = Math.min(1, trn[i] * 1.1) * (played ? 0.95 : 0.5); ctx.fillRect(Xc(i) - cwp / 2, cy - e2[i] * sc, cwp, (e2[i] - n2[i]) * sc); }
+      ctx.fillStyle = bc[2]; for (let i = 0; i < nc; i++) { if (!has[i] || trn[i] < 0.04) continue; ctx.globalAlpha = Math.min(1, trn[i] * 1.1) * (played ? 0.95 : 0.5); ctx.fillRect(Xc(i) - cwp / 2, cy - Math.max(e2[i], fMx[i]) * sc, cwp, (Math.max(e2[i], fMx[i]) - Math.min(n2[i], fMn[i])) * sc); }
       // kick flash: the played side brightens for ~120 ms after each kick
       if (played && fl > 0.01) { ctx.fillStyle = bc[2]; ctx.globalAlpha = 0.75 * fl; if (path((i) => cy - e2[i] * sc, (i) => cy - n2[i] * sc)) ctx.fill(); }
       ctx.restore();
