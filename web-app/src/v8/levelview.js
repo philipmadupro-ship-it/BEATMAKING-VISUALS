@@ -1,8 +1,8 @@
-// v11 level meters (DAW grammar of Ableton / Logic / FL, vstgui VU idioms): L/R peak + RMS bars with real ballistics,
-// peak-hold tick, peak and clip LEDs that flash on transients (decay 140 ms), a hanging gain-reduction meter computed
-// from the clip's own envelope (meterlib.grCurve: a feed-forward bus compressor, so it dips on every kick), momentary
-// and short-term LUFS bars with exact numerals, and the 6-band power bars. Nothing is drawn from fixed values: every
-// pixel is a function of the audio at t. Pure: (ctx, S, rect, t, k) -> draws inside the rect only.
+// v11.1 level meters after FabFilter Pro-L 2 / Pro-MB: a scrolling level + gain-reduction history (newest at the right
+// edge, 2 bars wide, beat hairlines) beside tall thin L/R bars (RMS body + fainter peak, vertical gradient, peak-hold
+// line, peak LED), a clean tick scale and small Akira readouts (peak, hold, GR, short-term and integrated LUFS). The GR
+// is meterlib.grCurve (a feed-forward bus compressor on the clip's own envelope, so every kick is a dip). Nothing is
+// drawn from fixed values: every pixel is a function of the audio at t. Pure: (ctx, S, rect, t, k) -> draws inside the rect.
 import * as ML from './meterlib.js';
 
 /** Gain-reduction curve for a clip (cached per level stream + settings): dB <= 0 per 1 ms block. */
@@ -18,67 +18,86 @@ export function ledAt(lv, t, thr = -3, decay = 0.14) {
 }
 
 export function createLevelView(L, M8, H) {
-  const { D, F, FPS, rgba, mix, text, fmt, fidx, clamp } = L, { levOpts, levRead, levScale, levBar, levTicks, hatch, lbl, reveal, cr, zonesOf } = H;
-  const lufsPos = (v, lo = -36) => clamp((v - lo) / (0 - lo));
-  const gRange = 12;   // GR scale: 0 .. -12 dB, hanging from the top
-  const lufsStr = (v) => (!Number.isFinite(v) || v < -90 ? '−∞' : v.toFixed(1));
+  const { D, F, FPS, rgba, text, fmt, fidx, clamp } = L, { levOpts, levRead, levScale, levBar, levTicks, hatch, reveal } = H;
+  const lufsStr = (v) => (!Number.isFinite(v) || v < -69 ? '−∞' : v.toFixed(1));
+  const WIN_BEATS = 8, NUM = 0.74;   // history span: 2 bars
 
-  /** One thin hanging bar (GR) or rising bar (LUFS): x, y, w, h, value position 0..1 from the anchored end. */
-  function slim(ctx, S, x, y, w, h, u, { hang = false, col, holdU = null, a = 1 } = {}) {
-    ctx.fillStyle = rgba(S.ink, 0.07); ctx.fillRect(x, y, w, h);
-    const hh = Math.round(h * clamp(u)); ctx.fillStyle = rgba(col, a);
-    if (hang) ctx.fillRect(x, y, w, hh); else ctx.fillRect(x, y + h - hh, w, hh);
-    if (holdU != null && holdU > 0.01) { const yy = Math.round(hang ? y + h * holdU : y + h * (1 - holdU)); ctx.fillStyle = S.hot; ctx.fillRect(x - 2, yy - 1, w + 4, 2); }
+  /** History columns for the window (t0, t1]: n columns of {lvl: peak dBFS, gr: deepest GR dB <= 0}. */
+  function histCols(gr, t0, t1, n) {
+    const lv = D.lv, rate = lv.rate, out = [], span = (t1 - t0) / n;
+    for (let i = 0; i < n; i++) {
+      const a = Math.max(0, Math.floor((t0 + i * span) * rate)), b = Math.min(lv.n, Math.max(a + 1, Math.floor((t0 + (i + 1) * span) * rate)));
+      let pk = 0, g = 0; for (let j = a; j < b; j++) { const p = Math.max(lv.pkL[j], lv.pkR[j]); if (p > pk) pk = p; if (gr[j] < g) g = gr[j]; }
+      out.push({ lvl: pk > 1e-7 ? 20 * Math.log10(pk) : -120, gr: g });
+    }
+    return out;
   }
-  function led(ctx, S, x, y, w, hgt, v, on) {   // v = brightness 0..1; `on` forces the lit colour (latched clip)
-    ctx.fillStyle = rgba(S.ink, 0.1); ctx.fillRect(x, y, w, hgt);
-    if (on || v > 0.02) { ctx.fillStyle = rgba(S.hot, on ? 1 : 0.25 + 0.75 * v); ctx.fillRect(x, y, w, hgt); if (on && S.grey) hatch(ctx, x, y, w, hgt, S.bg); }
+
+  /** One tall thin bar: faint track, gradient RMS body, fainter peak above it, 1.5 px hold line. */
+  function bar(ctx, S, x, y, w, h, sc, v, col) {
+    const Y = (db) => y + h * (1 - sc.pos(clamp(db, -140, 6) )), grad = ctx.createLinearGradient(0, y + h, 0, y);
+    grad.addColorStop(0, rgba(col, 0.22)); grad.addColorStop(0.7, rgba(col, 0.78)); grad.addColorStop(1, rgba(col, 1));
+    ctx.fillStyle = rgba(S.ink, 0.06); ctx.fillRect(x, y, w, h);
+    const yr = Y(v.rms), yp = Y(v.pk);
+    ctx.fillStyle = grad; ctx.globalAlpha = 0.38; if (v.pk > -140) ctx.fillRect(x, yp, w, y + h - yp);
+    ctx.globalAlpha = 1; if (v.rms > -140) ctx.fillRect(x, yr, w, y + h - yr);
+    if (v.hold > -140) { ctx.fillStyle = S.hot; ctx.fillRect(x - 1, Math.round(Y(v.hold)) - 0.75, w + 2, 1.5); }
+  }
+  function lamp(ctx, S, x, y, w, v, on) {
+    ctx.fillStyle = rgba(S.ink, 0.1); ctx.fillRect(x, y, w, 3);
+    if (on || v > 0.02) { ctx.fillStyle = rgba(S.hot, on ? 1 : 0.25 + 0.75 * v); ctx.fillRect(x, y, w, 3); }
   }
 
   function levels(ctx, S, r, t, k, opt = {}) {
     const [x, y, w, h] = r; if (!opt.noReveal) reveal(ctx, x, y, w, h, k);
-    const o = levOpts(), sc = levScale(o), st0 = L.meter('levels', 'style', 'auto'), style = st0 === 'auto' ? (S.grey ? 'segment' : 'gradient') : st0, compact = opt.compact || w < 140;
-    const f = fidx(t), vL = levRead(0, t, o), vR = levRead(1, t, o), fs = L.floorSize(ctx, 15), fs18 = L.floorSize(ctx, 18);
-    // gain reduction from the clip's envelope, shown as the deepest value in this frame; its hold falls like the peak hold
+    const o = levOpts(), sc = levScale(o), compact = opt.compact || w < 200, col = S.grey ? S.ink : S.sig1, f = fidx(t);
+    const vL = levRead(0, t, o), vR = levRead(1, t, o), ledPk = ledAt(D.lv, t, -3), kk = o.kmode ? o.K : 0;
     const grO = { thresh: L.meter('levels', 'grThresh', 0) || null, ratio: L.meter('levels', 'grRatio', 4), release: L.meter('levels', 'grRelease', 120), det: L.meter('levels', 'grDet', 'peak') };
-    const gr = grFor(D, grO), grNow = ML.grAt(gr, t, FPS, D.lv.rate), grHold = ML.releaseAt((ff) => -ML.grAt(gr, ff / FPS, FPS, D.lv.rate), f, FPS, 12, 0, 0.8);
-    const ledPk = ledAt(D.lv, t, -3), kk = o.kmode ? o.K : 0;
-    // layout: readout line, LED row, bars, footer names
-    const rowH = compact ? 0 : 2 * (fs18 + 3) + 4, lampH = 8, top = y + rowH + lampH + 8, foot = compact ? 0 : fs + 8, bh = y + h - top - foot - 2;
-    const bw = compact ? Math.max(8, Math.min(12, (w - 40) / 2 - 1)) : clamp(w * 0.04, 10, 18), gap = 2;
-    let cx = x + (compact ? 2 : 6);
-    // L / R
-    [vL, vR].forEach((v, ch) => { const X = cx + ch * (bw + gap); levBar(ctx, S, X, top, bw, bh, sc, v, style); led(ctx, S, X, top - lampH - 4, bw, lampH, ledPk, v.clip); });
-    cx += 2 * bw + gap; levTicks(ctx, S, cx + 3, top, bh, sc); cx += compact ? 30 : 36;
-    if (!compact) {
-      const l1 = y + (fs18 + 3) / 2, l2 = y + (fs18 + 3) * 1.5, fy = y + h - foot / 2, nm = (str, X, Y) => lbl(ctx, S, str, X, Y, { size: 13, a: 0.55 });
-      // peak and RMS numerals, live every frame (peak = the frame's peak, RMS = both channels), under no fixed text
-      const mx = Math.max(vL.max, vR.max), hot = mx >= -0.1 || vL.clip || vR.clip, rr = 10 * Math.log10((10 ** (vL.rms / 10) + 10 ** (vR.rms / 10)) / 2);
-      const pkS = mx < -140 ? '−∞' : fmt(Math.max(vL.pk, vR.pk) + kk), rmS = rr < -140 ? '−∞' : fmt(rr + kk);
-      text(ctx, pkS, x + 6, l1, { size: 18, w: 700, col: hot ? S.hot : S.ink, maxW: 78 }); text(ctx, rmS, x + 6, l2, { size: 18, col: rgba(S.ink, 0.6), maxW: 78 });
-      nm(o.kmode ? 'K' + o.K : 'PK', x + 6, fy);
-      // gain reduction: a hanging bar, scale 0 .. -12 dB, numeral in the row
-      const gx = cx + 6; slim(ctx, S, gx, top, bw, bh, -grNow / gRange, { hang: true, col: S.grey ? S.ink : S.sig2, holdU: grHold / gRange, a: 0.9 });
-      led(ctx, S, gx, top - lampH - 4, bw, lampH, clamp(-grNow / 6), false);
-      for (const d of [0, 3, 6, 9, 12]) { const yy = Math.round(top + bh * d / gRange) + 0.5; ctx.fillStyle = rgba(S.ink, 0.4); ctx.fillRect(gx + bw, yy, 4, 1); if (d % 6 === 0) lbl(ctx, S, d ? '−' + d : '0', gx + bw + 7, yy, { size: 14, a: 0.55 }); }
-      nm('GR', gx, fy);
-      text(ctx, grNow < -0.05 ? grNow.toFixed(1) : '0.0', gx, l1, { size: 18, w: 600, col: S.ink, maxW: 60 });
-      cx = gx + bw + 50;
-      // momentary and short-term LUFS: rising bars on -36..0, numerals under the row
-      if (x + w - cx > 150) {
-        const lw = bw, lx = cx + 6, M = F.M[f], Sh = F.S[f];
-        slim(ctx, S, lx, top, lw, bh, lufsPos(M), { col: S.ink, a: 0.85 }); slim(ctx, S, lx + lw + gap, top, lw, bh, lufsPos(Sh), { col: S.grey ? '#9a9a9a' : S.sig1, a: 0.9 });
-        for (const d of [0, -12, -24, -36]) { const yy = Math.round(top + bh * (1 - lufsPos(d))) + 0.5; ctx.fillStyle = rgba(S.ink, 0.4); ctx.fillRect(lx + 2 * lw + gap, yy, 4, 1); lbl(ctx, S, d ? '−' + Math.abs(d) : '0', lx + 2 * lw + gap + 7, yy, { size: 14, a: 0.55 }); }
-        nm('LUFS', lx, fy); text(ctx, lufsStr(M), lx, l1, { size: 18, w: 600, col: S.ink, maxW: 64 }); text(ctx, lufsStr(Sh), lx, l2, { size: 18, col: rgba(S.ink, 0.6), maxW: 64 });
-        cx = lx + 2 * lw + gap + 50;
-      }
-      // 6-band power bars on the same scale as the peak meters when there is room
-      const names = ['SB', 'LO', 'LM', 'MD', 'HM', 'AR'], b0 = cx + 4, bw2 = (x + w - 44 - b0) / 6;
-      if (bw2 >= 12) { names.forEach((nm, i) => { const get = (ff) => F.bandDb[ff][i], v = { pk: get(f), rms: get(f), hold: ML.releaseAt(get, f, FPS, o.rel, -150, o.hold) }, X = b0 + i * bw2 + 2;
-          levBar(ctx, S, X, top, bw2 - 6, bh, sc, v, style); if (L.floorSize(ctx, 14) * 1.3 <= bw2) lbl(ctx, S, nm, X + (bw2 - 6) / 2, y + h - foot / 2, { size: 14, align: 'center', a: 0.6 }); });
-        levTicks(ctx, S, x + w - 40, top, bh, sc); }
+    const gr = grFor(D, grO), grNow = ML.grAt(gr, t, FPS, D.lv.rate);
+    const pad = 6, top = y + pad + 6, bh = y + h - pad - top, bw = compact ? Math.max(6, Math.min(10, (w - 40) / 2 - 1)) : clamp(w * 0.027, 7, 11), gap = 2;
+    if (compact) {   // strip inside the loudness window: bars + scale only
+      let cx = x + 2; [vL, vR].forEach((v, ch) => { bar(ctx, S, cx + ch * (bw + gap), top, bw, bh, sc, v, col); lamp(ctx, S, cx + ch * (bw + gap), top - 7, bw, ledPk, v.clip); });
+      levTicks(ctx, S, cx + 2 * bw + gap + 3, top, bh, sc, { size: 13 }); if (!opt.noReveal) ctx.restore(); return;
     }
+    // type is floored at ~22 px at the overview (core.floorSize), so every size below is measured, not assumed
+    const sW = L.floorSize(ctx, 11), sN = L.floorSize(ctx, 16), nH = sN * NUM, colW = Math.max(sW * 4.7, nH * 5.4) + 4, scaleW = L.floorSize(ctx, 12) * NUM * 2.3 + 8;
+    const rx = x + w - pad - colW, bx = rx - 10 - 2 * bw - gap, sx = bx - scaleW, hx = x + pad, hw = sx - 6 - hx;
+    // ---- history panel: level (peak envelope, same scale as the bars) rising from the floor, GR hanging from the top
+    const hy = top, hh = bh;
+    ctx.save(); ctx.beginPath(); ctx.rect(hx, hy, hw, hh); ctx.clip();
+    ctx.fillStyle = rgba(S.ink, 0.04); ctx.fillRect(hx, hy, hw, hh);
+    for (const [d] of sc.ticks) { const yy = Math.round(hy + hh * (1 - sc.pos(d))) + 0.5; ctx.fillStyle = rgba(S.ink, d === 0 ? 0.16 : 0.055); ctx.fillRect(hx, yy, hw, 1); }
+    const T = WIN_BEATS * L.BEAT, t0 = t - T, ncol = Math.max(24, Math.round(hw * 1.5)), Xc = (i) => hx + hw * (i / ncol);
+    const cols = histCols(gr, t0, t, ncol).map((c, i) => (t0 + (i + 1) * T / ncol < 0 ? null : c)), i0 = cols.findIndex((c) => c);
+    for (let b = Math.ceil(t0 / L.BEAT); b * L.BEAT <= t; b++) { const xx = Math.round(hx + hw * ((b * L.BEAT - t0) / T)) + 0.5; if (b * L.BEAT < 0) continue; ctx.fillStyle = rgba(S.ink, b % 4 === 0 ? 0.16 : 0.06); ctx.fillRect(xx, hy, 1, hh); }
+    if (i0 >= 0) {
+      // Pro-L 2 grammar: the input peak trace on top, the output (input + GR) below it, the slab between them is the gain reduction
+      const Yl = (db) => hy + hh * (1 - sc.pos(clamp(db, -140, 6))), last = ncol - 1, Yi = (i) => Yl(cols[i].lvl), Yo = (i) => Yl(cols[i].lvl + cols[i].gr);
+      const g1 = ctx.createLinearGradient(0, hy + hh, 0, hy); g1.addColorStop(0, rgba(col, 0.03)); g1.addColorStop(1, rgba(col, 0.32));
+      ctx.beginPath(); ctx.moveTo(Xc(i0), hy + hh); for (let i = i0; i <= last; i++) ctx.lineTo(Xc(i), Yo(i)); ctx.lineTo(Xc(last), hy + hh); ctx.closePath(); ctx.fillStyle = g1; ctx.fill();
+      ctx.beginPath(); for (let i = i0; i <= last; i++) ctx.lineTo(Xc(i), Yi(i)); for (let i = last; i >= i0; i--) ctx.lineTo(Xc(i), Yo(i)); ctx.closePath();
+      const g2 = ctx.createLinearGradient(0, hy, 0, hy + hh * 0.5); g2.addColorStop(0, rgba(S.hot, 1)); g2.addColorStop(1, rgba(S.hot, 0.75)); ctx.fillStyle = g2; ctx.fill();
+      ctx.beginPath(); for (let i = i0; i <= last; i++) (i === i0 ? ctx.moveTo(Xc(i), Yi(i)) : ctx.lineTo(Xc(i), Yi(i))); ctx.strokeStyle = rgba(col, 0.75); ctx.lineWidth = 1; ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = rgba(S.ink, 0.2); ctx.lineWidth = 1; ctx.strokeRect(hx + 0.5, hy + 0.5, hw - 1, hh - 1);
+    ctx.fillStyle = S.hot; ctx.fillRect(hx + hw - 1.5, hy, 1.5, hh);   // "now" edge
+    // ---- bars + scale
+    [vL, vR].forEach((v, ch) => { const X = bx + ch * (bw + gap); bar(ctx, S, X, top, bw, bh, sc, v, col); lamp(ctx, S, X, top - 7, bw, ledPk, v.clip); });
+    levTicks(ctx, S, sx + 2, top, bh, sc, { size: 12 });
+    // ---- readouts: small label (Synkopy) over an Akira numeral; units are group headers so the column stays narrow
+    const mx = Math.max(vL.max, vR.max), hold = Math.max(vL.hold, vR.hold), hot = mx >= -0.1 || vL.clip || vR.clip;
+    const rows = [['peak', mx < -140 ? '−∞' : fmt(Math.max(vL.pk, vR.pk) + kk), o.kmode ? 'K' + o.K : 'dB', hot ? S.hot : S.ink, 1], ['hold', hold < -140 ? '−∞' : fmt(hold + kk), 'dB', S.ink, 0.78],
+      ['GR', grNow < -0.05 ? grNow.toFixed(1) : '0.0', 'dB', S.ink, 0.9], ['S', lufsStr(F.S[f]), 'LUFS', S.ink, 0.95], ['I', lufsStr(F.I[f]), 'LUFS', S.ink, 0.95]];
+    const ih = sW + nH + 10, want = [0, 1, 3, 4, 2];   // fill order by priority: peak, hold, short-term, integrated, GR
+    const show = want.filter((_, n) => (n + 1) * ih <= bh + 4).sort(); let yy = top;
+    for (const i of show) { const [name, val, unit, c, al] = rows[i];
+      if (i === 3) { ctx.fillStyle = rgba(S.ink, 0.16); ctx.fillRect(rx, yy - 5, colW, 1); }
+      lbl(ctx, S, name, rx, yy + sW * 0.5, { size: 11, a: 0.55 }); lbl(ctx, S, unit, rx + colW, yy + sW * 0.5, { size: 11, a: 0.4, align: 'right' });
+      text(ctx, val, rx, yy + sW + nH * 0.55 + 4, { size: 16, w: 700, col: i === 0 ? c : rgba(S.ink, al), maxW: colW });
+      yy += ih; }
     if (!opt.noReveal) ctx.restore();
   }
-  return { levels };
+  const lbl = (ctx, S, s, x, y, o = {}) => text(ctx, s, x, y, { size: o.size || 12, col: rgba(S.ink, o.a == null ? 0.6 : o.a), align: o.align, w: o.w || 400, maxW: o.maxW });
+  return { levels, histCols };
 }
