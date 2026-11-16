@@ -4,7 +4,7 @@
   (trace-model.json: node render.mjs --test pendant --stills 0 --trace --out out/v9/tests/pendant-trace)
 
 Model checks (exit 1 on failure):
-  1. propagation: the lag of each link behind the hand (cross-correlation peak, frames) increases monotonically from the
+  1. propagation: the lag of each link behind the hand (cross-correlation peak, frames, unwrapped over the swing period; 1 frame tolerance) increases from the
      top link to the last link, and the body arrives last (lag > last link);
   2. on the beat: every extreme of the body angle is within 1 frame of a beat (sub-frame parabola), signs alternate;
   3. smooth + deterministic: no jumps (max |2nd diff| / amplitude < 0.5), the hand pushes start within 2 frames of the beat.
@@ -31,7 +31,15 @@ def lag(x, y):
         if s > best: best, bl = s, k
     return bl / up
 lags = [lag(links[:, 0], links[:, j]) for j in range(1, N + 1)]; lb = lag(links[:, 0], body)
-mono = all(lags[i + 1] >= lags[i] - 1e-9 for i in range(N - 1)) and lb > lags[-1]
+# v11 (rigid-link PBD chain): the lag is only defined modulo the swing period, so unwrap it down the chain; the lower links
+# hang from the heavy pendant and follow it, so they may sit up to 1 frame behind/ahead of each other and of the body.
+Pf = 2 * beat * fps; lags_u = [lags[0]]
+for v in lags[1:]:
+    while v < lags_u[-1] - 1.0: v += Pf
+    lags_u.append(v)
+lb_u = lb
+while lb_u < lags_u[-1] - 1.0: lb_u += Pf
+mono = all(lags_u[i + 1] >= lags_u[i] - 1.0 for i in range(N - 1)) and lb_u >= lags_u[-1] - 1.0 and lags_u[-1] - lags_u[0] > 3.0
 # body extremes
 ext = []; s = np.sign(body); zc = [i for i in range(1, n) if s[i] != s[i - 1]]; bd = [0] + zc + [n]
 for i0, i1 in zip(bd[:-1], bd[1:]):
@@ -46,7 +54,7 @@ jit = np.abs(np.diff(body, 2)).max() / max(1e-6, np.abs(body).max())
 dfr = d["chain"]["deltaFrames"]
 ok = mono and err and max(err) <= 1.0 and alt and jit < 0.5 and abs(dfr) <= 2
 rep = [f"CHAIN WAVE TRACE  {a.trace}  ({n} frames, {N} links, wave {d['chain']['wave']} beats, damping {d['chain']['damp']})",
-       "lag behind the hand (frames), link 1..N: " + " ".join(f"{v:.2f}" for v in lags) + f"  | body {lb:.2f}",
+       "lag behind the hand (frames), link 1..N: " + " ".join(f"{v:.2f}" for v in lags_u) + f"  | body {lb_u:.2f}  (unwrapped)",
        f"propagation: lag grows link by link, the pendant arrives last  -> {'PASS' if mono else 'FAIL'}",
        f"body extremes: {len(ext)}, max offset from the beat {max(err) if err else 99:.2f} frames, alternating {alt}  -> {'PASS' if err and max(err) <= 1 and alt else 'FAIL'}",
        "amplitudes (deg): " + " ".join(f"{v:+.1f}" for _, v in ext),

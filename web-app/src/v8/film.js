@@ -131,15 +131,9 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   function elephantBody(cr, t, k, Sx) {
     const [x, y, w, h] = cr; c.save(); c.beginPath(); c.rect(x - 14, y - 14, w + 28, (h + 28) * k); c.clip();
-    const { size, len, ax, ay } = pendantGeom(cr), g = BR.chainGeom(ax, ay, len, t);
-    BR.drawChain(c, Sx, g);
+    const { size, len, ax, ay } = pendantGeom(cr), g = BR.drawChainFx(c, Sx, ax, ay, len, t);
     const sw = BR.elephant(c, Sx, g.end[0], g.end[1], size, t, g.ang[g.ang.length - 1]);
     if (LOOK === 'scope') { c.fillStyle = rgba(Sx.ink, 0.8); c.fillRect(ax - 22, ay - 20, 44, 10); c.fillRect(ax - 3, ay - 12, 6, 12); }
-    const hx = g.pts[0][0], hy = g.pts[0][1];   // the hand: a crosshair that pushes on the beat
-    c.strokeStyle = Sx.hot; c.lineWidth = 2; c.beginPath(); c.arc(hx, hy, 7, 0, 7); c.stroke(); c.beginPath(); c.moveTo(hx - 14, hy); c.lineTo(hx + 14, hy); c.moveTo(hx, hy - 14); c.lineTo(hx, hy + 14); c.stroke(); c.lineWidth = 1;
-    const R = Math.min(170, h * 0.3) + len; c.strokeStyle = rgba(Sx.ink, 0.5); c.setLineDash([4, 5]); c.beginPath(); c.arc(ax, ay, R, Math.PI / 2 - sw.amp, Math.PI / 2 + sw.amp); c.stroke(); c.setLineDash([]);
-    for (const a of [-sw.amp, sw.amp]) { c.strokeStyle = rgba(Sx.ink, 0.6); c.beginPath(); c.moveTo(ax - Math.sin(a) * (R - 8), ay + Math.cos(a) * (R - 8)); c.lineTo(ax - Math.sin(a) * (R + 8), ay + Math.cos(a) * (R + 8)); c.stroke(); }
-    c.beginPath(); c.moveTo(ax - Math.sin(sw.th) * (R - 14), ay + Math.cos(sw.th) * (R - 14)); c.lineTo(ax - Math.sin(sw.th) * (R + 14), ay + Math.cos(sw.th) * (R + 14)); c.strokeStyle = Sx.hot; c.lineWidth = 3; c.stroke(); c.lineWidth = 1;
     c.restore();
   }
   const BODY = { logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),

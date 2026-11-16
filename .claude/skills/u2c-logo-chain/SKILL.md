@@ -21,6 +21,9 @@ Code: `web-app/src/v8/brand.js` (`B.logoPhase`, `B.logoEvents`, `B.logo`, `drawG
 | punch | scale `1 + 0.012*kick` (x2 on hero) | - |
 Taste limits: no on/off strobing (every envelope is continuous), bloom alpha <= 0.5, NIGREDO glow stays grey (R=G=B), accent pixels <= 2 %. Never fade the letters; the glow is additive light, not opacity.
 
+## v11 link physics (brand.js `B.logo`)
+On every link step (grid unchanged, `logoPhase` untouched) the link that threads IN lands with a damped-spring settle (starts 16 logo px above its place, zeta 0.4, 0.2 s period, gone after 0.24 s); the link that runs OUT falls under gravity (7000 logo px/s^2, small sideways drift and spin, gone after 0.22 s, drawn even after its letter is fully out). Constants `SETTLE_*`, `FALL_*`. Only in `cycle` mode (not hero/full). Glow keeps its clip (settling links are extras). Stills: `LOGO=1 STEP=2 node tools/chain-stills.mjs <audio> nigredo 0.12 shots/logo`.
+
 ## Tests
 - Sync: link steps + runner steps are in `schedule()` -> `tests/sync_test.py` (<= 1 frame).
 - Grey: smoke row "NIGREDO is greys only"; `tests/qa_video.py <mp4> --stage nigredo`.
