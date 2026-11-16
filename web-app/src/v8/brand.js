@@ -2,6 +2,7 @@
 // the grid (never broken: the pieces never move, a ghost outline always stays), and the elephant pendant hanging from
 // ITS OWN chain (mesh-rigged from the art, a pendulum phase-locked to the grid with spring-damped followers).
 // Cue-driven: logo mode / cycle length / hero, pendant amplitude per beat (degrees), period in beats.
+import { buildChain } from './chainsim.js';
 export function createBrand(L, assets) {
   const { D, BEAT, BAR, rgba, hash, hs, clamp, kickEnv, fidx } = L;
   const B = {};
@@ -69,6 +70,7 @@ export function createBrand(L, assets) {
   };
   /** Scheduled link steps between beats b0 and b1 for a cycle of C beats (for the sync test). */
   B.logoEvents = (b0, b1, C = 8) => { const ev = [], u = C / 8; for (let c = Math.floor((b0 + C / 2) / C) - 1; c * C - C / 2 < b1; c++) for (let k = 0; k < 3; k++) for (const [ph, nm] of [[k * u, 'IN'], [C / 2 + k * u, 'OUT']]) for (let q = 0; q < STEPS; q++) { const b = c * C - C / 2 + ph + q * u / STEPS; if (b >= b0 - 1e-9 && b < b1) ev.push([b, `logo ${nm} ${'U2C'[k]} link step ${q + 1}`]); } return ev; };
+  const SETTLE_T = 0.24, SETTLE_A = 16, SETTLE_W = 2 * Math.PI / 0.2, FALL_T = 0.22, FALL_G = 7000;   // settle duration (s), start height + angular rate (logo px), fall time and gravity (logo px / s^2)
   let LINKS = null;
   function buildLinks() {   // Voronoi of each letter's link anchors on a 3 px grid -> one Path2D per link (row runs merged)
     LINKS = [];
@@ -102,14 +104,28 @@ export function createBrand(L, assets) {
     const total = LINKS.reduce((n, Lk) => n + Lk.n, 0), q16 = Math.floor(t / (BEAT / 4) + 1e-6);
     let rk = -1, ri = -1; if (o.runner !== false) { let gi = ((q16 % total) + total) % total; for (let k = 0; k < 3; k++) { if (gi < LINKS[k].n) { rk = k; ri = gi; break; } gi -= LINKS[k].n; } }
     const G = o.glow > 0 ? glowCtx() : null, draws = [];
+    // v11 physics on the link steps: a link that threads IN lands with a damped-spring settle (it hangs above its place
+    // for the first frame and drops onto it); a link that runs OUT falls under gravity with a little spin. Both start
+    // exactly on the step (the grid is unchanged) and last well under a beat.
+    const Cc = o.cycle || 8, uu = Cc / 8, cb0 = (((t / BEAT + Cc / 2) % Cc) + Cc) % Cc, fx = !o.hero && (o.mode || 'cycle') === 'cycle';
+    const linkFx = (k, Lk, mode, i, dx, dy, rotA) => {
+      const an = A.links.anchors.filter((a) => a[0] === k)[i]; ctx.save(); ctx.translate(an[1] + dx, an[2] + dy); ctx.rotate(rotA); ctx.translate(-an[1], -an[2]); ctx.clip(Lk.paths[i]);
+      for (const p of Lk.ps) ctx.drawImage(art.logo, p.ax, p.ay, p.aw, p.ah, p.x, p.y, p.w, p.h); ctx.restore();
+    };
     for (let k = 0; k < 3; k++) {
-      const [mode, st] = ph[k], Lk = LINKS[k]; if (mode === 0) continue;
+      const [mode, st] = ph[k], Lk = LINKS[k]; const settle = [], fall = [];
+      if (fx) for (let i = 0; i < Lk.n; i++) { const sti = Math.floor(i * STEPS / Lk.n) + 1, aIn = (cb0 - (k * uu + (sti - 1) * uu / STEPS)) * BEAT, aOut = (cb0 - (Cc / 2 + k * uu + (sti - 1) * uu / STEPS)) * BEAT;
+        if ((mode === 1 || mode === 2) && aIn >= 0 && aIn < SETTLE_T) settle.push([i, aIn]); if ((mode === 3 || mode === 0) && aOut >= 0 && aOut < FALL_T) fall.push([i, aOut]); }
+      for (const [i, a] of fall) { const dir = (i + k) % 2 ? 1 : -1; linkFx(k, Lk, mode, i, dir * 14 * a, 0.5 * FALL_G * a * a, dir * 2.2 * a * a); }
+      if (mode === 0) continue;
       const nIn = Math.ceil(Lk.n * st / STEPS), mOut = Math.ceil(Lk.n * st / STEPS);
-      const clip = mode === 2 ? null : mode === 1 ? Lk.head[nIn] : Lk.tail[Math.min(Lk.n, mOut)];
+      let clip = mode === 2 ? null : mode === 1 ? Lk.head[nIn] : Lk.tail[Math.min(Lk.n, mOut)];
+      if (settle.length) { clip = new Path2D(); const cnt = mode === 1 ? nIn : Lk.n; for (let i = 0; i < cnt; i++) if (!settle.some((e) => e[0] === i)) clip.addPath(Lk.paths[i]); }
       solid[k] = mode === 2 ? 1 : mode === 1 ? nIn / Lk.n : 1 - mOut / Lk.n;
       ctx.save(); if (clip) ctx.clip(clip);
       for (const p of Lk.ps) ctx.drawImage(art.logo, p.ax, p.ay, p.aw, p.ah, p.x, p.y, p.w, p.h);
       ctx.restore();
+      for (const [i, a] of settle) linkFx(k, Lk, mode, i, 0, -SETTLE_A * Math.exp(-0.4 * SETTLE_W * a) * Math.cos(SETTLE_W * Math.sqrt(1 - 0.16) * a), 0);
       // the link being threaded (IN) or the next to leave (OUT) is lit; a hero moment lights the link on the beat; else the runner
       const lit = mode === 1 ? nIn - 1 : mode === 3 && mOut < Lk.n ? mOut : o.hero ? Math.floor(t / (BEAT / 2)) % Lk.n : mode === 2 && rk === k ? ri : -1;
       if (lit >= 0) { ctx.save(); ctx.clip(Lk.paths[lit]); for (const p of Lk.ps) ctx.drawImage(art.lit, p.ax, p.ay, p.aw, p.ah, p.x, p.y, p.w, p.h); ctx.restore(); }
@@ -139,16 +155,12 @@ export function createBrand(L, assets) {
     if (bloom > 0.01) put(blur(GL.c, 7 + 5 * bloom), amt * bloom * (paper ? 0.25 : 0.5));
   }
 
-  // ---------------------------------------------------------------- ELEPHANT on a CHAIN WAVE (v9)
-  // The pendant hangs from a chain of N links held by a hand at the top. On every swing beat the hand PUSHES (an
-  // expo-out move toward the side the pendant must reach next); the motion travels down the chain link by link as a
-  // wave (each link is a critically damped follower of the link above, zeta 0.7, tuned so the whole chain delays the
-  // swing by `wave` beats), and the pendant body is a damped pendulum stage (zeta `damp`) at the bottom: it arrives
-  // last. Linear and time-invariant, so the phase is solved analytically: the body stage is tuned so that
-  // hand push (beat m) -> body extreme (beat m + j·period/2, j = 1 or 2 by the wave length) exactly; a steady-state run measures any residual
-  // (integration, harmonics) and shifts the push schedule by it (`P8.delta`, reported in frames) and scales the hand so
-  // the body's extremes equal the cue amplitude. Fixed 1/240 s steps from a 4-bar pre-roll: deterministic and
-  // already in steady state at frame 0 (seam-clean). Springs for the loops / legs chase the body angle.
+  // ---------------------------------------------------------------- ELEPHANT on a rigid-link chain (v11)
+  // The pendant hangs from N rigid links held by a hand. chainsim.js simulates the chain (position based dynamics:
+  // exact link lengths, gravity, drag, joint friction) at a fixed 1/240 s from a 4-bar pre-roll; the hand pushes on the
+  // beat, the wave runs down the links and the pendant, which has mass and lags, lands its extremes on the beats
+  // (a per-push pass corrects each push time and size from where its extreme really lands). renderFrame(t) only looks
+  // the trajectory up. On top of the in-plane motion: link roll (torsion) and a depth sway of the pendant, glints and motion blur.
   const rot = (p, c, a) => { const s = Math.sin(a), co = Math.cos(a), dx = p[0] - c[0], dy = p[1] - c[1]; return [c[0] + dx * co - dy * s, c[1] + dx * s + dy * co]; };
   const P8 = { key: '' };
   const deg = Math.PI / 180, NBt = D.bars * 4;
@@ -156,110 +168,85 @@ export function createBrand(L, assets) {
     for (let k = 0; k < NBt; k++) { let s = 0, n = 0; for (let f = Math.floor(k * BEAT * FPSd); f < Math.min(NFd, (k + 1) * BEAT * FPSd); f++) { s += L.F.bands[f][0] + L.F.bands[f][1]; n++; } raw.push(n ? s / n : 0); }
     const sm = raw.map((_, k) => { let s = 0, n = 0; for (let j = k - 2; j <= k + 1; j++) if (j >= 0 && j < NBt) { s += raw[j]; n++; } return s / n; });
     const p95 = sm.slice().sort((x, y) => x - y)[Math.floor(sm.length * 0.95)] || 1; return sm.map((v) => clamp(v / p95)); })();
-  const ZL = 0.7, TAU = 0.12;                          // link damping; hand push time constant (fraction of a half period)
-  const pushShape = (x) => (1 - Math.exp(-x / TAU)) / (1 - Math.exp(-1 / TAU));
-  // second-order stage x'' = w^2 (in - x) - 2 z w x': phase lag + gain at r = w_drive / w_n
-  const lag2 = (r, z) => Math.atan2(2 * z * r, 1 - r * r), gain2 = (r, z) => 1 / Math.hypot(1 - r * r, 2 * z * r);
-  const rForLag = (phi, z) => { if (Math.abs(phi - Math.PI / 2) < 1e-6) return 1; const tn = Math.tan(phi), q = Math.sqrt(z * z + tn * tn); return tn > 0 ? (-z + q) / tn : (-z - q) / tn; };
-  function design(period, N, wave, damp) {
-    const HP = period / 2, w = Math.PI / (HP * BEAT);           // drive: one push per half period (HP beats)
-    // fundamental of the steady hand profile (unit level, alternating): delay of its peak after the push, amplitude
-    let re = 0, im = 0; const M = 512;
-    for (let i = 0; i < 2 * M; i++) { const x = (i % M) / M, sgn = i < M ? 1 : -1, u = sgn * (-1 + 2 * pushShape(x)), ph = Math.PI * i / M; re += u * Math.cos(ph); im += u * Math.sin(ph); }
-    re /= M; im /= M; const aH = Math.hypot(re, im), dH = Math.atan2(im, re) / Math.PI * HP;   // beats
-    const phiL = Math.min(1.4, Math.PI * wave / HP / N), rL = rForLag(phiL, ZL);
-    // the push at m*HP lands its body extreme j half periods later: the smallest j that leaves the body stage a lag in (0.1, 0.9) pi
-    let j = 1, phiB = 0; for (; j < 6; j++) { phiB = Math.PI * (j * HP - dH - wave) / HP; if (phiB >= 0.1 * Math.PI) break; }
-    phiB = Math.min(phiB, 0.9 * Math.PI);
-    const rB = rForLag(phiB, damp);
-    return { HP, w, aH, dH, N, j, wn: w / rL, wB: w / rB, damp, gain: aH * Math.pow(gain2(rL, ZL), N) * gain2(rB, damp) };
-  }
-  // levels(m): hand level reached by push m; delta(m): push m starts at (m + delta(m)) half periods (beats * HP)
-  function simulate(P, levels, delta, t0, n, DT, keepAll) {
-    const N = P.N, ang = new Float64Array(N + 1), vel = new Float64Array(N + 1), out = keepAll ? Array.from({ length: N + 2 }, () => new Float32Array(n + 1)) : null, body = new Float32Array(n + 1);
-    const HPs = P.HP * BEAT, T0 = (m) => (m + delta(m)) * HPs;
-    const hand = (t) => { let m = Math.floor(t / HPs); if (t < T0(m)) m--; else if (t >= T0(m + 1)) m++;
-      const a = levels(m - 1), b = levels(m); return a + (b - a) * pushShape((t - T0(m)) / (T0(m + 1) - T0(m))); };
-    const u0 = hand(t0); ang.fill(u0);
-    for (let i = 0; i <= n; i++) {
-      const t = t0 + i * DT, h = hand(t);
-      for (let j = 0; j <= N; j++) {
-        const inp = j === 0 ? h : ang[j - 1], wn = j === N ? P.wB : P.wn, z = j === N ? P.damp : ZL;
-        vel[j] += (wn * wn * (inp - ang[j]) - 2 * z * wn * vel[j]) * DT; ang[j] += vel[j] * DT;
-      }
-      if (out) { out[0][i] = h; for (let j = 0; j <= N; j++) out[j + 1][i] = ang[j]; }
-      body[i] = ang[N];
-    }
-    return { out, body };
-  }
-  // the body's extreme near landing time tb (search +-0.45 half period): sub-step time offset (s) and |value|
-  function peakNear(body, t0, DT, tb, HPs) {
-    const i0 = Math.round((tb - t0) / DT), R = Math.round(HPs * 0.45 / DT); let bi = i0, bv = -1;
-    for (let i = Math.max(1, i0 - R); i <= Math.min(body.length - 2, i0 + R); i++) if (Math.abs(body[i]) > bv) { bv = Math.abs(body[i]); bi = i; }
-    const y0 = Math.abs(body[bi - 1]), y1 = bv, y2 = Math.abs(body[bi + 1]), dd = y0 - 2 * y1 + y2, d = dd ? (y0 - y2) / (2 * dd) : 0;
-    return { off: (bi + d - i0) * DT, v: y1 - 0.25 * (y0 - y2) * d };
-  }
-  /** Inputs: ampDeg(beatIndex) -> degrees, period (beats), react, chain {links, wave (beats), damp}. Re-simulates on change. */
+  /** Inputs: ampDeg(beatIndex) -> degrees, period (beats), react, chain {links, wave (looseness: low = stiff), damp}. Re-simulates on change. */
   B.pendulum = (ampDeg, period = 2, react = 0.32, chain = {}) => {
-    const N = Math.max(3, Math.min(24, Math.round(chain.links || 10))), wave = clamp(chain.wave == null ? 0.75 : chain.wave, 0.05, period / 2 - 0.1), damp = clamp(chain.damp == null ? 0.35 : chain.damp, 0.1, 0.9);
+    const N = Math.max(3, Math.min(24, Math.round(chain.links || 10))), wave = clamp(chain.wave == null ? 0.75 : chain.wave, 0.05, 1.5), damp = clamp(chain.damp == null ? 0.35 : chain.damp, 0.1, 0.9);
     const amp = []; for (let k = 0; k < NBt; k++) amp.push(ampDeg(k) * (1 - react / 2 + react * bassRaw[k]) * deg); amp.push(amp[amp.length - 1] || 0);
     const key = amp.map((v) => v.toFixed(5)).join(',') + '|' + [period, N, wave, damp].join(',');
     if (key === P8.key) return; P8.key = key; P8.amp = amp; P8.period = period;
-    const P = design(period, N, wave, damp), DT = 1 / 240, HP = P.HP;
-    // calibration 1: a steady alternating run (unit target) gives the common offset of the body peaks + their size
-    const HPs = HP * BEAT, cal = (delta) => { const t0 = -8 * HPs, n = Math.ceil(16 * HPs / DT); const r = simulate(P, (m) => (((m % 2) + 2) % 2 ? -1 : 1) / P.gain, () => delta, t0, n, DT, false).body;
-      let off = 0, pk = 0; for (let m = 2; m < 7; m++) { const q = peakNear(r, t0, DT, m * HPs, HPs); off += q.off; pk += q.v; } return { off: off / 5 / BEAT, pk: pk / 5 }; };
-    let delta = 0; for (let it = 0; it < 3; it++) delta -= cal(delta).off;
-    const gfix = 1 / (cal(delta).pk || 1);
-    // calibration 2 (per push): the push m lands its extreme at (m + j) HP with the sign of that beat and the cue amplitude;
-    // amplitude changes leave transients, so each push time and level is corrected from where its extreme actually lands.
-    const t0 = -4 * BAR, n = Math.ceil((D.duration + 0.4 - t0) / DT), m0 = Math.floor(t0 / HPs) - 2, m1 = Math.ceil((D.duration + 0.4) / HPs) + 2;
-    const tgt = (m) => { const land = (m + P.j) * HP, k = clamp(Math.round(Math.max(0, land)), 0, amp.length - 1); return ((((m + P.j) % 2) + 2) % 2 === 0 ? 1 : -1) * amp[k]; };
-    const dl = new Float64Array(m1 - m0 + 1).fill(delta), lv = new Float64Array(m1 - m0 + 1);
-    for (let m = m0; m <= m1; m++) lv[m - m0] = tgt(m) * gfix / P.gain;
-    const idx = (m) => clamp(m - m0, 0, m1 - m0), levels = (m) => lv[idx(m)], dfun = (m) => dl[idx(m)];
-    for (let it = 0; it < 4; it++) {
-      const r = simulate(P, levels, dfun, t0, n, DT, false).body;
-      for (let m = Math.max(m0, Math.floor(-2 * BAR / HPs)); m <= m1 - P.j; m++) { const tb = (m + P.j) * HPs; if (tb > D.duration + 0.2) break; const q = peakNear(r, t0, DT, tb, HPs), want = Math.abs(tgt(m));
-        dl[m - m0] = clamp(dl[m - m0] - q.off / HPs * 0.8, delta - 0.35, delta + 0.35); if (q.v > 1e-6 && want > 1e-6) lv[m - m0] *= clamp(1 + 0.8 * (want / q.v - 1), 0.5, 2); }
-    }
-    const sim = simulate(P, levels, dfun, t0, n, DT, true);
+    const sim = buildChain({ N, period: Math.max(1, period), BEAT, duration: D.duration, damp, loose: 1.5 - wave, amp, dB: 9 });
+    const { t0, DT, n, links } = sim, body = links[N + 1];
     // loop / leg springs chase the body angle
-    const SP = { H: [3.2, 0.55], TL: [1.55, 0.3], BL: [1.3, 0.32], LEG: [2.1, 0.36] }, st = {}, out = {}, body = sim.body, w0 = P.w;
+    const SP = { H: [3.2, 0.55], TL: [1.55, 0.3], BL: [1.3, 0.32], LEG: [2.1, 0.36] }, st = {}, out = {}, w0 = Math.PI / (period / 2 * BEAT);
     for (const k in SP) { st[k] = [body[0], 0]; out[k] = new Float32Array(n + 1); }
     for (let i = 0; i <= n; i++) { const th = body[i]; for (const k in SP) { const [r, z] = SP[k], w = r * w0, s = st[k]; s[1] += (w * w * (th - s[0]) - 2 * z * w * s[1]) * DT; s[0] += s[1] * DT; out[k][i] = s[0]; } }
-    Object.assign(P8, { t0, DT, n, sp: out, links: sim.out, N, design: P, delta, gfix, wave, damp });
+    // torsion: each link's roll about its own axis is a damped spring driven by its angular velocity; the pendant's depth sway likewise
+    const tw = [], wT = 2 * Math.PI * 2.6, zT = 0.22;
+    for (let j = 1; j <= N + 1; j++) { const a = links[j], o = new Float32Array(n + 1); let x = 0, v = 0; const gain = j === N + 1 ? 0.55 : 0.28;
+      for (let i = 1; i <= n; i++) { const om = (a[i] - a[i - 1]) / DT; v += (wT * wT * (gain * om - x) - 2 * zT * wT * v) * DT; x += v * DT; o[i] = x; } tw.push(o); }
+    Object.assign(P8, { t0, DT, n, sp: out, links, tw, N, wave, damp, sim: sim.info, period });
   };
   const ampAt = (b) => { const Am = P8.amp, k = Math.floor(b), u = b - k, a0 = Am[clamp(k, 0, Am.length - 1)], a1 = Am[clamp(k + 1, 0, Am.length - 1)]; return a0 + (a1 - a0) * (0.5 - 0.5 * Math.cos(Math.PI * u)); };
   const sample = (a, t) => { const x = (t - P8.t0) / P8.DT, i = clamp(Math.floor(x), 0, P8.n - 1), u = x - i; return a[i] + (a[i + 1] - a[i]) * u; };
   const spring = (k, t) => sample(P8.sp[k], t);
-  /** Body angle (rad) at time t: the last stage of the chain wave. */
+  /** Body angle (rad) at time t: the pendant, last body of the chain. */
   B.theta = (t) => sample(P8.links[P8.N + 1], t);
-  /** Hand angle (index 0) and every link angle (1..N) at t. */
+  /** Hand offset (index 0, in link lengths) and every link angle (1..N) at t. */
   B.linkAngles = (t) => { const o = []; for (let j = 0; j <= P8.N; j++) o.push(sample(P8.links[j], t)); return o; };
-  B.chainInfo = () => ({ links: P8.N, wave: P8.wave, damp: P8.damp, deltaBeats: P8.delta, deltaFrames: P8.delta * BEAT * L.FPS, linkHz: P8.design.wn / (2 * Math.PI), bodyHz: P8.design.wB / (2 * Math.PI), swingHz: P8.design.w / (2 * Math.PI), handLead: P8.design.dH });
-  B.swing = (t) => ({ th: B.theta(t), amp: ampAt(t / BEAT), hang: spring('H', t), tl: spring('TL', t), bl: spring('BL', t), leg: spring('LEG', t) });
+  B.chainInfo = () => ({ links: P8.N, wave: P8.wave, damp: P8.damp, deltaBeats: 0, deltaFrames: 0, linkHz: 0, bodyHz: 1 / (P8.sim.Tn || 1), swingHz: 1 / (P8.period * BEAT), handLead: 0, ...P8.sim });
+  B.swing = (t) => ({ th: B.theta(t), amp: ampAt(t / BEAT), hang: spring('H', t), tl: spring('TL', t), bl: spring('BL', t), leg: spring('LEG', t), yaw: clamp(sample(P8.tw[P8.N], t), -0.6, 0.6) });
   /** Chain geometry: hand at (ax, ay) (+ its push / kick lift), N links of length len/N; returns joints + the pendant pivot. */
   B.chainGeom = (ax, ay, len, t) => {
     const a = B.linkAngles(t), N = P8.N, l = len / N, lift = 0.22 * l * kickEnv[fidx(t)];
-    const hx = ax - 0.8 * len * Math.sin(a[0]), hy = ay - lift, pts = [[hx, hy]];
+    const hx = ax + a[0] * l, hy = ay - lift, pts = [[hx, hy]];
     for (let j = 1; j <= N; j++) { const p = pts[j - 1]; pts.push([p[0] - Math.sin(a[j]) * l, p[1] + Math.cos(a[j]) * l]); }
     return { pts, ang: a, l, end: pts[N] };
   };
-  const METAL = { NIGREDO: ['#d6d6d6', '#5e5e5e'], ALBEDO: ['#1a1917', '#7d776b'], CITRINITAS: ['#d79a35', '#6e4433'], RUBEDO: ['#c08cf5', '#5a2d78'] };
-  /** Draw the chain links (alternating face-on rings and edge-on bars, overlapping like real links). */
-  B.drawChain = (ctx, S, g) => {
-    const [hi, lo] = METAL[S.name] || METAL.NIGREDO, l = g.l, N = P8.N;
+  const METAL = { NIGREDO: ['#e4e4e4', '#4a4a4a', '#8e8e8e'], ALBEDO: ['#2a2824', '#8a8478', '#4d4a42'], CITRINITAS: ['#e6ad4a', '#5b3827', '#a8703a'], RUBEDO: ['#d2a6fa', '#4a2268', '#8d54c0'] };
+  // kick onsets (s) for the glints that run down the chain
+  const KT = D.onsets.kick.map((k) => k[2]).sort((x, y) => x - y), GLINT_T = 0.26;
+  /** Glints active at t: [{pos (link index, float), a}] - a spec flash that leaves the hand on each kick and runs down to the pendant. */
+  B.glints = (t) => { const o = []; for (let i = KT.length - 1; i >= 0; i--) { const age = t - KT[i]; if (age < 0) continue; if (age > GLINT_T + 0.12) break; o.push({ pos: age / GLINT_T * (P8.N + 1) - 0.5, a: Math.exp(-Math.max(0, age - GLINT_T * 0.5) / 0.07) }); } return o; };
+  const LIGHT = [-0.55, -0.835];   // direction TO the light (upper left)
+  /** Draw the links: alternating face-on rings / edge-on bars that roll with the chain (tw = roll per link), lit from one source,
+   *  glints (B.glints) on the kick. `alpha` fades a motion-blur ghost. */
+  B.drawChain = (ctx, S, g, tw, gl, alpha = 1) => {
+    const [hi, lo, md] = METAL[S.name] || METAL.NIGREDO, l = g.l, N = P8.N, white = S.grey ? '#ffffff' : hi;
+    ctx.save(); ctx.globalAlpha = alpha; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (let j = 1; j <= N; j++) {
       const p = g.pts[j - 1], q = g.pts[j], cx = (p[0] + q[0]) / 2, cy = (p[1] + q[1]) / 2, a = Math.atan2(q[1] - p[1], q[0] - p[0]);
-      const face = j % 2 === 1, Lx = l * 1.32, Wy = face ? l * 0.62 : l * 0.2, lw = Math.max(1.5, l * 0.17);
+      const roll = (j % 2 === 1 ? 0 : Math.PI / 2) + (tw ? tw[j - 1] * 3 : 0), f = Math.abs(Math.cos(roll));
+      const Lx = l * 1.34, Wy = Math.max(l * 0.25, l * 0.64 * f), lw = Math.max(1.6, l * 0.17 * (0.7 + 0.3 * f));
+      let gi = 0; if (gl) for (const e of gl) gi = Math.max(gi, e.a * Math.exp(-((j - 0.5 - e.pos) ** 2) / 1.1));
+      const lx = LIGHT[0] * Math.cos(a) + LIGHT[1] * Math.sin(a), ly = -LIGHT[0] * Math.sin(a) + LIGHT[1] * Math.cos(a);   // light in the link's frame
       ctx.save(); ctx.translate(cx, cy); ctx.rotate(a);
-      ctx.beginPath(); ctx.roundRect(-Lx / 2, -Wy / 2, Lx, Wy, Wy / 2);
-      if (face) { ctx.lineWidth = lw + 2; ctx.strokeStyle = lo; ctx.stroke(); ctx.lineWidth = lw; ctx.strokeStyle = hi; ctx.stroke();
-        ctx.lineWidth = Math.max(1, lw * 0.3); ctx.strokeStyle = rgba(S.grey ? '#ffffff' : hi, 0.55); ctx.beginPath(); ctx.moveTo(-Lx * 0.25, -Wy / 2 + lw * 0.1); ctx.lineTo(Lx * 0.2, -Wy / 2 + lw * 0.1); ctx.stroke(); }
-      else { ctx.fillStyle = lo; ctx.fill(); ctx.lineWidth = Math.max(1, lw * 0.45); ctx.strokeStyle = hi; ctx.stroke(); }
+      const path = () => { ctx.beginPath(); ctx.roundRect(-Lx / 2, -Wy / 2, Lx, Wy, Wy / 2); };
+      if (f > 0.42) {   // face-on: a ring of round wire
+        path(); ctx.lineWidth = lw + 2; ctx.strokeStyle = rgba(lo, 0.95); ctx.stroke();
+        path(); ctx.lineWidth = lw; ctx.strokeStyle = md; ctx.stroke();
+        ctx.save(); ctx.translate(lx * lw * 0.2, ly * lw * 0.2); path(); ctx.lineWidth = lw * 0.55; ctx.strokeStyle = hi; ctx.stroke(); ctx.restore();
+        ctx.save(); ctx.translate(lx * lw * 0.28, ly * lw * 0.28); path(); ctx.lineWidth = Math.max(1, lw * 0.2); ctx.strokeStyle = rgba(white, 0.55 + 0.4 * gi); ctx.stroke(); ctx.restore();
+      } else {          // edge-on: a solid bar, cylinder shaded
+        const k = clamp(ly), gr = ctx.createLinearGradient(0, -Wy / 2, 0, Wy / 2); if (k > 0) { gr.addColorStop(0, md); gr.addColorStop(0.45, hi); gr.addColorStop(1, lo); } else { gr.addColorStop(0, lo); gr.addColorStop(0.55, hi); gr.addColorStop(1, md); }
+        path(); ctx.fillStyle = gr; ctx.fill(); ctx.lineWidth = Math.max(1, lw * 0.35); ctx.strokeStyle = rgba(lo, 0.9); ctx.stroke();
+      }
+      if (gi > 0.05) {   // glint: a four-point spec star on the lit edge, added over the metal
+        ctx.globalCompositeOperation = 'lighter'; const sx = lx * Wy * 0.4, sy = ly * Wy * 0.4, R = l * (0.18 + 0.4 * gi); ctx.strokeStyle = rgba(white, 0.9 * gi); ctx.lineWidth = Math.max(1, l * 0.045);
+        ctx.beginPath(); ctx.moveTo(sx - R, sy); ctx.lineTo(sx + R, sy); ctx.moveTo(sx, sy - R); ctx.lineTo(sx, sy + R); ctx.stroke();
+        ctx.fillStyle = rgba(white, 0.7 * gi); ctx.beginPath(); ctx.arc(sx, sy, Math.max(1.2, l * 0.1), 0, 7); ctx.fill();
+      }
       ctx.restore();
     }
+    ctx.restore();
+  };
+  /** The whole chain at clip time t with motion blur: ghosts at +-0.35 / 0.7 of a frame, their strength scaling with the link speed. */
+  B.drawChainFx = (ctx, S, ax, ay, len, t) => {
+    const g = B.chainGeom(ax, ay, len, t), tw = P8.tw.slice(0, P8.N).map((a) => sample(a, t)), gl = B.glints(t), fr = 1 / L.FPS;
+    let spd = 0; const g1 = B.chainGeom(ax, ay, len, t - 0.35 * fr), g2 = B.chainGeom(ax, ay, len, t + 0.35 * fr);
+    for (let j = 1; j < g.pts.length; j++) spd = Math.max(spd, Math.hypot(g2.pts[j][0] - g1.pts[j][0], g2.pts[j][1] - g1.pts[j][1]));
+    if (spd > 0.6) { const al = clamp(spd / 7, 0, 0.5); for (const d of [0.7, 0.35]) for (const sg of [-1, 1]) B.drawChain(ctx, S, B.chainGeom(ax, ay, len, t + sg * d * fr), tw, null, al * (d === 0.7 ? 0.5 : 0.8)); }
+    B.drawChain(ctx, S, g, tw, gl, 1);
+    return g;
   };
   B.tracePts = (ax, ay, size, t, len) => {
     const rg = A.rig, sc = size / rg.w, P = rg.pivot, sw = B.swing(t), g = B.chainGeom(ax, ay, len == null ? size * 0.32 : len, t), bc = rot([345, 316], P, sw.th);
@@ -268,7 +255,7 @@ export function createBrand(L, assets) {
   B.elephant = (ctx, S, ax, ay, size, t, lastLink) => {
     const rg = A.rig, sc = size / rg.w, P = rg.pivot, sw = B.swing(t), img = B.art(S).eleph;
     if (lastLink != null) sw.hang = lastLink;   // the top of the art's own hanger follows the last chain link
-    ctx.save(); ctx.translate(ax, ay); ctx.scale(sc, sc); ctx.translate(-P[0], -P[1]);
+    ctx.save(); ctx.translate(ax, ay); ctx.scale(sc * Math.cos(sw.yaw || 0), sc); ctx.translate(-P[0], -P[1]);
     const sC = clamp((rg.cross[1] - P[1]) / (rg.bail[1] - P[1])), bowC = Math.sin(Math.PI * sC);
     const eTL = 0.55 * (sw.tl - sw.th), eBL = 0.45 * (sw.bl - sw.th), eLeg = 0.6 * (sw.leg - sw.th), bow = sw.hang - sw.th;
     const V = rg.verts.map(([vx, vy, wTL, wBL, , wH, s, wLeg]) => {

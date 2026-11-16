@@ -178,8 +178,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   function elephantBody(cr, t, k, Sx) {
     const [x, y, w, h] = cr; c.save(); c.beginPath(); c.rect(x - 14, y - 14, w + 28, (h + 28) * k); c.clip();
-    const { size, len, ax, ay } = pendantGeom(cr), g = BR.chainGeom(ax, ay, len, t);
-    BR.drawChain(c, Sx, g);
+    const { size, len, ax, ay } = pendantGeom(cr), g = BR.drawChainFx(c, Sx, ax, ay, len, t);
     const sw = BR.elephant(c, Sx, g.end[0], g.end[1], size, t, g.ang[g.ang.length - 1]);
     if (LOOK === 'lab') lab.tape(c, ax, ay - 6, 70, 22, 0.08, Sx, 77);
     if (LOOK === 'scope') { c.fillStyle = rgba(Sx.ink, 0.8); c.fillRect(ax - 22, ay - 20, 44, 10); c.fillRect(ax - 3, ay - 12, 6, 12); }

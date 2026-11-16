@@ -41,6 +41,7 @@ src/ui/timeline.js
 src/util/draw.js
 src/v8/assets.js
 src/v8/brand.js
+src/v8/chainsim.js
 src/v8/core.js
 src/v8/data.js
 src/v8/film.js
