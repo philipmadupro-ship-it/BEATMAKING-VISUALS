@@ -42,3 +42,8 @@ Dumps `U2C6.schedule()` (via `render.mjs --stills 0 --schedule`), checks each ev
 - [ ] New event listed in `schedule()`.
 - [ ] `sync_test.py` PASS (<= 1 frame) and smoke sync rows PASS.
 - [ ] Grid looks right on the waveform card (bar lines on kicks): `node render.mjs --test waveform --stills 2`.
+
+## v13 rendered-reaction test (reactions vs the ACTUAL audio, not only the grid)
+- `tools/probe_render.sh <name> [render.mjs args]` renders every frame of the real page and dumps per-ROI luma, camera and intro state; `tests/onset_sync.py --probe out/v13/probe-<name>.json [--cam ...]` detects the kick onsets (40-150 Hz, 2 ms RMS; librosa cross-check), compares the grid and each reaction's ATTACK frame (presentation time f/fps minus the onset; ideal within +-0.5 frame).
+- Frames are drawn at their centre, so a kick at tk first shows on frame `ceil(tk*fps - 0.5)`. `core.js kickEnv` and `waveview` flash use `L.kickT(raw, quantised)` (grid slot if within 12 ms, else the detected onset); per-frame readers (spectrum lift from the 1 ms `D.be`) must read the frame's OWN interval [f, f+1)/fps, not the previous one.
+- Intro: `intro.enter` (start), `intro.push` (ease-in exponential zoom, speed peaks at the cut), `intro.open` (lab dolly-out from the cover, `coverTarget()` rect); all landings are scheduled events.

@@ -129,7 +129,9 @@ The first `intro.length` bars (default 2 = 8 beats) are a liquid-glass player + 
 | `intro.index` | number (cards) | carousel position; default keys: start on cover-4, 4 eased snaps of 0.5 beat landing ON beats 3..6, one direction, ending on cover-0 |
 | `intro.select` | bool | optional: corner brackets step in (4 x 32nd) around the chosen card; without a key they start where `intro.push` starts (beat 6) |
 | `intro.push` | number 0..1 | exponential push-in on the chosen cover (default: bezier 0 to 1 over beats 6 to 8, fills the frame, cut at beat 8) |
-| `intro.zoom` | number | max zoom (0 = fill the frame) |
+| `intro.zoom` | number | max zoom (0 = exactly the framing at which the lab's cover card fills the frame, `coverTarget()` in intro.js: `L.coverRect` or the compartment centre rect) |
+| `intro.enter` | number 0..1 | v13 start: linear keys 0 to 1 over beats 0-2; the cards fan out of one stack (land on beat 2) and the player rises (lands on beat 3) |
+| `intro.open` | number (beats) | v13: after the cut the lab camera starts on the cover and dollies out to the wide shot over this many beats (default 2; 0 = none); both halves of the zoom carry streak copies |
 | `intro.player.scale` / `.opacity` | number | player pose (static 1 / 1: no fades by default) |
 
 ## The default sheet (from the analysis)
