@@ -182,11 +182,6 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const sw = BR.elephant(c, Sx, g.end[0], g.end[1], size, t, g.ang[g.ang.length - 1]);
     if (LOOK === 'lab') lab.tape(c, ax, ay - 6, 70, 22, 0.08, Sx, 77);
     if (LOOK === 'scope') { c.fillStyle = rgba(Sx.ink, 0.8); c.fillRect(ax - 22, ay - 20, 44, 10); c.fillRect(ax - 3, ay - 12, 6, 12); }
-    const hx = g.pts[0][0], hy = g.pts[0][1];   // the hand: a crosshair that pushes on the beat
-    c.strokeStyle = Sx.hot; c.lineWidth = 2; c.beginPath(); c.arc(hx, hy, 7, 0, 7); c.stroke(); c.beginPath(); c.moveTo(hx - 14, hy); c.lineTo(hx + 14, hy); c.moveTo(hx, hy - 14); c.lineTo(hx, hy + 14); c.stroke(); c.lineWidth = 1;
-    const R = Math.min(170, h * 0.3) + len; c.strokeStyle = rgba(Sx.ink, 0.5); c.setLineDash([4, 5]); c.beginPath(); c.arc(ax, ay, R, Math.PI / 2 - sw.amp, Math.PI / 2 + sw.amp); c.stroke(); c.setLineDash([]);
-    for (const a of [-sw.amp, sw.amp]) { c.strokeStyle = rgba(Sx.ink, 0.6); c.beginPath(); c.moveTo(ax - Math.sin(a) * (R - 8), ay + Math.cos(a) * (R - 8)); c.lineTo(ax - Math.sin(a) * (R + 8), ay + Math.cos(a) * (R + 8)); c.stroke(); }
-    c.beginPath(); c.moveTo(ax - Math.sin(sw.th) * (R - 14), ay + Math.cos(sw.th) * (R - 14)); c.lineTo(ax - Math.sin(sw.th) * (R + 14), ay + Math.cos(sw.th) * (R + 14)); c.strokeStyle = Sx.hot; c.lineWidth = 3; c.stroke(); c.lineWidth = 1;
     const deg = sw.th * 180 / Math.PI;
     lab.hand(c, tag('notes.elephant', { angle: `${deg >= 0 ? '+' : '−'}${Math.abs(deg).toFixed(1)}` }), x + w - 4, y + 44, 34, Sx.hot, t, 21, -0.03, 'right');
     const per = V('pendant.period', 2), perTxt = `${BR.chainInfo().links} LINKS · T = ${+per.toFixed(2)} BEATS · ${Math.round(sw.amp * 180 / Math.PI)}°`;

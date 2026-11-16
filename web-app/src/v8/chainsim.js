@@ -9,7 +9,8 @@
 // half period after each push; a per-push pass then corrects each push time / size from where its extreme really
 // lands, so every extreme sits on a beat (<= 1 frame) at the cue amplitude. Units: link length 1, seconds.
 const TUNE = new Map(), WARM = new Map(), T1C = new Map();
-const DT = 1 / 240, SUB = 2, ITERS = 14, ZL = 0.3, MB = 20;     // step, substeps, solver sweeps, push time constant, pendant/link mass
+const DT = 1 / 240, SUB = 2, ITERS = 14;
+let ZL = 0.3, MB = 20;     // step, substeps, solver sweeps, push time constant, pendant/link mass
 const pushShape = (x) => (1 - Math.exp(-x / ZL)) / (1 - Math.exp(-1 / ZL));
 
 /** One run. P: {N, dB, g, gamma, fr}; hand(t) -> x offset; returns per-step series (hand, link angles 1..N, bob angle) + max stretch. */
@@ -63,12 +64,13 @@ function peakNear(body, t0, tb, HPs) {
  * Returns {t0, DT, n, links (N+2 Float32Array: hand x, link angles 1..N, pendant angle), info}.
  */
 export function buildChain(o) {
+  ZL = o.zl || 0.3; MB = o.mb || 20;
   const N = o.N, HP = o.period / 2, HPs = HP * o.BEAT, Tdrive = o.period * o.BEAT, dB = o.dB || 9;
   // natural period of the chain + pendant at g = 1 (ring-down from a small tilt; T scales as 1/sqrt(g))
-  const T1 = T1C.get(N + ',' + dB) ?? (() => { const r = run({ N, dB, g: 1, gamma: 0, fr: 0, tilt: 0.05 }, () => 0, 0, 30000, false).body, z = []; let armed = false;
+  const T1 = T1C.get(N + ',' + dB + ',' + MB) ?? (() => { const r = run({ N, dB, g: 1, gamma: 0, fr: 0, tilt: 0.05 }, () => 0, 0, 30000, false).body, z = []; let armed = false;
     for (let i = 0; i < r.length - 1; i++) { if (r[i] < -0.01) armed = true; if (armed && r[i] <= 0 && r[i + 1] > 0) { z.push(i + -r[i] / (r[i + 1] - r[i])); armed = false; } }
     return z.length > 1 ? (z[z.length - 1] - z[0]) / (z.length - 1) * DT : 25; })();
-  T1C.set(N + ',' + dB, T1);
+  T1C.set(N + ',' + dB + ',' + MB, T1);
   const params = (r) => { const Tn = r * Tdrive, wn = 2 * Math.PI / Tn; return { N, dB, g: (T1 / Tn) ** 2, gamma: 2 * o.damp * wn, fr: o.loose * 4, Tn }; };
   // steady alternating run (unit hand, delta pushes shifted) -> phase of the body fundamental + amplitude per unit hand
   const steady = (P, delta, flip) => {
@@ -84,7 +86,7 @@ export function buildChain(o) {
     for (let it = 0; it < 3; it++) { f = steady(P, delta, flip); let e = -f.phi / Math.PI; e = ((e + 1) % 2 + 2) % 2 - 1; if (Math.abs(e) < 2e-3) break; delta += e; }
     return { delta, flip, amp: f.amp, pk: f.pk, stretch: f.stretch }; };
   // tune the pendant's natural period so the pushes land on the beats themselves (delta ~ 0): scan r, refine by bisection (cached per setup)
-  const ckey = [N, o.period, o.BEAT, o.damp, o.loose, dB].join(','); let best = TUNE.get(ckey) || null; const cached = !!best;
+  const ckey = [N, o.period, o.BEAT, o.damp, o.loose, dB, ZL, MB].join(','); let best = TUNE.get(ckey) || null; const cached = !!best;
   if (!best) { const cand = o.cand || [0.4, 0.75, 1.05, 1.4, 1.8, 2.4, 3.2, 4.5];
   for (const r of cand) { const P = params(r), s = solve(P); if (o.debug) console.log("scan", r, s.delta.toFixed(3), s.flip, s.amp.toFixed(4)); if (!best || Math.abs(s.delta) < Math.abs(best.s.delta)) best = { r, P, s }; }
   const bi = cand.indexOf(best.r); let lo = cand[Math.max(0, bi - 1)], hi = cand[Math.min(cand.length - 1, bi + 1)];

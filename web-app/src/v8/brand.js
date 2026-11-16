@@ -174,7 +174,7 @@ export function createBrand(L, assets) {
     const amp = []; for (let k = 0; k < NBt; k++) amp.push(ampDeg(k) * (1 - react / 2 + react * bassRaw[k]) * deg); amp.push(amp[amp.length - 1] || 0);
     const key = amp.map((v) => v.toFixed(5)).join(',') + '|' + [period, N, wave, damp].join(',');
     if (key === P8.key) return; P8.key = key; P8.amp = amp; P8.period = period;
-    const sim = buildChain({ N, period: Math.max(1, period), BEAT, duration: D.duration, damp, loose: 1.5 - wave, amp, dB: 9 });
+    const sim = buildChain({ N, period: Math.max(1, period), BEAT, duration: D.duration, damp, loose: 1.5 - wave, amp, dB: 9, zl: 0.3, mb: 20 });
     const { t0, DT, n, links } = sim, body = links[N + 1];
     // loop / leg springs chase the body angle
     const SP = { H: [3.2, 0.55], TL: [1.55, 0.3], BL: [1.3, 0.32], LEG: [2.1, 0.36] }, st = {}, out = {}, w0 = Math.PI / (period / 2 * BEAT);
@@ -208,33 +208,39 @@ export function createBrand(L, assets) {
   /** Glints active at t: [{pos (link index, float), a}] - a spec flash that leaves the hand on each kick and runs down to the pendant. */
   B.glints = (t) => { const o = []; for (let i = KT.length - 1; i >= 0; i--) { const age = t - KT[i]; if (age < 0) continue; if (age > GLINT_T + 0.12) break; o.push({ pos: age / GLINT_T * (P8.N + 1) - 0.5, a: Math.exp(-Math.max(0, age - GLINT_T * 0.5) / 0.07) }); } return o; };
   const LIGHT = [-0.55, -0.835];   // direction TO the light (upper left)
-  /** Draw the links: alternating face-on rings / edge-on bars that roll with the chain (tw = roll per link), lit from one source,
-   *  glints (B.glints) on the kick. `alpha` fades a motion-blur ghost. */
+  const INK = { NIGREDO: '#050505', ALBEDO: '#16140f', CITRINITAS: '#1d0f08', RUBEDO: '#12051c' };
+  const rr = (ctx, x, y, w, h, r) => { ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); };
+  /** Draw the links in the style of the pendant art (chunky flat-sided curb links, dark ink outline, bevel light on the lit
+   *  sides, short hatching on the shade): alternating face-on rings and edge-on slabs that roll with the chain (tw = roll
+   *  per link), lit from one source; glints (B.glints) are soft highlights on the lit edge, clipped to the link. */
   B.drawChain = (ctx, S, g, tw, gl, alpha = 1) => {
-    const [hi, lo, md] = METAL[S.name] || METAL.NIGREDO, l = g.l, N = P8.N, white = S.grey ? '#ffffff' : hi;
-    ctx.save(); ctx.globalAlpha = alpha; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const [hi, lo, md] = METAL[S.name] || METAL.NIGREDO, ink = INK[S.name] || INK.NIGREDO, l = g.l, N = P8.N, white = S.grey ? '#ffffff' : hi;
+    ctx.save(); ctx.globalAlpha = alpha; ctx.lineJoin = 'round';
     for (let j = 1; j <= N; j++) {
       const p = g.pts[j - 1], q = g.pts[j], cx = (p[0] + q[0]) / 2, cy = (p[1] + q[1]) / 2, a = Math.atan2(q[1] - p[1], q[0] - p[0]);
-      const roll = (j % 2 === 1 ? 0 : Math.PI / 2) + (tw ? tw[j - 1] * 3 : 0), f = Math.abs(Math.cos(roll));
-      const Lx = l * 1.34, Wy = Math.max(l * 0.25, l * 0.64 * f), lw = Math.max(1.6, l * 0.17 * (0.7 + 0.3 * f));
+      const roll = (j % 2 === 1 ? 0 : Math.PI / 2) + (tw ? tw[j - 1] * 3 : 0), f = Math.abs(Math.cos(roll)), face = f > 0.42;
+      const Lx = l * 1.3, Wy = face ? l * 1.08 * (0.6 + 0.4 * f) : l * 0.42, bar = l * 0.31, ow = Math.max(1.3, l * 0.06), r = Math.min(Wy, Lx) * 0.2;
       let gi = 0; if (gl) for (const e of gl) gi = Math.max(gi, e.a * Math.exp(-((j - 0.5 - e.pos) ** 2) / 1.1));
       const lx = LIGHT[0] * Math.cos(a) + LIGHT[1] * Math.sin(a), ly = -LIGHT[0] * Math.sin(a) + LIGHT[1] * Math.cos(a);   // light in the link's frame
       ctx.save(); ctx.translate(cx, cy); ctx.rotate(a);
-      const path = () => { ctx.beginPath(); ctx.roundRect(-Lx / 2, -Wy / 2, Lx, Wy, Wy / 2); };
-      if (f > 0.42) {   // face-on: a ring of round wire
-        path(); ctx.lineWidth = lw + 2; ctx.strokeStyle = rgba(lo, 0.95); ctx.stroke();
-        path(); ctx.lineWidth = lw; ctx.strokeStyle = md; ctx.stroke();
-        ctx.save(); ctx.translate(lx * lw * 0.2, ly * lw * 0.2); path(); ctx.lineWidth = lw * 0.55; ctx.strokeStyle = hi; ctx.stroke(); ctx.restore();
-        ctx.save(); ctx.translate(lx * lw * 0.28, ly * lw * 0.28); path(); ctx.lineWidth = Math.max(1, lw * 0.2); ctx.strokeStyle = rgba(white, 0.55 + 0.4 * gi); ctx.stroke(); ctx.restore();
-      } else {          // edge-on: a solid bar, cylinder shaded
-        const k = clamp(ly), gr = ctx.createLinearGradient(0, -Wy / 2, 0, Wy / 2); if (k > 0) { gr.addColorStop(0, md); gr.addColorStop(0.45, hi); gr.addColorStop(1, lo); } else { gr.addColorStop(0, lo); gr.addColorStop(0.55, hi); gr.addColorStop(1, md); }
-        path(); ctx.fillStyle = gr; ctx.fill(); ctx.lineWidth = Math.max(1, lw * 0.35); ctx.strokeStyle = rgba(lo, 0.9); ctx.stroke();
+      const x0 = -Lx / 2, y0 = -Wy / 2;
+      ctx.beginPath(); rr(ctx, x0, y0, Lx, Wy, r); if (face) rr(ctx, x0 + bar, y0 + bar, Lx - 2 * bar, Wy - 2 * bar, r * 0.5);
+      ctx.save(); ctx.clip('evenodd');
+      ctx.fillStyle = md; ctx.fillRect(x0, y0, Lx, Wy);
+      const sy = ly < 0 ? 0 : Wy - bar * 0.55, sx = lx < 0 ? 0 : Lx - bar * 0.55;   // bevel strips on the sides that face the light
+      ctx.fillStyle = hi; ctx.globalAlpha = alpha * 0.95; ctx.fillRect(x0, ly < 0 ? y0 : y0 + Wy - bar * 0.5, Lx, bar * 0.5); if (face) ctx.fillRect(lx < 0 ? x0 : x0 + Lx - bar * 0.5, y0, bar * 0.5, Wy);
+      ctx.globalAlpha = alpha; ctx.fillStyle = lo; ctx.fillRect(x0, ly < 0 ? y0 + Wy - bar * 0.38 : y0, Lx, bar * 0.38); if (face) ctx.fillRect(lx < 0 ? x0 + Lx - bar * 0.38 : x0, y0, bar * 0.38, Wy);
+      ctx.strokeStyle = rgba(ink, 0.55); ctx.lineWidth = Math.max(1, l * 0.035);   // hatching on the shade side
+      ctx.beginPath(); const hy = ly < 0 ? y0 + Wy - bar * 0.38 : y0; for (let k = 0; k < 3; k++) { const hx = x0 + Lx * (0.2 + 0.25 * k); ctx.moveTo(hx, hy + (ly < 0 ? bar * 0.38 : 0)); ctx.lineTo(hx + bar * 0.35, hy + (ly < 0 ? 0 : bar * 0.38)); } ctx.stroke();
+      void sy; void sx;
+      if (gi > 0.04) {   // glint: a soft highlight on the lit edge (no lines), kept inside the link
+        const gx = lx < 0 ? x0 + Lx * 0.28 : x0 + Lx * 0.72, gy = ly < 0 ? y0 + Wy * 0.22 : y0 + Wy * 0.78, R = l * (0.3 + 0.4 * gi), gr = ctx.createRadialGradient(gx, gy, 0, gx, gy, R);
+        gr.addColorStop(0, rgba(white, 0.95 * gi)); gr.addColorStop(0.4, rgba(white, 0.4 * gi)); gr.addColorStop(1, rgba(white, 0));
+        ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = gr; ctx.fillRect(gx - R, gy - R, 2 * R, 2 * R); ctx.globalCompositeOperation = 'source-over';
       }
-      if (gi > 0.05) {   // glint: a four-point spec star on the lit edge, added over the metal
-        ctx.globalCompositeOperation = 'lighter'; const sx = lx * Wy * 0.4, sy = ly * Wy * 0.4, R = l * (0.18 + 0.4 * gi); ctx.strokeStyle = rgba(white, 0.9 * gi); ctx.lineWidth = Math.max(1, l * 0.045);
-        ctx.beginPath(); ctx.moveTo(sx - R, sy); ctx.lineTo(sx + R, sy); ctx.moveTo(sx, sy - R); ctx.lineTo(sx, sy + R); ctx.stroke();
-        ctx.fillStyle = rgba(white, 0.7 * gi); ctx.beginPath(); ctx.arc(sx, sy, Math.max(1.2, l * 0.1), 0, 7); ctx.fill();
-      }
+      ctx.restore();
+      ctx.strokeStyle = ink; ctx.lineWidth = ow; ctx.beginPath(); rr(ctx, x0, y0, Lx, Wy, r); ctx.stroke();
+      if (face) { ctx.lineWidth = ow * 0.8; ctx.beginPath(); rr(ctx, x0 + bar, y0 + bar, Lx - 2 * bar, Wy - 2 * bar, r * 0.5); ctx.stroke(); }
       ctx.restore();
     }
     ctx.restore();
@@ -244,7 +250,7 @@ export function createBrand(L, assets) {
     const g = B.chainGeom(ax, ay, len, t), tw = P8.tw.slice(0, P8.N).map((a) => sample(a, t)), gl = B.glints(t), fr = 1 / L.FPS;
     let spd = 0; const g1 = B.chainGeom(ax, ay, len, t - 0.35 * fr), g2 = B.chainGeom(ax, ay, len, t + 0.35 * fr);
     for (let j = 1; j < g.pts.length; j++) spd = Math.max(spd, Math.hypot(g2.pts[j][0] - g1.pts[j][0], g2.pts[j][1] - g1.pts[j][1]));
-    if (spd > 0.6) { const al = clamp(spd / 7, 0, 0.5); for (const d of [0.7, 0.35]) for (const sg of [-1, 1]) B.drawChain(ctx, S, B.chainGeom(ax, ay, len, t + sg * d * fr), tw, null, al * (d === 0.7 ? 0.5 : 0.8)); }
+    if (spd > 0.6) { const al = clamp(spd / 18, 0, 0.25); for (const d of [0.7, 0.35]) for (const sg of [-1, 1]) B.drawChain(ctx, S, B.chainGeom(ax, ay, len, t + sg * d * fr), tw, null, al * (d === 0.7 ? 0.5 : 0.8)); }
     B.drawChain(ctx, S, g, tw, gl, 1);
     return g;
   };

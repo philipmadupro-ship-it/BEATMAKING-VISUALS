@@ -36,7 +36,7 @@ export function stageOf(id, over = {}) {
   const S = Object.assign({}, STAGES[id] || STAGES.nigredo);
   for (const k of STAGE_COLOR_KEYS) if (over[k]) S[k] = over[k];
   S.bandCols = S.grey && !Object.keys(over).length ? BAND_COLS.NIGREDO : (BAND_COLS[S.name] || BAND_COLS.NIGREDO);
-  S.swingDeg = S.embodied ? { drop: 9.8, calm: 5 } : { drop: 9, calm: 4.6 };
+  S.swingDeg = S.embodied ? { drop: 12.5, calm: 9 } : { drop: 12, calm: 8.5 };
   return S;
 }
 
