@@ -58,6 +58,8 @@ export function buildRegistry({ look = 'exe', aspect = '916', stage = 'nigredo',
     num('pendant.react', 'Bass reaction', 0.32, 0, 1, 0.01, ''),
     num('pendant.links', 'Chain links', 10, 3, 24, 1, ''), num('pendant.wave', 'Chain looseness (joint friction; high = slack)', 0.75, 0.05, 1.5, 0.01, ''), num('pendant.damp', 'Pendulum damping', 0.35, 0.1, 0.9, 0.01, 'ζ'),
     num('pendant.chain', 'Chain length (of the window)', 0.3, 0, 0.6, 0.01, ''), num('pendant.size', 'Size', 1, 0.4, 1.6, 0.01, '×'), num('pendant.x', 'Pivot X offset', 0, -300, 300, 1, 'px'), num('pendant.y', 'Pivot Y offset', 0, -300, 300, 1, 'px')]);
+  if (look === 'exe') el('hero', 'Hero (logo + pendant, front layer)', 'Brand', [bool('hero.on', 'Hero on', true), num('hero.scale', 'Scale (logo, chain, pendant)', 1, 0.5, 1.6, 0.01, '×'), num('hero.x', 'Offset X', 0, -400, 400, 1, 'px'),
+    num('hero.y', 'Offset Y', 0, -400, 400, 1, 'px'), num('hero.shadow', 'Shadow', 1, 0, 2, 0.05, '×'), num('glass.back', 'Meter windows pushed back (dim + blur)', 1, 0, 1.5, 0.05, '')]);
   el('text', 'Text cues', 'Text', [{ path: 'text.cue', label: 'Text cue', kind: 'clip', default: '' }]);
   el('fx', 'FX', 'Finish', [{ path: 'fx.glitch', label: 'Glitch (opt-in)', kind: 'clip', default: 0, min: 0, max: 1, step: 0.01 }, { path: 'fx.flash', label: '1-frame invert', kind: 'event', default: false },
     num('fx.grain', 'Grain', S.grain, 0, 0.5, 0.01), num('fx.vignette', 'Vignette', S.vignette, 0, 1, 0.01), num('fx.scan', 'Scanlines', 0, 0, 1, 0.01), num('fx.halation', 'Halation (dark stages)', 0.16, 0, 0.6, 0.01)]);
@@ -70,8 +72,9 @@ export function buildRegistry({ look = 'exe', aspect = '916', stage = 'nigredo',
     el('win.' + id, WINDOW_LABELS[id] || id, 'Windows', [num(`win.${id}.x`, 'X', r[0], -400, 2400, 1, 'px'), num(`win.${id}.y`, 'Y', r[1], -400, 2400, 1, 'px'), num(`win.${id}.w`, 'Width', r[2], 60, 2000, 1, 'px'), num(`win.${id}.h`, 'Height', r[3], 60, 2000, 1, 'px'),
       bool(`win.${id}.visible`, 'Visible (key = open / close)', true), num(`win.${id}.open`, 'Opens at', openBeat(look, aspect, id), -2, bars * 4, 0.125, 'beats'),
       en(`win.${id}.content`, 'Shows', c, CONTENT_KINDS), col(`win.${id}.accent`, 'Accent', S.hot)]); }
-  const kinds = [...new Set(ids.flatMap((id) => (CONTENT[id] === 'bands' ? ['levels'] : CONTENT[id] === 'loudness' ? ['loudness', 'levels', 'ghost'] : [CONTENT[id]])))];
+  const kinds = [...new Set(['eq', ...ids.flatMap((id) => (CONTENT[id] === 'bands' ? ['levels'] : CONTENT[id] === 'loudness' ? ['loudness', 'levels', 'ghost'] : [CONTENT[id]]))])];
   for (const k of kinds) if (METER_PROPS[k]) el('meter.' + k, `Meter · ${k}`, 'Meters', METER_PROPS[k].map(([key, label, def, min, max, step, unit]) => (Array.isArray(min) ? en(meterPath(k, key), label, def, min) : typeof def === 'boolean' ? bool(meterPath(k, key), label, def) : num(meterPath(k, key), label, def, min, max, step, unit))));
+  const eqEl = E.find((e) => e.id === 'meter.eq'); if (eqEl && !ids.some((id) => CONTENT[id] === 'eq')) eqEl.hidden = true;   // v12: no EQ window; keys stay registered for old sheets
   const flat = flattenTags(mergeDeep(DEFAULT_TAGS, tags)), groups = {};
   for (const [p, v] of Object.entries(flat)) { const g = p.split('.')[0]; (groups[g] = groups[g] || []).push({ path: 'tag.' + p, label: p, kind: 'text', default: String(v) }); }
   for (const [g, props] of Object.entries(groups)) el('tag.' + g, `Tags · ${g}`, 'Tags', props);

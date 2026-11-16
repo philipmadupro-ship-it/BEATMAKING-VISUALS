@@ -8,7 +8,7 @@ import { createCore, stageOf, STAGE_COLOR_KEYS } from './core.js';
 import { createLab } from './lab.js';
 import { createMeters } from './meters.js';
 import { createBrand } from './brand.js';
-import { LAYOUT, CONTENT, openBeat, WINDOW_IDS, HUD_BAND } from './layout.js';
+import { LAYOUT, CONTENT, openBeat, WINDOW_IDS, HUD_BAND, HERO } from './layout.js';
 import { DEFAULT_TAGS } from './tags.js';
 import { mergeDeep, createEvaluator, emptySheet } from '../cues/schema.js';
 import { buildRegistry, meterPath } from './registry.js';
@@ -66,9 +66,9 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (fe === 'none') return null; if (fe !== 'auto') return has(fe) ? fe : null;
     const bb = Math.floor(t / BEAT), q = bb * 4;
     let id = snrAt.has(q) ? 'spectrum' : kickAt.has(q) ? 'loud' : null;
-    if (bb % 4 === 0) id = 'chains';
-    if (bb % 8 === 6) id = 'elephant';
-    if (!id || !has(id)) { const be = F.bands[fidx(bb * BEAT)], i = be.indexOf(Math.max(...be)); id = ['stereo', 'eq', 'eq', 'spectrum', 'spectro', 'spectro'][i]; }
+    if (bb % 4 === 0) id = has('chains') ? 'chains' : 'session';
+    if (bb % 8 === 6) id = has('elephant') ? 'elephant' : 'stereo';
+    if (!id || !has(id)) { const be = F.bands[fidx(bb * BEAT)], i = be.indexOf(Math.max(...be)); id = ['stereo', 'spectrum', 'spectrum', 'spectrum', 'spectro', 'spectro'][i]; }
     if (!has(id)) id = has('session') ? 'session' : 'chains';
     return id;
   }
@@ -81,7 +81,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // the pendant windows carry no label (the art is the label). The exe and lab looks share the glass; lab keeps faint
   // graph paper inside, scope adds a recessed CRT screen. API for content code: V11-SHELL-API.md.
   const NO_LABEL = new Set(['logo', 'pendant']);
-  const PAD = 20, LABEL_H = 46;
+  const PAD = 20, LABEL_H = port ? 46 : 40;
   /** Content rect of window id for its rect r (also used by the camera framing and the API). */
   function contentRect(id, r) {
     const [x, y, w, h] = r, kind = contentOf(id), top = NO_LABEL.has(kind) ? PAD : LABEL_H;
@@ -91,7 +91,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const screenRect = (id, r) => { const [x, y, w, h] = r, top = NO_LABEL.has(contentOf(id)) ? 16 : LABEL_H - 4; return [x + 16, y + top, w - 32, h - top - 16]; };
   function label(id, x, y, w, Sx, active) {
     if (NO_LABEL.has(contentOf(id))) return;
-    text(c, String(WIN(id)).toUpperCase(), x + PAD + 2, y + 26, { size: 18, fam: UI, w: 500, ls: 2.4, col: rgba(Sx.ink, active ? 0.95 : 0.52), maxW: w - 2 * PAD });
+    text(c, String(WIN(id)).toUpperCase(), x + PAD + 2, y + (port ? 26 : 24), { size: 18, fam: UI, w: 500, ls: 2.4, col: rgba(Sx.ink, active ? 0.95 : 0.52), maxW: w - 2 * PAD });
   }
   function chrome(id, r, n, t, Sx, active) {
     const [x, y, w, h] = r, rad = V('glass.radius', 22), lit = rgba(Sx.ink, 0.55);
@@ -100,7 +100,9 @@ export function createFilm({ D, assets, aspect = '916' }) {
       if (n === 1) { c.beginPath(); c.moveTo(x + rad, y); c.lineTo(x + w - rad, y); c.stroke(); } else c.stroke(L.rr(x, y, w, h, rad));
       c.lineWidth = 1; return null;
     }
-    L.glass(c, x, y, w, h, Sx, { r: rad, tint: V('glass.tint', LOOK === 'scope' ? 0.5 : 0.36), active: active && V('bracket.on', true) });
+    // v12 depth (exe): the meter windows sit behind the hero: darker, calmer glass (lower edge light, softer shadow)
+    const back = LOOK === 'exe' ? V('glass.back', 1) : 0;
+    L.glass(c, x, y, w, h, Sx, { r: rad, tint: V('glass.tint', LOOK === 'scope' ? 0.5 : 0.36) + 0.2 * back, active: active && V('bracket.on', true), edge: 1 - 0.4 * back, shadow: 1 - 0.25 * back });
     if (LOOK === 'lab') { c.save(); c.clip(L.rr(x, y, w, h, rad)); lab.graphPaper(c, x, y, w, h, Sx, 10, 50, 0.45); c.restore(); }
     if (LOOK === 'scope') { const sr = screenRect(id, r); c.fillStyle = rgba(Sx.bg, 0.62); c.fill(L.rr(sr[0], sr[1], sr[2], sr[3], 12)); c.strokeStyle = rgba(Sx.ink, 0.12); c.stroke(L.rr(sr[0] + 0.5, sr[1] + 0.5, sr[2] - 1, sr[3] - 1, 12)); }
     label(id, x, y, w, Sx, active);
@@ -139,9 +141,48 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (LOOK === 'scope') { c.fillStyle = rgba(Sx.ink, 0.8); c.fillRect(ax - 22, ay - 20, 44, 10); c.fillRect(ax - 3, ay - 12, 6, 12); }
     c.restore();
   }
+
+  // ---------------------------------------------------------------- v12 hero (exe): logo + pendant as ONE object, front layer
+  // The pendant's chain hangs from the bottom of the U (LOGO_AT, logo px), so the chain sim's anchor follows the logo (its
+  // kick punch and the hero.* offsets); the beat pushes still start at that hand. The hero is drawn after every window into its
+  // own layer (same pixels + camera transform as the frame) and composited over them with a soft two-part shadow.
+  const LOGO_AT = [132, 588], LGW = 887, LGH = 647;
+  const HERO_HIDE = new Set(['loud', 'stereo']);   // a push to the levels / imager is a clear view of that window (hard cut, no fade)
+  function heroGeom(t) {
+    const H0 = HERO[aspect], k = V('hero.scale', 1), s = (H0.logoW / LGW) * V('logo.scale', 1) * k, cx = H0.cx + V('hero.x', 0), cy = H0.cy + V('hero.y', 0);
+    const isHero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), punch = 1 + 0.012 * kickEnv[fidx(t)] * (isHero ? 2 : 1);
+    return { s, cx, cy, ax: cx + (LOGO_AT[0] - LGW / 2) * s * punch + V('pendant.x', 0), ay: cy + (LOGO_AT[1] - LGH / 2) * s * punch + V('pendant.y', 0),
+      len: H0.chain * k * (V('pendant.chain', 0.3) / 0.3), size: H0.eleph * k * V('pendant.size', 1) };
+  }
+  function heroArt(cx, t) {   // draws into ctx cx (world transform already set)
+    const g = heroGeom(t), hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4));
+    BR.logo(cx, S, [g.cx - (LGW * g.s + 30) / 2, g.cy + 8 - (LGH * g.s + 40) / 2, LGW * g.s + 30, LGH * g.s + 40], t, { cycle: C, mode: V('logo.mode', 'cycle'), hero, scale: 1,
+      glow: V('logo.glow', 1) * (0.35 + 0.8 * kickEnv[fidx(t)]), bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
+    const ch = BR.drawChainFx(cx, S, g.ax, g.ay, g.len, t);
+    BR.elephant(cx, S, ch.end[0], ch.end[1], g.size, t, ch.ang[ch.ang.length - 1]);
+  }
+  let HL = null;
+  const mkCanvas = (w, h) => { const q = document.createElement('canvas'); q.width = Math.max(1, Math.ceil(w)); q.height = Math.max(1, Math.ceil(h)); return q; };
+  function hero(t, cam, scale, sh) {
+    if (LOOK !== 'exe' || !V('hero.on', true) || (sh && (sh.from !== 'wide' || sh.to !== 'wide') && (HERO_HIDE.has(sh.from) || HERO_HIDE.has(sh.to)))) return;
+    const main = c, cv = main.canvas, z = cam.z;
+    if (!HL || HL.a.width !== cv.width || HL.a.height !== cv.height) HL = { a: mkCanvas(cv.width, cv.height), s: mkCanvas(cv.width / 4, cv.height / 4) };
+    const hx = HL.a.getContext('2d'); hx.setTransform(1, 0, 0, 1, 0, 0); hx.globalAlpha = 1; hx.globalCompositeOperation = 'source-over'; hx.clearRect(0, 0, cv.width, cv.height);
+    hx.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z)); hx.imageSmoothingEnabled = true;
+    c = hx; try { heroArt(hx, t); } finally { c = main; }
+    // shadow: the layer's silhouette, 1/4 resolution, blurred, dropped below the object (wide soft + tight contact)
+    const sx = HL.s.getContext('2d'), px = scale * z, light = L.isLight(S);
+    sx.setTransform(1, 0, 0, 1, 0, 0); sx.globalCompositeOperation = 'source-over'; sx.clearRect(0, 0, HL.s.width, HL.s.height); sx.drawImage(HL.a, 0, 0, HL.s.width, HL.s.height);
+    sx.globalCompositeOperation = 'source-in'; sx.fillStyle = light ? rgba(S.ink, 1) : '#000'; sx.fillRect(0, 0, HL.s.width, HL.s.height); sx.globalCompositeOperation = 'source-over';
+    main.save(); main.setTransform(1, 0, 0, 1, 0, 0); main.imageSmoothingEnabled = true; main.imageSmoothingQuality = 'high';
+    for (const [dx, dy, bl, a] of [[10, 34, 16, 0.5], [4, 12, 5, 0.34]]) { main.filter = `blur(${bl * px}px)`; main.globalAlpha = a * (light ? 0.6 : 1) * V('hero.shadow', 1); main.drawImage(HL.s, dx * px, dy * px, cv.width, cv.height); }
+    main.filter = 'none'; main.globalAlpha = 1; main.drawImage(HL.a, 0, 0); main.restore();
+  }
+  // v12: spectrum + spectrogram calls are wrapped here so the merge can switch them to SV.draw / SG.draw(ctx, rect, frame, opts)
+  const drawSpectrum = (cr, t, k, Sx) => M.spectrum(c, Sx, cr, t, k), drawSpectrogram = (cr, t, k, Sx) => M.spectro(c, Sx, cr, t, k);
   const BODY = { logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),
-    eq: (cr, t, k, Sx) => M.eq(c, Sx, cr, t, k), spectrum: (cr, t, k, Sx) => M.spectrum(c, Sx, cr, t, k), loudness: (cr, t, k, Sx) => M.loud(c, Sx, cr, t, k), stereo: (cr, t, k, Sx) => M.stereo(c, Sx, cr, t, k),
-    spectrogram: (cr, t, k, Sx) => M.spectro(c, Sx, cr, t, k), surface: (cr, t, k, Sx) => M.surface(c, Sx, cr, t, k),
+    eq: (cr, t, k, Sx) => M.eq(c, Sx, cr, t, k), spectrum: drawSpectrum, loudness: (cr, t, k, Sx) => M.loud(c, Sx, cr, t, k), stereo: (cr, t, k, Sx) => M.stereo(c, Sx, cr, t, k),
+    spectrogram: drawSpectrogram, surface: (cr, t, k, Sx) => M.surface(c, Sx, cr, t, k),
     levels: (cr, t, k, Sx) => M.levels(c, Sx, cr, t, k), ghost: (cr, t, k, Sx) => M.ghost(c, Sx, cr, t, k) };
   function card(id, t, active) {
     const r = LY[id], n = openStep(id, t); if (n <= 0) return;
@@ -269,9 +310,10 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const cam = camera(), z = cam.z; L.view.camZ = z; L.view.base = scale;
     c.fillStyle = S.bg; c.fillRect(0, 0, W, H);
     c.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z));
-    ground(); L.snap(c, 'ground', 3);
+    ground(); L.snap(c, 'ground', LOOK === 'exe' ? 3 + 4 * V('glass.back', 1) : 3);   // v12: exe glass blurs the ground more (depth)
     const att = attention(t);
     for (const id of IDS) card(id, t, att === id);
+    hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
     if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16));
     result(t); hud(t, ev.shot(b)); textCues(t); textures(t);

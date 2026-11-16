@@ -105,7 +105,7 @@ export function createInspector(app, root) {
       ${p.kind === 'clip' || p.kind === 'event' ? `<span class="hint">${hasKeys ? tr.keys.length + ' on its lane' : 'timed: ◆ adds one at the playhead'}</span>` : control(p, v, 'data-k="prop"')}${hasKeys ? strip(tr) : ''}</div>`;
   }
   function elementView() {
-    const R = reg(), groups = {}; for (const e of R.elements) (groups[e.group] = groups[e.group] || []).push(e);
+    const R = reg(), groups = {}; for (const e of R.elements) if (!e.hidden || e.id === element) (groups[e.group] = groups[e.group] || []).push(e);   // v12: hidden elements (the EQ meter keys) stay registered but are not listed
     const el = R.elements.find((e) => e.id === element) || R.elements[0]; element = el.id;
     const b = playBeat(), ev = cues.ev(), animated = new Set(cues.sheet.tracks.filter((t) => t.keys.length).map((t) => t.path));
     let h = `<div class="ins-h"><b>Effect controls</b><span class="hint">at ${beatsToBbt(snapBeat(b, 1 / 960))} · ◆ keyframe · drag a label to scrub</span></div>

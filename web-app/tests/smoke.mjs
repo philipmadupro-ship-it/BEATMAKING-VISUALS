@@ -71,7 +71,7 @@ const sel = await ev(() => window.u2c.cuetl.selected().map(([r, k]) => r.path + 
 ok('UI: click a camera key selects it', sel.length === 1 && sel[0] === 'camera.shot:' + k0.v, sel.join());
 const before = await frameAt(k0.b + 0.5);
 // 2. retarget it in the inspector (value select) -> the preview pushes to the new window
-const target = await ev(() => { const o = [...document.querySelectorAll('#insp [data-k="v"] option')].map((x) => x.value); const cur = window.u2c.cuetl.selected()[0][1].v; return o.includes('eq') && cur !== 'eq' ? 'eq' : o.find((v) => v !== 'wide' && v !== cur && v !== 'chains'); });   // v9: session + chains are both full width (same framing): prefer a half-width window
+const target = await ev(() => { const o = [...document.querySelectorAll('#insp [data-k="v"] option')].map((x) => x.value); const cur = window.u2c.cuetl.selected()[0][1].v; return o.includes('spectrum') && cur !== 'spectrum' ? 'spectrum' : o.find((v) => v !== 'wide' && v !== cur && v !== 'chains'); });   // v9: session + chains are both full width (same framing): prefer a half-width window
 await page.selectOption('#insp [data-k="v"]', target); await page.waitForTimeout(200);
 const after = await frameAt(k0.b + 0.5), rect = await ev((id) => window.u2c.clip.film(window.u2c.clip.current(), '916').rects(window.u2c.cues.ev(), 0, window.u2c.store.project.look)[id], target);
 const camOn = after.cam && rect && Math.abs(after.cam.x - (rect[0] + rect[2] / 2)) < rect[2] && after.cam.z > 1.1;
@@ -114,25 +114,25 @@ const pasted = await ev(() => window.u2c.cues.sheet.tracks.find((x) => x.path ==
 ok('Cmd+C / Cmd+V pastes at the playhead', pasted === '4,16', pasted);
 // 7. add a property track from the inspector (Element -> property -> keyframe) and edit it: the window moves
 await page.keyboard.press('Escape'); await page.click('.tabs [data-tab="inspect"]');
-await page.selectOption('#insp [data-k="element"]', 'win.eq'); await page.waitForTimeout(100);
-await page.click('#insp .prop[data-path="win.eq.x"] [data-act="kf"]'); await page.waitForTimeout(150);
-const kfTrack = await ev(() => { const t = window.u2c.cues.sheet.tracks.find((x) => x.path === 'win.eq.x'); return t ? t.keys.length : 0; });
+await page.selectOption('#insp [data-k="element"]', 'win.spectrum'); await page.waitForTimeout(100);
+await page.click('#insp .prop[data-path="win.spectrum.x"] [data-act="kf"]'); await page.waitForTimeout(150);
+const kfTrack = await ev(() => { const t = window.u2c.cues.sheet.tracks.find((x) => x.path === 'win.spectrum.x'); return t ? t.keys.length : 0; });
 await page.fill('#insp input[type="number"][data-k="v"]', '300'); await page.locator('#insp input[type="number"][data-k="v"]').dispatchEvent('change');
-const moved = await ev(() => { const app = window.u2c, f = app.clip.film(app.clip.current(), '916'), b = app.cuetl.state.playhead; return f.rects(app.cues.ev(), b + 1, app.store.project.look).eq; });
-ok('Add track: keyframe any registry property (win.eq.x) and edit it', kfTrack === 1 && moved && moved[0] === 300, `track keys ${kfTrack} · eq window x = ${moved && moved[0]}`);
+const moved = await ev(() => { const app = window.u2c, f = app.clip.film(app.clip.current(), '916'), b = app.cuetl.state.playhead; return f.rects(app.cues.ev(), b + 1, app.store.project.look).spectrum; });
+ok('Add track: keyframe any registry property (win.spectrum.x) and edit it', kfTrack === 1 && moved && moved[0] === 300, `track keys ${kfTrack} · spectrum window x = ${moved && moved[0]}`);
 const regN = await ev(() => Object.keys(window.u2c.registry().byPath).length);
 ok('property registry covers every element (windows, meters, brand, camera, stage colours, tags)', regN > 150, `${regN} keyframeable properties for this look`);
 // 8. preset + JSON round trip
 await ev(() => window.u2c.actions.applyPreset('tour')); const tour = await ev(() => window.u2c.cues.sheet.tracks.find((t) => t.path === 'camera.shot').keys.length);
-await page.focus('#cueCv'); await page.keyboard.press('ControlOrMeta+z'); const back = await ev(() => window.u2c.cues.sheet.tracks.find((t) => t.path === 'win.eq.x') != null);
+await page.focus('#cueCv'); await page.keyboard.press('ControlOrMeta+z'); const back = await ev(() => window.u2c.cues.sheet.tracks.find((t) => t.path === 'win.spectrum.x') != null);
 ok('presets (Meter tour) apply and undo', tour >= 4 && back, `tour camera keys ${tour} · undo restores the edited sheet ${back}`);
 const rt = await ev(async () => { const S = await import('/src/cues/schema.js'), a = window.u2c.cues.sheet, j = JSON.stringify(S.serializeSheet(a)), b = S.parseSheet(JSON.parse(j)); const strip = (s) => JSON.stringify(s.tracks.map((t) => [t.path, t.keys.map((k) => [Math.round(k.b * 960), k.v, k.ease, k.dur ?? null])])); return { same: strip(a) === strip(b), bytes: j.length, at: JSON.parse(j).tracks[0].keys[0].at }; });
 ok('cue sheet JSON export / import round trip (BAR.BEAT.TICK)', rt.same, `${rt.bytes} bytes · first key at "${rt.at}"`);
 // 9. autosave per project survives a reload (same file -> same sheet)
 const savedTarget = await ev(() => window.u2c.cues.sheet.tracks.find((t) => t.path === 'camera.shot').keys[0].v);
 await page.waitForTimeout(600); await page.reload(); await page.waitForFunction(() => document.documentElement.dataset.track === '1', null, { timeout: 120000 }); await uploadAndWait();
-const restored = await ev(() => ({ cam: window.u2c.cues.sheet.tracks.find((t) => t.path === 'camera.shot').keys[0].v, eq: !!window.u2c.cues.sheet.tracks.find((t) => t.path === 'win.eq.x') }));
-ok('autosave: the edited cue sheet is restored for the same beat', restored.cam === savedTarget && restored.eq, `camera ${restored.cam} · win.eq.x track ${restored.eq}`);
+const restored = await ev(() => ({ cam: window.u2c.cues.sheet.tracks.find((t) => t.path === 'camera.shot').keys[0].v, eq: !!window.u2c.cues.sheet.tracks.find((t) => t.path === 'win.spectrum.x') }));
+ok('autosave: the edited cue sheet is restored for the same beat', restored.cam === savedTarget && restored.eq, `camera ${restored.cam} · win.spectrum.x track ${restored.eq}`);
 await page.click('#grid .card >> nth=0'); await page.waitForFunction(() => !document.querySelector('#studio').hidden && window.u2c.clip.current().ready, null, { timeout: 60000 });
 // ---- sync: scheduled events on the grid, flash on its frame, pendant extremes on the beats, camera lands on its key
 const syncEval = () => ev(async () => {
