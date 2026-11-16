@@ -275,12 +275,12 @@ for (const k of ['sine1k', 'pink', 'hardleft', 'clipped']) {
   { // v13 kick glow: peaks on the frame that contains each kick, decays exponentially (no flicker), is dark before the next hit
     const D2 = { ...D, onsets: { kick: kicks.map((k) => [k, 1, k]) } }; let flick = 0, stuck = 0, notpeak = 0;
     for (const tk of kicks) {
-      const fk = Math.ceil(tk * FPS - 1e-6), G = (u) => LV.glowAt(D2, u / FPS, FPS);   // fk = the first frame that sees the hit: within 1 frame of it
-      if (G(fk) < 0.99 || fk - tk * FPS > 1 || (tk > 0.2 && G(fk - 1) > 0.05)) notpeak++;   // full on the kick frame, dark the frame before
+      const fk = Math.ceil(tk * FPS - 0.5), G = (u) => LV.glowAt(D2, u / FPS, FPS);   // fk = the first frame that sees the hit: within 1 frame of it
+      if (G(fk) < 0.99 || fk - tk * FPS > 0.5 + 1e-6 || (tk > 0.2 && G(fk - 1) > 0.05)) notpeak++;   // full on the kick frame, dark the frame before
       let prev = 2; for (let u = fk; u < fk + 12; u++) { const v = G(u); if (v > prev + 1e-9 || v <= 0) flick++; prev = v; }   // monotone exponential decay, never a hard off
       if (G(fk + 1) > 0.8 || LV.glowAt(D2, tk + 0.9 * beat, FPS) > 0.02) stuck++;
     }
-    ok('kick glow: peaks within 1 frame of every kick (1.0 on the kick frame, 0 before), exponential decay, no flicker, dark before the next', notpeak === 0 && flick === 0 && stuck === 0, `${kicks.length} kicks · ${notpeak} not peaking, ${flick} flicker/hard-off, ${stuck} stuck · 120 ms after the kick frame ${LV.glowAt(D2, Math.ceil(kicks[1] * FPS) / FPS + 0.12, FPS).toFixed(2)}`);
+    ok('kick glow: peaks within 1 frame of every kick (1.0 on the kick frame, 0 before), exponential decay, no flicker, dark before the next', notpeak === 0 && flick === 0 && stuck === 0, `${kicks.length} kicks · ${notpeak} not peaking, ${flick} flicker/hard-off, ${stuck} stuck · 120 ms after the kick frame ${LV.glowAt(D2, Math.ceil(kicks[1] * FPS - 0.5) / FPS + 0.12, FPS).toFixed(2)}`);
   }
   ok('peak LED: flashes on every kick transient and is dark between hits', led === 0 && ledBetween === 0, `${led} missed, ${ledBetween} stuck`);
   ok('GR static curve: 4:1, 6 dB knee, T -20: 0 dB below the knee, -0.5625 dB at T, -7.5 dB at -10 dBFS', Math.abs(ML.grStatic(-30, -20, 4, 6)) < 1e-9 && Math.abs(ML.grStatic(-10, -20, 4, 6) + 7.5) < 1e-9 && Math.abs(ML.grStatic(-20, -20, 4, 6) + 0.5625) < 1e-9);

@@ -60,18 +60,27 @@ rep = [f"ONSET SYNC [{a.label}]  {a.id}  {60 / BEAT:.2f} BPM  fps {FPS}",
 P = json.load(open(a.probe)); f0 = P["f0"]
 intro = np.array(P["intro"]); lab0 = (np.where(intro == 0)[0][0] + f0) / FPS if intro.any() else 0.0
 t0 = a.t0 if a.t0 is not None else lab0 + 0.1
-refs = (np.round(ons / q16) * q16)[grid & (ons >= t0) & (ons < D["duration"] - 0.3)]   # the hit's grid slot IS the audio onset (the on-beat click transient sits on the grid to 0.1 ms, tests/sync_test.py); the 1 ms detector's own lag is the median above
+kq = np.array([k[2] for k in D["onsets"]["kick"] if abs(k[0] - k[2]) <= 0.012])            # kick onsets the visuals follow (on the 16th grid within 12 ms)
+slot = np.round(ons / q16) * q16
+is_kick = np.array([bool(len(kq)) and np.abs(kq - g).min() < 0.002 for g in slot])        # v13: the detector also fires on 808 re-triggers / snare bodies that are NOT kick onsets: those are not reactions to wait for
+nonk = int((grid & ~is_kick & (ons >= t0) & (ons < D["duration"] - 0.3)).sum())
+refs = slot[grid & is_kick & (ons >= t0) & (ons < D["duration"] - 0.3)]   # the hit's grid slot IS the audio onset (the on-beat click transient sits on the grid to 0.1 ms, tests/sync_test.py); the 1 ms detector's own lag is the median above
 ELEM = [("waveform flash/pulse (session)", "session"), ("spectrum kick lift", "spectrum"), ("levels flash (loud)", "loud"), ("logo glow", "logo")]
 rows = []; out = {}
 for name, roi in ELEM:
     if roi not in P["luma"]: continue
     L = np.array(P["luma"][roi]); d = np.diff(L, prepend=L[0]); offs = []
     for g in refs:
-        fk = int(np.floor(g * FPS)); lo_, hi_ = fk - 3 - f0, fk + 4 - f0
-        if lo_ < 1 or hi_ >= len(d): continue
-        w = d[lo_:hi_ + 1]
-        if w.max() < 0.6 * max(1e-9, np.percentile(d[d > 0], 90) if (d > 0).any() else 1): continue   # no visible reaction on this hit
-        fr = lo_ + int(np.argmax(w >= 0.5 * w.max())) + f0   # the ATTACK: first frame reaching half of the largest rise
+        fk = int(np.floor(g * FPS)); thr = 0.6 * max(1e-9, np.percentile(d[d > 0], 90) if (d > 0).any() else 1)
+        fr = None
+        # v13: the reaction must ATTACK within +-1 frame of the kick's presentation frame, so look there first (other hits, e.g. hats, move the
+        # same meters a few frames before / after: they are not this kick's reaction); only if it is absent there is the wide window [-3, +4] searched
+        # (a late or early reaction is then reported with its real offset, so a mistimed reaction still fails)
+        for a_, b_ in ((fk - 1 - f0, fk + 2 - f0), (fk - 3 - f0, fk + 4 - f0)):
+            if a_ < 1 or b_ >= len(d): break
+            w = d[a_:b_ + 1]
+            if w.max() >= thr: fr = a_ + int(np.argmax(w >= 0.5 * w.max())) + f0; break
+        if fr is None: continue
         offs.append(fr / FPS * 1000 - g * 1000)
     if not offs: continue
     offs = np.array(offs); out[name] = offs.tolist()
@@ -109,7 +118,7 @@ if P.get("idx") and any(v is not None for v in P["idx"]):
         if fi is not None: extra.append(("intro enter lands (beat 3 = 2 beats)", (fi + f0) / FPS * 1000 - 2 * BEAT * 1000))
         extra.append((f"intro enter at frame 0 (must already be moving: > 0 by frame 1)", 0.0 if (en[1] or 0) > 0 else 99999.0))
 
-lines = rep + [f"{'element':<42}{'n':>4}{'median ms':>11}{'worst |ms|':>12}{'median fr':>11}{'worst fr':>10}  verdict"]
+lines = rep + [f"reference hits: {len(refs)} analysed kick onsets in the lab part; {nonk} other on-grid detector hits (808 re-triggers / snare bodies, not kick onsets) are not references", "", f"{'element':<42}{'n':>4}{'median ms':>11}{'worst |ms|':>12}{'median fr':>11}{'worst fr':>10}  verdict"]
 bad = 0
 for name, n, med, wst, mean in rows:
     ok = wst <= a.max_frames * 1000 / FPS + 1e-6 and abs(med) <= 0.5 * 1000 / FPS + 1e-6; bad += not ok

@@ -12,7 +12,7 @@ import { LAYOUT, CONTENT, openBeat, WINDOW_IDS, HUD_BAND, HERO } from './layout.
 import { DEFAULT_TAGS } from './tags.js';
 import { mergeDeep, createEvaluator, emptySheet } from '../cues/schema.js';
 import { buildRegistry, meterPath } from './registry.js';
-import { createIntro } from './intro.js';   // v11 intro
+import { createIntro, coverScrim } from './intro.js';   // v11 intro
 
 const METER_KIND = { scope: 'logo', session: 'waveform', spectro: 'spectrogram', loud: 'loudness' };
 
@@ -36,7 +36,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   // v13 logo glow / cover pulse: ONE envelope from the analysed kicks: full strength on the kick's own frame (sharp attack, no ramp),
   // then a smooth exponential decay (cue logo.decay, default 0.17 s), never a hard off (the tail is carried to 1.6 s).
-  const KICKS = D.onsets.kick.map((o) => [Math.max(0.55, Math.min(1, o[1])), Math.ceil(o[2] * FPS - 1e-6)]).sort((p, q) => p[1] - q[1]);
+  const KICKS = L.kickHits.map(([tk, st]) => [Math.max(0.55, Math.min(1, st)), L.kickF(tk)]);   // on-grid kicks only (L.kickT timing), the same frame as kickEnv
   function glowAt(f, tau = V('logo.decay', 0.17)) {
     let m = 0; for (let i = KICKS.length - 1; i >= 0; i--) { const d = (f - KICKS[i][1]) / FPS; if (d < 0) continue; if (d > 1.6) break; m = Math.max(m, KICKS[i][0] * Math.exp(-d / tau)); } return m;
   }
@@ -45,7 +45,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // ---------------------------------------------------------------- windows: rect, open steps, content
   const rectOf = (id) => { const r = LAYOUT[LOOK][aspect][id]; return [V(`win.${id}.x`, r[0]), V(`win.${id}.y`, r[1]), V(`win.${id}.w`, r[2]), V(`win.${id}.h`, r[3])]; };
   // v11 intro: with an intro of IB beats the lab builds after it (default open beats shift by IB; -2 = open at the cut)
-  const winOpen = (id) => { const d = openBeat(LOOK, aspect, id); return V(`win.${id}.open`, IB ? (d < 0 ? IB : d + IB) : d); };
+  const winOpen = (id) => { if (IB && id === 'stage') return 0;   // v13: the cover card is already there at the cut (the intro push ends on it), it does not build in
+    const d = openBeat(LOOK, aspect, id); return V(`win.${id}.open`, IB ? (d < 0 ? IB : d + IB) : d); };
   function openStep(id, t) {
     const n0 = steps(t, winOpen(id), 6, U.t32), k = ev.lastKey(`win.${id}.visible`, t / BEAT);
     if (!k) return V(`win.${id}.visible`, true) ? n0 : 0;
@@ -214,14 +215,12 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const r = L.winRect, [x, y, w, h] = r, rad = V('glass.radius', 22), I = glowAt(fidx(t)) * V('cover.pulse', 1), cv = INTRO.coverCanvas ? INTRO.coverCanvas(0, Sx) : null;
     L.coverRect = r; L.coverRadius = rad;
     c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip(); c.clip(L.rr(x, y, w, h, rad));
-    if (cv) { const z = 1 + 0.012 * I, sc = Math.max(w, h) / cv.width * z; c.drawImage(cv, x + w / 2 - cv.width * sc / 2, y + h / 2 - cv.height * sc / 2, cv.width * sc, cv.height * sc); }
+    if (cv) { const z = L.openFx ? 1 : 1 + 0.012 * I, sc = Math.max(w, h) / cv.width * z; c.drawImage(cv, x + w / 2 - cv.width * sc / 2, y + h / 2 - cv.height * sc / 2, cv.width * sc, cv.height * sc); }   // (the scale pulse waits for the dolly to land: the match cut is an exact crop)
     else { c.fillStyle = Sx.card; c.fillRect(x, y, w, h); }
-    const dim = V('cover.dim', 1), light = L.isLight(Sx);
-    c.fillStyle = rgba(light ? Sx.card : Sx.bg, 0.5 * dim); c.fillRect(x, y, w, h);   // calm the cover so the logo reads on top
-    const gr = c.createLinearGradient(0, y + h * 0.55, 0, y + h); gr.addColorStop(0, rgba(Sx.bg, 0)); gr.addColorStop(1, rgba(Sx.bg, 0.6 * dim)); c.fillStyle = gr; c.fillRect(x, y, w, h);
-    if (I > 0.02) { c.fillStyle = rgba(light ? Sx.bg : '#ffffff', 0.07 * I); c.fillRect(x, y, w, h); }   // kick lift, a brightness step that decays (no fade in)
-    const tl = c.createLinearGradient(0, y, 0, y + h * 0.3); tl.addColorStop(0, rgba('#ffffff', 0.1)); tl.addColorStop(1, rgba('#ffffff', 0)); c.fillStyle = tl; c.fillRect(x, y, w, h * 0.3);
-    if (V('stepgrid.on', true) && k >= 1) stepGrid(x, y, w, h, t, Sx, I);
+    const light = L.isLight(Sx);
+    coverScrim(c, Sx, x, y, w, h, { dim: V('cover.dim', 1), light });   // v13: darker, so the logo reads (the intro push darkens into this same scrim)
+    if (I > 0.02) { c.fillStyle = rgba(light ? Sx.bg : '#ffffff', 0.05 * I); c.fillRect(x, y, w, h); }   // kick lift, a brightness step that decays (no fade in)
+    if (V('stepgrid.on', false) && k >= 1) stepGrid(x, y, w, h, t, Sx, I);
     c.restore();
     c.strokeStyle = rgba(Sx.ink, 0.38); c.lineWidth = 1.2; c.stroke(L.rr(x + 0.6, y + 0.6, w - 1.2, h - 1.2, rad)); c.lineWidth = 1;
   }
@@ -326,6 +325,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     LOOK = LAYOUT[look] ? look : 'exe';
     const over = {}; for (const k of STAGE_COLOR_KEYS) { const v = V('stage.' + k, null); if (v) over[k] = v; }
     S = stageOf(stage, over); LY = {}; IDS = Object.keys(LAYOUT[LOOK][aspect]); for (const id of IDS) LY[id] = rectOf(id);
+    L.coverRect = LY.stage || null; L.coverRadius = V('glass.radius', 22);   // the match-cut target is known on intro frames too (not only after the lab drew)
     setVars(); L.pendantMark = LOOK === 'exe' ? (ctx, Sx, cx, cy, d) => BR.elephantMark(ctx, Sx, cx, cy, d, d) : null;
   }
   function pendulum() {

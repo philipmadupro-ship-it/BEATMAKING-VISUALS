@@ -88,6 +88,10 @@ export function createCore(D) {
   // the attack is full strength there; the decay then runs per frame from the attack frame. tk = the grid slot when the detected onset is within
   // 12 ms of it (the beat is programmed on the grid: removes the detector jitter), else the detected onset (a genuinely off-grid hit).
   const kickT = (tr, tq) => (Math.abs(tr - tq) <= 0.012 ? tq : tr);
+  // kickHits: the kicks the reactive visuals (logo glow, cover pulse, levels flash) follow = the ones that sit on the 16th grid (within 12 ms), at the
+  // grid time. A long 808 re-triggers off the grid with weak detector hits that are not kick onsets: they do not flash anything.
+  const kickHits = D.onsets.kick.filter(([tr, , tq]) => Math.abs(tr - tq) <= 0.012).map(([, s, tq]) => [tq, s]).sort((p, q) => p[0] - q[0]);
+  const kickF = (tk) => Math.max(0, Math.ceil(tk * FPS - 0.5));   // the first frame that shows a hit at time tk (frame f is drawn at its centre)
   const kickEnv = new Float32Array(NF);
   for (const [tr, s, tq] of D.onsets.kick) { const f0 = Math.max(0, Math.ceil(kickT(tr, tq) * FPS - 0.5)); for (let f = f0; f < NF && (f - f0) / FPS < 0.6; f++) kickEnv[f] = Math.max(kickEnv[f], s * Math.exp(-(f - f0) / FPS / 0.14)); }
   const songBar = (clipBar) => D.song.startBar + clipBar;
@@ -130,7 +134,7 @@ const RUN = new RegExp(`@[A-Za-z]+\\d[A-Za-z\\d]*|${NUMR}${UNIT}|[@%]|[^@%]+?(?=
   const tagVars = (o) => Object.assign(VARS, o);
   const sub = (s, extra) => String(s).replace(/\{(\w+)\}/g, (m, k) => (extra && k in extra ? extra[k] : k in VARS ? VARS[k] : m));
   const L = { view, floorSize, MIN_PX, tagVars, sub, D, F, FPS, NF, BEAT, BAR, U, T, Bt, barOf, beatIn, SCHED, ev, steps, on, beatPhase, barPhase, clamp, lerp, fidx, hash, hs,
-    kickT, SPECTRO: D.spectro, GS: D.gonioS, GM: D.gonioM, W2: D.wave2.data, kickEnv, songBar, labelAt, STAGES, rgba, mix, font, text, fmt, tc, bbt, SANS, MONO, SERIF, HAND, DISPLAY, UI, FONT,
+    kickT, kickHits, kickF, SPECTRO: D.spectro, GS: D.gonioS, GM: D.gonioM, W2: D.wave2.data, kickEnv, songBar, labelAt, STAGES, rgba, mix, font, text, fmt, tc, bbt, SANS, MONO, SERIF, HAND, DISPLAY, UI, FONT,
     tagGet: () => undefined, meter: (kind, key, def) => def };
   // ---------------------------------------------------------------- v11 liquid glass (shell design system)
   // Backdrops: L.snap(ctx, slot) copies what is on the canvas NOW into a small blurred copy (1/8 size, canvas filter

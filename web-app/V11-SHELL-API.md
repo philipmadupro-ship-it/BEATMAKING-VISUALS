@@ -35,4 +35,4 @@ Only the title, credit and real readouts remain (`tags.js`: `hud.*`, `result.*`,
 - At runtime `L.coverRect` / `L.coverRadius` (film core `L`) hold the live rect (set each frame the stage card draws). The card is a normal glass window (`stage`, content kind `cover`), open at frame 0 of the lab (`FIRST_OPEN.exe`), so it is already there on the cut frame; the camera-shot id `stage` also works for pushes.
 - The cover is `INTRO.coverCanvas(0, S)` (greys in Nigredo) with a 0.5 scrim, a bottom gradient and the step grid, so the match-cut should end on the same image slightly darker; cover kick pulse scale = 1 + 0.012 I (I = the logo-glow envelope).
 - Logo: centred on its bbox at the card centre (`BR.logo(..., {at: {cx, cy, w}})`, `BR.logoBBox()`); `HERO[aspect].logoW` = 384 / 300.
-- Static pendant mark: `L.pendantMark(ctx, S, cx, cy, d)` (exe only), drawn by the imager in a ring at `L.portholeRect = [cx, cy, R]`; no chain, no swing.
+- Static pendant mark: `L.pendantMark(ctx, S, cx, cy, d)` (exe only), drawn by the imager as a bare static mark (no ring, no frame; v13 correction 2) at `L.portholeRect = [cx, cy, R]`; no chain, no swing.

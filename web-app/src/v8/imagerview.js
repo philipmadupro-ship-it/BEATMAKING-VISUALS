@@ -3,7 +3,7 @@
 //   POLAR LEVEL   half disc, petals: per-sector level (instant attack, slow release) as a filled polygon, radial spikes,
 //                 and a held outline;
 //   LISSAJOUS     rotated square (L / R on the diagonals), dots with a connected trail of the newest samples;
-// plus the correlation bar, the L .. R balance line with its dot, and (v13) the static pendant mark in a ring (L.pendantMark). Everything comes from the real per-bin M/S data
+// plus the correlation bar, the L .. R balance line with its dot, and (v13) the static elephant mark, nothing around it (L.pendantMark). Everything comes from the real per-bin M/S data
 // (analysis/stereo.js, msspec.js) and the 8 kHz L/R scope stream; nothing is decorative.
 import * as ML from './meterlib.js';
 import { hexRgb } from './core.js';
@@ -41,8 +41,7 @@ export function createImagerView(L, M8, H) {
     const [x0, y0, w, h] = r; reveal(ctx, x0, y0, w, h, k);
     const f = fidx(t), tf = tickF(t), C = imgCols(S), range = L.meter('stereo', 'range', 40), gain = L.meter('stereo', 'gain', 1), ink = (a) => rgba(S.ink, a);
     const fz = (s) => L.floorSize(ctx, s), small = h < 460, LH = fz(22);
-    // v13 stack, top to bottom: the half disc (as wide as the window allows), CORR, BAL, then the static pendant mark in a
-    // circular frame in whatever height is left (no BAND WIDTH, no WIDTH strip). Too little room (small windows): no mark.
+    // v13 stack, top to bottom: the half disc (as wide as the window allows), CORR, BAL, then the static elephant mark (no frame) in whatever height is left (no BAND WIDTH, no WIDTH strip). Too little room (small windows): no mark.
     const rowH = Math.max(34, LH + 12), gap = 10, top = y0 + LH + 8, below = LH * 1.7, R0 = (w - 16) / 2 - 4;
     const wantD = Math.min(w - 12, 236), fixed = (top - y0) + below + 2 * rowH + 4 * gap;
     let R = Math.max(40, Math.min(R0, h - fixed - 20)), Dm = Math.min(wantD, h - fixed - R - 16);
@@ -105,13 +104,8 @@ export function createImagerView(L, M8, H) {
     ctx.fillStyle = ink(0.12); ctx.fillRect(bx0, Math.round(byc) - 3, bx1 - bx0, 6); ctx.fillStyle = ink(0.4); for (const v of [-6, -3, 0, 3, 6]) ctx.fillRect(Math.round(Xb(v)), Math.round(byc) - (v === 0 ? 10 : 6), 1, v === 0 ? 20 : 12);
     ctx.fillStyle = rgba(C.mid, 0.55); ctx.fillRect(Math.min(Xb(0), Xb(bal)), Math.round(byc) - 3, Math.abs(Xb(bal) - Xb(0)), 6); ctx.fillStyle = S.ink; ctx.fillRect(Math.round(Xb(bal)) - 2, Math.round(byc) - 9, 4, 18);
     text(ctx, Math.abs(bal) < 0.05 ? '0.0 dB' : `${bal < 0 ? 'L' : 'R'} ${Math.abs(bal).toFixed(1)} dB`, x0 + w - 6, byc, { size: 24, w: 600, align: 'right', col: S.ink, maxW: LH * 4.2 });
-    // ---- the pendant, a STATIC mark in a ring with a thin inner ring (circle in a circle); the art is the rest-pose elephant
-    if (Dm) { const rg = ctx.createRadialGradient(mkCx, mkCy - mkR * 0.25, mkR * 0.1, mkCx, mkCy, mkR);
-      rg.addColorStop(0, rgba(S.ink, 0.1)); rg.addColorStop(1, rgba(S.ink, 0.02));
-      ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(mkCx, mkCy, mkR, 0, 2 * Math.PI); ctx.fill();
-      ctx.strokeStyle = ink(0.55); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(mkCx, mkCy, mkR - 1, 0, 2 * Math.PI); ctx.stroke();
-      ctx.strokeStyle = ink(0.22); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(mkCx, mkCy, mkR - 10, 0, 2 * Math.PI); ctx.stroke();
-      if (L.pendantMark) L.pendantMark(ctx, S, mkCx, mkCy, (mkR - 14) * 2); }
+    // ---- the elephant: a STATIC logo mark with nothing around it (no ring, no frame); the art is the rest-pose elephant
+    if (Dm && L.pendantMark) L.pendantMark(ctx, S, mkCx, mkCy, Dm);
     ctx.restore();
   }
 

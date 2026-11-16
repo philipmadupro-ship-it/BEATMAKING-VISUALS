@@ -36,8 +36,23 @@ export function coverTarget(L, look, aspect) {
   }
   const h = HERO[aspect] || HERO['916'], sz = h.logoW * 1.25; return [h.cx - sz / 2, h.cy - sz / 2, sz, sz];
 }
+/**
+ * The cover card's scrim, ONE function for the lab's card and the intro's last push frames (so the match cut is the same picture):
+ * a flat darkening (v13: 0.74, the logo must read on top) plus a deeper floor towards the bottom. `amount` 0..1 scales both (the intro push
+ * darkens into it, reaching 1 at the cut). Drawn over the rect x,y,w,h (the gradient is anchored to it; the flat part covers whatever is filled).
+ */
+export const COVER_SCRIM = 0.74, COVER_FLOOR = 0.82;
+export function coverScrim(c, S, x, y, w, h, { dim = 1, light = false, amount = 1, fill = null } = {}) {
+  const a = Math.min(1, COVER_SCRIM * dim) * amount, f = Math.min(1, COVER_FLOOR * dim) * amount, base = light ? S.card : S.bg, [fx, fy, fw, fh] = fill || [x, y, w, h];
+  c.fillStyle = rgba2(base, a); c.fillRect(fx, fy, fw, fh);
+  const gr = c.createLinearGradient(0, y + h * 0.55, 0, y + h); gr.addColorStop(0, rgba2(S.bg, 0)); gr.addColorStop(1, rgba2(S.bg, Math.max(0, f - a) / Math.max(1e-6, 1 - a)));
+  c.fillStyle = gr; c.fillRect(fx, fy, fw, fh);
+  const tl = c.createLinearGradient(0, y, 0, y + h * 0.3); tl.addColorStop(0, `rgba(255,255,255,${0.07 * amount})`); tl.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = tl; c.fillRect(fx, fy, fw, fh);   // the glass top light
+}
+const rgba2 = (hex, a) => { const [r, g, b] = hexRgb(hex); return `rgba(${r},${g},${b},${a})`; };
 /** Zoom that makes a rect w x h fill the W x H frame (object-fit: cover). */
-const fillZoom = (w, h, W, H) => Math.max(W / w, H / h);
+/** (v13: 6 % overscan, so the card's rounded corners and hairline are off-frame at the cut; both halves of the zoom use the same number) */
+const OVERSCAN = 1.06, fillZoom = (w, h, W, H) => Math.max(W / w, H / h) * OVERSCAN;
 
 // ---------------------------------------------------------------- assets (covers + the two display fonts, all optional)
 const img = (src) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
@@ -259,6 +274,8 @@ export function createIntro(L, A = {}) {
       c.restore();
     }
     c.restore();
+    // v13: the push darkens into the lab's cover scrim (the same function, anchored where the lab's card lands at the cut), so the cut shows no brightness jump
+    if (push > 0) { const sa = ss(push), [rx, ry, rw, rh] = tgt, K = zf; coverScrim(c, S, W / 2 - rw * K / 2, H / 2 - rh * K / 2, rw * K, rh * K, { dim: V('cover.dim', 1), light: false, amount: sa, fill: [0, 0, W, H] }); }
     // v13: directional motion blur on the zoom: the scale change over the last frame time (the same exponential zoom at t - 0.9 frame)
     const pPrev = clamp(ev.value('intro.push', (t - 0.9 / D.fps) / BEAT, 0)), dl = Math.log(zmax) * (push - pPrev);
     if (dl > 0) streak(c, pvx, pvy, dl);

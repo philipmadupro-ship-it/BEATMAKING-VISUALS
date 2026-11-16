@@ -17,16 +17,18 @@ export function ledAt(lv, t, thr = -3, decay = 0.14) {
   return 0;
 }
 
-/** Kick glow 0..1 at t: sharp attack on the frame that contains each analysed kick onset (raw audio time, not the grid), then a
- *  smooth exponential decay (tau 90 ms, about 120 ms to a quarter). A pure function of t: no state, so no flicker, never negative. */
+/** Kick glow 0..1 at t: sharp attack on the frame that first shows each kick (L.kickT timing: the grid slot when the detected onset is within 12 ms
+ *  of it, frame f drawn at its centre, so f = ceil(tk * fps - 0.5)), then a smooth exponential decay (tau 90 ms, about 120 ms to a quarter). Detector
+ *  hits that are off the grid by more than 12 ms are 808 re-triggers, not kick onsets: they flash nothing. A pure function of t (frame-quantised). */
 export const GLOW_TAU = 0.09;
 export function glowAt(D, t, fps = 30, tau = GLOW_TAU) {
   const ks = D.onsets && D.onsets.kick; if (!ks || !ks.length) return 0;
-  let g = 0;
+  const fi = Math.floor(t * fps + 1e-6); let g = 0;
   for (let i = ks.length - 1; i >= 0; i--) {
-    const fk = Math.ceil(ks[i][0] * fps - 1e-6) / fps, age = t - fk;   // the first frame that can show this hit
-    if (age < -1e-4) continue; if (age > tau * 6) break;
-    g = Math.max(g, Math.exp(-Math.max(0, age) / tau));
+    const [tr, , tq] = ks[i]; if (Math.abs(tr - tq) > 0.012) continue;
+    const age = (fi - Math.max(0, Math.ceil(tq * fps - 0.5))) / fps;
+    if (age < 0) continue; if (age > tau * 6) break;
+    g = Math.max(g, Math.exp(-age / tau));
   }
   return g;
 }

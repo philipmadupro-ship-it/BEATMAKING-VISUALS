@@ -6,6 +6,7 @@
 # v11: assets/fonts/fonts.css + the OFL stand-in fonts and the studio UI font; assets/covers/cover-0..4.jpg (the intro carousel).
 # The licensed brand fonts (AkiraExpanded.otf, Synkopy.otf) are NOT here: they are gitignored and listed in PUBLISH-PRIVATE.txt.
 # v12: + src/v8/spectrumview.js, src/v8/spectrogramview.js (spectrum analyser and Edison-style spectrogram; the EQ window is gone); covers unchanged.
+# v13: + merged compose/levels/syncintro (no new files): stage cover card + static elephant mark (imager), L.kickHits, intro match cut (coverScrim). Step grid is code-only and off by default.
 src/analysis/analysis.worker.js
 src/analysis/bandenv.js
 src/analysis/clipdata.js

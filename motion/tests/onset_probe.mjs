@@ -10,7 +10,8 @@ const f0 = +arg('f0', 0), f1 = +arg('f1', 899), aspect = arg('aspect', '916'), l
 const { LAYOUT, HERO } = await import(path.join(FILM, 'v9/src/v8/layout.js'));
 const R = LAYOUT[look][aspect], H = HERO[aspect];
 const rois = {}; for (const id of Object.keys(R)) rois[id] = R[id];
-rois.logo = [H.cx - H.logoW / 2, H.cy - H.logoW * 0.16, H.logoW, H.logoW * 0.32];
+const st = R.stage, cx = H.cx ?? (st[0] + st[2] / 2), cy = H.cy ?? (st[1] + st[3] / 2);   // v13: the hero is centred in the stage (cover) card
+rois.logo = [cx - H.logoW / 2, cy - H.logoW * 0.16, H.logoW, H.logoW * 0.32];
 rois.frame = [0, 0, aspect === '916' ? 1080 : 1920, aspect === '916' ? 1920 : 1080];
 const puppeteer = (await import('puppeteer-core')).default;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.woff2': 'font/woff2', '.otf': 'font/otf', '.css': 'text/css', '.ttf': 'font/ttf', '.jpg': 'image/jpeg' };
