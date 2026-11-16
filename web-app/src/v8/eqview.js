@@ -42,8 +42,8 @@ export function dynEnvelope(D, { attack = 4, release = 140, sens = 10 } = {}) {
 }
 /** Which detector bands a band listens to, its direction and depth (dB at env = 1). Low bands (< 150 Hz) duck on the beat. */
 export function bandDyn(b, depth) {
-  const f = b.f, low = f < 150, det = f < 60 ? [0, 1] : f < 150 ? [1] : f < 500 ? [2] : f < 2000 ? [3] : f < 6000 ? [4] : [5];
-  return { det, depth: depth * (f < 60 ? 1 : low ? 0.6 : 0.45), dir: low ? -1 : (b.g < 0 ? -1 : 1) };
+  const f = b.f, low = f < 150, det = f < 60 ? [0, 1] : f < 150 ? [1] : f < 500 ? [2] : f < 2000 ? [3] : f < 6000 ? [4] : [4, 5];   // 6 kHz and up: hats and snare
+  return { det, depth: depth * (f < 60 ? 1 : low ? 0.6 : f >= 6000 ? 0.7 : 0.45), dir: low ? -1 : (b.g < -1 ? -1 : 1) };
 }
 /** Offset in dB the detector adds to the band at this env (6 values). */
 export function dynOffset(b, e6, depth) { const d = bandDyn(b, depth); let e = 0; for (const j of d.det) e = Math.max(e, e6[j]); return d.dir * d.depth * e; }
@@ -83,100 +83,96 @@ export function createEqView(L) {
   function draw(ctx, S, r, t, k) {
     const [x0, y0, w0, h0] = r;
     ctx.save(); ctx.beginPath(); ctx.rect(x0 - 2, y0 - 2, w0 + 4, (h0 + 4) * k); ctx.clip();
-    const MS = D.ms, FMX = MS.anFmax || 20000, x = Math.round(x0 + 46), pw = Math.round(w0 - 46 - 54), y = y0 + 8, h = h0 - 8 - 36, cols = eqCols(S), M = L.meter;
-    const tilt = M('eq', 'tilt', 4.5), strength = M('eq', 'strength', 50) / 100, anR = M('eq', 'anRange', 90), mode = M('eq', 'mode', 'pre-post'), hold = M('eq', 'hold', 1);
-    const depth = M('eq', 'depth', 5), atk = M('eq', 'attack', 4), rel = M('eq', 'release', 140), sens = M('eq', 'sens', 10), ghostS = M('eq', 'ghost', 0.14), regions = M('eq', 'regions', true), piano = M('eq', 'piano', true);
+    const MS = D.ms, FMX = MS.anFmax || 20000, GUT = Math.min(96, w0 * 0.2), x = Math.round(x0 + 8), pw = Math.round(w0 - 8 - GUT), y = y0 + 6, h = h0 - 12, cols = eqCols(S), M = L.meter;
+    const tilt = M('eq', 'tilt', 4.5), strength = M('eq', 'strength', 50) / 100, anR = M('eq', 'anRange', 90), mode = M('eq', 'mode', 'pre-post');
+    const depth = M('eq', 'depth', 8), atk = M('eq', 'attack', 4), rel = M('eq', 'release', 140), sens = M('eq', 'sens', 10), regions = M('eq', 'regions', true);
     const XF = (fq) => x + pw * Math.log(fq / 20) / Math.log(FMX / 20), FX = (X) => 20 * (FMX / 20) ** ((X - x) / pw);
     const E = dynEnvelope(D, { attack: atk, release: rel, sens }), e6 = E.at(t), e6c = Float32Array.from(e6);
-    // static bands of this section, plus a band on the kick if the fit has none below 150 Hz
+    // bands of this section (static match-EQ fit). The kick band (< 150 Hz, ducks on kicks) and a high shelf/presence band
+    // (breathes with hats and snare from the band detector) are always present.
     const fit = bandsAt(t, tilt, strength); let bands = fit.bands.map((b) => ({ type: b.type, f: b.f, g: b.g, q: b.q }));
-    if (!bands.some((b) => b.f < 150)) bands.push({ type: 'BELL', f: 70, g: 0, q: 0.9 });
     bands.sort((a, b) => a.f - b.f);
     for (let i = 0; i + 1 < bands.length;) { const a = bands[i], c = bands[i + 1];   // bands closer than 1/2 octave read as one node: merge them
-      if (c.f / a.f < 1.41) { const wa = Math.abs(a.g) + 0.5, wc = Math.abs(c.g) + 0.5; bands.splice(i, 2, { type: a.type === c.type ? a.type : (wa >= wc ? a.type : c.type), f: Math.exp((Math.log(a.f) * wa + Math.log(c.f) * wc) / (wa + wc)), g: clamp(a.g + c.g, -9, 9), q: Math.min(a.q, c.q) }); } else i++; }
-    bands = bands.slice(0, 5);
+      if (c.f / a.f < 1.6) { const wa = Math.abs(a.g) + 0.5, wc = Math.abs(c.g) + 0.5; bands.splice(i, 2, { type: a.type === c.type ? a.type : (wa >= wc ? a.type : c.type), f: Math.exp((Math.log(a.f) * wa + Math.log(c.f) * wc) / (wa + wc)), g: clamp(a.g + c.g, -9, 9), q: Math.min(a.q, c.q) }); } else i++; }
+    if (!bands.some((b) => b.f < 150)) bands.push({ type: 'BELL', f: 70, g: 0, q: 0.9 });
+    if (!bands.some((b) => b.f >= 5000)) bands.push({ type: 'HS', f: 9000, g: 0, q: 0.71 });
+    bands.sort((a, b) => a.f - b.f);
+    const keep = new Set([bands.find((b) => b.f < 150), [...bands].reverse().find((b) => b.f >= 5000)]);
+    while (bands.length > 5) { let wi = -1, wv = 1e9; bands.forEach((b, i) => { if (!keep.has(b) && Math.abs(b.g) < wv) { wv = Math.abs(b.g); wi = i; } }); bands.splice(wi, 1); }
     const nb = bands.length, offs = bands.map((b) => dynOffset(b, e6c, depth)), dynB = bands.map((b, i) => ({ ...b, g: b.g + offs[i] }));
-    // per pixel column frequencies; band curves (static / dynamic), sums
     const colF = Array.from({ length: pw + 1 }, (_, i) => FX(x + i));
     const curveOf = (bl, step = 1) => { const per = bl.map((b) => { const co = ML.coefOf(b, FS_EQ), a = new Float32Array(pw + 1); for (let i = 0; i <= pw; i += step) a[i] = ML.magDb(co, colF[i], FS_EQ); if (step > 1) a[pw] = ML.magDb(co, colF[pw], FS_EQ); return a; });
       const sum = new Float32Array(pw + 1); for (let i = 0; i <= pw; i += step) { let s = 0; for (const a of per) s += a[i]; sum[i] = s; } if (step > 1) { let s = 0; for (const a of per) s += a[pw]; sum[pw] = s; } return { per, sum }; };
     const stat = curveOf(bands), dyn = curveOf(dynB);
     let rg = M('eq', 'range', 0);
     if (!rg) { const worst = curveOf(bands.map((b) => { const d = bandDyn(b, depth); return { ...b, g: b.g + d.dir * d.depth }; }), 4);   // every band at full detector: a stable scale
-      const m = Math.max(0, ...stat.sum.map(Math.abs), ...worst.sum.map(Math.abs)); rg = [3, 6, 12, 18, 30].find((v) => v >= m * 1.08) || 30; }
+      const m = Math.max(0, ...stat.sum.map(Math.abs), ...worst.sum.map(Math.abs)); rg = [3, 6, 12, 18, 30].find((v) => v >= m * 1.12) || 30; }
     const Yg = (db) => y + h * (0.5 - db / (2 * rg)), Ya = (v) => y + h * clamp(-v / anR);
-    const sc = S.name === 'RUBEDO' ? S.hot : S.ink;
-    // ---- grid (sparse: decades and the 0 dB line)
+    const sc = S.name === 'RUBEDO' ? S.hot : S.ink, bandA = S.grey ? [0.55, 0.45, 0.38, 0.32, 0.27] : [0.3, 0.3, 0.3, 0.3, 0.3];
+    const act01 = (i) => clamp(Math.abs(offs[i]) / Math.max(0.01, bandDyn(bands[i], depth).depth));
+    // ---- grid: log decades and a few dB lines; 0 dB brighter
     ctx.lineWidth = 1;
-    for (let dec = 10; dec <= 10000; dec *= 10) for (let m = 1; m <= 9; m++) { const fq = dec * m; if (fq < 20 || fq > FMX) continue; const X = cr(XF(fq)); ctx.strokeStyle = rgba(S.ink, m === 1 && dec >= 100 ? 0.12 : 0.04); ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X, y + h); ctx.stroke(); }
-    const step = rg >= 30 ? 12 : rg >= 12 ? 6 : rg >= 6 ? 3 : 1;
-    for (let kk = -Math.floor(rg / step); kk <= Math.floor(rg / step); kk++) { const db = kk * step, Y = cr(Yg(db)); ctx.strokeStyle = rgba(S.ink, db === 0 ? 0.26 : 0.05); ctx.beginPath(); ctx.moveTo(x, Y); ctx.lineTo(x + pw, Y); ctx.stroke(); if (Y > y + 8 && Y < y + h - 8) lbl(ctx, S, (db > 0 ? '+' : db < 0 ? '−' : '') + Math.abs(db), x - 6, Y, { size: 15, align: 'right', a: 0.8 }); }
-    for (let v = 0; v < anR; v += 30) lbl(ctx, S, v ? '−' + v : '0', x + pw + 5, clamp(Ya(-v), y + 9, y + h - 9), { size: 15, a: 0.38 });
+    for (let dec = 10; dec <= 10000; dec *= 10) for (let m = 1; m <= 9; m++) { const fq = dec * m; if (fq < 20 || fq > FMX) continue; const X = cr(XF(fq)); ctx.strokeStyle = rgba(S.ink, m === 1 && dec >= 100 ? 0.1 : 0.035); ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X, y + h); ctx.stroke(); }
+    const step = rg >= 30 ? 12 : rg >= 12 ? 6 : rg >= 6 ? 3 : 1, gx1 = x + pw + 8, gx2 = x0 + w0 - 1;
+    for (let kk = -Math.floor(rg / step); kk <= Math.floor(rg / step); kk++) { const db = kk * step, Y = cr(Yg(db)); ctx.strokeStyle = rgba(S.ink, db === 0 ? 0.3 : 0.05); ctx.beginPath(); ctx.moveTo(x, Y); ctx.lineTo(x + pw, Y); ctx.stroke();
+      if (Y > y + 7 && Y < y + h - 7) lbl(ctx, S, (db > 0 ? '+' : db < 0 ? '−' : '') + Math.abs(db), gx1, Y, { size: 13, a: db === 0 ? 0.95 : 0.75, col: sc }); }
+    for (let v = 0; v < anR; v += 30) lbl(ctx, S, v ? '−' + v : '0', gx2, clamp(Ya(-v), y + 8, y + h - 8), { size: 13, align: 'right', a: 0.38 });
     ctx.save(); ctx.beginPath(); ctx.rect(x, y, pw, h); ctx.clip();
-    // ---- band regions between the crossovers (geometric midpoints of neighbouring band frequencies)
+    // ---- crossover regions (geometric midpoints of neighbouring bands), tinted by the band and lit by its activity
     const edges = [20]; for (let i = 0; i < nb - 1; i++) edges.push(Math.sqrt(bands[i].f * bands[i + 1].f)); edges.push(FMX);
-    if (regions) bands.forEach((b, i) => { const xa = XF(edges[i]), xb = XF(edges[i + 1]), a = Math.abs(offs[i]) / Math.max(0.01, bandDyn(b, depth).depth);
-      const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, rgba(cols[i], 0.03 + 0.1 * a)); g.addColorStop(1, rgba(cols[i], 0.02 + 0.06 * a)); ctx.fillStyle = g; ctx.fillRect(xa, y, xb - xa, h); });
-    if (regions) for (let i = 1; i < nb; i++) { const X = cr(XF(edges[i])); ctx.setLineDash([2, 3]); ctx.strokeStyle = rgba(S.ink, 0.2); ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X, y + h); ctx.stroke(); ctx.setLineDash([]); }
-    // ---- analyzer: PRE (soft fill + hairline), POST = PRE x dynamic curve, peak-hold dots. 1/6-oct bands, cubic through the log axis
+    if (regions) bands.forEach((b, i) => { const xa = XF(edges[i]), xb = XF(edges[i + 1]), a = act01(i);
+      const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, rgba(cols[i], 0.015 + 0.09 * a)); g.addColorStop(1, rgba(cols[i], 0.01 + 0.05 * a)); ctx.fillStyle = g; ctx.fillRect(xa, y, xb - xa, h); });
+    if (regions) for (let i = 1; i < nb; i++) { const X = cr(XF(edges[i])); ctx.setLineDash([2, 4]); ctx.strokeStyle = rgba(S.ink, 0.14); ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X, y + h); ctx.stroke(); ctx.setLineDash([]); }
+    // ---- analyser: soft filled gradients, PRE dimmer behind, POST (= PRE x the dynamic curve) brighter in front
     const f = fidx(t);
     if (mode !== 'off') {
-      const o6 = D.oct6, u0 = Math.log2(o6[0]), du = (Math.log2(o6[o6.length - 1]) - u0) / (o6.length - 1), nn = o6.length, sp = F.spec[f], hd = F.hold[f];
+      const o6 = D.oct6, u0 = Math.log2(o6[0]), du = (Math.log2(o6[o6.length - 1]) - u0) / (o6.length - 1), nn = o6.length, sp = F.spec[f];
       const cat = (arr, u) => { const i = clamp(Math.floor(u), 0, nn - 2), s = clamp(u - i, 0, 1), p0 = arr[Math.max(0, i - 1)], p1 = arr[i], p2 = arr[i + 1], p3 = arr[Math.min(nn - 1, i + 2)];
         return 0.5 * (2 * p1 + (-p0 + p2) * s + (2 * p0 - 5 * p1 + 4 * p2 - p3) * s * s + (-p0 + 3 * p1 - 3 * p2 + p3) * s * s * s); };
-      const tl = (fq) => tilt * Math.log2(fq / 1000), pre = colF.map((fq) => cat(sp, (Math.log2(fq) - u0) / du) + tl(fq)), hl = colF.map((fq) => cat(hd, (Math.log2(fq) - u0) / du) + tl(fq));
+      const tl = (fq) => tilt * Math.log2(fq / 1000), pre = colF.map((fq) => cat(sp, (Math.log2(fq) - u0) / du) + tl(fq));
       const path = (arr, add) => { ctx.beginPath(); arr.forEach((v, i) => { const Y = Ya(v + (add ? add[i] : 0)); i ? ctx.lineTo(x + i, Y) : ctx.moveTo(x, Y); }); };
-      path(pre); ctx.lineTo(x + pw, y + h); ctx.lineTo(x, y + h); ctx.closePath(); ctx.fillStyle = rgba(S.ink, 0.045); ctx.fill();
-      path(pre); ctx.strokeStyle = rgba(S.ink, 0.22); ctx.lineWidth = 1; ctx.lineJoin = 'round'; ctx.stroke();
-      if (mode === 'pre-post') { path(pre, dyn.sum); ctx.lineTo(x + pw, y + h); ctx.lineTo(x, y + h); ctx.closePath();
-        const gr = ctx.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, rgba(S.sig1, 0.15)); gr.addColorStop(1, rgba(S.sig1, 0)); ctx.fillStyle = gr; ctx.fill();
-        path(pre, dyn.sum); ctx.strokeStyle = rgba(S.ink, 0.6); ctx.stroke(); }
-      if (hold > 0) { ctx.fillStyle = rgba(S.ink, 0.5); for (let i = 0; i <= pw; i += 3) ctx.fillRect(x + i, Ya(hl[i] + (mode === 'pre-post' ? dyn.sum[i] : 0)) - 0.5, 1.5, 1.5); }
+      const fillG = (a0, a1, col) => { ctx.lineTo(x + pw, y + h); ctx.lineTo(x, y + h); ctx.closePath(); const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, rgba(col, a0)); g.addColorStop(1, rgba(col, a1)); ctx.fillStyle = g; ctx.fill(); };
+      ctx.lineJoin = 'round';
+      path(pre); fillG(0.1, 0.01, S.ink); path(pre); ctx.strokeStyle = rgba(S.ink, 0.16); ctx.stroke();
+      if (mode === 'pre-post') { path(pre, dyn.sum); fillG(S.grey ? 0.3 : 0.34, 0.02, S.grey ? S.ink : S.sig1); path(pre, dyn.sum); ctx.strokeStyle = rgba(S.grey ? S.ink : S.sig2, 0.4); ctx.stroke(); }
     }
-    // ---- band bodies: from 0 dB to the dynamic band curve (soft), and the gain-reduction area between static and dynamic
-    bands.forEach((b, i) => { const a = dyn.per[i], s = stat.per[i];
-      ctx.beginPath(); ctx.moveTo(x, Yg(0)); for (let c = 0; c <= pw; c++) ctx.lineTo(x + c, Yg(a[c])); ctx.lineTo(x + pw, Yg(0)); ctx.closePath(); ctx.fillStyle = rgba(cols[i], 0.08); ctx.fill();
-      ctx.beginPath(); for (let c = 0; c <= pw; c++) (c ? ctx.lineTo(x + c, Yg(a[c])) : ctx.moveTo(x, Yg(a[c]))); for (let c = pw; c >= 0; c--) ctx.lineTo(x + c, Yg(s[c])); ctx.closePath(); ctx.fillStyle = rgba(cols[i], 0.3); ctx.fill();
-      ctx.beginPath(); for (let c = 0; c <= pw; c++) (c ? ctx.lineTo(x + c, Yg(a[c])) : ctx.moveTo(x, Yg(a[c]))); ctx.strokeStyle = rgba(cols[i], 0.7); ctx.lineWidth = 1.1; ctx.stroke(); });
-    // ---- static sum (dashed), ghost trail of the dynamic sum, then the dynamic sum itself
-    ctx.beginPath(); stat.sum.forEach((v, i) => (i ? ctx.lineTo(x + i, Yg(v)) : ctx.moveTo(x, Yg(v)))); ctx.setLineDash([4, 4]); ctx.strokeStyle = rgba(S.ink, 0.38); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
-    const NG = Math.min(8, Math.round(ghostS * FPS)); ctx.lineJoin = 'round';
-    for (let gi = NG; gi >= 1; gi--) { const tt = t - gi / FPS; if (tt < 0) continue; const eg = E.at(tt), gb = bands.map((b) => ({ ...b, g: b.g + dynOffset(b, eg, depth) })), gc = curveOf(gb, 4);
-      ctx.beginPath(); let first = true; for (let c = 0; c <= pw; c++) { if (c % 4 && c !== pw) continue; const Y = Yg(gc.sum[c]); first ? ctx.moveTo(x + c, Y) : ctx.lineTo(x + c, Y); first = false; }
-      ctx.strokeStyle = rgba(sc, 0.3 * (1 - (gi - 1) / NG) ** 1.5); ctx.lineWidth = 1; ctx.stroke(); }
-    ctx.beginPath(); dyn.sum.forEach((v, i) => (i ? ctx.lineTo(x + i, Yg(v)) : ctx.moveTo(x, Yg(v)))); ctx.lineCap = 'round';
-    ctx.strokeStyle = rgba(sc, 0.12); ctx.lineWidth = 7; ctx.stroke(); ctx.strokeStyle = sc; ctx.lineWidth = 2.5; ctx.stroke(); ctx.lineWidth = 1; ctx.lineCap = 'butt';
+    // ---- band fills: each band from 0 dB to its own dynamic curve; the gain-reduction area (static -> dynamic) is the brighter part
+    bands.forEach((b, i) => { const a = dyn.per[i], s = stat.per[i], act = act01(i), al = bandA[i] + 0.14 * act;
+      ctx.beginPath(); ctx.moveTo(x, Yg(0)); for (let c = 0; c <= pw; c++) ctx.lineTo(x + c, Yg(a[c])); ctx.lineTo(x + pw, Yg(0)); ctx.closePath(); ctx.fillStyle = rgba(cols[i], al); ctx.fill();
+      ctx.beginPath(); for (let c = 0; c <= pw; c++) (c ? ctx.lineTo(x + c, Yg(a[c])) : ctx.moveTo(x, Yg(a[c]))); for (let c = pw; c >= 0; c--) ctx.lineTo(x + c, Yg(s[c])); ctx.closePath(); ctx.fillStyle = rgba(cols[i], 0.18 + 0.2 * act); ctx.fill();
+      ctx.beginPath(); for (let c = 0; c <= pw; c++) (c ? ctx.lineTo(x + c, Yg(a[c])) : ctx.moveTo(x, Yg(a[c]))); ctx.strokeStyle = rgba(cols[i], 0.55 + 0.35 * act); ctx.lineWidth = 1; ctx.stroke(); });
+    // ---- static sum faint and dashed, the dynamic sum on top: one crisp bright line
+    ctx.beginPath(); stat.sum.forEach((v, i) => (i ? ctx.lineTo(x + i, Yg(v)) : ctx.moveTo(x, Yg(v)))); ctx.setLineDash([3, 4]); ctx.strokeStyle = rgba(S.ink, 0.3); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); dyn.sum.forEach((v, i) => (i ? ctx.lineTo(x + i, Yg(v)) : ctx.moveTo(x, Yg(v)))); ctx.lineJoin = 'round';
+    ctx.strokeStyle = rgba(sc, 0.1); ctx.lineWidth = 5; ctx.stroke(); ctx.strokeStyle = sc; ctx.lineWidth = 2; ctx.stroke(); ctx.lineWidth = 1;
+    // ---- frequency labels, FabFilter style: small, just inside the plot along the bottom, thinned so wide numerals never touch
+    { const fs = 11, sz = L.floorSize(ctx, fs), occ = [], list = [['100', 100, 0], ['1k', 1000, 0], ['10k', 10000, 0], ['20', 20, 1], ['500', 500, 1], ['5k', 5000, 1], ['50', 50, 2], ['200', 200, 2], ['2k', 2000, 2], ['20k', 20000, 2]].sort((a, c) => a[2] - c[2]);
+      for (const [s, fq] of list) { const wl = s.length * 0.66 * sz + 10, lx = clamp(XF(fq), x + wl / 2 + 3, x + pw - wl / 2 - 3);
+        if (occ.some(([a, c]) => lx - wl / 2 < c && lx + wl / 2 > a)) continue; occ.push([lx - wl / 2, lx + wl / 2]); lbl(ctx, S, s, lx, y + h - 8, { size: fs, align: 'center', a: [100, 1000, 10000].includes(fq) ? 0.85 : 0.6 }); } }
     ctx.restore();   // plot clip
-    // ---- nodes on the dynamic band curves; the active band (largest |offset|) is bigger and gets the readout
+    // ---- numbered band nodes on the dynamic band curves; the active band (largest |offset|) is ringed and gets the readout
     let act = -1, best = 0.8; offs.forEach((o, i) => { if (Math.abs(o) > best) { best = Math.abs(o); act = i; } });
     const nodes = bands.map((b, i) => ({ i, X: XF(b.f), Y: Yg(dyn.per[i][clamp(Math.round(XF(b.f) - x), 0, pw)]), b }));
-    for (const n of nodes) { const s = n.i === act, e = Math.abs(offs[n.i]) / Math.max(0.01, bandDyn(n.b, depth).depth), R = s ? 7 : 5;
-      ctx.strokeStyle = rgba(cols[n.i], 0.55 * e); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(n.X, n.Y, R + 3 + 6 * e, 0, 7); ctx.stroke(); ctx.lineWidth = 1;
-      ctx.fillStyle = rgba(S.bg, 0.9); ctx.beginPath(); ctx.arc(n.X, n.Y, R + 1.8, 0, 7); ctx.fill(); ctx.fillStyle = cols[n.i]; ctx.beginPath(); ctx.arc(n.X, n.Y, R, 0, 7); ctx.fill();
-      if (s) { ctx.strokeStyle = S.ink; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(n.X, n.Y, R + 3.5, 0, 7); ctx.stroke(); ctx.lineWidth = 1; } }
-    // ---- readout of the active band only: a glass pill with Hz / note, dB / Q, GR
-    if (act >= 0) { const n = nodes[act], b = dynB[act], rows = [`${fmtHz(b.f)} · ${noteName(b.f)}`, `${b.g >= 0 ? '+' : '−'}${Math.abs(b.g).toFixed(1)} dB · GR ${Math.abs(offs[act]).toFixed(1)}`, `Q ${b.q.toFixed(2)}`],
-        rh = Math.max(22, L.floorSize(ctx, 16) + 5), bw = 176, bh = 10 + rows.length * rh, avoid = L.avoid || [], hit = (a, q) => a[0] < q[0] + q[2] && q[0] < a[0] + a[2] && a[1] < q[1] + q[3] && q[1] < a[1] + a[3];
-      const inPlot = (q) => q[0] >= x && q[1] >= y && q[0] + q[2] <= x + pw && q[1] + q[3] <= y + h, others = nodes.filter((o) => o !== n).map((o) => [o.X - 12, o.Y - 12, 24, 24]);
-      // prefer the clear side of the 0 dB line (cuts: above it, boosts: below it), right of the node, then left
-      const y0l = Yg(0), qy = n.Y >= y0l - 2 ? y0l - 8 - bh : y0l + 8; let q = null;
-      for (const c of [[n.X + 16, qy, bw, bh], [n.X - 16 - bw, qy, bw, bh], [n.X + 16, n.Y - 16 - bh, bw, bh], [n.X - 16 - bw, n.Y + 16, bw, bh]]) if (inPlot(c) && !others.some((o) => hit(c, o)) && !avoid.some((o) => hit(c, o))) { q = c; break; }
-      if (!q) q = [clamp(n.X - bw / 2, x, x + pw - bw), clamp(qy, y, y + h - bh), bw, bh];
-      ctx.fillStyle = rgba(S.bg, 0.55); ctx.fillRect(q[0], q[1], bw, bh); ctx.strokeStyle = rgba(S.ink, 0.38); ctx.strokeRect(cr(q[0]), cr(q[1]), bw, bh);
-      ctx.strokeStyle = rgba(S.ink, 0.12); ctx.beginPath(); ctx.moveTo(q[0] + 1, q[1] + 1.5); ctx.lineTo(q[0] + bw - 1, q[1] + 1.5); ctx.stroke();
-      rows.forEach((s, i) => lbl(ctx, S, s, q[0] + 9, q[1] + 5 + rh / 2 + i * rh, { size: 15, a: i === 2 ? 0.7 : 1, maxW: bw - 16 })); }
-    // ---- GR meter (the biggest reduction of any band, dB, scale = the EQ range) with a peak-hold tick of the last 0.8 s
-    { const gx = x + pw + 42, gw = 5, gr = (tt) => { const ee = E.at(tt); let m = 0; for (const b of bands) m = Math.max(m, -dynOffset(b, ee, depth)); return m; };
-      let pk = 0; for (let q = 0; q <= 100; q++) pk = Math.max(pk, gr(Math.max(0, t - q * 0.008)));
-      ctx.fillStyle = rgba(S.ink, 0.07); ctx.fillRect(gx, y, gw, h); ctx.fillStyle = rgba(sc, 0.9); ctx.fillRect(gx, y, gw, h * clamp(gr(t) / rg)); ctx.fillStyle = sc; ctx.fillRect(gx - 1, y + h * clamp(pk / rg) - 1, gw + 2, 2); }
-    // ---- axis: piano strip (one key per semitone, C keys longer, the active band's key lit), then the frequency ruler
-    const py = y + h + 4, ph = 9;
-    if (piano) { const litM = act >= 0 ? Math.round(12 * Math.log2(bands[act].f / 440) + 69) : -1;
-      for (let mi = 15; mi <= 135; mi++) { const fq = 440 * 2 ** ((mi - 69) / 12), xa = XF(fq * 2 ** (-1 / 24)), xb = XF(fq * 2 ** (1 / 24)); if (xb < x || xa > x + pw) continue;
-        const pc = ((mi % 12) + 12) % 12, white = WHITE[pc], lit = mi === litM, X0 = Math.max(x, xa), W = Math.min(x + pw, xb) - X0;
-        ctx.fillStyle = lit ? S.hot : rgba(S.ink, white ? (pc === 0 ? 0.62 : 0.4) : 0.14); ctx.fillRect(X0 + 0.3, py, Math.max(0.5, W - 0.6), white ? ph + (pc === 0 ? 2 : 0) : ph - 4); } }
-    let lastR = -1e9; for (const [s, fq] of [['20', 20], ['50', 50], ['100', 100], ['200', 200], ['500', 500], ['1k', 1000], ['2k', 2000], ['5k', 5000], ['10k', 10000], ['20k', 20000]]) {
-      const X = XF(fq), wl = s.length * 0.62 * L.floorSize(ctx, 15) + 8; if (X - wl / 2 < lastR || X + wl / 2 > x0 + w0) continue; lbl(ctx, S, s, X, py + ph + 14, { size: 15, align: 'center', a: [100, 1000, 10000].includes(fq) ? 0.75 : 0.45 }); lastR = X + wl / 2; }
+    for (const n of nodes) { const s = n.i === act, e = act01(n.i), R = 8 + (s ? 1.5 : 0);
+      if (e > 0.05) { ctx.strokeStyle = rgba(cols[n.i], 0.6 * e); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(n.X, n.Y, R + 3 + 7 * e, 0, 7); ctx.stroke(); }
+      ctx.fillStyle = rgba(S.bg, 0.92); ctx.beginPath(); ctx.arc(n.X, n.Y, R + 1.8, 0, 7); ctx.fill(); ctx.fillStyle = cols[n.i]; ctx.beginPath(); ctx.arc(n.X, n.Y, R, 0, 7); ctx.fill();
+      if (s) { ctx.strokeStyle = S.ink; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(n.X, n.Y, R + 3.5, 0, 7); ctx.stroke(); }
+      ctx.lineWidth = 1; text(ctx, String(n.i + 1), n.X, n.Y + 0.5, { size: 11, w: 700, col: S.bg, align: 'center' }); }
+    // ---- readout tag of the active band: two small rows, placed where it covers neither a curve, the 0 dB line nor another node
+    if (act >= 0) { const n = nodes[act], b = dynB[act], rows = [`${fmtHz(b.f)}`, `${b.g >= 0 ? '+' : '−'}${Math.abs(b.g).toFixed(1)} dB · Q ${b.q.toFixed(1)}`],
+        rh = Math.max(16, L.floorSize(ctx, 12) + 4), bw = 128, bh = 8 + rows.length * rh, avoid = L.avoid || [], hit = (a, q) => a[0] < q[0] + q[2] && q[0] < a[0] + a[2] && a[1] < q[1] + q[3] && q[1] < a[1] + a[3];
+      const y0l = Yg(0), others = nodes.filter((o) => o !== n).map((o) => [o.X - 13, o.Y - 13, 26, 26]);
+      const curves = [dyn.sum, stat.sum, ...dyn.per], cost = (q) => { if (q[0] < x || q[1] < y || q[0] + q[2] > x + pw || q[1] + q[3] > y + h - 18) return 1e6;
+        let c = 0; if (y0l > q[1] - 3 && y0l < q[1] + q[3] + 3) c += 400; for (const o of others) if (hit(q, o)) c += 300; for (const o of avoid) if (hit(q, o)) c += 300;
+        for (const cv of curves) for (let X = Math.max(0, Math.floor(q[0] - x)); X <= Math.min(pw, Math.ceil(q[0] + q[2] - x)); X += 3) { const Y = Yg(cv[X]); if (Y > q[1] - 3 && Y < q[1] + q[3] + 3) c += 4; }
+        return c; };
+      let q = null, qc = 1e9; const gap = 20;
+      for (const [dx, dy] of [[1, -1], [-1, -1], [1, 1], [-1, 1], [0, -1], [0, 1], [1, 0], [-1, 0]]) for (const m of [1, 1.8, 2.6]) { const c = [dx > 0 ? n.X + gap * m : dx < 0 ? n.X - gap * m - bw : n.X - bw / 2, dy > 0 ? n.Y + gap * m : dy < 0 ? n.Y - gap * m - bh : n.Y - bh / 2, bw, bh], cc = cost(c) + m * 3; if (cc < qc) { qc = cc; q = c; } }
+      if (!q) q = [clamp(n.X - bw / 2, x, x + pw - bw), clamp(n.Y - bh - gap, y, y + h - bh), bw, bh];
+      const ax = clamp(n.X, q[0], q[0] + bw), ay = n.Y < q[1] ? q[1] : n.Y > q[1] + bh ? q[1] + bh : n.Y;
+      ctx.strokeStyle = rgba(S.ink, 0.35); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(n.X, n.Y + (ay > n.Y ? 10 : ay < n.Y ? -10 : 0)); ctx.lineTo(ax, ay); ctx.stroke();
+      ctx.fillStyle = rgba(S.bg, 0.72); ctx.fillRect(q[0], q[1], bw, bh); ctx.strokeStyle = rgba(S.ink, 0.35); ctx.strokeRect(cr(q[0]), cr(q[1]), bw, bh);
+      rows.forEach((s, i) => lbl(ctx, S, s, q[0] + 7, q[1] + 4 + rh / 2 + i * rh, { size: 12, a: i ? 0.75 : 1, maxW: bw - 12 })); }
     ctx.restore();
     return { rg, act, offs, bands: dynB };
   }

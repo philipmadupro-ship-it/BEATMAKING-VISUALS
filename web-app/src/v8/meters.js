@@ -29,11 +29,11 @@ export function createMeters(L) {
 
   // ---------------------------------------------------------------- SPECTRUM: v6 look (1/6-oct bars, peak hold, line) + Aurora-method trail
   M.spectrum = (ctx, S, r, t, k) => {
-    const [x, y, w, h0] = r, h = h0 - 30; reveal(ctx, x, y, w, h0, k);
+    const [x0, y, w0, h0] = r, gut = Math.min(46, w0 * 0.1), x = x0 + gut, w = w0 - gut, h = h0 - 30; reveal(ctx, x0, y, w0, h0, k);   // left gutter holds the dB scale, clear of the bars
     const f = fidx(t), fl = L.meter('spectrum', 'floor', 90), sm = Math.max(1, Math.round(L.meter('spectrum', 'smooth', 1))), c = D.oct6, Y = (v) => y + h * clamp(-v / fl);
     const avg = (ff) => { if (sm <= 1) return F.spec[Math.max(0, ff)]; const o = new Float32Array(c.length); let k = 0; for (let j = 0; j < sm && ff - j >= 0; j++, k++) { const s2 = F.spec[ff - j]; for (let i = 0; i < o.length; i++) o[i] += s2[i]; } for (let i = 0; i < o.length; i++) o[i] /= Math.max(1, k); return o; };
     const sp = avg(f), hd = F.hold[f], showHold = L.meter('spectrum', 'hold', true);
-    for (const d of [0, -30, -60, -90].filter((d) => -d <= fl)) { const yy = Math.round(Y(d)) + 0.5; ctx.strokeStyle = rgba(S.ink, 0.09); ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); ctx.stroke(); if (d > -fl) lbl(ctx, S, String(d), x + 2, yy + 14, { a: 0.45 }); }
+    for (const d of [0, -30, -60, -90].filter((d) => -d <= fl)) { const yy = Math.round(Y(d)) + 0.5; ctx.strokeStyle = rgba(S.ink, 0.09); ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); ctx.stroke(); if (d > -fl) lbl(ctx, S, d ? '\u2212' + (-d) : '0', x - 6, Math.max(yy, y + 9), { align: 'right', size: 16, a: 0.5 }); }
     for (const [s, fq] of [['20', 20], ['100', 100], ['1k', 1000], ['10k', 10000]]) { const X = X20(fq, x, w); ctx.strokeStyle = rgba(S.ink, 0.09); ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X, y + h); ctx.stroke(); lbl(ctx, S, s, Math.min(x + w - 24, X + (fq === 20 ? 2 : -12)), y + h + 16, { a: 0.6 }); }
     if (L.meter('spectrum', 'mode', 'bars') === 'ms') {   // M/S overlay: M filled, S a line, one dB axis (S never normalised up)
       const MSs = D.ms, nb = 128, row = (arr) => Array.from({ length: nb }, (_, i) => arr[f * nb + i] / 2.55 - 100), Xb = (i) => x + w * (i + 0.5) / nb, m = row(MSs.spectroM), sd = row(MSs.spectroS);
