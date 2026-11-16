@@ -16,7 +16,7 @@ const col = (path, label, def) => ({ path, label, kind: 'color', default: def })
 export const METER_PROPS = {
   spectrum: [['mode', 'Display (1/6-oct bars, or M/S overlay)', 'bars', ['bars', 'ms']], ['floor', 'Range (dB below 0)', 90, 30, 120, 1, 'dB'], ['trail', 'Trail', 0.22, 0, 1, 0.01, 's'], ['smooth', 'Smoothing', 1, 1, 12, 1, 'frames'], ['hold', 'Peak hold', true]],
   spectrogram: [['mode', 'Panes (M + S, or M only)', 'ms', ['ms', 'm']], ['range', 'Range (floor below 0 dBFS)', 90, 40, 120, 1, 'dB'], ['window', 'Time window', 8, 1, 16, 0.5, 's'], ['gamma', 'Alpha curve (Aurora v^g)', 0.56, 0.2, 1.5, 0.01, '']],
-  eq: [['range', 'EQ scale ± (0 = auto: 3/6/12/30)', 0, 0, 30, 1, 'dB'], ['anRange', 'Analyzer range', 90, 60, 120, 30, 'dB'], ['mode', 'Analyzer', 'pre-post', ['pre-post', 'pre', 'off']],
+  eq: [['range', 'EQ scale ± (0 = auto: 12/18/30)', 0, 0, 30, 1, 'dB'], ['anRange', 'Analyzer range', 90, 60, 120, 30, 'dB'], ['mode', 'Analyzer', 'pre-post', ['pre-post', 'pre', 'off']],
     ['tilt', 'Analyzer tilt (about 1 kHz)', 4.5, 0, 6, 0.1, 'dB/oct'], ['smoothing', 'Analyzer release', 20, 3, 120, 1, 'dB/s'], ['hold', 'Analyzer peak hold (0 = off)', 1, 0, 10, 0.1, 's'],
     ['strength', 'Match strength', 50, 0, 100, 5, '%'],
     ['depth', 'Dynamic depth (low band, dB at full detector)', 5, 0, 12, 0.5, 'dB'], ['attack', 'Detector attack', 4, 1, 50, 1, 'ms'], ['release', 'Detector release', 140, 20, 600, 10, 'ms'], ['sens', 'Detector sensitivity (dB jump = full)', 10, 3, 24, 1, 'dB'],

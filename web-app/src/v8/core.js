@@ -94,9 +94,9 @@ export function createCore(D) {
   const floorSize = (ctx, size) => { const m = ctx.getTransform(), sc = Math.hypot(m.a, m.b) / (view.camZ * view.base) || 1; return Math.max(size, MIN_PX / sc); };
   // v11.1 one text helper for the whole film. Default ("mix"): numbers (6, -18.4, 128, 09.1.1, 1.2k) in Akira Expanded sized NUM_SCALE x down, words and units in
   // Synkopy, "@" in the fallback face (Synkopy draws it as "e"). An explicit o.fam draws one face (title, labels), still routing "@" to the fallback.
-  const UNIT = '(?:\\s?(?:kHz|Hz|dBTP|dBFS|dB|LUFS|LU|ms|BPM|%|k|Q)(?![A-Za-z]))?';   // short units ride with the number in Akira (Synkopy breaks them at small sizes)
+  const UNIT = '(?:\\s?(?:kHz|Hz|dBTP|dBFS|dB|LUFS|LU|ms|BPM|%|k|Q|s)(?![A-Za-z]))?';   // short units ride with the number in Akira (Synkopy breaks them at small sizes)
 const NUMR = '(?<![A-Za-z])(?:Q\\s?)?[+\\-\\u2212]?\\d[\\d.,:]*';   // a number not glued to a word (uche2crazy stays one word), optional leading Q
-const RUN = new RegExp(`${NUMR}${UNIT}|[@%]|[^@%]+?(?=${NUMR}|[@%]|$)`, 'g');
+const RUN = new RegExp(`${NUMR}${UNIT}|[@%]|[^@%]+?(?=${NUMR}|[@%]|$)`, 'gi');
   function runsOf(s, o) {
     const mix = !o.fam || o.mix, out = [];
     for (const m of s.match(RUN) || [s]) {
