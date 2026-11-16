@@ -9,11 +9,10 @@
 //   intro.push (0..1 push-in, exponential zoom)   intro.zoom (max zoom, 0 = fill the frame)   intro.select (bool: corner brackets)
 //   intro.player.scale / intro.player.opacity (1 / 1; keyframeable, default static)
 // Deterministic: draw(t) is a pure function of t, the sheet and the clip data (no state between frames except caches).
-import { clamp, lerp, hexRgb } from './core.js';
+import { clamp, lerp, hexRgb, fillAt } from './core.js';
 
 export const INTRO_DISPLAY = '"Akira Expanded","Unbounded","Arial Black",sans-serif';   // display: drop AkiraExpanded.otf/.woff2 in assets/fonts
 export const INTRO_UI = '"Synkopy","Space Grotesk","Helvetica Neue",Arial,sans-serif';  // UI: drop Synkopy.otf/.woff2 in assets/fonts
-const MONO = '"JetBrains Mono",ui-monospace,monospace';
 export const COVER_N = 5, TW = 600, TH = 738;   // card texture: square cover (TW) + caption plate (TH - TW)
 
 // ---------------------------------------------------------------- assets (covers + the two display fonts, all optional)
@@ -38,6 +37,7 @@ function rr(c, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); c.beginPath(); c.
 const ss = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
 function tx(c, s, x, y, size, fam, col, align = 'left', maxW = 0, ls = 0) {
   c.font = `400 ${size}px ${fam}`; c.letterSpacing = ls + 'px'; c.textAlign = align; c.textBaseline = 'middle'; c.fillStyle = col;
+  if (/Synkopy/.test(fam) && s.includes('@')) { fillAt(c, s, x, y, { px: size, w: 400, fam, align, maxW }); c.letterSpacing = '0px'; return; }   // '@' in mono
   const w = c.measureText(s).width;
   if (maxW && w > maxW) { c.save(); c.translate(x, y); c.scale(maxW / w, 1); c.fillText(s, 0, 0); c.restore(); } else c.fillText(s, x, y);
   c.letterSpacing = '0px';
@@ -81,7 +81,9 @@ export function createIntro(L, A = {}) {
   function bloomCanvas(i, S) {
     const key = `bl${i}|${S.name}`; let cv = CACHE.get(key); if (cv) return cv;
     const N = 48; cv = mk(N, N); const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(coverCanvas(i, S), 0, 0, N, N);
-    const d = g.getImageData(0, 0, N, N); boxBlur(d.data, N, N, 5); g.putImageData(d, 0, 0); CACHE.set(key, cv); return cv;
+    const d = g.getImageData(0, 0, N, N); boxBlur(d.data, N, N, 5); g.putImageData(d, 0, 0);
+    let sum = 0; for (let p = 0; p < d.data.length; p += 4) sum += (d.data[p] + d.data[p + 1] + d.data[p + 2]) / 765;
+    cv.lum = sum / (N * N); CACHE.set(key, cv); return cv;
   }
   // card texture: cover + glass caption plate (title, credit), hairline rim; and its reflection (flipped, faded)
   function cardTex(i, S, title, credit) {
@@ -105,7 +107,7 @@ export function createIntro(L, A = {}) {
 
   // ---- geometry per aspect (logical px of the W x H frame)
   function geom(W, H) {
-    if (H >= W) return { cx: W / 2, cy: 800, cw: 560, xs1: 400, xs2: 270, pl: [40, 1420, W - 80, 168], top: 92, dy1: 34 };
+    if (H >= W) return { cx: W / 2, cy: 860, cw: 660, xs1: 470, xs2: 300, pl: [32, 1403, W - 64, 190], top: 92, dy1: 40 };
     return { cx: W / 2, cy: 440, cw: 380, xs1: 260, xs2: 190, pl: [(W - 1180) / 2, 862, 1180, 136], top: 54, dy1: 26 };
   }
   // ---- liquid glass panel: soft shadow, frosted body (the bloom again, brighter, clipped inside), inner highlight, hairline edge
@@ -141,27 +143,31 @@ export function createIntro(L, A = {}) {
     c.fillStyle = S.bg; c.fillRect(0, 0, W, H);
     // blurred bloom of the cards near the centre (pulses with the kick): the light the glass is made of
     const wts = []; for (let i = 0; i < COVER_N; i++) { const od = ((((i - pos + 2.5) % 5) + 5) % 5) - 2.5, w = Math.max(0, 1 - Math.abs(od)); if (w > 0) wts.push([i, w]); }
-    const bloomA = 0.30 + 0.16 * kick, bs = Math.max(W, H) * 1.05;
-    const bloom = (k) => { c.save(); for (const [i, w] of wts) { c.globalAlpha = clamp(w * bloomA * k); c.drawImage(bloomCanvas(i, S), g.cx - bs * 0.5, g.cy - bs * 0.5, bs, bs); } c.restore(); };
+    // the cover is only a soft, low-intensity glow behind the centre card: every bloom is normalised to the same mean luminance
+    // (a bright cover never lifts the frame), kept small, and a vignette to the stage ground closes the edges
+    const bloomA = 0.30 + 0.07 * kick, bs = Math.max(W, H) * 0.62, REF = 0.14;
+    const bloom = (k) => { c.save(); for (const [i, w] of wts) { const bc = bloomCanvas(i, S); c.globalAlpha = clamp(w * bloomA * k * Math.min(1.6, REF / Math.max(0.05, bc.lum))); c.drawImage(bc, g.cx - bs * 0.5, g.cy - bs * 0.5, bs, bs); } c.restore(); };
     c.save();
     // push-in: exponential zoom about the chosen cover's centre; the pivot glides to the frame centre so the cover ends filling the frame
     const cardH = g.cw * TH / TW, coverCy = g.cy - cardH / 2 + g.cw / 2, Z = Math.exp(Math.log(zmax) * push), gk = ss(push * 1.4);
     c.translate(lerp(g.cx, W / 2, gk), lerp(coverCy, H / 2, gk)); c.scale(Z, Z); c.translate(-g.cx, -coverCy);
     bloom(1);
+    { const vg = c.createRadialGradient(g.cx, g.cy, bs * 0.12, g.cx, g.cy, bs * 0.5); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, S.bg); c.fillStyle = vg; c.fillRect(g.cx - bs * 0.5 - 2, g.cy - bs * 0.5 - 2, bs + 4, bs + 4); }
     // top readouts (real data): tempo / key and the bar.beat counter
     if (push < 0.02) {
-      tx(c, `${Math.round(D.bpm)} BPM  ${D.key}`, g.pl[0] + 8, g.top, 24, MONO, 'rgba(255,255,255,0.62)'); tx(c, L.bbt(t), W - g.pl[0] - 8, g.top, 24, MONO, 'rgba(255,255,255,0.62)', 'right');
+      tx(c, `${Math.round(D.bpm)} BPM  ${D.key}`, g.pl[0] + 8, g.top, 20, INTRO_DISPLAY, 'rgba(255,255,255,0.62)', 'left', 0, 1); tx(c, L.bbt(t), W - g.pl[0] - 8, g.top, 20, INTRO_DISPLAY, 'rgba(255,255,255,0.62)', 'right', 0, 1);
     }
     // ---- cover-flow
     const items = []; for (let i = 0; i < COVER_N; i++) items.push([i, ((((i - pos + 2.5) % 5) + 5) % 5) - 2.5]); items.sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]));
     const d3 = g.cw * 1.6;
+    const mtx = c.getTransform(), dev = Math.hypot(mtx.a, mtx.b);   // device px per logical px: strips are ~3 device px wide (cheap in small previews)
     for (const [i, od] of items) {
       const a0 = Math.abs(od), sg = Math.sign(od) || 1, near = 1 - ss(a0 / 0.6);
       const k = (1 - 0.2 * Math.min(a0, 1) - 0.1 * clamp(a0 - 1, 0, 1)) * clamp((2.5 - a0) / 0.4) * (1 + (0.022 * kick) * near);
       if (k <= 0.001) continue;
       const x = g.cx + sg * (Math.min(a0, 1) * g.xs1 + clamp(a0 - 1, 0, 1.5) * g.xs2), y = g.cy + g.dy1 * Math.min(a0, 1) + 22 * clamp(a0 - 1, 0, 1);
       const ang = sg * (0.78 * Math.min(a0, 1) + 0.16 * clamp(a0 - 1, 0, 1)), w = g.cw * k, h = w * TH / TW, hw = w / 2, ca = Math.cos(ang), sa = Math.sin(ang);
-      const nm = names[i] != null ? String(names[i]) : title, ct = cardTex(i, S, nm, credit), n = Math.max(6, Math.ceil(w / 3)), shade = 0.52 * Math.min(a0, 1) + 0.12 * clamp(a0 - 1, 0, 1);
+      const nm = names[i] != null ? String(names[i]) : title, ct = cardTex(i, S, nm, credit), n = clamp(Math.ceil(w * dev / 3), 6, 320), shade = 0.52 * Math.min(a0, 1) + 0.12 * clamp(a0 - 1, 0, 1);
       for (let j = 0; j < n; j++) {
         const u0 = -hw + w * j / n, u1 = -hw + w * (j + 1) / n, s0 = d3 / (d3 + u0 * sa), s1 = d3 / (d3 + u1 * sa), sm = (s0 + s1) / 2, xa = x + u0 * ca * s0, xb = x + u1 * ca * s1, hh = h * sm, top = y - hh / 2;
         c.drawImage(ct.tex, j * TW / n, 0, TW / n, TH, xa, top, xb - xa + 0.7, hh);
@@ -170,7 +176,7 @@ export function createIntro(L, A = {}) {
       }
     }
     // selection: four corner brackets step in around the chosen card (32nd-note steps), like the lab's attention bracket
-    const sk = ev.lastKey('intro.select', b);
+    const sk = selectKey(ev, b);
     if (sk && sk.key.v && push < 0.5) {
       const n = steps(t, sk.key.b, 4, U.t32), w = g.cw * (1 + 0.022 * kick), h = w * TH / TW, gap = 12 + (4 - n) * 10, L0 = 38, x0 = g.cx - w / 2 - gap, x1 = g.cx + w / 2 + gap, y0 = g.cy - h / 2 - gap, y1 = g.cy + h / 2 + gap;
       c.strokeStyle = 'rgba(255,255,255,0.92)'; c.lineWidth = 3; c.beginPath();
@@ -180,34 +186,37 @@ export function createIntro(L, A = {}) {
     // ---- player: liquid-glass bar (transport, now-playing pill with cover thumb + title + credit + scrub bar, level bars)
     const ps = V('intro.player.scale', 1), pa = clamp(V('intro.player.opacity', 1));
     if (pa > 0.001) {
-      const [px0, py0, pw0, ph0] = g.pl, pw = pw0 * ps, ph = ph0 * ps, px = px0 + (pw0 - pw) / 2, py = py0 + (ph0 - ph) / 2, sc = ps;
+      const [px0, py0, pw0, ph0] = g.pl, pw = pw0 * ps, ph = ph0 * ps, px = px0 + (pw0 - pw) / 2, py = py0 + (ph0 - ph) / 2, v = ps * ph0 / 150, hz = ps;   // v: vertical / type scale, hz: horizontal
       c.save(); c.globalAlpha = pa;
       glass(c, S, bloom, px, py, pw, ph, ph / 2);
       const cy = py + ph / 2, ink = 'rgba(255,255,255,0.92)';
-      icon(c, 'prev', px + 92 * sc, cy, 30 * sc, ink); icon(c, 'pause', px + 176 * sc, cy, 40 * sc, ink); icon(c, 'next', px + 260 * sc, cy, 30 * sc, ink);
-      const x0 = px + 336 * sc, x1 = px + pw - 214 * sc, y0 = py + 17 * sc, y1 = py + ph - 17 * sc;
-      glass(c, S, bloom, x0, y0, x1 - x0, y1 - y0, 30 * sc, { dark: true, shadow: 0, frost: 0.4 });
-      const th = 76 * sc, tX = x0 + 16 * sc, tY = (y0 + y1) / 2 - th / 2 - 6 * sc;
-      c.save(); rr(c, tX, tY, th, th, 16 * sc); c.clip(); c.drawImage(coverCanvas(0, S), tX, tY, th, th); c.restore(); c.strokeStyle = 'rgba(255,255,255,0.3)'; c.lineWidth = 1.2; rr(c, tX, tY, th, th, 16 * sc); c.stroke();
-      const tx0 = tX + th + 18 * sc, tw = x1 - tx0 - 20 * sc;
-      tx(c, title, tx0, tY + 22 * sc, 25 * sc, INTRO_DISPLAY, S.ink, 'left', tw, 0.5); tx(c, credit, tx0, tY + 56 * sc, 23 * sc, INTRO_UI, 'rgba(255,255,255,0.66)', 'left', tw);
-      const sy = y1 - 17 * sc, sx0 = tx0, sx1 = x1 - 22 * sc, prog = clamp(((song.startTime || 0) + t) / total);
-      c.fillStyle = 'rgba(255,255,255,0.24)'; rr(c, sx0, sy - 2.5 * sc, sx1 - sx0, 5 * sc, 2.5 * sc); c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.92)'; rr(c, sx0, sy - 2.5 * sc, Math.max(5 * sc, (sx1 - sx0) * prog), 5 * sc, 2.5 * sc); c.fill();
-      c.beginPath(); c.arc(sx0 + (sx1 - sx0) * prog, sy, 7 * sc, 0, 7); c.fill();
-      // right: elapsed time (real) and the six band levels of the beat (real, per frame)
-      tx(c, mmss((song.startTime || 0) + t), px + pw - 36 * sc, cy - 26 * sc, 26 * sc, MONO, ink, 'right');
-      const bn = F.bands[f], bw = 9 * sc, gap = 6 * sc, bx = px + pw - 36 * sc - (6 * bw + 5 * gap);
-      for (let q = 0; q < 6; q++) { const v = clamp(bn[q] ?? 0), hgt = (5 + 34 * v) * sc; c.fillStyle = 'rgba(255,255,255,0.85)'; rr(c, bx + q * (bw + gap), cy + 40 * sc - hgt, bw, hgt, 2.5 * sc); c.fill(); }
+      icon(c, 'prev', px + 96 * hz, cy, 30 * v, ink); icon(c, 'pause', px + 182 * hz, cy, 40 * v, ink); icon(c, 'next', px + 268 * hz, cy, 30 * v, ink);
+      const x0 = px + 348 * hz, x1 = px + pw - 200 * hz, y0 = py + 17 * v, y1 = py + ph - 17 * v;
+      glass(c, S, bloom, x0, y0, x1 - x0, y1 - y0, 30 * v, { dark: true, shadow: 0, frost: 0.4 });
+      const th = 76 * v, tX = x0 + 16 * v, tY = (y0 + y1) / 2 - th / 2 - 6 * v;
+      c.save(); rr(c, tX, tY, th, th, 16 * v); c.clip(); c.drawImage(coverCanvas(0, S), tX, tY, th, th); c.restore(); c.strokeStyle = 'rgba(255,255,255,0.3)'; c.lineWidth = 1.2; rr(c, tX, tY, th, th, 16 * v); c.stroke();
+      const tx0 = tX + th + 20 * v, tw = x1 - tx0 - 20 * v;
+      tx(c, title, tx0, tY + 22 * v, 25 * v, INTRO_DISPLAY, S.ink, 'left', tw, 0.5); tx(c, credit, tx0, tY + 57 * v, 23 * v, INTRO_UI, 'rgba(255,255,255,0.66)', 'left', tw);
+      const sy = y1 - 17 * v, sx0 = tx0, sx1 = x1 - 22 * v, prog = clamp(((song.startTime || 0) + t) / total);
+      c.fillStyle = 'rgba(255,255,255,0.24)'; rr(c, sx0, sy - 2.5 * v, sx1 - sx0, 5 * v, 2.5 * v); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.92)'; rr(c, sx0, sy - 2.5 * v, Math.max(5 * v, (sx1 - sx0) * prog), 5 * v, 2.5 * v); c.fill();
+      c.beginPath(); c.arc(sx0 + (sx1 - sx0) * prog, sy, 7 * v, 0, 7); c.fill();
+      // right: elapsed time (real audio position), Akira
+      tx(c, mmss((song.startTime || 0) + t), px + pw - 40 * hz, cy, 26 * v, INTRO_DISPLAY, ink, 'right', 0, 1);
       c.restore();
     }
     c.restore();
+  }
+  // selection brackets: an explicit intro.select key, else they step in where the push starts (first intro.push key)
+  function selectKey(ev, b) {
+    const k = ev.lastKey('intro.select', b); if (k) return k;
+    const pt = ev.tracksOf('intro.push')[0]; return pt && pt.keys.length && b >= pt.keys[0].b - 1e-9 ? { key: { b: pt.keys[0].b, v: true } } : null;
   }
   /** Events for the sync test / the timeline (beats): the hard cut into the lab and the selection steps. */
   function events(ev) {
     const out = [], ib = beats(ev); if (!ib) return out;
     out.push([ib, 'intro → lab hard cut']);
-    for (const k of ev.keysIn('intro.select', 0, ib + 1)) if (k.v) for (let q = 0; q < 4; q++) out.push([k.b + q * U.t32, `intro select bracket step ${q + 1}`]);
+    const sk = selectKey(ev, ib); if (sk && sk.key.v) for (let q = 0; q < 4; q++) out.push([sk.key.b + q * U.t32, `intro select bracket step ${q + 1}`]);
     return out;
   }
   return { draw, beats, events, geom, cardTex, coverCanvas };

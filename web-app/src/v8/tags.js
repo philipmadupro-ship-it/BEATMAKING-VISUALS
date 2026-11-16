@@ -76,10 +76,10 @@ export const DEFAULT_TAGS = {
   "credit": "prod. {producer}",
   "cards": [
    "{title}",
-   "RUBEDO",
-   "CITRINITAS",
-   "ALBEDO",
-   "NIGREDO"
+   "EXP-01",
+   "EXP-02",
+   "EXP-03",
+   "EXP-04"
   ]
  },
  "hud": {

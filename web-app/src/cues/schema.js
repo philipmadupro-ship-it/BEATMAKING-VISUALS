@@ -19,7 +19,7 @@ export const EASES = {
   expoOut: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
   backOut: (x) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); },
 };
-export const LANES = ['intro', 'camera', 'focus', 'look', 'stage', 'logo', 'pendant', 'text', 'fx'];
+export const LANES = ['camera', 'focus', 'look', 'stage', 'logo', 'pendant', 'text', 'fx'];
 /** Interpolation types (optional `ty` on a key; v1 sheets have none and use `ease`). The type describes the segment
  *  from this key to the next: hold = step, linear, bezier = cubic through the handles (this key's `ob`, the next key's
  *  `ib`), auto = monotone curve through the neighbours (no overshoot; number tracks). Handles are in the segment's unit
@@ -135,7 +135,8 @@ function trackFlags(t) { const o = {}; for (const f of ['mute', 'lock', 'solo', 
 export function cloneSheet(s) { return JSON.parse(JSON.stringify(s)); }
 export function defaultEase(kind) { return kind === 'number' || kind === 'color' ? 'linear' : kind === 'shot' ? 'easeInOut' : 'step'; }
 export function laneOf(path) {
-  if (path.startsWith('intro.')) return 'intro'; if (path.startsWith('camera.')) return 'camera'; if (path === 'focus.featured') return 'focus'; if (path === 'look') return 'look'; if (path === 'stage') return 'stage';
+  if (path.startsWith('intro.')) return 'stage';   // the intro shares the Stage lane group (keeps the laptop dock to the same row count)
+  if (path.startsWith('camera.')) return 'camera'; if (path === 'focus.featured') return 'focus'; if (path === 'look') return 'look'; if (path === 'stage') return 'stage';
   if (path.startsWith('logo.')) return 'logo'; if (path.startsWith('pendant.')) return 'pendant'; if (path === 'text.cue') return 'text'; if (path.startsWith('fx.')) return 'fx'; return 'custom';
 }
 /** Structural validation of a JSON document against a property registry ({path: {type, options}}); returns messages. */

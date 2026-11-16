@@ -51,6 +51,15 @@ export function rgba(hex, a) { const c = hexRgb(hex); return `rgba(${c[0]},${c[1
 export function mix(h1, h2, k, a = 1) { const x = hexRgb(h1), y = hexRgb(h2), c = [0, 1, 2].map((i) => Math.round(lerp(x[i], y[i], clamp(k)))); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
 export const SANS = '"Instrument Sans"', MONO = '"JetBrains Mono"', SERIF = '"Instrument Serif"', HAND = '"Caveat"';
 export const MIN_PX = 22;
+const AT_FALLBACK = '"Space Grotesk","Helvetica Neue",Arial,sans-serif';
+/** Fill `s` at (x, y) with font family `fam`, but every '@' in the mono font (Synkopy's '@' glyph reads as an 'e'). The caller has set
+ *  fillStyle / textBaseline / letterSpacing. o = {px, w, style, fam, align, maxW}; returns the drawn width. */
+export function fillAt(ctx, s, x, y, o) {
+  const parts = String(s).split(/(@)/).filter(Boolean), fnt = (p) => `${o.style || ''} ${p === '@' ? 400 : o.w || 400} ${o.px}px ${p === '@' ? AT_FALLBACK : o.fam}`;
+  let tot = 0; const ws = parts.map((p) => { ctx.font = fnt(p); const w = ctx.measureText(p).width; tot += w; return w; });
+  const k = o.maxW && tot > o.maxW ? o.maxW / tot : 1, x0 = o.align === 'center' ? x - tot * k / 2 : o.align === 'right' ? x - tot * k : x;
+  ctx.save(); ctx.translate(x0, y); ctx.scale(k, 1); ctx.textAlign = 'left'; let cx = 0; parts.forEach((p, i) => { ctx.font = fnt(p); ctx.fillText(p, cx, 0); cx += ws[i]; }); ctx.restore(); return tot * k;
+}
 
 /** The shared helper object for one clip (v8 window.L6). D: see v8/data.js. */
 export function createCore(D) {
@@ -78,6 +87,7 @@ export function createCore(D) {
     s = String(s);
     font(ctx, floorSize(ctx, o.size || 12), o.fam || MONO, o.w || 400, o.style || ''); ctx.letterSpacing = (o.ls || 0) + 'px';
     ctx.textAlign = o.align || 'left'; ctx.textBaseline = o.base || 'middle'; ctx.fillStyle = o.col || '#fff';
+    if (/Synkopy/.test(o.fam || '') && s.includes('@')) { const w = fillAt(ctx, s, x, y, { px: floorSize(ctx, o.size || 12), w: o.w || 400, style: o.style || '', fam: o.fam, align: o.align || 'left', maxW: o.maxW }); ctx.letterSpacing = '0px'; return w; }
     if (o.maxW) { const w0 = ctx.measureText(s).width; if (w0 > o.maxW) { ctx.save(); ctx.translate(x, y); ctx.scale(o.maxW / w0, 1); ctx.fillText(s, 0, 0); ctx.restore(); ctx.letterSpacing = '0px'; return o.maxW; } }
     ctx.fillText(s, x, y);
     const w = ctx.measureText(s).width; ctx.letterSpacing = '0px'; return w;
