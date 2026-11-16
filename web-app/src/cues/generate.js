@@ -1,11 +1,12 @@
 // Default cue sheets from the analysis (pure). The default reproduces the v8 film: wide by default, three focus pushes
 // (in on the beat before a bar line, hold 1-2 bars, back out), placed on 4-bar phrase lines and chosen by the section
-// there (a drop gets the logo, a build the EQ, a break the pendant, otherwise the look's v8 rotation), pendant amplitude
+// there (v12: SECTION_PUSH per look - exe: drop -> spectrum, build -> waveform, break -> imager; no EQ pushes, the plan
+// rotates waveform / spectrum / imager / levels; lab and scope keep logo / pendant), otherwise the look's rotation), pendant amplitude
 // per section (drop 9 deg, else 4.6; RUBEDO 9.8 / 5), the logo cycling IN/OUT over 2 bars with a hero bar on the
 // first drop, a 1-frame invert on the drop downbeat, glitch off. Every generated track is marked auto: it is rebuilt
 // when the analysis, the section, the look or the stage changes, until the user edits it.
 import { emptySheet, newId, defaultEase } from './schema.js';
-import { FOCUS_PLAN, LAYOUT, CONTENT } from '../v8/layout.js';
+import { FOCUS_PLAN, SECTION_PUSH, LAYOUT, CONTENT } from '../v8/layout.js';
 import { stageOf } from '../v8/core.js';
 
 export const PRESETS = {
@@ -34,15 +35,15 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
       // a section change within a bar of the push picks the window for that section; otherwise the look's v8 rotation
       let [id, n] = rot[i % rot.length]; i++;
       const chg = [bar - 1, bar, bar + 1].find((k) => k > 0 && k < NB && lab(k) !== lab(k - 1)), sec = chg != null ? lab(chg) : null;
-      const want = sec === 'drop' ? 'chains' : sec === 'build' ? 'eq' : sec === 'break' ? 'elephant' : null;
+      const want = sec ? SECTION_PUSH[look][sec] || null : null;
       if (want && ids.includes(want) && used[used.length - 1] !== want) { id = want; n = want === 'chains' && look === 'lab' ? 1 : 2; }
       if (!ids.includes(id) || bar + n >= NB - 2) continue;
       push(bar, id, n); used.push(id);
     }
   } else if (preset === 'drop') {
-    for (const d of dropBars) { if (d + 1 >= NB - 1) continue; cam.push(key(d * 4, 'chains', { transition: 'cut', ease: 'step' })); cam.push(key(d * 4 + 4, 'wide', { transition: 'push', dur: 1, ease: 'expoOut' })); }
+    for (const d of dropBars) { if (d + 1 >= NB - 1) continue; cam.push(key(d * 4, ids.includes('chains') ? 'chains' : 'spectrum', { transition: 'cut', ease: 'step' })); cam.push(key(d * 4 + 4, 'wide', { transition: 'push', dur: 1, ease: 'expoOut' })); }
   } else if (preset === 'tour') {
-    const tour = ['spectrum', 'eq', 'loud', 'stereo', 'spectro', 'session', 'elephant', 'chains', 'surface'].filter((id) => ids.includes(id)); let j = 0;
+    const tour = ['spectrum', 'loud', 'stereo', 'spectro', 'session', 'elephant', 'chains', 'surface'].filter((id) => ids.includes(id)); let j = 0;
     for (let bar = 2; bar + 2 <= NB - 2; bar += 2) { const id = tour[j++ % tour.length]; cam.push(key(bar * 4, id, { transition: 'push', dur: 1, ease: 'easeInOut' })); }
     if (cam.length) cam.push(key(Math.min(NB - 2, 2 + 2 * j) * 4, 'wide', { transition: 'push', dur: 1, ease: 'easeInOut' }));
   }

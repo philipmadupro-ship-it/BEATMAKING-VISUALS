@@ -104,8 +104,18 @@ meter. The match-EQ bands themselves are not keys: they are fitted per song sect
 section's first bar line (4-frame ease). Window content kinds now include `levels` (DAW strip meter) and `ghost` (hero
 readout); the DAW level strip also sits inside the loudness window (v10: the bands window is gone).
 
-Window ids per look (v9: no clock.sys / bands.dat): exe `session chains elephant eq spectrum loud stereo spectro`; lab `chains session
-elephant spectrum eq loud stereo spectro`; scope `chains elephant eq spectrum loud stereo surface (spectro on 16:9)`.
+Window ids per look (v12: **no EQ window in any look**; the `eq` content kind and every `meter.eq.*` key stay registered (hidden in the
+inspector, `registry.byPath` still has them) so old sheets load; a sheet that sets `win.<id>.content = eq` still draws it):
+exe `session loud stereo spectro spectrum` (stereo = the imager) + the **hero** (logo + pendant, a front layer, not a window);
+lab `chains session elephant spectrum loud stereo spectro`; scope `chains elephant spectrum loud stereo surface spectro`.
+Exe 9:16 (1080x1920): session 1016x366 at (32,112) · loud 494x596 (32,502) · stereo 494x596 (554,502) · spectro 1016x250 (32,1122) · spectrum 1016x414 (32,1396).
+
+Hero (exe only, v12; `film.js` heroGeom): the logo is centred (bbox-exact) at `layout.js HERO[aspect]` (9:16 cx 540, cy 614, 392 px wide) and the pendant's chain
+hangs from the bottom of the U (logo px 132,588), so the chain-sim hand follows the logo (incl. its kick punch). Keys: `hero.on`, `hero.scale`
+(logo + chain + pendant), `hero.x / hero.y` (px), `hero.shadow` (×), `glass.back` (meter windows pushed back: darker glass, softer edge light, more
+backdrop blur; 0 = v11 look). `pendant.chain / .size / .x / .y` still scale the chain, the pendant and the hand offset. The hero is drawn over the windows
+with a soft shadow; during a push to `loud` / `stereo` it is hidden (hard) so the pushed meter is clear. Swing extremes are unchanged (anchor-only change).
+
 
 Tag variables: `{title} {Title} {titleWord} {producer} {bpm} {bpm2} {key} {keyShort} {stage} {stageN} {look}
 {experiment} {date} {lufs} {srcLufs} {lra} {tp} {bars}`, plus `{angle}` in the pendant note and `{tc} {bbt} {songBar}` in the HUD.
@@ -125,7 +135,7 @@ The first `intro.length` bars (default 2 = 8 beats) are a liquid-glass player + 
 ## The default sheet (from the analysis)
 `src/cues/generate.js`: the v8 film. Wide by default; focus pushes land on the bar lines 3, 7, 11 … (one beat in,
 `easeInOut`), hold 1-2 bars and push back out; the window follows the look's v8 rotation unless a section changes
-there (drop → logo, build → EQ, break → pendant). Pendant amplitude by section (drop 9°, else 4.6°; RUBEDO 9.8° / 5°),
+there (v12, `SECTION_PUSH` in layout.js; exe: drop → spectrum, build → waveform, break → imager; lab/scope: drop → logo, build → spectrum, break → pendant; no EQ pushes). The exe rotation is waveform, spectrum, imager, levels. Pendant amplitude by section (drop 9°, else 4.6°; RUBEDO 9.8° / 5°),
 logo cycle 2 bars, a 1-frame invert on the first drop downbeat, glitch off. Presets: **Calm** (wide, gentle swing,
 4-bar logo cycle, no bracket), **Drop-focused** (cut to the logo + hero on every drop, bigger swing, a flash per drop),
 **Meter tour** (a different meter featured every 2 bars).
