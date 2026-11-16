@@ -10,6 +10,7 @@ import { createLevelView } from './levelview.js';
 import { createImagerView } from './imagerview.js';
 import { createWaveView, createWaveLODs } from './waveview.js';
 import { createEqView } from './eqview.js';
+import { draw as drawSpectrum } from './spectrumview.js';
 export function createMeters(L) {
   const { D, F, FPS, NF, BEAT, BAR, T, U, rgba, mix, text, fmt, tc, bbt, fidx, clamp, lerp, hash, SANS, MONO } = L;
   const M = {};
@@ -27,33 +28,10 @@ export function createMeters(L) {
   // 400 columns/s min/max/rms (1 px columns, crisp), onset lane, playhead. The detail window shows 2 bars.
   M.session = createWaveView(L, M, { lbl, reveal }).session;
 
-  // ---------------------------------------------------------------- SPECTRUM: v6 look (1/6-oct bars, peak hold, line) + Aurora-method trail
+  // ---------------------------------------------------------------- SPECTRUM (v12): raw 1/6-oct analyser, spectrumview.js (no EQ curve)
   M.spectrum = (ctx, S, r, t, k) => {
-    const [x0, y, w0, h0] = r, gut = Math.min(46, w0 * 0.1), x = x0 + gut, w = w0 - gut, h = h0 - 30; reveal(ctx, x0, y, w0, h0, k);   // left gutter holds the dB scale, clear of the bars
-    const f = fidx(t), fl = L.meter('spectrum', 'floor', 90), sm = Math.max(1, Math.round(L.meter('spectrum', 'smooth', 1))), c = D.oct6, Y = (v) => y + h * clamp(-v / fl);
-    const avg = (ff) => { if (sm <= 1) return F.spec[Math.max(0, ff)]; const o = new Float32Array(c.length); let k = 0; for (let j = 0; j < sm && ff - j >= 0; j++, k++) { const s2 = F.spec[ff - j]; for (let i = 0; i < o.length; i++) o[i] += s2[i]; } for (let i = 0; i < o.length; i++) o[i] /= Math.max(1, k); return o; };
-    const sp = avg(f), hd = F.hold[f], showHold = L.meter('spectrum', 'hold', true);
-    for (const d of [0, -30, -60, -90].filter((d) => -d <= fl)) { const yy = Math.round(Y(d)) + 0.5; ctx.strokeStyle = rgba(S.ink, 0.09); ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); ctx.stroke(); if (d > -fl) lbl(ctx, S, d ? '\u2212' + (-d) : '0', x - 6, Math.max(yy, y + 9), { align: 'right', size: 16, a: 0.5 }); }
-    for (const [s, fq] of [['20', 20], ['100', 100], ['1k', 1000], ['10k', 10000]]) { const X = X20(fq, x, w); ctx.strokeStyle = rgba(S.ink, 0.09); ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X, y + h); ctx.stroke(); lbl(ctx, S, s, Math.min(x + w - 24, X + (fq === 20 ? 2 : -12)), y + h + 16, { a: 0.6 }); }
-    if (L.meter('spectrum', 'mode', 'bars') === 'ms') {   // M/S overlay: M filled, S a line, one dB axis (S never normalised up)
-      const MSs = D.ms, nb = 128, row = (arr) => Array.from({ length: nb }, (_, i) => arr[f * nb + i] / 2.55 - 100), Xb = (i) => x + w * (i + 0.5) / nb, m = row(MSs.spectroM), sd = row(MSs.spectroS);
-      ctx.beginPath(); ctx.moveTo(x, y + h); m.forEach((v, i) => ctx.lineTo(Xb(i), Y(v))); ctx.lineTo(x + w, y + h); ctx.closePath(); ctx.fillStyle = rgba(S.sig1, 0.22); ctx.fill();
-      ctx.beginPath(); m.forEach((v, i) => (i ? ctx.lineTo(Xb(i), Y(v)) : ctx.moveTo(Xb(i), Y(v)))); ctx.strokeStyle = S.ink; ctx.lineWidth = 1.25; ctx.lineJoin = 'round'; ctx.stroke();
-      ctx.beginPath(); sd.forEach((v, i) => (i ? ctx.lineTo(Xb(i), Y(v)) : ctx.moveTo(Xb(i), Y(v)))); ctx.strokeStyle = S.grey ? '#bdbdbd' : S.sig2; ctx.lineWidth = 1.5; if (S.grey) ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
-      lbl(ctx, S, 'M', x + w - 60, y + 14, { size: 16, w: 700, a: 0.9 }); lbl(ctx, S, 'S', x + w - 30, y + 14, { size: 16, w: 700, col: S.grey ? '#bdbdbd' : S.sig2 });
-      ctx.restore(); return;
-    }
-    const bw = w / c.length;
-    for (let i = 0; i < c.length; i++) {
-      const X = X20(c[i], x, w) - bw * 0.35, top = Y(sp[i]);
-      ctx.fillStyle = mix(S.sig1, S.sig2, i / c.length, S.name === 'ALBEDO' ? 0.38 : 0.46); ctx.fillRect(X, top, bw * 0.7, y + h - top);
-      if (showHold) { ctx.fillStyle = rgba(S.ink, 0.95); ctx.fillRect(X, Y(hd[i]) - 1, bw * 0.7, 2); }
-    }
-    // 0.22 s trail (older lines thinner and dimmer), then a soft glow and the live line
-    const trail = Math.round(L.meter('spectrum', 'trail', 0.22) * FPS), line = (ff) => { ctx.beginPath(); const s2 = avg(ff); for (let i = 0; i < c.length; i++) { const X = X20(c[i], x, w), Yy = Y(s2[i]); i ? ctx.lineTo(X, Yy) : ctx.moveTo(X, Yy); } };
-    for (let q = trail; q >= 1; q--) { line(f - q); ctx.strokeStyle = rgba(S.ink, 0.2 * (1 - q / (trail + 1))); ctx.lineWidth = 1; ctx.stroke(); }
-    line(f); ctx.lineJoin = 'round'; ctx.strokeStyle = rgba(S.sig2, 0.18); ctx.lineWidth = 6; ctx.stroke(); ctx.strokeStyle = S.ink; ctx.lineWidth = 2; ctx.stroke(); ctx.lineWidth = 1;
-    lbl(ctx, S, showHold ? '1/6 oct · hold 1 s' : '1/6 oct', x + w - 2, y + 14, { align: 'right', a: 0.6 });
+    const [x, y, w, h] = r; reveal(ctx, x, y, w, h, k);
+    drawSpectrum(ctx, r, { t }, { L, S, top: L.meter('spectrum', 'top', -6), bottom: -Math.abs(L.meter('spectrum', 'floor', 72)), hold: L.meter('spectrum', 'hold', true) });
     ctx.restore();
   };
 
