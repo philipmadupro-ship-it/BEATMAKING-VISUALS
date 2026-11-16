@@ -95,7 +95,7 @@ export function createCore(D) {
   const floorSize = (ctx, size) => { const m = ctx.getTransform(), sc = Math.hypot(m.a, m.b) / (view.camZ * view.base) || 1; return Math.max(size, MIN_PX / sc); };
   // v11.1 one text helper for the whole film. Default ("mix"): numbers (6, -18.4, 128, 09.1.1, 1.2k) in Akira Expanded sized NUM_SCALE x down, words and units in
   // Synkopy, "@" in the fallback face (Synkopy draws it as "e"). An explicit o.fam draws one face (title, labels), still routing "@" to the fallback.
-  const RUN = /[+\-\u2212]?\d[\d.,:]*|@|[^@]+?(?=[+\-\u2212]?\d|@|$)/g;
+  const RUN = /[+\-\u2212]?\d[\d.,:]*|[@%]|[^@%]+?(?=[+\-\u2212]?\d|[@%]|$)/g;
   function runsOf(s, o) {
     const mix = !o.fam || o.mix, out = [];
     for (const m of s.match(RUN) || [s]) {
