@@ -298,6 +298,34 @@ for (const k of ['sine1k', 'pink', 'hardleft', 'clipped']) {
     ok('real beat: gain reduction rises on the strong kicks (>= 60 % of kicks with strength >= 0.6: +1 dB between 40 ms before and 50 ms after)', strong.length >= 6 && rise >= 0.6 * strong.length, `${rise}/${strong.length} kicks`);
     ok('real beat: the LO-band detector crosses half of its kick peak within 1.5 frames of the quantised kick time (>= 90 % of the kicks that fire it)', hits.length >= 5 && near >= 0.9 * hits.length, `${near}/${hits.length} · offsets ${hits.map((d) => (d * 1000) | 0).join(' ')} ms`); }
 }
+// ---- 11. spectrum analyser (v12, spectrumview.js): the displayed curve is the FFT data; the low end jumps on every kick
+{ const SV = await import(path.join(ROOT, 'src/v8/spectrumview.js')), fps = 30, FR = 1 / fps;
+  // three steady tones (100 Hz -18, 1 kHz -24, 5 kHz -30 dBFS, peak): the curve at each tone's frequency reads the clip's 1/6-oct data (<= 0.5 dB) and the tone level (<= 1 dB, band-edge scalloping)
+  const sr = 48000, n = sr * 3, x = new Float32Array(n), tones = [[100, -18], [1000, -24], [5000, -30]];
+  for (const [fq, db] of tones) for (let i = 0; i < n; i++) x[i] += 10 ** (db / 20) * Math.sin(2 * Math.PI * fq * i / sr);
+  const D = clipData({ L: x, R: x, sr, inT: 0, bars: 1, beat: 1, target: 'off' }), f = D.frames >> 1, F0 = D.frame;
+  const bandAt = (hz) => { const i = D.oct6.findIndex((v) => Math.abs(Math.log2(v / hz)) < 1 / 12); return F0.spec[f * 61 + i]; };
+  const dev = tones.map(([fq, db]) => [Math.abs(SV.curveAt(D, f, fq) - bandAt(fq)), Math.abs(SV.curveAt(D, f, fq) - db)]);
+  ok('spectrum analyser (synthetic tones): curve = the clip FFT band and the tone level (<= 1 dB each, band-edge scalloping) at 100 Hz / 1 kHz / 5 kHz', dev.every(([a, b]) => a <= 1.0 && b <= 1.0), dev.map(([a, b]) => `${a.toFixed(2)}/${b.toFixed(2)}`).join(' · '));
+  // interpolation never overshoots its bands, and passes through each band centre
+  const T = SV.traceData(D); let over = 0, centre = 0; for (let i = 0; i < 61; i++) { const v = T.disp[f * 61 + i]; centre = Math.max(centre, Math.abs(SV.curveAt(D, f, D.oct6[i]) - v)); }
+  for (let hz = 22; hz < 19000; hz *= 1.013) { const c = SV.curveAt(D, f, hz), vals = Array.from(T.disp.subarray(f * 61, f * 61 + 61)); if (c > Math.max(...vals) + 1e-6) over++; }
+  ok('spectrum analyser: monotone cubic through the band values (exact at band centres, never above the highest band)', centre < 1e-3 && over === 0, `centre err ${centre.toExponential(1)} dB`);
+  if (realClip) { const R = realClip, TR = SV.traceData(R), nf = R.frames; let n1 = 0, big = 0, mx = 0;
+    // real beat: away from the kick lift (bands > 250 Hz) the display tracks the per-frame FFT data: |display - data| <= 3 dB for 95 % of cells (release 22 dB/s vs the data's own 24 dB/s fall)
+    const idx = R.oct6.map((v, i) => i).filter((i) => R.oct6[i] > 250); for (let fr = 5; fr < nf; fr++) for (const i of idx) { n1++; const d = Math.abs(TR.disp[fr * 61 + i] - R.frame.spec[fr * 61 + i]); mx = Math.max(mx, d); if (d > 3) big++; }
+    ok('spectrum analyser (real beat): the curve tracks the FFT data above 250 Hz (<= 3 dB for >= 95 % of band x frame cells)', big <= 0.05 * n1, `${(100 * big / n1).toFixed(2)} % over 3 dB · worst ${mx.toFixed(1)} dB`);
+    // kicks: the low end (bands <= 90 Hz) rises within 1 frame of the quantised kick time, for the kicks whose low band fires (1 ms detector crosses half its peak)
+    const strong = R.onsets.kick.filter(([, st, tq]) => st >= 0.6 && tq > 0.2 && tq < R.duration - 0.4), rises = [], E2 = (await import(path.join(ROOT, 'src/v8/eqview.js'))).dynEnvelope(R);
+    for (const [, , tq] of strong) { let m = 0; for (let t = tq - 0.1; t < tq + 0.2; t += 0.001) m = Math.max(m, E2.at(t)[1]); if (m < 0.6) continue;
+      const fk = Math.ceil(tq * fps - 1e-6), before = SV.lowLevel(R, fk - 2), at = SV.lowLevel(R, fk), at1 = SV.lowLevel(R, fk + 1); rises.push([at - before, Math.max(at, at1) - before]); }
+    ok('spectrum analyser (real beat): the low end (<= 90 Hz) rises within 1 frame of the kicks (>= 85 % of the kicks that fire the low band: +1 dB by the kick frame, +2 dB within one more)', rises.length >= 5 && rises.filter(([a, b]) => a >= 1 && b >= 2).length >= 0.85 * rises.length, `${rises.filter(([a, b]) => a >= 1 && b >= 2).length}/${rises.length} · rise ${rises.map(([a]) => a.toFixed(1)).join(' ')} dB`); }
+  // synthetic 55 Hz kicks every 0.5 s with a quiet tail: the kick lift makes the low end jump >= 3 dB on the kick frame (and not before)
+  { const sr2 = 48000, n2 = sr2 * 5, y = new Float32Array(n2), kicks = [];
+    for (let k = 0; k < 9; k++) { const t0 = 0.25 + 0.5 * k; kicks.push(t0); for (let i = 0; i < sr2 * 0.4; i++) { const tt = i / sr2; y[Math.round(t0 * sr2) + i] += 0.7 * Math.sin(2 * Math.PI * (45 * tt + 25 * (1 - Math.exp(-tt * 30)) / 30)) * Math.exp(-tt / 0.12); } }
+    const D2 = clipData({ L: y, R: y, sr: sr2, inT: 0, bars: 2, beat: 0.5, target: 'off' }), jumps = kicks.slice(1, 8).map((tk) => { const fk = Math.ceil(tk * fps - 1e-6); return SV.lowLevel(D2, fk, 150) - SV.lowLevel(D2, fk - 2, 150); });
+    ok('spectrum analyser (synthetic kicks): the low end jumps >= 3 dB on the kick frame (kick lift from the 1 ms detector)', jumps.every((j) => j >= 3), `jumps ${jumps.map((j) => j.toFixed(1)).join(' ')} dB`); }
+}
 fs.writeFileSync(path.join(DIR, 'results.json'), JSON.stringify(table.map(({ k, A, F, N }) => ({ k, app: { peak: A.peak, rms: A.rms, lufs: A.lufs, tp: A.tp, corr: A.corr, clip: A.clip, eq: A.eq }, ffmpeg: F, numpy: N })), null, 1));
 const fails = results.filter(r => !r.pass).length;
 console.log(`\n${results.length - fails}/${results.length} passed · signals + results in ${DIR}`);
