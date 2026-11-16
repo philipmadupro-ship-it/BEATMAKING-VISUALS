@@ -96,11 +96,12 @@ export function createCore(D) {
   // Synkopy, "@" in the fallback face (Synkopy draws it as "e"). An explicit o.fam draws one face (title, labels), still routing "@" to the fallback.
   const UNIT = '(?:\\s?(?:kHz|Hz|dBTP|dBFS|dB|LUFS|LU|ms|BPM|%|k|Q|s)(?![A-Za-z]))?';   // short units ride with the number in Akira (Synkopy breaks them at small sizes)
 const NUMR = '(?<![A-Za-z])(?:Q\\s?)?[+\\-\\u2212]?\\d[\\d.,:]*';   // a number not glued to a word (uche2crazy stays one word), optional leading Q
-const RUN = new RegExp(`${NUMR}${UNIT}|[@%]|[^@%]+?(?=${NUMR}|[@%]|$)`, 'gi');
+const RUN = new RegExp(`@[A-Za-z]+\\d[A-Za-z\\d]*|${NUMR}${UNIT}|[@%]|[^@%]+?(?=${NUMR}|[@%]|$)`, 'gi');
   function runsOf(s, o) {
     const mix = !o.fam || o.mix, out = [];
     for (const m of s.match(RUN) || [s]) {
-      if (m === '@' || m === '%') out.push([m, 'fb']); else if (mix && /^(?:Q\s?)?[+\-\u2212]?\d/.test(m)) out.push([m, 'num']); else out.push([m, 'main']);
+      if (m === '@' || m === '%' || /^@[A-Za-z]+\d/.test(m)) out.push([m, 'fb']);   // handles like @uche2crazy: Synkopy's 2 reads as z
+      else if (mix && /^(?:Q\s?)?[+\-\u2212]?\d/.test(m)) out.push([m, 'num']); else out.push([m, 'main']);
     }
     return out;
   }
