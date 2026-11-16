@@ -18,6 +18,7 @@ const { makeTrack, mixdown } = await import(path.join(ROOT, 'src/analysis/index.
 const { meters } = await import(path.join(ROOT, 'src/engine/meters.js'));
 const { clipData, OCT6 } = await import(path.join(ROOT, 'src/analysis/clipdata.js'));
 const ML = await import(path.join(ROOT, 'src/v8/meterlib.js'));
+const LV = await import(path.join(ROOT, 'src/v8/levelview.js'));
 
 const DIR = process.env.METERS_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'u2c-meters-'));
 const TOL = { peak: .5, rms: .5, lufs: .5, tp: .5 };
@@ -252,6 +253,27 @@ for (const k of ['sine1k', 'pink', 'hardleft', 'clipped']) {
   ok('K-14 mode: 600 ms RMS + 3.01 dB reads the sine peak level (-6.0 dBFS)', Math.abs(k14 - p) < 0.15, `K RMS ${k14.toFixed(2)} dBFS → K-14 ${(k14 + 14).toFixed(2)}`);
   const sc = [[6, 1], [0, 0.912], [-18, 0.592], [-60, 0]].every(([d, v]) => Math.abs(ML.dbPos(d) - v) < 1e-9) && Math.abs(ML.dbPos(-3) - (0.805 + 0.107 / 2)) < 1e-9;
   ok('meter scale: the measured Live 12 table (+6 / 0 / -18 / -60 and interpolation)', sc);
+}
+{ // v11 gain-reduction meter: a synthetic kick train (128 BPM) over a quiet bed; GR is computed from the clip's own envelope
+  const sr = 48000, beat = 60 / 128, bars = 4, dur = bars * 4 * beat, n = Math.round(dur * sr), x = new Float32Array(n), FPS = 30, kicks = [];
+  for (let i = 0; i < n; i++) x[i] = 0.02 * Math.sin(2 * Math.PI * 220 * i / sr);   // bed ~ -37 dBFS
+  for (let b = 0; b < bars * 4; b++) { const t0 = b * beat; kicks.push(t0); for (let i = Math.round(t0 * sr), j = 0; i < n && j < 0.35 * sr; i++, j++) { const tt = j / sr; x[i] += 0.9 * Math.exp(-tt / 0.09) * Math.sin(2 * Math.PI * (45 * tt + 80 * 0.04 * (1 - Math.exp(-tt / 0.04)))); } }
+  const D = clipData({ L: x, R: x, sr, inT: 0, bars, beat, target: 'off' }), gr = LV.grFor(D), at = (t) => ML.grAt(gr, t, FPS, D.lv.rate);
+  let early = 0, late = 0, slow = 0, led = 0, ledBetween = 0; const worst = { dip: 1e9 };
+  for (const tk of kicks) {
+    const f = Math.floor(tk * FPS + 1e-9) + 1;                       // the video frame whose interval contains the onset
+    const dip = at(f / FPS), before = at((f - 1) / FPS), rec = at(tk + 0.9 * beat);
+    worst.dip = Math.min(worst.dip, -dip);
+    if (dip > -2) late++;                                            // not deep enough within 1 frame of the kick
+    if (before < -0.5 && tk > 0.2) early++;                          // dipping before the hit (previous kick's tail must have recovered)
+    if (rec < -0.5) slow++;                                          // recovered by the end of the beat
+    if (LV.ledAt(D.lv, (f) / FPS, -3) < 0.5) led++;                   // the peak LED flashes on the hit
+    if (LV.ledAt(D.lv, tk + 0.9 * beat, -3) > 0.02) ledBetween++;     // and is dark again before the next one
+  }
+  ok('GR meter: dips within 1 frame of every kick (>= 2 dB)', late === 0, `${kicks.length} kicks, shallowest dip ${worst.dip.toFixed(1)} dB, ${late} late`);
+  ok('GR meter: silent before each hit and recovered within the beat (nothing static between hits)', early === 0 && slow === 0, `${early} early, ${slow} slow, threshold ${gr.thresh.toFixed(1)} dB`);
+  ok('peak LED: flashes on every kick transient and is dark between hits', led === 0 && ledBetween === 0, `${led} missed, ${ledBetween} stuck`);
+  ok('GR static curve: 4:1, 6 dB knee, T -20: 0 dB below the knee, -0.5625 dB at T, -7.5 dB at -10 dBFS', Math.abs(ML.grStatic(-30, -20, 4, 6)) < 1e-9 && Math.abs(ML.grStatic(-10, -20, 4, 6) + 7.5) < 1e-9 && Math.abs(ML.grStatic(-20, -20, 4, 6) + 0.5625) < 1e-9);
 }
 fs.writeFileSync(path.join(DIR, 'results.json'), JSON.stringify(table.map(({ k, A, F, N }) => ({ k, app: { peak: A.peak, rms: A.rms, lufs: A.lufs, tp: A.tp, corr: A.corr, clip: A.clip, eq: A.eq }, ffmpeg: F, numpy: N })), null, 1));
 const fails = results.filter(r => !r.pass).length;

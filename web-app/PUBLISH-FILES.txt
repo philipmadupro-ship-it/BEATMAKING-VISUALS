@@ -48,6 +48,9 @@ src/v8/lab.js
 src/v8/layout.js
 src/v8/links.js
 src/v8/meterlib.js
+src/v8/levelview.js
+src/v8/imagerview.js
+src/v8/waveview.js
 src/v8/meters.js
 src/v8/registry.js
 src/v8/tags.js
