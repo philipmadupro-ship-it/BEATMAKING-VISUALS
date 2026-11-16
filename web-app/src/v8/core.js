@@ -49,7 +49,26 @@ const HX = new Map();
 export function hexRgb(hex) { let c = HX.get(hex); if (!c) { const n = parseInt(String(hex).slice(1, 7), 16) || 0; c = [(n >> 16) & 255, (n >> 8) & 255, n & 255]; HX.set(hex, c); } return c; }
 export function rgba(hex, a) { const c = hexRgb(hex); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
 export function mix(h1, h2, k, a = 1) { const x = hexRgb(h1), y = hexRgb(h2), c = [0, 1, 2].map((i) => Math.round(lerp(x[i], y[i], clamp(k)))); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
-export const SANS = '"Instrument Sans"', MONO = '"JetBrains Mono"', SERIF = '"Instrument Serif"', HAND = '"Caveat"';
+// v11 type system: three voices. DISPLAY (Akira Expanded, stand-in Unbounded 800) for the title and the end card; UI
+// (Synkopy, the user's "Sknopy"; stand-in Space Grotesk) for window labels and the credit; MONO (JetBrains Mono) for every number. The brand
+// files are optional @font-face slots in assets/fonts/fonts.css: a missing file falls through to the stand-in, so the
+// fonts swap by dropping the files in. Canvas font strings take these stacks as the family list.
+export const FONT = { display: '"Akira Expanded", "Unbounded", sans-serif', ui: '"Synkopy", "Space Grotesk", sans-serif', mono: '"JetBrains Mono", monospace' };
+export const DISPLAY = FONT.display, UI = FONT.ui;
+export const SANS = FONT.ui, MONO = '"JetBrains Mono"', SERIF = '"Instrument Serif"', HAND = '"Caveat"';
+/** Font faces the renderer waits for before the first frame (web main.js + native boot.mjs). */
+export const FONT_LOADS = ['800 40px "Akira Expanded"', '800 40px "Unbounded"', '600 40px "Unbounded"', '400 22px "Synkopy"', '500 22px "Synkopy"', '400 22px "Space Grotesk"', '500 22px "Space Grotesk"',
+  '600 22px "Space Grotesk"', '700 22px "Space Grotesk"', '400 22px "JetBrains Mono"', '500 22px "JetBrains Mono"', '700 22px "JetBrains Mono"', '800 22px "JetBrains Mono"', '700 24px "Caveat"'];
+/** Resolve once every face above is loaded or known missing (a missing brand file resolves too). */
+export function loadFonts(doc = globalThis.document, sample = 'ATELMANSION 3 Atelmansion prod. 0123456789 Hz dB LUFS') {
+  if (!doc || !doc.fonts) return Promise.resolve([]);
+  return Promise.all(FONT_LOADS.map((f) => doc.fonts.load(f, sample).catch(() => []))).then((r) => FONT_LOADS.map((f, i) => [f, r[i].length > 0]));
+}
+/** Which voice is live: {display: 'Akira Expanded' | 'Unbounded', ui: 'Synkopy' | 'Space Grotesk'} (after loadFonts). */
+export function liveFonts(doc = globalThis.document) {
+  const has = (f) => { try { return !!doc && doc.fonts.check(f) && [...doc.fonts].some((x) => x.status === 'loaded' && f.includes(x.family.replace(/"/g, ''))); } catch (_) { return false; } };
+  return { display: has('800 40px "Akira Expanded"') ? 'Akira Expanded' : 'Unbounded', ui: has('400 22px "Synkopy"') ? 'Synkopy' : 'Space Grotesk' };
+}
 export const MIN_PX = 22;
 
 /** The shared helper object for one clip (v8 window.L6). D: see v8/data.js. */
@@ -90,8 +109,69 @@ export function createCore(D) {
   const tagVars = (o) => Object.assign(VARS, o);
   const sub = (s, extra) => String(s).replace(/\{(\w+)\}/g, (m, k) => (extra && k in extra ? extra[k] : k in VARS ? VARS[k] : m));
   const L = { view, floorSize, MIN_PX, tagVars, sub, D, F, FPS, NF, BEAT, BAR, U, T, Bt, barOf, beatIn, SCHED, ev, steps, on, beatPhase, barPhase, clamp, lerp, fidx, hash, hs,
-    SPECTRO: D.spectro, GS: D.gonioS, GM: D.gonioM, W2: D.wave2.data, kickEnv, songBar, labelAt, STAGES, rgba, mix, font, text, fmt, tc, bbt, SANS, MONO, SERIF, HAND,
+    SPECTRO: D.spectro, GS: D.gonioS, GM: D.gonioM, W2: D.wave2.data, kickEnv, songBar, labelAt, STAGES, rgba, mix, font, text, fmt, tc, bbt, SANS, MONO, SERIF, HAND, DISPLAY, UI, FONT,
     tagGet: () => undefined, meter: (kind, key, def) => def };
+  // ---------------------------------------------------------------- v11 liquid glass (shell design system)
+  // Backdrops: L.snap(ctx, slot) copies what is on the canvas NOW into a small blurred copy (1/8 size, canvas filter
+  // blur, deterministic). The film snaps slot 'ground' after the ground (window glass), 'frame' before the end card and
+  // 'halo' for the halation. L.glass draws a window in the current transform; L.panel a flat glass sub-panel for content.
+  const SLOTS = {};
+  const mkc = (w, h) => { const q = document.createElement('canvas'); q.width = Math.max(1, Math.ceil(w)); q.height = Math.max(1, Math.ceil(h)); return q; };
+  L.snap = (ctx, slot = 'ground', px = 3) => {
+    const cv = ctx.canvas, W0 = cv.width, H0 = cv.height; let o = SLOTS[slot];
+    if (!o || o.W0 !== W0 || o.H0 !== H0) o = SLOTS[slot] = { W0, H0, a: mkc(W0 / 2, H0 / 2), b: mkc(W0 / 4, H0 / 4), s: mkc(W0 / 8, H0 / 8), out: mkc(W0 / 8, H0 / 8) };
+    const ga = o.a.getContext('2d'), gb = o.b.getContext('2d'), gs = o.s.getContext('2d'), go = o.out.getContext('2d');
+    ga.drawImage(cv, 0, 0, o.a.width, o.a.height); gb.drawImage(o.a, 0, 0, o.b.width, o.b.height); gs.drawImage(o.b, 0, 0, o.s.width, o.s.height);
+    go.clearRect(0, 0, o.out.width, o.out.height); go.filter = `blur(${px}px)`; go.drawImage(o.s, 0, 0); go.filter = 'none';
+    return o.out;
+  };
+  L.backdrop = (slot) => (SLOTS[slot] ? SLOTS[slot].out : null);
+  const isLight = (S) => { const c = hexRgb(S.bg); return c[0] + c[1] + c[2] > 3 * 128; };
+  L.isLight = isLight;
+  /** The one accent of the stage (window override first). */
+  L.accent = (S) => S.hot;
+  /** Highlight colour of glass edges: the ink on dark grounds, white light on paper (Albedo). */
+  const hiOf = (S) => (isLight(S) ? '#ffffff' : S.ink);
+  const pxScale = (ctx) => { const m = ctx.getTransform(); return Math.hypot(m.a, m.b) || 1; };
+  L.rr = (x, y, w, h, r) => { const p = new Path2D(); p.roundRect(x, y, w, h, Math.max(0, Math.min(r, w / 2, h / 2))); return p; };
+  /**
+   * Liquid-glass window. o: {r (radius, 22), backdrop (slot name or canvas, 'ground'), tint (0..1 card fill, 0.38),
+   * active (accent rim), shadow (0..1, 1), edge (0..1, 1)}. Returns the Path2D (clip to it for content).
+   */
+  L.glass = (ctx, x, y, w, h, S, o = {}) => {
+    const r = o.r ?? 22, P = L.rr(x, y, w, h, r), k = pxScale(ctx), light = isLight(S), hi = hiOf(S), sh = o.shadow ?? 1, edge = o.edge ?? 1;
+    if (sh > 0) { ctx.save(); ctx.shadowColor = light ? rgba(S.ink, 0.16 * sh) : `rgba(0,0,0,${0.62 * sh})`; ctx.shadowBlur = 56 * k; ctx.shadowOffsetY = 22 * k; ctx.fillStyle = S.bg; ctx.fill(P); ctx.restore(); }
+    ctx.save(); ctx.clip(P);
+    const bd = typeof (o.backdrop ?? 'ground') === 'string' ? L.backdrop(o.backdrop ?? 'ground') : o.backdrop;
+    if (bd) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = true; ctx.drawImage(bd, 0, 0, ctx.canvas.width, ctx.canvas.height); ctx.restore(); }
+    else { ctx.fillStyle = S.paper; ctx.fillRect(x, y, w, h); }
+    ctx.fillStyle = rgba(S.card, o.tint ?? 0.38); ctx.fillRect(x, y, w, h);
+    const g = ctx.createLinearGradient(0, y, 0, y + Math.min(h, 260));   // soft inner light from the top
+    g.addColorStop(0, rgba(hi, light ? 0.42 : 0.075)); g.addColorStop(1, rgba(hi, 0)); ctx.fillStyle = g; ctx.fillRect(x, y, w, Math.min(h, 260));
+    if (edge > 0) {   // inner highlight: a second hairline 1.5 px inside, lit at the top only
+      const gi = ctx.createLinearGradient(0, y, 0, y + 40); gi.addColorStop(0, rgba(hi, (light ? 0.9 : 0.28) * edge)); gi.addColorStop(1, rgba(hi, 0));
+      ctx.strokeStyle = gi; ctx.lineWidth = 1.5; ctx.stroke(L.rr(x + 1.5, y + 1.5, w - 3, h - 3, Math.max(0, r - 1.5)));
+    }
+    ctx.restore();
+    if (edge > 0) {   // the hairline light edge: bright at the top, falling off, a faint rim light at the bottom
+      const ge = ctx.createLinearGradient(0, y, 0, y + h); ge.addColorStop(0, rgba(hi, (light ? 0.95 : 0.34) * edge)); ge.addColorStop(0.35, rgba(hi, (light ? 0.5 : 0.1) * edge));
+      ge.addColorStop(1, rgba(light ? S.ink : hi, (light ? 0.14 : 0.16) * edge)); ctx.strokeStyle = ge; ctx.lineWidth = 1.2; ctx.stroke(P);
+    }
+    if (o.active) { ctx.strokeStyle = rgba(S.hot, 0.85); ctx.lineWidth = 1.6; ctx.stroke(P); }
+    ctx.lineWidth = 1; return P;
+  };
+  /** Flat glass sub-panel for content inside a window (readout cells, knob strips): no shadow, no backdrop. */
+  L.panel = (ctx, x, y, w, h, S, o = {}) => {
+    const r = o.r ?? 12, P = L.rr(x, y, w, h, r), hi = hiOf(S), light = isLight(S);
+    ctx.fillStyle = light ? rgba('#ffffff', 0.32 * (o.fill ?? 1)) : rgba(S.ink, 0.045 * (o.fill ?? 1)); ctx.fill(P);
+    const ge = ctx.createLinearGradient(0, y, 0, y + h); ge.addColorStop(0, rgba(hi, light ? 0.8 : 0.16)); ge.addColorStop(1, rgba(light ? S.ink : hi, light ? 0.1 : 0.05));
+    ctx.strokeStyle = ge; ctx.lineWidth = 1; ctx.stroke(P); return P;
+  };
+  /** Screen-space halation: a blurred copy of the frame screened back over it (light-on-dark only). */
+  L.halation = (ctx, amt) => {
+    if (!(amt > 0)) return; const bd = L.snap(ctx, 'halo', 5);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = amt; ctx.drawImage(bd, 0, 0, ctx.canvas.width, ctx.canvas.height); ctx.restore();
+  };
   L.tag = (path, extra) => { const v = L.tagGet(path); if (v == null) return ''; return Array.isArray(v) ? v.map((x) => sub(x, extra)) : sub(v, extra); };
   return L;
 }

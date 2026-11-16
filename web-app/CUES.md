@@ -8,7 +8,7 @@ export render it, and the native renderer can read the same file (`--cues file.j
   "format": "u2c-cues", "version": 1,
   "meta": { "beatsPerBar": 4, "ppq": 960, "bars": 16, "look": "exe", "aspect": "916", "preset": "default" },
   "base": { "look": "exe", "stage": "nigredo", "win.eq.accent": "#ffffff" },
-  "tags": { "notes": { "spectrum": "808 lives here" } },
+  "tags": { "hud": { "right": "{bpm} BPM · {key}" } },
   "tracks": [
     { "path": "camera.shot", "kind": "shot", "lane": "camera", "keys": [
       { "at": "4.1.0", "v": "chains", "transition": "push", "dur": 1, "ease": "easeInOut" },
@@ -91,8 +91,9 @@ them per element with a ◆ to keyframe any of them.
 | level meters | `meter.levels.mode` (peak-rms = peak + 300 ms RMS; k20 / k14 / k12 = K-system, 600 ms RMS + 3.01 dB), `.scale` (live = the measured Live 12 table, linear), `.range` (dB, linear scale), `.smoothing` (peak release, dB/s, 20; 11.8 = IEC slow), `.hold` (s, 1.5), `.style` (auto, gradient, segment) |
 | loudness | `meter.loud.layout` (history, gauge), `.focus` (ghost = the camera's focus shot on this window shows the ghost readout; meter), `.target` (LUFS), `.floor` (history range), `.scale` (linear, compressed), `.window` (s of history; 0 = the whole clip) |
 | text | `text.cue` (clip): `v` text with `{vars}`, `x`, `y` (0..1), `size` (px), `font` (mono, sans, serif, hand, stencil), `color` (ink, hot, dim, #hex), `align`, `box`. Typed one character per 64th note, hard cut at the end. |
-| tags | `tag.<path>` for every leaf of `src/v8/tags.js` (e.g. `tag.notes.spectrum`, `tag.boot.2`, `tag.result.cta`) as text tracks; the `tags` object deep-merges static overrides |
-| overlays | `hud.on`, `boot.on`, `result.on`, `result.at` (beat), `bracket.on`, `wires.on`, `notes.on`, `furniture.on` |
+| tags | `tag.<path>` for every leaf of `src/v8/tags.js` (e.g. `tag.hud.right`, `tag.windows.eq`, `tag.result.meta`) as text tracks; the `tags` object deep-merges static overrides |
+| overlays | `hud.on`, `result.on`, `result.at` (beat), `bracket.on` (accent rim on the hero window) |
+| glass (v11) | `glass.radius` (px), `glass.tint` (0..0.9), `ground.pool` (light pools, 0..2), `fx.halation` (dark stages, 0..0.6) |
 | finish | `fx.grain`, `fx.vignette`, `fx.scan`, `fx.flash` (event: 1-frame invert), `fx.glitch` (clip, opt-in, default off: thin slices ≤ 80 ms on each beat), `ground.pattern` (auto, graph, dots, scan, none), `ground.gridA`, `stage.<colour>` (bg, paper, card, ink, dim, rule, sig1, sig2, hot, stamp, tape) |
 
 Meter keys step (enum / bool) or interpolate (numbers) like any other track: e.g. a key `meter.stereo.mode = level` on a

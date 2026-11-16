@@ -53,12 +53,12 @@ export function buildRegistry({ look = 'exe', aspect = '916', stage = 'nigredo',
     num('pendant.chain', 'Chain length (of the window)', 0.3, 0, 0.6, 0.01, ''), num('pendant.size', 'Size', 1, 0.4, 1.6, 0.01, '×'), num('pendant.x', 'Pivot X offset', 0, -300, 300, 1, 'px'), num('pendant.y', 'Pivot Y offset', 0, -300, 300, 1, 'px')]);
   el('text', 'Text cues', 'Text', [{ path: 'text.cue', label: 'Text cue', kind: 'clip', default: '' }]);
   el('fx', 'FX', 'Finish', [{ path: 'fx.glitch', label: 'Glitch (opt-in)', kind: 'clip', default: 0, min: 0, max: 1, step: 0.01 }, { path: 'fx.flash', label: '1-frame invert', kind: 'event', default: false },
-    num('fx.grain', 'Grain', S.grain, 0, 0.5, 0.01), num('fx.vignette', 'Vignette', S.vignette, 0, 1, 0.01), num('fx.scan', 'Scanlines', 0, 0, 1, 0.01)]);
-  el('ground', 'Grid / background', 'Finish', [en('ground.pattern', 'Pattern', 'auto', ['auto', 'graph', 'dots', 'scan', 'none']), num('ground.gridA', 'Grid strength', S.gridA, 0, 0.4, 0.005)]);
+    num('fx.grain', 'Grain', S.grain, 0, 0.5, 0.01), num('fx.vignette', 'Vignette', S.vignette, 0, 1, 0.01), num('fx.scan', 'Scanlines', 0, 0, 1, 0.01), num('fx.halation', 'Halation (dark stages)', 0.16, 0, 0.6, 0.01)]);
+  el('ground', 'Grid / background', 'Finish', [en('ground.pattern', 'Pattern', 'auto', ['auto', 'graph', 'dots', 'scan', 'none']), num('ground.gridA', 'Grid strength', S.gridA, 0, 0.4, 0.005), num('ground.pool', 'Light pools', 1, 0, 2, 0.05)]);
   el('stagecol', 'Stage colours', 'Finish', STAGE_COLOR_KEYS.map((k) => col('stage.' + k, k, S[k])));
-  el('overlays', 'Overlays', 'Overlays', [bool('hud.on', 'HUD', true), bool('boot.on', 'Boot terminal (bar 1)', true), bool('result.on', 'Result card', true),
-    num('result.at', 'Result card at', Math.max(0, (bars - (bars >= 8 ? 2 : 1)) * 4), 0, bars * 4, 0.25, 'beats'), bool('bracket.on', 'Attention bracket', true), bool('wires.on', 'Wires (exe)', true),
-    bool('notes.on', 'Handwritten notes', true), bool('furniture.on', 'Tape / pins / residue', true)]);
+  el('overlays', 'Overlays', 'Overlays', [bool('hud.on', 'HUD', true), bool('result.on', 'Result card', true),
+    num('result.at', 'Result card at', Math.max(0, (bars - (bars >= 8 ? 2 : 1)) * 4), 0, bars * 4, 0.25, 'beats'), bool('bracket.on', 'Accent rim on the hero window', true),
+    num('glass.radius', 'Glass corner radius', 22, 0, 48, 1, 'px'), num('glass.tint', 'Glass tint', 0.36, 0, 0.9, 0.01)]);
   for (const id of ids) { const r = L[id], c = CONTENT[id];
     el('win.' + id, WINDOW_LABELS[id] || id, 'Windows', [num(`win.${id}.x`, 'X', r[0], -400, 2400, 1, 'px'), num(`win.${id}.y`, 'Y', r[1], -400, 2400, 1, 'px'), num(`win.${id}.w`, 'Width', r[2], 60, 2000, 1, 'px'), num(`win.${id}.h`, 'Height', r[3], 60, 2000, 1, 'px'),
       bool(`win.${id}.visible`, 'Visible (key = open / close)', true), num(`win.${id}.open`, 'Opens at', openBeat(look, aspect, id), -2, bars * 4, 0.125, 'beats'),

@@ -1,2 +1,7 @@
 demo/*.mp4
 shots/
+# licensed brand fonts (Akira Expanded, Synkopy): never in the public repo; drop them in locally (see assets/fonts/fonts.css)
+assets/fonts/*.otf
+assets/fonts/*.ttf
+assets/fonts/AkiraExpanded.*
+assets/fonts/Synkopy.*

@@ -10,7 +10,7 @@ import { createCueStore } from './cues/store.js';
 import { generateSheet, PRESETS } from './cues/generate.js';
 import { newId, defaultEase, snapBeat, SNAPS } from './cues/schema.js';
 import { buildRegistry } from './v8/registry.js';
-import { STAGES } from './v8/core.js';
+import { STAGES, loadFonts } from './v8/core.js';
 import { analyzeBuffer, decodeFile, metaFromFilename, synthDemo, regrid } from './analysis/index.js';
 import { loopBuffer } from './export/audio.js';
 import { createMotion } from './ui/motion.js';
@@ -41,8 +41,7 @@ function hook(track, sec) {
 async function boot() {
   status('Loading libraries…');
   const [libs, assets] = await Promise.all([loadLibs(), loadAssets('assets/')]);
-  const fonts = ['800 22px "JetBrains Mono"', '700 22px "JetBrains Mono"', '500 22px "JetBrains Mono"', '400 22px "JetBrains Mono"', '600 22px "Instrument Sans"', 'italic 400 40px "Instrument Serif"', '700 24px Caveat'];
-  await Promise.race([Promise.all(fonts.map((f) => document.fonts.load(f, 'EXP-03 Atelmansion 0123456789'))), new Promise((r) => setTimeout(r, 3000))]).catch(() => {});
+  await Promise.race([loadFonts(), new Promise((r) => setTimeout(r, 3000))]).catch(() => {});
   const clock = createClock(), motion = createMotion(libs.gsap), cues = createCueStore();
   const app = { store, clock, libs, assets, cues, motion, hook, actions: {} };
   app.clip = createClipManager(app); app.renderFrame = createRenderer(app);
