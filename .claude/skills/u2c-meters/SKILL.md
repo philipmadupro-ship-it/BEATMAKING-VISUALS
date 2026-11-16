@@ -30,3 +30,13 @@ cd /home/user/u2c-motion && .venv/bin/python tests/test_meters.py         # nati
 - [ ] METERS-SPEC.md read; change matches it.
 - [ ] Both meter tests PASS; a new meter adds its own reference check to `tests/meters.mjs`.
 - [ ] Meter props registered in `registry.js METER_PROPS` (keyframeable as `meter.<kind>.<key>`).
+
+
+## EQ (v11): src/v8/eqview.js
+- Pro-MB / Pro-Q style dynamic multiband view. `meters.js` only wires `M8.eq = EV.draw`; the module draws inside its rect, no opaque backdrop (glass windows).
+- Static bands = per-section match fit (meterlib.fitMatch; bands closer than 1/2 oct merge, a 70 Hz kick band is added if none < 150 Hz). Dynamic gain = g + dir * depth * env, env = band detector -> `dynEnvelope(D, {attack, release, sens})`.
+- Detector = `analysis/bandenv.js` (`D.be`: 6 bands, 4th-order band-pass on L+R/2, energy through a per-band one-pole 12/6/3/1.5/1/1 ms, read every 1 ms, Uint8 dB = q/2-120). A TRANSIENT measure: level minus its own 90 ms follower, `sens` dB = 1, so a sustained 808 does not hold the duck. The 1 ms blocks of the first version rippled with the 50 Hz period (idle env 0.6): never go back to block mean-square for the low bands. The per-frame bands (8192 window centred on the frame) smear a kick by +-85 ms and cannot land on the beat.
+- Real beat: the LO band crosses half its kick peak 7-34 ms after the quantised kick time (kick audio + 12 ms smoothing), so within one frame at 30 fps.
+- Drawing order: grid, band regions, analyzer PRE (1/6-oct, cubic on log f, tilt 4.5 dB/oct about 1 kHz) and POST = PRE x dynamic curve, peak-hold dots, band bodies and the static-to-dynamic GR area, static sum (dashed), ghost trail (last `ghost` s of the dynamic sum), dynamic sum, nodes on the dynamic band curves, readout for the active band only (|offset| > 0.8 dB), GR meter with 0.8 s peak hold, piano strip + Hz ruler. Auto range 3/6/12/18/30 dB is computed from the WORST case (all bands at full detector) so the scale never jumps on a kick.
+- Tests (tests/meters.mjs section 10): synthetic kicks (GR >= 80 % of depth, >= 50 % within 1 frame, recovers before the next, r >= 0.9 vs the detector) and the real beat (GR rises on strong kicks, detector onset within 1.5 frames). `grAt`, `dynEnvelope`, `bandDyn`, `dynOffset` are exported for them.
+- Native: eqview.js is picked up by sync_web.mjs (it copies src/v8/*.js); bandenv.js must be added to its analysis FILES list and tools/meterdata.mjs re-run to write `meters.be` (not done in the v11-eq worktree; the view falls back to frame-rate band levels until then).

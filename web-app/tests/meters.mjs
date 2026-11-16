@@ -275,6 +275,29 @@ for (const k of ['sine1k', 'pink', 'hardleft', 'clipped']) {
   ok('peak LED: flashes on every kick transient and is dark between hits', led === 0 && ledBetween === 0, `${led} missed, ${ledBetween} stuck`);
   ok('GR static curve: 4:1, 6 dB knee, T -20: 0 dB below the knee, -0.5625 dB at T, -7.5 dB at -10 dBFS', Math.abs(ML.grStatic(-30, -20, 4, 6)) < 1e-9 && Math.abs(ML.grStatic(-10, -20, 4, 6) + 7.5) < 1e-9 && Math.abs(ML.grStatic(-20, -20, 4, 6) + 0.5625) < 1e-9);
 }
+// ---- 10. EQ dynamics (v11): the dynamic band's gain reduction follows the 1 ms band detector and lands on the kicks
+{ const EV = await import(path.join(ROOT, 'src/v8/eqview.js')), fps = 30, FR = 1 / fps, depth = 5;
+  // synthetic beat: 55 Hz kick (pitch drop, 0.12 s decay) every 0.5 s from 0.25 s, quiet hat noise on the offbeats, 5 s at 48 kHz
+  const sr = 48000, n = sr * 5, x = new Float32Array(n), rng = (() => { let a = 12345; return () => ((a = (a * 1664525 + 1013904223) >>> 0) / 4294967296) - 0.5; })(), kicks = [];
+  for (let k = 0; k < 9; k++) { const t0 = 0.25 + 0.5 * k; kicks.push(t0); for (let i = 0; i < sr * 0.4; i++) { const tt = i / sr, ph = 2 * Math.PI * (45 * tt + 25 * (1 - Math.exp(-tt * 30)) / 30 * 1 + 0); x[Math.round(t0 * sr) + i] += 0.7 * Math.sin(ph) * Math.exp(-tt / 0.12); } }
+  for (let k = 0; k < 9; k++) { const t0 = 0.5 + 0.5 * k; for (let i = 0; i < sr * 0.04; i++) x[Math.round(t0 * sr) + i] += 0.05 * rng() * Math.exp(-i / sr / 0.01); }
+  const D = clipData({ L: x, R: x, sr, inT: 0, bars: 2, beat: 0.5, target: 'off' }), gr = (t) => EV.grAt(D, t, { depth });
+  const peak = kicks.slice(1, 8).map((tk) => { let m = 0; for (let t = tk; t < tk + 0.2; t += 0.002) m = Math.max(m, gr(t)); return m; });
+  const lands = kicks.slice(1, 8).every((tk, i) => gr(tk + FR) >= 0.5 * peak[i] && gr(tk - FR) <= 0.25 * peak[i] && peak[i] >= 0.8 * depth), idle = kicks.slice(1, 8).every((tk) => gr(tk - 0.06) <= 0.3 * depth);
+  ok('EQ dynamics (synthetic kicks): the low band ducks >= 80 % of its depth, >= 50 % within 1 frame of every kick, recovers before the next', lands && idle, `peak GR ${peak.map((v) => v.toFixed(1)).join('/')} dB (depth ${depth}) · idle ${gr(0.19 + 0.5).toFixed(2)} dB`);
+  // GR tracks the detector: the GR series correlates with the 1 ms low-band envelope (the same series, through the same follower)
+  const E = EV.dynEnvelope(D), a = [], b = []; for (let t = 0.2; t < 4.5; t += 0.004) { a.push(gr(t)); b.push(E.at(t)[0]); }
+  const ma = a.reduce((p, v) => p + v) / a.length, mb = b.reduce((p, v) => p + v) / b.length; let sab = 0, saa = 0, sbb = 0; a.forEach((v, i) => { sab += (v - ma) * (b[i] - mb); saa += (v - ma) ** 2; sbb += (b[i] - mb) ** 2; });
+  const corr = sab / Math.sqrt(saa * sbb); ok('EQ dynamics: gain reduction tracks the band envelope (correlation vs the SB band detector >= 0.9)', corr >= 0.9, `r = ${corr.toFixed(3)}`);
+  ok('EQ dynamics: the detector sees the kick in the low band and not in the top band (kick frame vs idle, dB)', (() => { const q = D.be.q, nb = D.be.nb, at = (ms, j) => q[ms * nb + j] / 2 - 120; return at(Math.round(1000 * (kicks[2] + 0.01)), 1) - at(Math.round(1000 * (kicks[2] + 0.3)), 1) > 6 && at(Math.round(1000 * (kicks[2] + 0.01)), 5) < at(Math.round(1000 * (kicks[2] + 0.01)), 1) - 20; })());
+  if (realClip) { const strong = realClip.onsets.kick.filter((k) => k[1] >= 0.6 && k[2] > 0.1 && k[2] < realClip.duration - 0.3), g2 = (t) => EV.grAt(realClip, t, { depth }), E2 = EV.dynEnvelope(realClip);
+    const rise = strong.filter(([, , tq]) => g2(tq + 0.05) - g2(tq - 0.04) > 1.0).length;
+    // kicks whose LO band really fires (the onset list also holds 808 notes and snare bleed): the detector crosses half its peak within 1.5 frames of the quantised kick time
+    const hits = strong.map(([, , tq]) => { let m = 0; for (let t = tq - 0.1; t < tq + 0.2; t += 0.001) m = Math.max(m, E2.at(t)[1]); if (m < 0.6) return null; for (let t = tq - 0.1; t < tq + 0.2; t += 0.001) if (E2.at(t)[1] >= 0.5 * m) return t - tq; return null; }).filter((v) => v != null);
+    const near = hits.filter((d) => Math.abs(d) <= 1.5 * FR).length;
+    ok('real beat: gain reduction rises on the strong kicks (>= 60 % of kicks with strength >= 0.6: +1 dB between 40 ms before and 50 ms after)', strong.length >= 6 && rise >= 0.6 * strong.length, `${rise}/${strong.length} kicks`);
+    ok('real beat: the LO-band detector crosses half of its kick peak within 1.5 frames of the quantised kick time (>= 90 % of the kicks that fire it)', hits.length >= 5 && near >= 0.9 * hits.length, `${near}/${hits.length} · offsets ${hits.map((d) => (d * 1000) | 0).join(' ')} ms`); }
+}
 fs.writeFileSync(path.join(DIR, 'results.json'), JSON.stringify(table.map(({ k, A, F, N }) => ({ k, app: { peak: A.peak, rms: A.rms, lufs: A.lufs, tp: A.tp, corr: A.corr, clip: A.clip, eq: A.eq }, ffmpeg: F, numpy: N })), null, 1));
 const fails = results.filter(r => !r.pass).length;
 console.log(`\n${results.length - fails}/${results.length} passed · signals + results in ${DIR}`);
