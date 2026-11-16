@@ -16,6 +16,10 @@ description: The Ableton-grade waveform (session.exe window) drawn from the actu
 - Behind: opaque-ish lane, bar lines (0.26), beat lines (0.12), 16th ticks at the lane foot; centre line. Transient markers at the MEASURED onset (`onsets[kind][i][0]`), flag + hairline; warp triangles on the ruler at the quantised onsets.
 - Detail span = `meter.session.span` bars (default 2), playhead at 25 %. Window `session` is 1032x400 (exe 9:16).
 
+## v11.1 drawing (src/v8/waveview.js)
+- Default look `envelope` = DAW clip: min/max envelope with ~28 ms look-back peak hold (kick attack stays sharp, 50 Hz bass reads as one body), smooth RMS body (triangular-smoothed mean squares), bright high-band core by tone; all as anti-aliased paths through per-device-pixel points, played part bright / unplayed dimmed. Three greys in Nigredo (low = envelope, mid = RMS, high = core). View is peak-normalised (clip peak = 0.46 of lane height). No header text (HUD owns BPM/key).
+- `look: exact` (what the accuracy test renders, `--wave-debug`) keeps the raw per-column rects at true scale.
+
 ## Accuracy test
 ```
 cd /home/user/u2c-motion && .venv/bin/python tests/test_waveform_render.py [--t 6.0] [--stage nigredo]

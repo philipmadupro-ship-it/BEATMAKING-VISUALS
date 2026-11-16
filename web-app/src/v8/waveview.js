@@ -37,6 +37,8 @@ export function createWaveView(L, M, H) {
   // three band colours per stage: low, mid, high. Nigredo is pure grey (dark -> white); the others walk the stage palette.
   const bandCols = (S) => (S.grey ? ['#7d7d7d', '#b9b9b9', '#ffffff'] : [S.sig1, S.sig2 === S.sig1 ? S.ink : S.sig2, S.waveHi === S.sig1 ? S.ink : S.waveHi]);
   const cache = new Map();
+  // display gain: the clip's true peak maps to ~92 % of the lane half-height (a DAW 'normalised view'), so the scale is correct and the lane is used
+  let PEAK = 0; { const l0 = WV.lv[0]; for (let i = 0; i < l0.n; i++) for (let ch = 0; ch < 2; ch++) PEAK = Math.max(PEAK, -l0.mn[ch][i], l0.mx[ch][i]); PEAK = Math.max(PEAK, 0.05); }
   /** Column colour from the tone map entry [low %, high %]: a weighted blend of the three band colours. */
   function toneCol(S, tone) {
     const wl = clamp(tone[0] / 100), wh = clamp(tone[1] / 100), wm = clamp(1 - wl - wh), key = S.name + (wl * 8 | 0) + '.' + (wm * 8 | 0) + '.' + (wh * 8 | 0);
@@ -45,11 +47,42 @@ export function createWaveView(L, M, H) {
     c = { base: `rgb(${v[0]},${v[1]},${v[2]})`, core: `rgb(${Math.min(255, v[0] + 70)},${Math.min(255, v[1] + 70)},${Math.min(255, v[2] + 70)})` }; cache.set(key, c); return c;
   }
 
+
+  /** DAW-style clip body for one lane: a filled min/max envelope (peak hold looking back ~18 ms, so a kick's attack stays
+   *  sharp and a 50 Hz bass reads as one body instead of a comb of cycles), a smooth RMS body inside it and a bright
+   *  high-band core, all drawn as anti-aliased paths through per-device-pixel points (no rect stairs). Played part bright,
+   *  unplayed dimmed; three tones: low = envelope, mid = RMS body, high = core (greys in Nigredo). */
+  function drawEnvelope(ctx, S, Q, ch, g) {
+    const { x, nc, cwp, cy, sc, t, t0, span, dpx } = g, dt = span / nc, bc = bandCols(S);
+    const mx = new Float32Array(nc), mn = new Float32Array(nc), ms = new Float32Array(nc), hi = new Float32Array(nc), has = new Uint8Array(nc);
+    for (let i = 0; i < nc; i++) { const q = Q[i]; if (q) { has[i] = 1; mx[i] = q.mx; mn[i] = q.mn; ms[i] = q.rms * q.rms; const wi = Math.min(D.wave.tone.length - 1, Math.floor(Math.max(0, t0 + dt * i) * D.wave.cps)); hi[i] = (D.wave.tone[Math.max(0, wi)] || [50, 10])[1] / 100; } }
+    const W = Math.max(1, Math.round(0.028 / dt)), G = Math.max(1, Math.round(0.007 / dt));
+    const eMx = new Float32Array(nc), eMn = new Float32Array(nc), rb = new Float32Array(nc), hb = new Float32Array(nc);
+    for (let i = 0; i < nc; i++) {
+      let a = 0, b = 0; for (let j = Math.max(0, i - W); j <= i; j++) { if (mx[j] > a) a = mx[j]; if (mn[j] < b) b = mn[j]; } eMx[i] = a; eMn[i] = b;
+    }
+    const sm = (src, dst, r) => { for (let i = 0; i < nc; i++) { let s2 = 0, c = 0; for (let j = Math.max(0, i - r); j <= Math.min(nc - 1, i + r); j++) { const wgt = r + 1 - Math.abs(j - i); s2 += src[j] * wgt; c += wgt; } dst[i] = s2 / c; } };
+    const e2 = new Float32Array(nc), n2 = new Float32Array(nc); sm(eMx, e2, 1); sm(eMn, n2, 1);
+    const r2 = new Float32Array(nc); sm(ms, r2, G * 3); sm(hi, hb, G * 4);
+    for (let i = 0; i < nc; i++) { const rr = Math.sqrt(r2[i]) * 1.0; rb[i] = Math.min(rr, e2[i], -n2[i] || rr); }
+    const Xc = (i) => x + (i + 0.5) * cwp, path = (top, bot) => { ctx.beginPath(); let st = -1; for (let i = 0; i < nc; i++) { if (!has[i]) continue; if (st < 0) { st = i; ctx.moveTo(Xc(i), top(i)); } else ctx.lineTo(Xc(i), top(i)); } if (st < 0) return false; for (let i = nc - 1; i >= st; i--) if (has[i]) ctx.lineTo(Xc(i), bot(i)); ctx.closePath(); return true; };
+    const PXl = Math.min(g.x + g.w, Math.max(g.x, x + g.w * (t - t0) / span));
+    for (const played of [false, true]) {
+      ctx.save(); ctx.beginPath(); if (played) ctx.rect(x, g.top0, PXl - x, g.laneH); else ctx.rect(PXl, g.top0, x + g.w - PXl, g.laneH); ctx.clip();
+      const k = played ? 1 : 0.5;
+      ctx.fillStyle = bc[0]; ctx.globalAlpha = 0.62 * k; if (path((i) => cy - e2[i] * sc, (i) => cy - n2[i] * sc)) ctx.fill();
+      ctx.strokeStyle = bc[1]; ctx.globalAlpha = 0.9 * k; ctx.lineWidth = 1 / dpx; ctx.beginPath(); let f = true; for (let i = 0; i < nc; i++) { if (!has[i]) continue; const yy = cy - e2[i] * sc; if (f) { ctx.moveTo(Xc(i), yy); f = false; } else ctx.lineTo(Xc(i), yy); } ctx.stroke();
+      ctx.beginPath(); f = true; for (let i = 0; i < nc; i++) { if (!has[i]) continue; const yy = cy - n2[i] * sc; if (f) { ctx.moveTo(Xc(i), yy); f = false; } else ctx.lineTo(Xc(i), yy); } ctx.stroke();
+      ctx.fillStyle = bc[1]; ctx.globalAlpha = 0.95 * k; if (path((i) => cy - rb[i] * sc, (i) => cy + rb[i] * sc)) ctx.fill();
+      ctx.fillStyle = bc[2]; ctx.globalAlpha = 0.9 * k; if (path((i) => cy - rb[i] * sc * clamp(0.06 + hb[i] * 1.3, 0, 0.5), (i) => cy + rb[i] * sc * clamp(0.06 + hb[i] * 1.3, 0, 0.5))) ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
   function session(ctx, S, r, t, k) {
     const [x, y, w, h] = r; reveal(ctx, x, y, w, h, k);
     const song = D.song;
-    // readouts: tempo and key only (title and credit belong to the window label)
-    lbl(ctx, S, `${Math.round(D.bpm)} BPM · ${D.key}`, x + w - 4, y + 12, { align: 'right', a: 0.7, size: 17 });
     // overview (whole track) + sections + clip bracket + song playhead
     const oy = y + 24, oh = 30, sx = (st) => x + w * st / song.duration;
     for (const q of song.phrases) { const a0 = song.bar1 + (q.bar - 1) * BAR, a1 = a0 + q.bars * BAR; if (a0 > song.duration) continue; ctx.fillStyle = rgba(q.label === 'drop' ? S.sig2 : S.rule, q.label === 'drop' ? 0.16 : 0.05); ctx.fillRect(sx(a0), oy, sx(Math.min(song.duration, a1)) - sx(a0), oh); }
@@ -72,7 +105,7 @@ export function createWaveView(L, M, H) {
     if (dbg) Object.assign(dbg, { x, w, nc, dpx, laneH, lanes: [], sr: WV.sr, spc: WV.spc, lod0cps: WV.lv[0].cps });
     const snap = (v) => Math.round(v * dpx) / dpx, PX = Math.round(tx(t)), look = dbg ? 'exact' : L.meter('session', 'look', 'envelope');   // the accuracy test renders 'exact'
     for (let ch = 0; ch < 2; ch++) {
-      const top0 = ly + laneH * ch, cy = snap(top0 + laneH / 2), sc = laneH * 0.47;
+      const top0 = ly + laneH * ch, cy = snap(top0 + laneH / 2), sc = laneH * 0.46 / (dbg ? 1 : PEAK);
       // grid behind the waveform: bars strong, beats faint, 16ths as short ticks at the lane edge
       for (let q = Math.floor(t0 / (BEAT / 4)) - 1; q * BEAT / 4 < t0 + span + BEAT; q++) {
         const X = snap(tx(q * BEAT / 4)); if (X < x || X > x + w) continue; const isBar = ((q % 16) + 16) % 16 === 0, isBeat = ((q % 4) + 4) % 4 === 0;
@@ -82,8 +115,11 @@ export function createWaveView(L, M, H) {
       // film, like Rekordbox), their peak-hold over ~12 ms so a 50 Hz bass reads as a body, not a comb of cycles.
       const Q = new Array(nc).fill(null);
       for (let px = 0; px < nc; px++) { const ta = t0 + span * px / nc, tb = t0 + span * (px + 1) / nc; if (tb <= 0 || ta >= D.duration) continue; Q[px] = WV.col(Math.max(0, ta), Math.min(D.duration, tb), ch); }
-      const env = look === 'envelope', hw = env ? Math.max(1, Math.round(0.006 / (span / nc))) : 0;
-      for (let px = 0; px < nc; px++) {
+      const env = look === 'envelope', hw = 0;
+      if (env) drawEnvelope(ctx, S, Q, ch, { x, w, nc, cwp, cy, sc, t, t0, span, top0, laneH, dpx });
+      else
+      {
+            for (let px = 0; px < nc; px++) {
         const q = Q[px]; if (!q) continue; const ta = t0 + span * px / nc;
         let mn = q.mn, mx = q.mx, rms = q.rms;
         if (env) { let c = 0; rms = 0; mn = 0; mx = 0; for (let j = Math.max(0, px - hw); j <= Math.min(nc - 1, px + hw); j++) { const o = Q[j]; if (!o) continue; mn = Math.min(mn, o.mn); mx = Math.max(mx, o.mx); rms += o.rms * o.rms; c++; } rms = Math.sqrt(rms / Math.max(1, c)); }
@@ -96,6 +132,7 @@ export function createWaveView(L, M, H) {
         const hiK = clamp(0.18 + tone[1] / 60), hc = hR * hiK; if (hc > 0.5 / dpx) { ctx.fillStyle = tc.core; ctx.globalAlpha = played ? 0.95 : 0.55; ctx.fillRect(X, snap(cy - (rHi + rLo) / 2 * sc - hc / 2), cwp, hc); }   // centred on the RMS body, so it stays inside [min, max]
         ctx.fillStyle = tc.base; ctx.globalAlpha = played ? 0.95 : 0.5; ctx.fillRect(X, yT, cwp, 1 / dpx); ctx.fillRect(X, yT + hT - 1 / dpx, cwp, 1 / dpx);
         if (dbg) dbg.cols.push({ px, ch, X, mn: q.mn, mx: q.mx, rms: q.rms, s0: q.s0, s1: q.s1, lod: q.lod, yT, hT });
+      }
       }
       ctx.globalAlpha = 1; ctx.fillStyle = rgba(S.ink, 0.2); ctx.fillRect(x, cy, w, 1 / dpx);
       // transient markers at the measured onsets: hairline + a flag; a hit within 1/8 beat flashes bright
