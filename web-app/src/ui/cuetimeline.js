@@ -14,11 +14,12 @@ import { quantiseKeys, gridTargets, ripple, stamp, attrsOf, applyAttrs, applyEas
 import { read, write } from '../state.js';
 
 export const DEFAULT_ROWS = [
+  ['intro.index', 'Intro · cards', 'stage'], ['intro.push', 'Intro · push', 'stage'],
   ['camera.shot', 'Camera', 'camera'], ['focus.featured', 'Meter / focus', 'focus'], ['look', 'Look', 'look'], ['stage', 'Stage', 'stage'],
   ['logo.cycle', 'Logo · cycle', 'logo'], ['logo.hero', 'Logo · hero', 'logo'], ['pendant.amp', 'Pendant · amp', 'pendant'], ['text.cue', 'Text', 'text'],
   ['fx.flash', 'FX · flash', 'fx'], ['fx.glitch', 'FX · glitch', 'fx'],
 ];
-const GROUP_LABEL = { camera: 'Camera', focus: 'Meter', look: 'Look', stage: 'Stage', logo: 'Logo', pendant: 'Pendant', text: 'Text', fx: 'FX' };
+const GROUP_LABEL = { camera: 'Camera', focus: 'Meter', look: 'Look', stage: 'Stage · intro', logo: 'Logo', pendant: 'Pendant', text: 'Text', fx: 'FX' };
 const FRAME = 1 / 30, SNAP_PX = 7, EXPANDED = 84, MIN_H = 14, MAX_H = 260, PRESET_KEY = 'u2c.keypresets';
 const tick = (b) => Math.round(b * PPQ) / PPQ;
 

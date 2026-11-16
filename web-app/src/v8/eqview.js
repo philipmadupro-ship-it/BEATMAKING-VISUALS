@@ -106,7 +106,7 @@ export function createEqView(L) {
     const stat = curveOf(bands), dyn = curveOf(dynB);
     let rg = M('eq', 'range', 0);
     if (!rg) { const worst = curveOf(bands.map((b) => { const d = bandDyn(b, depth); return { ...b, g: b.g + d.dir * d.depth }; }), 4);   // every band at full detector: a stable scale
-      const m = Math.max(0, ...stat.sum.map(Math.abs), ...worst.sum.map(Math.abs)); rg = [3, 6, 12, 18, 30].find((v) => v >= m * 1.12) || 30; }
+      const m = Math.max(0, ...stat.sum.map(Math.abs), ...worst.sum.map(Math.abs)); rg = [12, 18, 30].find((v) => v >= m * 1.12) || 30; }
     const Yg = (db) => y + h * (0.5 - db / (2 * rg)), Ya = (v) => y + h * clamp(-v / anR);
     const sc = S.name === 'RUBEDO' ? S.hot : S.ink, bandA = S.grey ? [0.55, 0.45, 0.38, 0.32, 0.27] : [0.3, 0.3, 0.3, 0.3, 0.3];
     const act01 = (i) => clamp(Math.abs(offs[i]) / Math.max(0.01, bandDyn(bands[i], depth).depth));

@@ -70,7 +70,6 @@ export function liveFonts(doc = globalThis.document) {
   return { display: has('800 40px "Akira Expanded"') ? 'Akira Expanded' : 'Unbounded', ui: has('400 22px "Synkopy"') ? 'Synkopy' : 'Space Grotesk' };
 }
 export const MIN_PX = 22;
-
 /** The shared helper object for one clip (v8 window.L6). D: see v8/data.js. */
 export function createCore(D) {
   const FPS = D.fps, NF = D.frames, BEAT = D.beat, BAR = 4 * BEAT;
@@ -95,11 +94,13 @@ export function createCore(D) {
   const floorSize = (ctx, size) => { const m = ctx.getTransform(), sc = Math.hypot(m.a, m.b) / (view.camZ * view.base) || 1; return Math.max(size, MIN_PX / sc); };
   // v11.1 one text helper for the whole film. Default ("mix"): numbers (6, -18.4, 128, 09.1.1, 1.2k) in Akira Expanded sized NUM_SCALE x down, words and units in
   // Synkopy, "@" in the fallback face (Synkopy draws it as "e"). An explicit o.fam draws one face (title, labels), still routing "@" to the fallback.
-  const RUN = /[+\-\u2212]?\d[\d.,:]*|[@%]|[^@%]+?(?=[+\-\u2212]?\d|[@%]|$)/g;
+  const UNIT = '(?:\\s?(?:kHz|Hz|dBTP|dBFS|dB|LUFS|LU|ms|BPM|%|k|Q)(?![A-Za-z]))?';   // short units ride with the number in Akira (Synkopy breaks them at small sizes)
+const NUMR = '(?<![A-Za-z])(?:Q\\s?)?[+\\-\\u2212]?\\d[\\d.,:]*';   // a number not glued to a word (uche2crazy stays one word), optional leading Q
+const RUN = new RegExp(`${NUMR}${UNIT}|[@%]|[^@%]+?(?=${NUMR}|[@%]|$)`, 'g');
   function runsOf(s, o) {
     const mix = !o.fam || o.mix, out = [];
     for (const m of s.match(RUN) || [s]) {
-      if (m === '@' || m === '%') out.push([m, 'fb']); else if (mix && /^[+\-\u2212]?\d/.test(m)) out.push([m, 'num']); else out.push([m, 'main']);
+      if (m === '@' || m === '%') out.push([m, 'fb']); else if (mix && /^(?:Q\s?)?[+\-\u2212]?\d/.test(m)) out.push([m, 'num']); else out.push([m, 'main']);
     }
     return out;
   }

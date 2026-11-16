@@ -135,6 +135,7 @@ function trackFlags(t) { const o = {}; for (const f of ['mute', 'lock', 'solo', 
 export function cloneSheet(s) { return JSON.parse(JSON.stringify(s)); }
 export function defaultEase(kind) { return kind === 'number' || kind === 'color' ? 'linear' : kind === 'shot' ? 'easeInOut' : 'step'; }
 export function laneOf(path) {
+  if (path.startsWith('intro.')) return 'stage';   // the intro shares the Stage lane group (keeps the laptop dock to the same row count)
   if (path.startsWith('camera.')) return 'camera'; if (path === 'focus.featured') return 'focus'; if (path === 'look') return 'look'; if (path === 'stage') return 'stage';
   if (path.startsWith('logo.')) return 'logo'; if (path.startsWith('pendant.')) return 'pendant'; if (path === 'text.cue') return 'text'; if (path.startsWith('fx.')) return 'fx'; return 'custom';
 }

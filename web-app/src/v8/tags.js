@@ -24,6 +24,17 @@ export const DEFAULT_TAGS = {
   "producer": "prod. {producer}",
   "measure": "I {lufs} LUFS · LRA {lra} LU · TP {tp} dBTP"
  },
+ "intro": {
+  "title": "{title}",
+  "credit": "prod. {producer}",
+  "cards": [
+   "{title}",
+   "",
+   "",
+   "",
+   ""
+  ]
+ },
  "hud": {
   "left": "{title}",
   "right": "{bpm} BPM · {key}",

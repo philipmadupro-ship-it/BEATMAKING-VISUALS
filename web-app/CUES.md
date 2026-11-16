@@ -110,6 +110,18 @@ elephant spectrum eq loud stereo spectro`; scope `chains elephant eq spectrum lo
 Tag variables: `{title} {Title} {titleWord} {producer} {bpm} {bpm2} {key} {keyShort} {stage} {stageN} {look}
 {experiment} {date} {lufs} {srcLufs} {lra} {tp} {bars}`, plus `{angle}` in the pendant note and `{tc} {bbt} {songBar}` in the HUD.
 
+### Intro (v11, lane `intro`, `src/v8/intro.js`)
+The first `intro.length` bars (default 2 = 8 beats) are a liquid-glass player + cover-flow carousel that ends in a hard cut into the lab; the lab then builds after the cut (default window open beats and the boot terminal shift by the intro length). Clip length is unchanged. Covers: `assets/covers/cover-0..4.jpg` (cover-0 is the beat's own; Nigredo = pure grey, other stages = luminance mapped through the stage ramp). Text: tags `intro.title`, `intro.credit`, `intro.cards[0..4]`.
+| path | kind | meaning |
+|---|---|---|
+| `intro.on` | bool | optional (default true); false = start in the lab (native `--intro off`) |
+| `intro.length` | number (bars) | optional (default 2), read at beat 0 |
+| `intro.index` | number (cards) | carousel position; default keys: start on cover-4, 4 eased snaps of 0.5 beat landing ON beats 3..6, one direction, ending on cover-0 |
+| `intro.select` | bool | optional: corner brackets step in (4 x 32nd) around the chosen card; without a key they start where `intro.push` starts (beat 6) |
+| `intro.push` | number 0..1 | exponential push-in on the chosen cover (default: bezier 0 to 1 over beats 6 to 8, fills the frame, cut at beat 8) |
+| `intro.zoom` | number | max zoom (0 = fill the frame) |
+| `intro.player.scale` / `.opacity` | number | player pose (static 1 / 1: no fades by default) |
+
 ## The default sheet (from the analysis)
 `src/cues/generate.js`: the v8 film. Wide by default; focus pushes land on the bar lines 3, 7, 11 … (one beat in,
 `easeInOut`), hold 1-2 bars and push back out; the window follows the look's v8 rotation unless a section changes

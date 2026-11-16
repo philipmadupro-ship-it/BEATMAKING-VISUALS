@@ -12,14 +12,15 @@ import { LAYOUT, CONTENT, openBeat, WINDOW_IDS, HUD_BAND } from './layout.js';
 import { DEFAULT_TAGS } from './tags.js';
 import { mergeDeep, createEvaluator, emptySheet } from '../cues/schema.js';
 import { buildRegistry, meterPath } from './registry.js';
+import { createIntro } from './intro.js';   // v11 intro
 
 const METER_KIND = { scope: 'logo', session: 'waveform', spectro: 'spectrogram', loud: 'loudness' };
 
 export function createFilm({ D, assets, aspect = '916' }) {
-  const L = createCore(D), lab = createLab(L), M = createMeters(L), BR = createBrand(L, assets);
+  const L = createCore(D), lab = createLab(L), M = createMeters(L), BR = createBrand(L, assets), INTRO = createIntro(L, assets && assets.intro);
   const { F, FPS, BEAT, BAR, T, U, steps, rgba, mix, text, fmt, tc, bbt, fidx, clamp, lerp, hs, hash, kickEnv, labelAt, SANS, MONO, SERIF, HAND, DISPLAY, UI } = L;
   const port = aspect === '916', W = port ? 1080 : 1920, H = port ? 1920 : 1080, NB = D.bars;
-  let c = null, ev = createEvaluator(emptySheet()), b = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
+  let c = null, ev = createEvaluator(emptySheet()), b = 0, IB = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
   const V = (path, def) => ev.value(path, b, def);
   // ---------------------------------------------------------------- tag variables (every on-screen word is editable)
   const titleCase = D.title.split(' ').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
@@ -37,8 +38,10 @@ export function createFilm({ D, assets, aspect = '916' }) {
 
   // ---------------------------------------------------------------- windows: rect, open steps, content
   const rectOf = (id) => { const r = LAYOUT[LOOK][aspect][id]; return [V(`win.${id}.x`, r[0]), V(`win.${id}.y`, r[1]), V(`win.${id}.w`, r[2]), V(`win.${id}.h`, r[3])]; };
+  // v11 intro: with an intro of IB beats the lab builds after it (default open beats shift by IB; -2 = open at the cut)
+  const winOpen = (id) => { const d = openBeat(LOOK, aspect, id); return V(`win.${id}.open`, IB ? (d < 0 ? IB : d + IB) : d); };
   function openStep(id, t) {
-    const n0 = steps(t, V(`win.${id}.open`, openBeat(LOOK, aspect, id)), 6, U.t32), k = ev.lastKey(`win.${id}.visible`, t / BEAT);
+    const n0 = steps(t, winOpen(id), 6, U.t32), k = ev.lastKey(`win.${id}.visible`, t / BEAT);
     if (!k) return V(`win.${id}.visible`, true) ? n0 : 0;
     const was = k.prev ? !!k.prev.v : true, on = !!k.key.v;
     if (on) return was ? n0 : Math.min(n0 || 6, steps(t, k.key.b, 6, U.t32));
@@ -250,14 +253,19 @@ export function createFilm({ D, assets, aspect = '916' }) {
     elephantBody(testRect(), t, 1, S);
     const bb = Math.floor(t / BEAT + 1e-6); text(c, `PENDANT · CHAIN WAVE · beat ${bb + 1} · ${bbt(t)}`, 40, port ? 120 : 50, { size: 28, w: 700, col: S.ink });
   }
+  function flash(t) { const f = fidx(t); if (ev.keysIn('fx.flash', 0, NB * 4 + 1).some((k) => fidx(T(k.b) + 0.5 / FPS) === f)) { c.globalCompositeOperation = 'difference'; c.fillStyle = S.grey ? '#ffffff' : S.ink; c.fillRect(0, 0, W, H); c.globalCompositeOperation = 'source-over'; } }
   /** Draw clip time t into ctx (a canvas of width W*scale). opts: {ev, fps (sample at the frame centre), look, stage}. */
   function render(ctx, t, opts = {}) {
-    c = ctx; ev = opts.ev || ev; tagDoc = opts.tags || DEFAULT_TAGS;
+    c = ctx; ev = opts.ev || ev; tagDoc = opts.tags || DEFAULT_TAGS; IB = INTRO.beats(ev);
     const fps = opts.fps || FPS, scale = ctx.canvas.width / W;
     t = clamp(t, 0, D.duration - 1 / fps) + 0.5 / fps; b = t / BEAT;
     setState(V('look', opts.look || 'exe'), V('stage', opts.stage || 'nigredo')); pendulum();
     c.setTransform(scale, 0, 0, scale, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
     if (opts.test) { L.view.camZ = 1; L.view.base = scale; testMode(opts.test, t); c.setTransform(1, 0, 0, 1, 0, 0); return { look: LOOK, stage: S.name, test: opts.test }; }
+    if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H }); c.setTransform(scale, 0, 0, scale, 0, 0); textCues(t); textures(t); flash(t); c.setTransform(1, 0, 0, 1, 0, 0);
+      return { look: LOOK, stage: S.name, intro: true };
+    }
     const cam = camera(), z = cam.z; L.view.camZ = z; L.view.base = scale;
     c.fillStyle = S.bg; c.fillRect(0, 0, W, H);
     c.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z));
@@ -267,17 +275,18 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
     if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16));
     result(t); hud(t, ev.shot(b)); textCues(t); textures(t);
-    const f = fidx(t); if (ev.keysIn('fx.flash', 0, NB * 4 + 1).some((k) => fidx(T(k.b) + 0.5 / FPS) === f)) { c.globalCompositeOperation = 'difference'; c.fillStyle = S.grey ? '#ffffff' : S.ink; c.fillRect(0, 0, W, H); c.globalCompositeOperation = 'source-over'; }
+    flash(t);
     glitch(t, scale);
     c.setTransform(1, 0, 0, 1, 0, 0);
     return { look: LOOK, stage: S.name, cam, attention: att };
   }
   /** Every scheduled visual event of the current cue sheet (beats + labels), for the sync test and the timeline. */
   function schedule(evx, opts = {}) {
-    ev = evx; const out = [], add = (bb, what) => { if (bb >= 0 && bb <= NB * 4) out.push({ b: bb, t: T(bb), what }); };
+    ev = evx; IB = INTRO.beats(ev); const out = [], add = (bb, what) => { if (bb >= 0 && bb <= NB * 4) out.push({ b: bb, t: T(bb), what }); };
     b = 0; setState(V('look', opts.look || 'exe'), V('stage', opts.stage || 'nigredo'));
     for (const t of ev.tracksOf('camera.shot')) for (const k of t.keys) { if (k.transition !== 'cut') add(k.b - (k.dur ?? 1), `camera push → ${k.v} (start)`); add(k.b, `camera ${k.transition === 'cut' ? 'cut' : 'push'} → ${k.v} (land)`); }
-    for (const id of IDS) { const o = V(`win.${id}.open`, openBeat(LOOK, aspect, id)); if (o >= 0) for (let q = 0; q < 6; q++) add(o + q * U.t32, `open ${id} step ${q + 1}`); }
+    for (const [bb, w] of INTRO.events(ev)) add(bb, w);   // v11 intro
+    for (const id of IDS) { const o = winOpen(id); if (o >= 0) for (let q = 0; q < 6; q++) add(o + q * U.t32, `open ${id} step ${q + 1}`); }
     const ra = resultAt(); for (let q = 0; q < 6; q++) add(ra + q * 0.5, `result line ${q + 1}`);
     for (const [bb, w] of BR.logoEvents(0, NB * 4, Math.max(4, Math.round(V('logo.cycle', 2) * 4)))) add(bb, w);
     for (let k = 0; k < NB * 4; k++) add(k * V('pendant.period', 2) / 2, 'pendant swing extreme');
@@ -288,7 +297,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     return out.sort((x, y) => x.b - y.b);
   }
   /** Window rects of a look (with the sheet's overrides at beat bb), for hit testing and camera framing in the UI. */
-  function rects(evx, bb, look) { ev = evx; b = bb; setState(look || V('look', 'exe'), V('stage', 'nigredo')); return { ...LY }; }
+  function rects(evx, bb, look) { ev = evx; IB = INTRO.beats(ev); b = bb; setState(look || V('look', 'exe'), V('stage', 'nigredo')); return { ...LY }; }
   // motion trace in the pendant test geometry (testRect): hand, every joint, every link angle, the body angle
   const trace = (t, evx) => { if (evx) ev = evx; b = 0; pendulum(); const g = pendantGeom(testRect()); return BR.tracePts(g.ax, g.ay, g.size, t + 0.5 / FPS, g.len); };
   return { W, H, D, render, schedule, rects, trace, testRect, waveRect, registry: (o = {}) => buildRegistry({ aspect, bars: NB, ...o }), core: L, brand: BR, WINDOW_IDS };

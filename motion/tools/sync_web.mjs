@@ -18,6 +18,9 @@ const FILES = [
   ...['meterstreams.js', 'msspec.js', 'dsp.js', 'stereo.js', 'truepeak.js'].map((f) => ['src/analysis/' + f, 'src/analysis/' + f]),
   ['src/export/audio.js', 'src/export/audio.js'],
   ...['u2c-links.png', 'u2c-links-edge.png', 'elephant.png', 'elephant-rig.json'].map((f) => ['assets/' + f, 'assets/' + f]),
+  // v11 intro: the cover cards (committed) and the two licensed fonts (gitignored on both sides: copied only when present)
+  ...[0, 1, 2, 3, 4].map((i) => [`assets/covers/cover-${i}.jpg`, `assets/covers/cover-${i}.jpg`]),
+  ...['AkiraExpanded', 'Synkopy'].flatMap((n) => ['otf', 'woff2', 'ttf'].map((e) => [`assets/fonts/${n}.${e}`, `assets/fonts/${n}.${e}`])).filter(([src]) => fs.existsSync(path.join(WEB, src))),
 ];
 const sha = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex').slice(0, 16);
 let diff = 0; const man = { source: WEB, commit: spawnSync('git', ['-C', WEB, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).stdout.trim(), files: {} };

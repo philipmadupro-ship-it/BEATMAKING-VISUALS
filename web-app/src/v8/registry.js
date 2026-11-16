@@ -44,6 +44,10 @@ export function buildRegistry({ look = 'exe', aspect = '916', stage = 'nigredo',
   const el = (id, label, group, props) => E.push({ id, label, group, props });
   const wins = ['wide', ...ids];
   el('scene', 'Scene', 'Scene', [en('look', 'Look', look, LOOKS), en('stage', 'Stage', stage, STAGE_IDS)]);
+  el('intro', 'Intro (player + cover-flow)', 'Intro', [bool('intro.on', 'Intro on (0 = start in the lab)', true), num('intro.length', 'Length', 2, 1, 4, 1, 'bars'),
+    num('intro.index', 'Carousel position (eased keys land on beats)', 0, -20, 20, 0.01, 'cards'), num('intro.push', 'Push-in (hard cut at the end of the intro)', 0, 0, 1, 0.01),
+    num('intro.zoom', 'Push zoom (0 = fill the frame)', 0, 0, 8, 0.05, '×'), bool('intro.select', 'Selection brackets', false),
+    num('intro.player.scale', 'Player scale', 1, 0.5, 1.5, 0.01, '×'), num('intro.player.opacity', 'Player opacity (static by default: no fades)', 1, 0, 1, 0.01)]);
   el('camera', 'Camera', 'Camera', [{ path: 'camera.shot', label: 'Shot (wide / focus window)', kind: 'shot', default: 'wide', options: wins },
     num('camera.zoom', 'Zoom multiplier', 1, 0.5, 3, 0.01, '×'), num('camera.x', 'Pan X', 0, -600, 600, 1, 'px'), num('camera.y', 'Pan Y', 0, -900, 900, 1, 'px')]);
   el('focus', 'Featured meter', 'Camera', [en('focus.featured', 'Hero window (bracket + lit header)', 'auto', ['auto', 'none', ...ids])]);
