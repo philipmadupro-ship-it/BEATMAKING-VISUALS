@@ -56,7 +56,7 @@ export function createWaveView(L, M, H) {
     const { x, nc, cwp, cy, sc, t, t0, span, dpx } = g, dt = span / nc, bc = bandCols(S);
     const mx = new Float32Array(nc), mn = new Float32Array(nc), ms = new Float32Array(nc), hi = new Float32Array(nc), has = new Uint8Array(nc);
     for (let i = 0; i < nc; i++) { const q = Q[i]; if (q) { has[i] = 1; mx[i] = q.mx; mn[i] = q.mn; ms[i] = q.rms * q.rms; const wi = Math.min(D.wave.tone.length - 1, Math.floor(Math.max(0, t0 + dt * i) * D.wave.cps)); hi[i] = (D.wave.tone[Math.max(0, wi)] || [50, 10])[1] / 100; } }
-    const W = Math.max(1, Math.round(0.028 / dt)), G = Math.max(1, Math.round(0.007 / dt));
+    const W = Math.max(1, Math.round(0.009 / dt)), G = Math.max(1, Math.round(0.007 / dt));
     const eMx = new Float32Array(nc), eMn = new Float32Array(nc), rb = new Float32Array(nc), hb = new Float32Array(nc);
     for (let i = 0; i < nc; i++) {
       let a = 0, b = 0; for (let j = Math.max(0, i - W); j <= i; j++) { if (mx[j] > a) a = mx[j]; if (mn[j] < b) b = mn[j]; } eMx[i] = a; eMn[i] = b;
@@ -66,15 +66,22 @@ export function createWaveView(L, M, H) {
     const r2 = new Float32Array(nc); sm(ms, r2, G * 3); sm(hi, hb, G * 4);
     for (let i = 0; i < nc; i++) { const rr = Math.sqrt(r2[i]) * 1.0; rb[i] = Math.min(rr, e2[i], -n2[i] || rr); }
     const Xc = (i) => x + (i + 0.5) * cwp, path = (top, bot) => { ctx.beginPath(); let st = -1; for (let i = 0; i < nc; i++) { if (!has[i]) continue; if (st < 0) { st = i; ctx.moveTo(Xc(i), top(i)); } else ctx.lineTo(Xc(i), top(i)); } if (st < 0) return false; for (let i = nc - 1; i >= st; i--) if (has[i]) ctx.lineTo(Xc(i), bot(i)); ctx.closePath(); return true; };
-    const PXl = Math.min(g.x + g.w, Math.max(g.x, x + g.w * (t - t0) / span));
+    const PXl = Math.min(g.x + g.w, Math.max(g.x, x + g.w * (t - t0) / span)), fl = g.flash || 0;
+    // transient score per column: how far the envelope sits above its own ~0.25 s average (a kick spikes, a bass body does not)
+    const cum = new Float64Array(nc + 1); for (let i = 0; i < nc; i++) cum[i + 1] = cum[i] + e2[i]; const rw = Math.max(2, Math.round(0.125 / dt)), trn = new Float32Array(nc);
+    for (let i = 0; i < nc; i++) { const a = Math.max(0, i - rw), b = Math.min(nc, i + rw + 1), av = (cum[b] - cum[a]) / (b - a) + 1e-4; trn[i] = clamp((e2[i] / av - 1.25) / 0.9); }
     for (const played of [false, true]) {
       ctx.save(); ctx.beginPath(); if (played) ctx.rect(x, g.top0, PXl - x, g.laneH); else ctx.rect(PXl, g.top0, x + g.w - PXl, g.laneH); ctx.clip();
-      const k = played ? 1 : 0.5;
+      const k = played ? 0.82 + 0.18 * (1 - fl) : 0.5;
       ctx.fillStyle = bc[0]; ctx.globalAlpha = 0.62 * k; if (path((i) => cy - e2[i] * sc, (i) => cy - n2[i] * sc)) ctx.fill();
       ctx.strokeStyle = bc[1]; ctx.globalAlpha = 0.9 * k; ctx.lineWidth = 1 / dpx; ctx.beginPath(); let f = true; for (let i = 0; i < nc; i++) { if (!has[i]) continue; const yy = cy - e2[i] * sc; if (f) { ctx.moveTo(Xc(i), yy); f = false; } else ctx.lineTo(Xc(i), yy); } ctx.stroke();
       ctx.beginPath(); f = true; for (let i = 0; i < nc; i++) { if (!has[i]) continue; const yy = cy - n2[i] * sc; if (f) { ctx.moveTo(Xc(i), yy); f = false; } else ctx.lineTo(Xc(i), yy); } ctx.stroke();
       ctx.fillStyle = bc[1]; ctx.globalAlpha = 0.95 * k; if (path((i) => cy - rb[i] * sc, (i) => cy + rb[i] * sc)) ctx.fill();
       ctx.fillStyle = bc[2]; ctx.globalAlpha = 0.9 * k; if (path((i) => cy - rb[i] * sc * clamp(0.06 + hb[i] * 1.3, 0, 0.5), (i) => cy + rb[i] * sc * clamp(0.06 + hb[i] * 1.3, 0, 0.5))) ctx.fill();
+      // transients: columns that spike over their surroundings are drawn bright, full height (kicks read as white spikes)
+      ctx.fillStyle = bc[2]; for (let i = 0; i < nc; i++) { if (!has[i] || trn[i] < 0.04) continue; ctx.globalAlpha = Math.min(1, trn[i] * 1.1) * (played ? 0.95 : 0.5); ctx.fillRect(Xc(i) - cwp / 2, cy - e2[i] * sc, cwp, (e2[i] - n2[i]) * sc); }
+      // kick flash: the played side brightens for ~120 ms after each kick
+      if (played && fl > 0.01) { ctx.fillStyle = bc[2]; ctx.globalAlpha = 0.75 * fl; if (path((i) => cy - e2[i] * sc, (i) => cy - n2[i] * sc)) ctx.fill(); }
       ctx.restore();
     }
     ctx.globalAlpha = 1;
@@ -84,7 +91,7 @@ export function createWaveView(L, M, H) {
     const [x, y, w, h] = r; reveal(ctx, x, y, w, h, k);
     const song = D.song;
     // overview (whole track) + sections + clip bracket + song playhead
-    const oy = y + 24, oh = 30, sx = (st) => x + w * st / song.duration;
+    const cmp = h < 340, oy = y + (cmp ? 16 : 24), oh = cmp ? 18 : 30, sx = (st) => x + w * st / song.duration;
     for (const q of song.phrases) { const a0 = song.bar1 + (q.bar - 1) * BAR, a1 = a0 + q.bars * BAR; if (a0 > song.duration) continue; ctx.fillStyle = rgba(q.label === 'drop' ? S.sig2 : S.rule, q.label === 'drop' ? 0.16 : 0.05); ctx.fillRect(sx(a0), oy, sx(Math.min(song.duration, a1)) - sx(a0), oh); }
     const ov = song.overview; ctx.fillStyle = rgba(S.ink, 0.5);
     for (let i = 0; i < ov.length; i++) { const v = ov[i] / 1000 * oh * 0.46; ctx.fillRect(x + w * i / ov.length, oy + oh / 2 - v, Math.max(1, w / ov.length), v * 2); }
@@ -92,7 +99,7 @@ export function createWaveView(L, M, H) {
     ctx.strokeStyle = rgba(S.ink, 0.7); ctx.lineWidth = 1.5; ctx.strokeRect(c0, oy - 1, c1 - c0, oh + 2); ctx.lineWidth = 1;
     ctx.fillStyle = S.hot; ctx.fillRect(Math.round(sx(song.startTime + t)), oy - 3, 2, oh + 6);
     // ruler over the detail window: the playhead sits at the centre, the grid scrolls under it
-    const ry = oy + oh + 8, rh = 20, span = L.meter('session', 'span', 2) * BAR, t0 = t - 0.5 * span, tx = (tt) => x + w * (tt - t0) / span;
+    const ry = oy + oh + (cmp ? 5 : 8), rh = cmp ? 15 : 20, span = L.meter('session', 'span', 2) * BAR, t0 = t - 0.5 * span, tx = (tt) => x + w * (tt - t0) / span;
     ctx.fillStyle = rgba(S.ink, 0.3); ctx.fillRect(x, Math.round(ry + rh), w, 1);
     for (let b = Math.floor(t0 / BEAT) - 1; b * BEAT < t0 + span + BEAT; b++) {
       const X = Math.round(tx(b * BEAT)) + 0.5; if (X < x || X > x + w) continue; const isBar = ((b % 4) + 4) % 4 === 0;
@@ -100,12 +107,15 @@ export function createWaveView(L, M, H) {
       if (isBar && X < x + w - 40) lbl(ctx, S, String(song.startBar + b / 4), X + 5, ry + 9, { w: 700, a: 0.9, size: 16 });
     }
     // L / R lanes: one column per DEVICE pixel, min/max envelope + RMS body + a bright core by the high-band share
-    const ly = ry + rh + 6, laneH = (y + h - ly - 4) / 2, m = ctx.getTransform(), dpx = Math.max(1e-3, Math.hypot(m.a, m.b)), nc = Math.max(1, Math.round(w * dpx)), cwp = w / nc;
+    const ly = ry + rh + 4, laneH = (y + h - ly - 3) / 2, m = ctx.getTransform(), dpx = Math.max(1e-3, Math.hypot(m.a, m.b)), nc = Math.max(1, Math.round(w * dpx)), cwp = w / nc;
     const dbg = L.waveDebug ? (L.waveDebug.cols = [], L.waveDebug.skip = [], L.waveDebug) : null;
     if (dbg) Object.assign(dbg, { x, w, nc, dpx, laneH, lanes: [], sr: WV.sr, spc: WV.spc, lod0cps: WV.lv[0].cps });
+    // kick flash (decays over 120 ms) and beat pulse (decays over ~1/3 beat) for the played-side brightening and the playhead
+    let flash = 0; if (!dbg) for (const [tr] of D.onsets.kick) { if (tr > t) break; const a = 1 - (t - tr) / 0.12; if (a > flash) flash = a; } flash = flash * flash;
+    const bph = (((t / BEAT) % 1) + 1) % 1, pulse = dbg ? 0 : Math.exp(-bph * 7);
     const snap = (v) => Math.round(v * dpx) / dpx, PX = Math.round(tx(t)), look = dbg ? 'exact' : L.meter('session', 'look', 'envelope');   // the accuracy test renders 'exact'
     for (let ch = 0; ch < 2; ch++) {
-      const top0 = ly + laneH * ch, cy = snap(top0 + laneH / 2), sc = laneH * 0.46 / (dbg ? 1 : PEAK);
+      const top0 = ly + laneH * ch, cy = snap(top0 + laneH / 2), sc = laneH * 0.49 / (dbg ? 1 : PEAK);
       // grid behind the waveform: bars strong, beats faint, 16ths as short ticks at the lane edge
       for (let q = Math.floor(t0 / (BEAT / 4)) - 1; q * BEAT / 4 < t0 + span + BEAT; q++) {
         const X = snap(tx(q * BEAT / 4)); if (X < x || X > x + w) continue; const isBar = ((q % 16) + 16) % 16 === 0, isBeat = ((q % 4) + 4) % 4 === 0;
@@ -116,7 +126,7 @@ export function createWaveView(L, M, H) {
       const Q = new Array(nc).fill(null);
       for (let px = 0; px < nc; px++) { const ta = t0 + span * px / nc, tb = t0 + span * (px + 1) / nc; if (tb <= 0 || ta >= D.duration) continue; Q[px] = WV.col(Math.max(0, ta), Math.min(D.duration, tb), ch); }
       const env = look === 'envelope', hw = 0;
-      if (env) drawEnvelope(ctx, S, Q, ch, { x, w, nc, cwp, cy, sc, t, t0, span, top0, laneH, dpx });
+      if (env) drawEnvelope(ctx, S, Q, ch, { x, w, nc, cwp, cy, sc, t, t0, span, top0, laneH, dpx, flash });
       else
       {
             for (let px = 0; px < nc; px++) {
@@ -145,7 +155,8 @@ export function createWaveView(L, M, H) {
     }
     if (dbg) dbg.playX = PX;
     // playhead, fixed at the centre, with the bar.beat readout (the only moving text)
-    ctx.fillStyle = S.hot; ctx.fillRect(PX, ry - 2, 2, y + h - ry + 2);
+    if (pulse > 0.02) { ctx.fillStyle = rgba(S.hot, 0.22 * pulse); ctx.fillRect(PX - 5 * pulse - 1, ry - 2, 10 * pulse + 4, y + h - ry + 2); }
+    ctx.fillStyle = S.hot; ctx.fillRect(PX - pulse * 0.8, ry - 2, 2 + pulse * 1.6, y + h - ry + 2);
     ctx.beginPath(); ctx.moveTo(PX - 7, ry - 3); ctx.lineTo(PX + 9, ry - 3); ctx.lineTo(PX + 1, ry + 6); ctx.fill();
     text(ctx, bbt(t), PX + 10, ly + 14, { size: 20, w: 700, col: S.hot });
     ctx.restore();
