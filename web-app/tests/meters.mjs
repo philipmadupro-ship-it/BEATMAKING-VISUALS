@@ -385,6 +385,38 @@ json.dump(res, open(out, 'w'))
   ok('spectrogram: S shares the M encoding (not normalised up: mean S < mean M on the real beat)', sm < mm, `mean M ${(mm / nf / 128).toFixed(1)} · S ${(sm / nf / 128).toFixed(1)}`);
 }
 
+
+// ---- v14 player panels: PEAK / RMS / DR, WIDTH and the inserts cube step
+{
+  const INS = await import(path.join(ROOT, 'src/v8/inserts.js'));
+  // (a) PEAK / RMS / DR (levelview.playerStats) vs the same numbers computed straight from the raw samples (1.5 s window ending at 1.9 s)
+  for (const k of ['mono', 'hardL', 'wide', 'anti']) {
+    const [Lc, Rc] = SYN.sig[k], D = synClip[k], sr = SYN.sr, t = 1.9, win = 1.5, a = Math.round((t - win) * sr), b = Math.round(t * sr); let pk = 0, ms = 0;
+    for (let i = a; i < b; i++) { pk = Math.max(pk, Math.abs(Lc[i]), Math.abs(Rc[i])); ms += (Lc[i] * Lc[i] + Rc[i] * Rc[i]) / 2; }
+    const peak = 20 * Math.log10(pk), rms = 10 * Math.log10(ms / (b - a)), st = LV.playerStats(D.lv, t, win);
+    ok(`player boxes ${k}: PEAK / RMS / DR match the raw-sample values (±0.05 dB)`, Math.abs(st.peak - peak) < 0.05 && Math.abs(st.rms - rms) < 0.05 && Math.abs(st.dr - (peak - rms)) < 0.1, `peak ${st.peak.toFixed(2)}/${peak.toFixed(2)} · rms ${st.rms.toFixed(2)}/${rms.toFixed(2)} · DR ${st.dr.toFixed(2)}/${(peak - rms).toFixed(2)}`);
+  }
+  { const sine = Float32Array.from({ length: 96000 }, (_, i) => 10 ** (-18 / 20) * Math.sin(2 * Math.PI * 1000 * i / 48000)), D = clipData({ L: sine, R: sine, sr: 48000, inT: 0, bars: 1, beat: 0.5, target: 'off' }), st = LV.playerStats(D.lv, 1.9, 1.5);
+    ok('player boxes: a -18 dBFS sine reads PEAK -18, RMS -21.0, DR 3.0 (sine crest)', Math.abs(st.peak + 18) < 0.1 && Math.abs(st.rms + 21.01) < 0.1 && Math.abs(st.dr - 3.01) < 0.15, `${st.peak.toFixed(2)} / ${st.rms.toFixed(2)} / ${st.dr.toFixed(2)}`); }
+  // (b) WIDTH = sqrt(sum S^2 / sum M^2) over the 100 ms window (S = (l-r)/2, M = (l+r)/2): the number the WIDTH slider shows (x 100 %)
+  for (const k of ['mono', 'hardL', 'wide', 'anti']) {
+    const [Lc, Rc] = SYN.sig[k], D = synClip[k], sr = SYN.sr, f = Math.min(D.frames - 1, Math.round(1.2 * D.fps)), c = Math.round(f / D.fps * sr), w0 = Math.max(0, c - Math.floor(0.1 * sr)), w1 = Math.min(Lc.length, Math.max(c, w0 + 32)); let mm = 0, ss = 0;
+    for (let i = w0; i < w1; i++) { const m = (Lc[i] + Rc[i]) / 2, sd = (Lc[i] - Rc[i]) / 2; mm += m * m; ss += sd * sd; }
+    const ref = mm / (w1 - w0) > 1e-14 ? Math.sqrt(ss / mm) : 0, got = D.frame.width[f];
+    ok(`WIDTH ${k}: frame width = sqrt(S^2/M^2) from the raw samples`, Math.abs(got - ref) < 2e-3 + 1e-3 * ref, `${got} vs ${ref.toFixed(3)}`);
+  }
+  ok('WIDTH anchors: mono 0 %, hard-left 100 %, independent L/R about 100 %', synClip.mono.frame.width[40] < 0.005 && Math.abs(synClip.hardL.frame.width[40] - 1) < 0.01 && Math.abs(synClip.wide.frame.width[40] - 1) < 0.15, `${synClip.mono.frame.width[40]} · ${synClip.hardL.frame.width[40]} · ${synClip.wide.frame.width[40]}`);
+  { const bw = synClip.wide.ms.bandWidth, f = synClip.wide.frames - 2, v = [0, 1, 2, 3].map((b) => bw[f * 4 + b]); ok('band width %: independent L/R noise reads about 100 % in each of the 4 bands (real per-band S/M)', v.every((x) => x > 80 && x < 120), v.map((x) => x.toFixed(0)).join(' / ')); }
+  // (c) the inserts cube turns one 90-degree step per beat, eased so it lands on the beat: within 1 frame of every beat
+  for (const [fps, beat] of [[30, 0.46875], [30, 0.5], [30, 0.4286]]) {
+    let worst = 0, still = true, mono = true, prev = -1;
+    for (let n = 1; n <= 24; n++) { const tb = n * beat; let fl = -1; for (let f = Math.floor((tb - beat) * fps); f <= Math.ceil(tb * fps) + 2; f++) if (Math.abs(INS.cubeStep((f + 0.5) / fps, beat) - n) < 0.01) { fl = f; break; }
+      const fb = tb * fps - 0.5;   // the frame whose centre is on the beat
+      worst = Math.max(worst, fl < 0 ? 99 : Math.abs(fl - fb)); if (Math.abs(INS.cubeStep(tb + 1e-9, beat) - n) > 1e-6) still = false; if (Math.abs(INS.cubeStep(tb - beat * 0.99 + 1e-6 + 0.0, beat) - (n - 1)) > 1e-3) still = false; }
+    for (let f = 0; f < 24 * beat * fps; f++) { const v = INS.cubeStep((f + 0.5) / fps, beat); if (v < prev - 1e-9) mono = false; prev = v; }
+    ok(`inserts cube @${fps} fps beat ${beat}: lands on every beat (first frame within 0.01 step is <= 1 frame from the beat), integer step at each beat, holds then eases, never backwards`, worst <= 1.0001 && still && mono, `worst ${worst.toFixed(2)} frames`);
+  }
+}
 fs.writeFileSync(path.join(DIR, 'results.json'), JSON.stringify(table.map(({ k, A, F, N }) => ({ k, app: { peak: A.peak, rms: A.rms, lufs: A.lufs, tp: A.tp, corr: A.corr, clip: A.clip, eq: A.eq }, ffmpeg: F, numpy: N })), null, 1));
 const fails = results.filter(r => !r.pass).length;
 console.log(`\n${results.length - fails}/${results.length} passed · signals + results in ${DIR}`);

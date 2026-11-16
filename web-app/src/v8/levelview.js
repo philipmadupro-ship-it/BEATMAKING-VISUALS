@@ -33,6 +33,16 @@ export function glowAt(D, t, fps = 30, tau = GLOW_TAU) {
   return g;
 }
 
+/** v14 player boxes: PEAK / RMS / DR over the `win` s ending at t, straight from the 1 ms level blocks (sample peak, mean square, both channels).
+ *  peak = max sample peak (dBFS); rms = 10 log10 of the mean square over both channels (dBFS); dr = peak - rms (short-window PLR, dB).
+ *  Pure function of (lv, t, win): the test recomputes it from the raw samples. */
+export function playerStats(lv, t, win = 1.5) {
+  const b1 = Math.max(0, Math.min(lv.n, Math.floor(t * lv.rate + 1e-6))), b0 = Math.max(0, b1 - Math.round(win * lv.rate)); let pk = 0, ms = 0;
+  for (let b = b0; b < b1; b++) { const p = Math.max(lv.pkL[b], lv.pkR[b]); if (p > pk) pk = p; ms += lv.msL[b] + lv.msR[b]; }
+  const nb = Math.max(1, b1 - b0), peak = pk > 1e-7 ? 20 * Math.log10(pk) : -Infinity, rms = ms > 1e-14 ? 10 * Math.log10(ms / (2 * nb)) : -Infinity;
+  return { peak, rms, dr: Number.isFinite(peak) && Number.isFinite(rms) ? peak - rms : NaN };
+}
+
 export function createLevelView(L, M8, H) {
   const { D, F, FPS, rgba, text, fmt, fidx, clamp } = L, { levOpts, levRead, levScale, levBar, levTicks, hatch, reveal } = H;
   const lufsStr = (v) => (!Number.isFinite(v) || v < -69 ? '−∞' : v.toFixed(1));
@@ -74,7 +84,49 @@ export function createLevelView(L, M8, H) {
     if (on || v > 0.02) { ctx.fillStyle = rgba(S.hot, on ? 1 : 0.25 + 0.75 * v); ctx.fillRect(x, y, w, 3); }
   }
 
+  // ---- v14 "player" variant (opt.variant = 'player'): tall segmented L / R bars with a dB scale, a slim GR bar, and four boxes PEAK / RMS / LUFS / DR.
+  // Bars: lit segments up to the RMS (zone colour), dimmer up to the peak, an accent peak tick, the exponential kick glow (glowAt) on the lit body.
+  // Boxes tick on the half beat: PEAK / RMS / DR = playerStats over the last 1.5 s, LUFS = short-term (BS.1770). Nothing is a fixed value.
+  const PL_TICKS = [0, -6, -12, -18, -24, -30, -36, -42, -48, -54, -60];
+  function levelsPlayer(ctx, S, r, t, k, opt) {
+    const [x, y, w, h] = r; if (!opt.noReveal) reveal(ctx, x, y, w, h, k);
+    const o = levOpts(), pos = (db) => ML.dbPos(clamp(db, -140, 0), 'live', 60, 0), Z = H.zonesOf(S), hb = L.BEAT / 2, tt = Math.floor(t / hb + 1e-6) * hb, tf = fidx(tt);
+    const vL = levRead(0, t, o), vR = levRead(1, t, o), g = glowAt(D, t, FPS), tk = [0, 1].map((ch) => levRead(ch, t, { ...o, hold: 0.2, rel: 26 }).hold), led = ledAt(D.lv, t, -3);
+    const gr = grFor(D, {}), grNow = ML.grAt(gr, t, FPS, D.lv.rate); let gd = gr._depth; if (gd == null) { gd = 0; for (let i = 0; i < gr.length; i++) if (-gr[i] > gd) gd = -gr[i]; gr._depth = gd; }
+    const grRange = Math.max(2, Math.ceil(gd * 1.15 + 0.2));
+    const sW = L.floorSize(ctx, 11), sN = L.floorSize(ctx, 16), nH = sN * NUM, pad = 4, gap = 6;
+    const boxH = Math.round(sW + nH + 16), boxY = y + h - boxH, hdr = Math.round(sW + 8), top = y + hdr, bot = boxY - 12, bh = bot - top;
+    const scaleW = Math.round(L.floorSize(ctx, 12) * NUM * 3.1 + 6), grW = w >= 250 ? 14 : 0, grGap = grW ? 10 : 0, bg = 8;
+    const bw = Math.floor((w - scaleW - pad - grW - grGap - bg - 2) / 2), bx = x + scaleW + pad, grX = bx + 2 * bw + bg + grGap;
+    const col = (db) => (db > 0 ? Z[3] : db > -6 ? Z[2] : db > -18 ? Z[1] : Z[0]), SEG = 1.5;
+    [0, 1].forEach((ch) => lbl(ctx, S, ch ? 'R' : 'L', bx + ch * (bw + bg) + bw / 2, y + hdr / 2, { size: 12, align: 'center', a: 0.85, w: 600 }));
+    if (grW) lbl(ctx, S, 'GR', x + w, y + hdr / 2, { size: 11, align: 'right', a: 0.55 });
+    { const fs = L.floorSize(ctx, 12), used = []; for (const d of PL_TICKS) { const yy = Math.round(top + bh * (1 - pos(d))) + 0.5; ctx.fillStyle = rgba(S.ink, 0.4); ctx.fillRect(bx - 5, yy - 0.5, 3, 1);
+      if (used.some((u) => Math.abs(u - yy) < fs * NUM + 4)) continue; used.push(yy); text(ctx, d === 0 ? '0' : '−' + Math.abs(d), x + scaleW - 4, yy, { size: 12, align: 'right', col: rgba(S.ink, d === 0 ? 0.95 : 0.6), w: d === 0 ? 700 : 400 }); } }
+    [vL, vR].forEach((v, ch) => {
+      const X = bx + ch * (bw + bg), rmsDb = v.rms, pkDb = v.pk;
+      ctx.fillStyle = rgba(S.ink, 0.04); ctx.fillRect(X, top, bw, bh);
+      for (let d = 0; d > -60; d -= SEG) { const y0 = top + bh * (1 - pos(d)), y1 = top + bh * (1 - pos(d - SEG)), mid = d - SEG / 2, hh = Math.max(1, y1 - y0 - 1), lit = mid <= rmsDb, pkl = !lit && mid <= pkDb, c = col(mid);
+        ctx.fillStyle = lit ? rgba(c, Math.min(1, 0.62 + 0.38 * pos(mid) + 0.2 * g)) : pkl ? rgba(c, 0.26) : rgba(S.ink, 0.07); ctx.fillRect(X, y0, bw, hh); }
+      if (g > 0.01 && rmsDb > -60) { const yr = top + bh * (1 - pos(rmsDb)), o2 = 4000; ctx.save(); ctx.beginPath(); ctx.rect(X - 30, top - 10, bw + 60, bh + 20); ctx.clip();
+        ctx.shadowColor = rgba(Z[3], 1); ctx.shadowOffsetX = o2; ctx.shadowBlur = 6 + 20 * g; ctx.globalAlpha = Math.min(1, 0.9 * g); ctx.fillStyle = '#000'; ctx.fillRect(X - o2, yr, bw, Math.min(bot - yr, 50)); ctx.restore(); }
+      if (tk[ch] > -140) { ctx.save(); if (g > 0.01) { ctx.shadowColor = rgba(S.hot, 1); ctx.shadowBlur = 4 + 14 * g; } ctx.fillStyle = S.hot; ctx.fillRect(X - 3, Math.round(top + bh * (1 - pos(tk[ch]))) - 1.5, bw + 6, 3); ctx.restore(); }
+      if (led > 0.02 || v.clip) { ctx.fillStyle = rgba(S.hot, v.clip ? 1 : 0.25 + 0.75 * led); ctx.fillRect(X, top - 4, bw, 3); }
+    });
+    if (grW) { ctx.fillStyle = rgba(S.ink, 0.07); ctx.fillRect(grX, top, grW, bh); const gh = bh * clamp(-grNow / grRange, 0, 1);
+      if (gh > 0.5) { const gg = ctx.createLinearGradient(0, top, 0, top + gh); gg.addColorStop(0, rgba(S.hot, 0.35)); gg.addColorStop(1, rgba(S.hot, 0.95)); ctx.fillStyle = gg; ctx.fillRect(grX, top, grW, gh); }
+      ctx.save(); if (g > 0.01) { ctx.shadowColor = rgba(S.hot, 1); ctx.shadowBlur = 4 + 14 * g; } ctx.fillStyle = S.ink; ctx.fillRect(grX - 2, top + gh - 1.5, grW + 4, 3); ctx.restore(); }
+    const st = playerStats(D.lv, tt, 1.5), lufs = F.S[tf], cw = (w - 3 * gap) / 4, ls = (v) => (!Number.isFinite(v) || v < -69 ? '−∞' : (v < 0 ? '−' : '') + Math.abs(v).toFixed(1));
+    const cells = [['PEAK', ls(st.peak), st.peak >= -0.1 ? S.hot : S.ink], ['RMS', ls(st.rms), S.ink], ['LUFS', ls(lufs), S.ink], ['DR', Number.isFinite(st.dr) ? st.dr.toFixed(1) : '—', S.ink]];
+    cells.forEach(([nm, val, c], i) => { const cx = x + i * (cw + gap), rr = L.rr ? L.rr(cx, boxY, cw, boxH, 8) : null;
+      if (rr) { ctx.fillStyle = rgba(S.ink, 0.05 + (i === 0 ? 0.05 * g : 0)); ctx.fill(rr); ctx.strokeStyle = rgba(S.ink, 0.24); ctx.lineWidth = 1; ctx.stroke(rr); } else { ctx.strokeStyle = rgba(S.ink, 0.24); ctx.strokeRect(cx + 0.5, boxY + 0.5, cw - 1, boxH - 1); }
+      lbl(ctx, S, nm, cx + cw / 2, boxY + 6 + sW * 0.5, { size: 11, align: 'center', a: 0.6, maxW: cw - 8 });
+      text(ctx, val, cx + cw / 2, boxY + boxH - 6 - nH * 0.5, { size: 16, w: 700, align: 'center', col: c, maxW: cw - 8 }); });
+    if (!opt.noReveal) ctx.restore();
+  }
+
   function levels(ctx, S, r, t, k, opt = {}) {
+    if (opt.variant === 'player') return levelsPlayer(ctx, S, r, t, k, opt);
     const [x, y, w, h] = r; if (!opt.noReveal) reveal(ctx, x, y, w, h, k);
     const o = levOpts(), sc = levScale(o), compact = opt.compact || w < 200, col = S.grey ? S.ink : S.sig1, f = fidx(t);
     const vL = levRead(0, t, o), vR = levRead(1, t, o), ledPk = ledAt(D.lv, t, -3), kk = o.kmode ? o.K : 0;

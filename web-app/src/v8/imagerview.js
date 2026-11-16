@@ -37,7 +37,34 @@ export function createImagerView(L, M8, H) {
     return (DENS[key] = lut);
   }
   const GRID = {};
-  function imagerSample(ctx, S, r, t, k) {
+  /** v14 player rows under the half disc: WIDTH (real S/M width, 0..200 %), CORR (+1..-1), BAL (L .. R, +-6 dB) as slider bars with a value, then the 4 band
+   *  widths (ms.bandWidth, splits 120 Hz / 1.2 kHz / 6 kHz) with their band labels. Values tick on the half beat (tf); the thumbs follow the frame. */
+  function playerRows(ctx, S, x0, w, lay, rowH, f, tf, C) {
+    const ink = (a) => rgba(S.ink, a), widY = lay.widY, corY = widY + lay.step, balY = corY + lay.step, labW = Math.max(L.floorSize(ctx, 11) * 3.3, 62), valW = Math.max(L.floorSize(ctx, 16) * 0.74 * 5.2, 66), bx0 = x0 + 6 + labW, bx1 = x0 + w - 6 - valW;
+    const rows = [
+      ['WIDTH', widY, (v) => (clamp(v, 0, 2)) / 2, F.width[f], F.width[tf], (v) => `${Math.round(v * 100)}%`, 0.5, [0, 0.5, 1]],
+      ['CORR', corY, (v) => (clamp(v, -1, 1) + 1) / 2, F.corr[f], F.corr[tf], (v) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}`, 0.5, [0, 0.25, 0.5, 0.75, 1]],
+      ['BAL', balY, (v) => (clamp(v, -6, 6) + 6) / 12, ML.balanceAt(D.lv, f / FPS, 3), ML.balanceAt(D.lv, tf / FPS, 3), (v) => (Math.abs(v) < 0.05 ? '0.0 dB' : `${v < 0 ? 'L' : 'R'} ${Math.abs(v).toFixed(1)}`), 0.5, [0, 0.25, 0.5, 0.75, 1]]];
+    for (const [nm, ry, pos, vNow, vTick, fmtv, zero, ticks] of rows) {
+      const yc = Math.round(ry + rowH / 2), X = (u) => bx0 + (bx1 - bx0) * u, neg = nm === 'CORR' && vNow < 0, th = pos(vNow);
+      lbl(ctx, S, nm, x0 + 6, yc, { size: 11, a: 0.7, maxW: labW - 2 });
+      ctx.fillStyle = ink(0.16); ctx.fillRect(bx0, yc, bx1 - bx0, 1);                                         // the track
+      ctx.fillStyle = ink(0.4); for (const u of ticks) ctx.fillRect(Math.round(X(u)), yc - (u === zero ? 5 : 3), 1, u === zero ? 10 : 6);
+      const z = nm === 'WIDTH' ? 0.5 : zero, fx0 = Math.min(X(z), X(th)), fw = Math.abs(X(th) - X(z));   // fill from the centre mark (WIDTH: from 100 %)
+      if (nm === 'WIDTH') { ctx.fillStyle = rgba(C.mid, 0.5); ctx.fillRect(bx0, yc - 1.5, X(th) - bx0, 3); } else if (neg && S.grey) hatch(ctx, fx0, yc - 1.5, fw, 3, C.neg); else { ctx.fillStyle = rgba(neg ? C.neg : C.mid, 0.6); ctx.fillRect(fx0, yc - 1.5, fw, 3); }
+      ctx.fillStyle = neg ? C.neg : S.ink; ctx.fillRect(Math.round(X(th)) - 1.5, yc - 8, 3, 16);
+      text(ctx, fmtv(vTick), x0 + w - 6, yc, { size: 16, w: 700, align: 'right', col: nm === 'CORR' && vTick < 0 ? C.neg : S.ink, maxW: valW });
+    }
+    // band widths: the value (Akira) over the band's range (Synkopy), a hairline underline scaled to the width (0..200 %)
+    const by = lay.bandY + 6, bw4 = (w - 12) / 4, names = ['20–120', '120–1K', '1K–6K', '6K–20K'], bwv = D.ms.bandWidth, sV = L.floorSize(ctx, 16) * 0.74;
+    ctx.fillStyle = ink(0.16); ctx.fillRect(x0 + 6, by - 3, w - 12, 1);
+    for (let b = 0; b < 4; b++) { const v = bwv[tf * 4 + b], cxm = x0 + 6 + bw4 * (b + 0.5), u = clamp(v / 200);
+      text(ctx, `${Math.round(v)}%`, cxm, by + 4 + sV * 0.55, { size: 16, w: 700, align: 'center', col: S.ink, maxW: bw4 - 6 });
+      ctx.fillStyle = ink(0.12); ctx.fillRect(cxm - bw4 * 0.35, by + 8 + sV, bw4 * 0.7, 2); ctx.fillStyle = rgba(C.mid, 0.8); ctx.fillRect(cxm - bw4 * 0.35, by + 8 + sV, bw4 * 0.7 * u, 2);
+      lbl(ctx, S, names[b], cxm, by + 14 + sV + L.floorSize(ctx, 11) * 0.55, { size: 11, a: 0.55, align: 'center', maxW: bw4 - 4 }); }
+  }
+
+  function imagerSample(ctx, S, r, t, k, opt = {}) {
     const [x0, y0, w, h] = r; reveal(ctx, x0, y0, w, h, k);
     const f = fidx(t), tf = tickF(t), C = imgCols(S), range = L.meter('stereo', 'range', 40), gain = L.meter('stereo', 'gain', 1), ink = (a) => rgba(S.ink, a);
     const fz = (s) => L.floorSize(ctx, s), small = h < 460, LH = fz(22);
@@ -46,8 +73,13 @@ export function createImagerView(L, M8, H) {
     const wantD = Math.min(w - 12, 236), fixed = (top - y0) + below + 2 * rowH + 4 * gap;
     let R = Math.max(40, Math.min(R0, h - fixed - 20)), Dm = Math.min(wantD, h - fixed - R - 16);
     if (Dm < 110 || !L.pendantMark) { Dm = 0; R = Math.max(40, Math.min(R0, h - fixed + gap)); }
-    const cx = x0 + w / 2, cy = top + R, balY = y0 + h - 12 - rowH, corY = balY - rowH - gap;   // CORR + BAL anchored to the bottom
-    const mkTop = cy + below, mkH = corY - gap - mkTop, mkCx = cx, mkCy = mkTop + mkH / 2, mkR = Dm / 2;
+    let cx = x0 + w / 2, cy = top + R, balY = y0 + h - 12 - rowH, corY = balY - rowH - gap;   // CORR + BAL anchored to the bottom
+    let mkTop = cy + below, mkH = corY - gap - mkTop, mkCx = cx, mkCy = mkTop + mkH / 2, mkR = Dm / 2;
+    // v14 player: half disc on top, then WIDTH / CORR / BAL slider rows, then the 4 band widths (no elephant mark, no dB labels under the disc)
+    let plLay = null; const PL = opt.variant === 'player', plRow = Math.max(28, LH + 8), plBand = Math.round(fz(11) + fz(16) * 0.74 + 14), plPad = 6;
+    if (PL) { Dm = 0; const rowsH = 3 * plRow + plBand + 4 * 6, topPl = y0 + Math.round(LH * 0.9) + 4; R = Math.max(40, Math.min(R0, h - rowsH - (topPl - y0) - 12)); cx = x0 + w / 2; cy = topPl + R;
+      const spare = Math.max(0, h - (cy - y0) - 8 - rowsH - 8), ex = Math.min(spare / 4, 26), stp = plRow + ex * 0.6; plLay = { widY: cy + 8 + ex * 0.5, step: stp, bandY: cy + 8 + ex * 0.5 + 3 * stp + ex * 0.2 };
+      corY = plLay.widY + stp; balY = corY + stp; }
     if (Dm) L.portholeRect = [mkCx, mkCy, mkR];
     // ---- density
     const CELL = R >= 150 ? 2 : 1.5, gw = Math.ceil(2 * R / CELL) + 2, gh = Math.ceil(R / CELL) + 2, gk = gw + 'x' + gh;
@@ -86,8 +118,9 @@ export function createImagerView(L, M8, H) {
     // ---- labels: M on top, L / R on the ±45° spokes, ∓S at the baseline ends, dB on the baseline
     const lb = (s, X, Y, o = {}) => lbl(ctx, S, s, X, Y, { size: 22, align: 'center', a: 0.75, ...o }), q45 = (R + LH * 0.75) * ML.SQ;
     lb('M', cx, cy - R - LH * 0.55); lb('L', cx - q45, cy - q45 - 2); lb('R', cx + q45, cy - q45 - 2);
-    lb('−S', cx - R + 3, cy + LH * 0.75, { align: 'left' }); lb('+S', cx + R - 3, cy + LH * 0.75, { align: 'right' });
-    for (const dB of (R < 190 ? [-20] : [-10, -30])) lb(String(dB).replace('-', '−'), cx + R * (1 + dB / range) - 4, cy + LH * 0.75, { a: 0.45, size: 20, maxW: R * 0.23 });
+    if (!PL) { lb('−S', cx - R + 3, cy + LH * 0.75, { align: 'left' }); lb('+S', cx + R - 3, cy + LH * 0.75, { align: 'right' }); }
+    if (!PL) for (const dB of (R < 190 ? [-20] : [-10, -30])) lb(String(dB).replace('-', '−'), cx + R * (1 + dB / range) - 4, cy + LH * 0.75, { a: 0.45, size: 20, maxW: R * 0.23 });
+    if (PL) { playerRows(ctx, S, x0, w, plLay, plRow, f, tf, C); ctx.restore(); return; }
     // ---- correlation: a horizontal bar -1 .. +1, the value ticked (half beat) as a number, the last 0.5 s as ghost ticks
     const bx0 = x0 + 8 + LH * 3.2, bx1 = x0 + w - 8 - LH * 3.6, Xc = (v) => bx0 + (bx1 - bx0) * (clamp(v, -1, 1) + 1) / 2, cv = F.corr[f], ct = F.corr[tf], cyb = corY + rowH / 2;
     lbl(ctx, S, 'CORR', x0 + 6, cyb, { size: 22, a: 0.7 });
@@ -109,8 +142,8 @@ export function createImagerView(L, M8, H) {
     ctx.restore();
   }
 
-  function imager(ctx, S, r, t, k) {
-    if (L.meter('stereo', 'mode', 'sample') === 'sample') return imagerSample(ctx, S, r, t, k);
+  function imager(ctx, S, r, t, k, opt = {}) {
+    if (opt.variant === 'player' || L.meter('stereo', 'mode', 'sample') === 'sample') return imagerSample(ctx, S, r, t, k, opt);
     const [x0, y0, w, h] = r; reveal(ctx, x0, y0, w, h, k);
     const f = fidx(t), tf = tickF(t), C = imgCols(S), mode = L.meter('stereo', 'mode', 'sample'), range = L.meter('stereo', 'range', 40), gain = L.meter('stereo', 'gain', 1);
     const fs = L.floorSize(ctx, 15), liss = mode === 'lissajous', hair = 1;
