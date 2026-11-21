@@ -45,7 +45,9 @@ export function draw(ctx, rect, frame, opts) {
     const tx = x + i * (tw + gap), r = Math.max(8, Math.min(16, h * 0.16));
     if (L.panel) L.panel(ctx, tx, y, tw, h, S, { r }); else { ctx.fillStyle = ink(0.06); ctx.fillRect(tx, y, tw, h); ctx.strokeStyle = ink(0.25); ctx.strokeRect(tx + 0.5, y + 0.5, tw - 1, h - 1); }
     // label (Synkopy, top-left); the art sits in the rest of the tile
-    const fz = Math.round(Math.max(11, Math.min(17, h * 0.1))), narrow = tw < 280, lh = Math.round((narrow ? 2.8 : 1.2) * fz + 6), ax = tx + 6, ay = y + lh + 4, aw = tw - 12, ah = h - lh - 10;
+    const fz = Math.round(Math.max(12, Math.min(22, h * 0.12))),   // v19.5: phone-readable labels
+      narrow = tw < 280, lh = Math.round((narrow ? 2.8 : 1.2) * fz + 6), ax = tx + 6, ay = y + lh + 4, aw = tw - 12, ah = h - lh - 10;
+    ctx.fillStyle = ink(0.07); ctx.fillRect(tx + 1, y + 1, tw - 2, lh); ctx.fillStyle = ink(0.16); ctx.fillRect(tx + 1, y + lh, tw - 2, 1);   // v19.5: tile title bar (window chrome)
     const nm = String((opts.labels && opts.labels[i]) || LABELS[i]).toUpperCase(), ly = y + 8 + fz * 0.5;
     ctx.beginPath(); ctx.arc(tx + 12, ly, 3.2, 0, 6.2832); ctx.fillStyle = rgba(S.hot, 0.55 + 0.45 * g); ctx.fill();   // power LED (on), brighter on the kick
     text(ctx, nm, tx + 22, ly, { size: fz, col: ink(0.8), w: 500, maxW: narrow ? tw - 30 : tw * 0.5 });
@@ -57,7 +59,7 @@ export function draw(ctx, rect, frame, opts) {
     else if (i === 2) rd = width(ctx, S, F, D, f, FPS, ax, ay, aw, ah, g, rgba, ink, clamp);
     else cube(ctx, S, D, t, f, ax, ay, aw, ah, g, rgba, ink, L.BEAT);
     ctx.restore();
-    if (rd) text(ctx, rd, narrow ? tx + 22 : tx + tw - 10, y + 8 + fz * (narrow ? 2.05 : 0.5), { size: fz, col: ink(0.95), w: 800, align: narrow ? 'left' : 'right', fam: '"Akira Expanded", "Unbounded", sans-serif', maxW: tw * 0.48 });   // live value (Akira)
+    if (rd) text(ctx, rd, narrow ? tx + 22 : tx + tw - 10, y + 8 + fz * (narrow ? 2.05 : 0.5), { size: Math.round(fz * (narrow ? 1.15 : 1)), col: ink(0.95), w: 800, align: narrow ? 'left' : 'right', fam: '"Akira Expanded", "Unbounded", sans-serif', maxW: tw * 0.48 });   // live value (Akira)
   }
   ctx.restore();
 }

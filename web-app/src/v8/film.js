@@ -464,21 +464,21 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // fills over the intro = anticipation), CTA 1 (comment keyword) and CTA 2 (link in bio) as pop-up alerts; spring pop-in (no fade), hard out.
   // All text is tags (social.*), timing is cue paths (social.cta1.at / .len, social.cta2.at / .len in beats); social.on switches it all.
   function dialog(cx, cy, wD, title, body, sub, t0, t, prog) {
-    const sc = 0.94 + 0.06 * spr(Math.max(0, t - t0) / 0.35, 9), h = sub ? 168 : 136, x = cx - wD / 2, y = cy - h / 2, col = S.grey ? '#0a0a0a' : S.hot;
+    const sc = 0.94 + 0.06 * spr(Math.max(0, t - t0) / 0.35, 9), big = port ? 22 : 0, h = (sub ? 168 : 136) + big, x = cx - wD / 2, y = cy - h / 2, col = S.grey ? '#0a0a0a' : S.hot;
     c.save(); c.translate(cx, cy); c.scale(sc, sc); c.translate(-cx, -cy);
     L.glass(c, x, y, wD, h, S, { r: 18, tint: 0.62, shadow: 1 });
     c.fillStyle = rgba(S.ink, 0.08); c.fillRect(x + 1, y + 1, wD - 2, 40); c.fillStyle = rgba(S.ink, 0.18); c.fillRect(x, y + 41, wD, 1);
     lights(x + 26, y + 21, S, true);
     text(c, String(title).toUpperCase(), x + wD / 2, y + 21, { size: 18, fam: UI, w: 600, ls: 1.5, col: rgba(S.ink, 0.8), align: 'center', maxW: wD - 180 });
-    text(c, String(body).toUpperCase(), x + wD / 2, y + 82, { size: port ? 42 : 32, fam: DISPLAY, w: 800, col: S.ink, align: 'center', maxW: wD - 48 });
-    if (sub) text(c, String(sub).toUpperCase(), x + wD / 2, y + 126, { size: 20, fam: UI, w: 500, ls: 1.2, col: rgba(S.ink, 0.65), align: 'center', maxW: wD - 48 });
+    text(c, String(body).toUpperCase(), x + wD / 2, y + 82 + big / 2, { size: port ? 56 : 32, fam: DISPLAY, w: 800, col: S.ink, align: 'center', maxW: wD - 48 });
+    if (sub) text(c, String(sub).toUpperCase(), x + wD / 2, y + 126 + big, { size: 20, fam: UI, w: 500, ls: 1.2, col: rgba(S.ink, 0.65), align: 'center', maxW: wD - 48 });
     if (prog != null) { const bx = x + 24, by = y + h - 18, bw = wD - 48; c.fillStyle = rgba(S.ink, 0.12); c.fillRect(bx, by, bw, 6); const n = Math.floor(clamp(prog) * 24);
       c.fillStyle = S.grey ? S.ink : col; for (let i = 0; i < n; i++) c.fillRect(bx + i * bw / 24 + 1, by, bw / 24 - 2, 6); }
     c.restore();
   }
   function social(t, intro) {
     if (!V('social.on', LOOK === 'player')) return;
-    const wD = port ? 820 : 760, cx = W / 2;
+    const wD = port ? 900 : 760, cx = W / 2;   // v19.5: wider + bigger hook text (reads at thumb-scroll size)
     if (intro) { const p = clamp(t / T(IB)); const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hookTxt = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); dialog(cx, port ? 330 : 150, wD, tag('social.title'), hookTxt, null, -1, t, p); return; }   // v19.1: A/B hook variants
     for (const [k, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) {
       const at = V(`social.${k}.at`, def), len = V(`social.${k}.len`, 8); if (b < at || b >= at + len) continue;
@@ -497,7 +497,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     else if (IB) { const g = INTRO.geom(W, H); w.push({ t: T(Math.max(1, IB - 2)) - 0.02, sx: g.cx + g.cw * 0.18, sy: g.cy + g.cw * 0.2, click: true }); }
     for (const k of ev.keysIn('camera.shot', 0, 1e6)) { const r = k.v !== 'wide' && LY[k.v]; if (!r) continue; const d = k.dur ?? 1; w.push({ t: T(k.b - d) - 0.02, wx: r[0] + 92, wy: r[1] + (port ? 28 : 26), click: true }); }
     if (V('social.on', LOOK === 'player')) for (const [kk, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) { const at = V(`social.${kk}.at`, def), len = V(`social.${kk}.len`, 8);
-      w.push({ t: T(at + len) - 0.02, sx: W / 2 - (port ? 410 : 380) + 26, sy: H * 0.5 - 84 + 21, click: true, cta: kk }); }
+      w.push({ t: T(at + len) - 0.02, sx: W / 2 - (port ? 450 : 380) + 26, sy: H * 0.5 - (port ? 95 : 84) + 21, click: true, cta: kk }); }
     if (RWB0) w.push({ t: T(RWB0) - T(3) - 0.02, wx: (LY.stage || [W / 2, H / 2, 0, 0])[0] + (LY.stage ? LY.stage[2] * 0.5 : 0), wy: (LY.stage || [0, H / 2, 0, 0])[1] + (LY.stage ? LY.stage[3] * 0.55 : 0), click: true });
     w.push({ t: D.duration, ...rest }); w.sort((a2, b2) => a2.t - b2.t); MW = { ev, w }; return w; }
   const mj = (u) => u * u * u * (10 - 15 * u + 6 * u * u);
@@ -608,12 +608,17 @@ export function createFilm({ D, assets, aspect = '916' }) {
     ground(); L.snap(c, 'ground', LOOK === 'exe' || LOOK === 'player' ? 3 + 4 * V('glass.back', 1) : 3);   // v12: exe glass blurs the ground more (depth)
     const att = attention(t);
     if (LOOK === 'player') playerShell(t);
-    for (const id of IDS) card(id, t, att === id);
+    // v19.5: the lifted (focused) window leaves its slot: the slot copy fades out as the window rises, so it never shows twice
+    let liftId = null, liftAmt = 0; if (LOOK === 'player' && port && V('focus.window', true)) { const s3 = ev.shot(b), id3 = s3.to !== 'wide' ? s3.to : s3.from !== 'wide' ? s3.from : null;
+      if (id3 && LY[id3]) { const r3 = LY[id3], syC = (r3[1] + r3[3] / 2 - cam.y) * z + H / 2, hh3 = r3[3] * z / 2; if (syC + hh3 > 1530 || syC - hh3 < 230) { liftId = id3; liftAmt = s3.to !== 'wide' ? (s3.from === s3.to ? 1 : s3.u) : 1 - s3.u; } } }
+    for (const id of IDS) { if (id === liftId && liftAmt > 0.01) { if (liftAmt < 0.99) { c.save(); c.globalAlpha = 1 - liftAmt; card(id, t, att === id); c.restore(); } continue; } card(id, t, att === id); }
     // v19.3 window focus (user): a clicked panel comes to the front: everything else sinks behind a scrim, the panel is redrawn on top, 3 % bigger
     if (LOOK === 'player' && V('focus.window', true)) { const s2 = ev.shot(b), id2 = s2.to !== 'wide' ? s2.to : s2.from !== 'wide' ? s2.from : null;
       if (id2 && LY[id2]) { const amt = s2.to !== 'wide' ? (s2.from === s2.to ? 1 : s2.u) : 1 - s2.u; if (amt > 0.01) { const r2 = LY[id2], cx2 = r2[0] + r2[2] / 2, cy2 = r2[1] + r2[3] / 2, sc2 = 1 + 0.03 * amt;
         c.fillStyle = rgba(S.bg, 0.55 * amt * V('focus.dim', 1)); c.fillRect(-W, -H, 3 * W, 3 * H);
-        c.save(); c.translate(cx2, cy2); c.scale(sc2, sc2); c.translate(-cx2, -cy2); card(id2, t, true); c.restore(); } } }
+        // v19.5: a window that rests under the TikTok caption (y > 1548) or the header lifts into the safe band while focused (same spring as the camera)
+        let lift = 0; if (port) { const syC = (cy2 - cam.y) * z + H / 2, hh2 = r2[3] * z * sc2 / 2, want = Math.min(Math.max(syC, 230 + hh2), 1530 - hh2); lift = (want - syC) / z * amt; }
+        c.save(); c.translate(cx2, cy2 + lift); c.scale(sc2, sc2); c.translate(-cx2, -cy2); card(id2, t, true); c.restore(); } } }
     if (LOOK === 'player' && V('focus.bracket', true)) focusBracket(t);
     hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
