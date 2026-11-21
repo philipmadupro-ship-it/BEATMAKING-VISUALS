@@ -10,7 +10,7 @@ export function filmData(cd, track, { title = 'UNTITLED', inT = 0 } = {}) {
     fps: cd.fps, frames: NF, duration: cd.duration, bars: cd.bars, bpm: track.bpm, beat: track.spb, key: keyName(track.key), title: String(title || 'UNTITLED').toUpperCase(),
     song: { duration: track.duration, startBar, startTime: inT, bar1: song.bar1, phrases: song.phrases.map((q) => ({ bar: q.bar, label: q.label, bars: q.bars })), overview: cd.overview, lastBar: song.bars.length ? song.bars[song.bars.length - 1].bar : 0 },
     frame: F, oct6: cd.oct6, oct1: cd.oct1, bandNames: cd.bandNames, spectroBins: cd.spectroBins, spectro: cd.spectro, gonioN: cd.gonioN, gonioS: cd.gonioS, gonioM: cd.gonioM, scope: cd.scope, polar: cd.polar, polarN: cd.polarN, lv: cd.lv, ms: cd.ms, be: cd.be,
-    onsets: cd.onsets, wave: { cps: cd.wave.cps, tone }, wave2: cd.wave2, wave3: cd.wave3, srcLufs: cd.srcLufs, summary: cd.summary,
+    onsets: cd.onsets, wave: { cps: cd.wave.cps, tone }, wave2: cd.wave2, wave3: cd.wave3, srcLufs: cd.srcLufs, summary: cd.summary, fileInfo: (track.meta && track.meta.fileInfo) || { sr: cd.wave3 && cd.wave3.sr },
   };
 }
 /** Labels of each clip bar (0-based) from the song structure. */

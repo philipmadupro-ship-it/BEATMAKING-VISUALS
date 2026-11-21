@@ -36,3 +36,11 @@ Only the title, credit and real readouts remain (`tags.js`: `hud.*`, `result.*`,
 - The cover is `INTRO.coverCanvas(0, S)` (greys in Nigredo) with a 0.5 scrim, a bottom gradient and the step grid, so the match-cut should end on the same image slightly darker; cover kick pulse scale = 1 + 0.012 I (I = the logo-glow envelope).
 - Logo: centred on its bbox at the card centre (`BR.logo(..., {at: {cx, cy, w}})`, `BR.logoBBox()`); `HERO[aspect].logoW` = 384 / 300.
 - Static pendant mark: `L.pendantMark(ctx, S, cx, cy, d)` (exe only), drawn by the imager as a bare static mark (no ring, no frame; v13 correction 2) at `L.portholeRect = [cx, cy, R]`; no chain, no swing.
+
+## v14 player look (shell API)
+- Look `player` (`layout.js`): `LAYOUT.player[aspect]` rects (16:9 and 9:16), `SIDEBAR[aspect]` (null in 9:16), `TOPBAR[aspect]`. Window ids: `session`, `loud`, `stage` (kind `hero`), `stereo`, `spectro`, `spectrum`, `now`, `inserts`, `meta`. Drawing helpers live in `src/v8/player.js` (`createPlayer(L, {tag, V})`: sidebar, topbar, now, meta, barcode, heroCaption, icon); the composition is in `film.js` (`playerShell`, `playerHero`, `playerNow`, `playerInserts`).
+- **Panels API (for the panels agent)**: the shell calls, with the usual content rect `cr = [x, y, w, h]`:
+  - `M.loud(ctx, S, cr, t, k)` (window `loud`, cr 300x~320 in 16:9, 250x~350 in 9:16) and `M.stereo(ctx, S, cr, t, k)` (window `stereo`): the levels / imager variants. `L.look === 'player'` (set every frame) tells them to draw the 4-box / WIDTH-CORR-BAL-band% variant; other looks unchanged.
+  - **`M.inserts(ctx, S, cr, t, k)`**: the 4 live tiles (mini spectrum, GR history, width/corr trace, cube that steps once per beat), drawn inside `cr` (16:9 about 380x72, 9:16 about 976x120). Until `M.inserts` exists the shell draws 4 empty glass tiles (`L.panel`). Put it in `meters.js` (or an `inserts.js` imported there); no film.js change is needed.
+- Match cut: `L.coverRect` / `L.coverRadius` = the cover image rect inside the now-playing card (set every frame, also on intro frames), radius 14; the intro target follows it.
+- Static elephant: `BR.elephantMark` under the U (no chain, no swing); logo thread + glow unchanged (`glowAt`, `logo.decay`).

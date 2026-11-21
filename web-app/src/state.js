@@ -1,7 +1,7 @@
 // Tiny store: one serialisable `project` (autosaved), a remembered producer `profile`, and a non-serialised `session`
 // (track, audio buffer, libs). The cue sheet lives in its own store (cues/store.js), saved per project.
 const PROJECT_KEY = 'u2c.project.v4', PROFILE_KEY = 'u2c.profile.v3';
-export const LOOK_IDS = ['exe', 'lab', 'scope'];
+export const LOOK_IDS = ['exe', 'lab', 'scope', 'player'];
 export const DEFAULT_PROJECT = {
   look: 'exe', stage: 'nigredo', aspect: '916',
   title: 'Night Shift', producer: '@uche2crazy', key: '',

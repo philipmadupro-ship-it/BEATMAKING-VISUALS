@@ -79,7 +79,7 @@ them per element with a ◆ to keyframe any of them.
 
 | element | paths |
 |---|---|
-| scene | `look` (exe, lab, scope), `stage` (nigredo, albedo, citrinitas, rubedo) |
+| scene | `look` (exe, lab, scope, player), `stage` (nigredo, albedo, citrinitas, rubedo, white) |
 | camera | `camera.shot` (shot), `camera.zoom` (×), `camera.x`, `camera.y` (px pan) |
 | featured meter | `focus.featured`: `auto` (v8: the bracket hops to the window each beat is about), `none`, or a window id |
 | logo chain | `logo.mode` (cycle, full, off), `logo.cycle` (bars per IN/OUT cycle, v8: 2), `logo.hero` (clip: whole chain, link lit on the half beat), `logo.scale`, v9: `logo.glow` (×, pulses on kicks), `logo.bloom` (×, on drop phrase downbeats), `logo.runner` (lit link stepping on 16ths) |
@@ -207,3 +207,9 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - 16-step grid (bottom of the stage card): the step of the current 16th lights (crisp hot outline), kick steps (filled dot) brightest, snare steps (ring dot) next, from the onset analysis of the bar; each lit step decays over ~120 ms.
 - Hero = the U2C logo only, centred on its bbox in the stage card (`hero.x/y` offsets, `hero.scale`). The pendant is no longer in the hero (`pendant.*` still drives the pendant test card and the lab/scope elephant windows).
 - Imager (stereo): BAND WIDTH and WIDTH removed; a static pendant mark in a ring + thin inner ring fills the freed space (exe).
+
+### v14 player look + white stage
+- `look: player` (U2C.PLAYER): windows `session` (waveform), `loud`, `stage` (hero: logo + STATIC pendant mark + caption), `stereo`, `spectro`, `spectrum`, `now` (now-playing: real song time, duration from the file, pause icon pulses on the beat), `inserts` (4 live tiles), `meta` (format / sample rate / bit depth / size from the wav, duration, date, tags, barcode from the title). 16:9 adds a sidebar; 9:16 drops it (condensed top bar, `now` is a strip). The top tab (PLAYER > ANALYSIS > MIX > MASTER) follows the camera.shot target on the beat the push starts (spectrum/spectro = ANALYSIS, loud/stereo = MIX, session = MASTER, wide = PLAYER).
+- Tags (all editable): `player.nav[]`, `player.vol`, `player.tracks[]`, `player.mark`, `player.coords[]`, `player.tabs[]`, `player.sub`, `player.info`, `player.pill`, `player.now.title|sub`, `player.caption[]`, `player.meta.labels[]`, `player.meta.tags` (default "EXPERIMENTAL, TRAP"), `windows.inserts|meta`.
+- `fx.flash` is now OFF by default in every look (generated sheets carry no flash keys); the track and the 1-frame invert stay keyframeable.
+- `stage: white` ("NIGREDO INVERSE"): the Nigredo palette, then the whole finished frame (HUD, intro included) is inverted as the last pass (`difference` with white, the same op as fx.flash). Greys only (R=G=B), works in every look; native `--stage white`.

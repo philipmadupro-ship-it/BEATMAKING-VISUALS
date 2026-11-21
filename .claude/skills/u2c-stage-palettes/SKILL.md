@@ -27,3 +27,6 @@ Chain metal (`brand.js METAL`): NIGREDO #d6d6d6/#5e5e5e, ALBEDO #1a1917/#7d776b,
 ## Done checklist
 - [ ] Colours from `S` / overrides only; accent on one element.
 - [ ] Grey test PASS for Nigredo renders; palette ground+ink >= 80 % (qa_video).
+
+## v14: `white` stage ("NIGREDO INVERSE")
+Stage id `white` = the Nigredo palette (it keeps `name: 'NIGREDO'`, so every palette lookup is the Nigredo one) with `inverse: true`: film.render inverts the finished frame as the very last pass (`globalCompositeOperation = 'difference'`, white fill, after the HUD, intro, grain and flash), which is the look of the old 1-frame invert flash: white ground, dark ink, cover and elephant as photographic negatives. Greys only, so the grey test (R=G=B) applies to it exactly as to Nigredo (qa_video.py treats `white` like `nigredo`). Selectable in the studio stage picker, the `stage` cue and native `--stage white`; works in exe, lab, scope and player. An fx.flash key inside a white render flips that frame back to dark.

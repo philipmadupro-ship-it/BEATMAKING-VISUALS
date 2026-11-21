@@ -8,7 +8,8 @@ import { createCore, stageOf, STAGE_COLOR_KEYS } from './core.js';
 import { createLab } from './lab.js';
 import { createMeters } from './meters.js';
 import { createBrand } from './brand.js';
-import { LAYOUT, CONTENT, openBeat, WINDOW_IDS, HUD_BAND, HERO } from './layout.js';
+import { LAYOUT, CONTENT, openBeat, WINDOW_IDS, HUD_BAND, HERO, SIDEBAR, TOPBAR } from './layout.js';
+import { createPlayer, TAB_OF } from './player.js';   // v14 player look
 import { DEFAULT_TAGS } from './tags.js';
 import { mergeDeep, createEvaluator, emptySheet } from '../cues/schema.js';
 import { buildRegistry, meterPath } from './registry.js';
@@ -26,7 +27,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const titleCase = D.title.split(' ').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
   const getTag = (path) => { const parts = path.split('.'); let v = tagDoc; for (const p of parts) v = v == null ? v : v[p];
     if (Array.isArray(v)) return v.map((x, i) => V(`tag.${path}.${i}`, x)); return v == null ? undefined : V('tag.' + path, v); };
-  L.tagGet = getTag; const tag = L.tag;
+  L.tagGet = getTag; const tag = L.tag; const PL = createPlayer(L, { tag, V });
   L.meter = (kind, key, def) => V(`meter.${kind}.${key}`, def);
   function setVars() {
     L.tagVars({ title: D.title, Title: titleCase, titleWord: D.title.split(' ')[0], bpm: String(Math.round(D.bpm)), bpm2: D.bpm.toFixed(2), key: D.key,
@@ -45,7 +46,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // ---------------------------------------------------------------- windows: rect, open steps, content
   const rectOf = (id) => { const r = LAYOUT[LOOK][aspect][id]; return [V(`win.${id}.x`, r[0]), V(`win.${id}.y`, r[1]), V(`win.${id}.w`, r[2]), V(`win.${id}.h`, r[3])]; };
   // v11 intro: with an intro of IB beats the lab builds after it (default open beats shift by IB; -2 = open at the cut)
-  const winOpen = (id) => { if (IB && id === 'stage') return 0;   // v13: the cover card is already there at the cut (the intro push ends on it), it does not build in
+  const winOpen = (id) => { if (IB && (id === 'now' || (id === 'stage' && LOOK !== 'player'))) return 0;   // v13: the cover card is already there at the cut (the intro push ends on it), it does not build in
     const d = openBeat(LOOK, aspect, id); return V(`win.${id}.open`, IB ? (d < 0 ? IB : d + IB) : d); };
   function openStep(id, t) {
     const n0 = steps(t, winOpen(id), 6, U.t32), k = ev.lastKey(`win.${id}.visible`, t / BEAT);
@@ -54,7 +55,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (on) return was ? n0 : Math.min(n0 || 6, steps(t, k.key.b, 6, U.t32));
     return was ? Math.max(0, 6 - steps(t, k.key.b, 6, U.t32)) : 0;
   }
-  const contentOf = (id) => V(`win.${id}.content`, CONTENT[id]);
+  const contentOf = (id) => V(`win.${id}.content`, LOOK === 'player' && id === 'stage' ? 'hero' : CONTENT[id]);
   // ---------------------------------------------------------------- camera: wide, or a push / cut to one window
   function framing(id) {
     if (!id || id === 'wide' || !LY[id]) return { x: W / 2, y: H / 2, z: 1 };
@@ -89,7 +90,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // grows over steps 4..6. No title bar, no window buttons: one hairline label in the UI voice, top left. The logo and
   // the pendant windows carry no label (the art is the label). The exe and lab looks share the glass; lab keeps faint
   // graph paper inside, scope adds a recessed CRT screen. API for content code: V11-SHELL-API.md.
-  const NO_LABEL = new Set(['logo', 'pendant', 'cover']);
+  const NO_LABEL = new Set(['logo', 'pendant', 'cover', 'hero', 'now']);
   const PAD = 20, LABEL_H = port ? 46 : 40;
   /** Content rect of window id for its rect r (also used by the camera framing and the API). */
   function contentRect(id, r) {
@@ -100,6 +101,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const screenRect = (id, r) => { const [x, y, w, h] = r, top = NO_LABEL.has(contentOf(id)) ? 16 : LABEL_H - 4; return [x + 16, y + top, w - 32, h - top - 16]; };
   function label(id, x, y, w, Sx, active) {
     if (NO_LABEL.has(contentOf(id))) return;
+    if (LOOK === 'player') { PL.icon(c, contentOf(id) === 'inserts' ? 'bars' : contentOf(id) === 'meta' ? 'meta' : 'bars', x + PAD + 10, y + (port ? 26 : 24), 22, rgba(Sx.ink, active ? 0.95 : 0.7), true); x += 30; }
     text(c, String(WIN(id)).toUpperCase(), x + PAD + 2, y + (port ? 26 : 24), { size: 18, fam: UI, w: 500, ls: 2.4, col: rgba(Sx.ink, active ? 0.95 : 0.52), maxW: w - 2 * PAD });
   }
   function chrome(id, r, n, t, Sx, active) {
@@ -110,8 +112,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
       c.lineWidth = 1; return null;
     }
     // v12 depth (exe): the meter windows sit behind the hero: darker, calmer glass (lower edge light, softer shadow)
-    const back = LOOK === 'exe' ? V('glass.back', 1) : 0;
-    L.glass(c, x, y, w, h, Sx, { r: rad, tint: V('glass.tint', LOOK === 'scope' ? 0.5 : 0.36) + 0.2 * back, active: active && V('bracket.on', true), edge: 1 - 0.4 * back, shadow: 1 - 0.25 * back });
+    const back = LOOK === 'exe' || LOOK === 'player' ? V('glass.back', 1) : 0;
+    L.glass(c, x, y, w, h, Sx, { r: rad, tint: V('glass.tint', LOOK === 'scope' ? 0.5 : 0.36) + 0.2 * back, active: active && V('bracket.on', LOOK !== 'player'), edge: 1 - 0.4 * back, shadow: 1 - 0.25 * back });
     if (LOOK === 'lab') { c.save(); c.clip(L.rr(x, y, w, h, rad)); lab.graphPaper(c, x, y, w, h, Sx, 10, 50, 0.45); c.restore(); }
     if (LOOK === 'scope') { const sr = screenRect(id, r); c.fillStyle = rgba(Sx.bg, 0.62); c.fill(L.rr(sr[0], sr[1], sr[2], sr[3], 12)); c.strokeStyle = rgba(Sx.ink, 0.12); c.stroke(L.rr(sr[0] + 0.5, sr[1] + 0.5, sr[2] - 1, sr[3] - 1, 12)); }
     label(id, x, y, w, Sx, active);
@@ -163,7 +165,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   // v12: the hero logo dwells fully threaded between an IN and an OUT (logo.hold bars, default 10 -> a 48-beat period, ~80 % complete);
   // the break sits around beat 28-36, clear of the usual stills at 10 s and 18 s
-  const HOLD = (C) => (LOOK === 'exe' && V('hero.on', true) ? Math.round(V('logo.hold', 10) * 4) : 0), HOLD_OFF = 16;
+  const HOLD = (C) => ((LOOK === 'exe' || LOOK === 'player') && V('hero.on', true) ? Math.round(V('logo.hold', 10) * 4) : 0), HOLD_OFF = 16;
   function heroArt(cx, t) {   // draws into ctx cx (world transform already set)
     const g = heroGeom(t), hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4)), I = glowAt(fidx(t));
     BR.logo(cx, S, [0, 0, 0, 0], t, { at: { cx: g.cx, cy: g.cy, w: g.w }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero,
@@ -226,10 +228,42 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   // v12: spectrum + spectrogram calls are wrapped here so the merge can switch them to SV.draw / SG.draw(ctx, rect, frame, opts)
   const drawSpectrum = (cr, t, k, Sx) => M.spectrum(c, Sx, cr, t, k), drawSpectrogram = (cr, t, k, Sx) => M.spectro(c, Sx, cr, t, k);
-  const BODY = { cover: coverBody, logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),
+  // ---------------------------------------------------------------- v14 player: hero, now-playing, inserts, metadata
+  // hero: the U2C chain logo centred in its cell (thread in/out + exponential kick glow unchanged), the elephant STATIC under the U (a logo mark, no swing),
+  // the caption block bottom right, registration crosses. L.heroRect (set here) = the cell.
+  function playerHero(cr, t, k, Sx) {
+    const [x, y, w, h] = L.winRect, cx = x + w / 2 + V('hero.x', 0), cy = y + h / 2 + V('hero.y', 0), bb = BR.logoBBox(), lw = Math.min(w * (port ? 0.52 : 0.43), h * 0.82 * bb.w / bb.h) * V('hero.scale', 1) * V('logo.scale', 1), lh = lw * bb.h / bb.w;
+    c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip();
+    const hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4)), I = glowAt(fidx(t));
+    BR.logo(c, Sx, [0, 0, 0, 0], t, { at: { cx, cy, w: lw }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero, glow: V('logo.glow', 1), kickI: I, pulse: I, bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
+    const d = lw * V('pendant.size', 1) * 0.5; BR.elephantMark(c, Sx, cx - lw * (port ? 0.2 : 0.16) + V('pendant.x', 0), cy + lh / 2 + d * 0.28 + V('pendant.y', 0), d, d);
+    const ink = Sx.ink; PL.crosses(c, Sx, [[x + 30, cy], [x + w - 30, cy]], 20);
+    PL.heroCaption(c, Sx, port ? x + w - 24 : x + w - 24, y + h - 22 - 25 * 3, 'right', 205);
+    c.restore();
+  }
+  const nowCover = (r) => { const [x, y, w, h] = r, cp = w > 700 && h < 220; return cp ? [x + 20, y + 20, h - 40, h - 40] : [x + 20, y + 20, w - 40, Math.round((w - 40) * 0.5)]; };
+  function playerNow(cr, t, k, Sx) {
+    const r = L.winRect; c.save(); c.beginPath(); c.rect(r[0], r[1], r[2], r[3] * k); c.clip();
+    PL.now(c, Sx, r, t, { cover: INTRO.coverCanvas ? INTRO.coverCanvas(0, Sx) : null, dim: V('cover.dim', 1), onCover: (rc, rd) => { L.coverRect = rc; L.coverRadius = rd; } });
+    c.restore();
+  }
+  function playerInserts(cr, t, k, Sx) {
+    const [x, y, w, h] = cr;
+    if (M.inserts) return M.inserts(c, Sx, cr, t, k);   // panels agent: 4 live tiles (spectrum, GR history, width/corr trace, rotating cube)
+    const g = 12, tw = (w - 3 * g) / 4; for (let i = 0; i < 4; i++) L.panel(c, x + i * (tw + g), y, tw, h, Sx, { r: 10 });   // placeholder: empty glass tiles until the module exists
+  }
+  const BODY = { hero: playerHero, now: playerNow, inserts: playerInserts, meta: (cr, t, k, Sx) => PL.meta(c, Sx, cr, t, { cover: INTRO.coverCanvas ? INTRO.coverCanvas(0, Sx) : null }),
+    cover: coverBody, logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),
     eq: (cr, t, k, Sx) => M.eq(c, Sx, cr, t, k), spectrum: drawSpectrum, loudness: (cr, t, k, Sx) => M.loud(c, Sx, cr, t, k), stereo: (cr, t, k, Sx) => M.stereo(c, Sx, cr, t, k),
     spectrogram: drawSpectrogram, surface: (cr, t, k, Sx) => M.surface(c, Sx, cr, t, k),
     levels: (cr, t, k, Sx) => M.levels(c, Sx, cr, t, k), ghost: (cr, t, k, Sx) => M.ghost(c, Sx, cr, t, k) };
+  // v14 player shell: sidebar (16:9) + top bar, in the world under the camera, drawn before the cards
+  function playerShell(t) {
+    const sb = SIDEBAR[aspect], tb = TOPBAR[aspect], s = ev.shot(b), tab = s.to === 'wide' ? 0 : (TAB_OF[s.to] ?? 0), I = glowAt(fidx(t));
+    if (sb) { L.glass(c, sb[0], sb[1], sb[2], sb[3], S, { r: V('glass.radius', 22), tint: 0.36 + 0.2, edge: 0.6, shadow: 0.75 });
+      PL.sidebar(c, S, sb, t, { pulse: I, logo: ([lx, ly], lw) => { const bb = BR.logoBBox(); BR.logo(c, S, [0, 0, 0, 0], t, { at: { cx: lx, cy: ly, w: lw }, cycle: 8, hero: true, glow: 0, kickI: 0, pulse: 0, bloom: 0, runner: false }); } }); }
+    PL.topbar(c, S, tb, t, { port, tab });
+  }
   function card(id, t, active) {
     const r = LY[id], n = openStep(id, t); if (n <= 0) return;
     const acc = V(`win.${id}.accent`, null), Sx = acc && acc !== S.hot ? Object.assign({}, S, { hot: acc }) : S;
@@ -267,7 +301,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // the wide shot only: from the first frame of a push until the camera is wide again it is off (hard), so it never
   // covers a pushed-in window.
   function hud(t, s) {
-    if (!V('hud.on', true)) return;
+    if (!V('hud.on', true) || LOOK === 'player') return;
     if (s && (s.to !== 'wide' || s.from !== 'wide') || L.openFx) return;
     const hv = { tc: tc(t), bbt: bbt(t), songBar: String(D.song.startBar + Math.floor(t / BAR)) }, [, t1, b0] = HUD_BAND[aspect];
     const m = port ? 52 : 52, top = t1 / 2 + 4, bot = (b0 + H) / 2 - 2, dim = rgba(S.ink, 0.55);
@@ -325,7 +359,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     LOOK = LAYOUT[look] ? look : 'exe';
     const over = {}; for (const k of STAGE_COLOR_KEYS) { const v = V('stage.' + k, null); if (v) over[k] = v; }
     S = stageOf(stage, over); LY = {}; IDS = Object.keys(LAYOUT[LOOK][aspect]); for (const id of IDS) LY[id] = rectOf(id);
-    L.coverRect = LY.stage || null; L.coverRadius = V('glass.radius', 22);   // the match-cut target is known on intro frames too (not only after the lab drew)
+    L.look = LOOK; L.coverRect = LOOK === 'player' ? nowCover(LY.now) : (LY.stage || null); L.coverRadius = LOOK === 'player' ? 14 : V('glass.radius', 22);   // the match-cut target is known on intro frames too (not only after the lab drew)
     setVars(); L.pendantMark = LOOK === 'exe' ? (ctx, Sx, cx, cy, d) => BR.elephantMark(ctx, Sx, cx, cy, d, d) : null;
   }
   function pendulum() {
@@ -341,6 +375,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
     elephantBody(testRect(), t, 1, S);
     const bb = Math.floor(t / BEAT + 1e-6); text(c, `PENDANT · CHAIN WAVE · beat ${bb + 1} · ${bbt(t)}`, 40, port ? 120 : 50, { size: 28, w: 700, col: S.ink });
   }
+  // v14 stage `white` (NIGREDO INVERSE): the finished frame inverted, the same op as the flash (grey in = grey out, so R=G=B holds)
+  function invertAll() { if (!S.inverse) return; c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'difference'; c.fillStyle = '#ffffff'; c.fillRect(0, 0, c.canvas.width, c.canvas.height); c.restore(); }
   function flash(t) { const f = fidx(t); if (ev.keysIn('fx.flash', 0, NB * 4 + 1).some((k) => fidx(T(k.b) + 0.5 / FPS) === f)) { c.globalCompositeOperation = 'difference'; c.fillStyle = S.grey ? '#ffffff' : S.ink; c.fillRect(0, 0, W, H); c.globalCompositeOperation = 'source-over'; } }
   /** Draw clip time t into ctx (a canvas of width W*scale). opts: {ev, fps (sample at the frame centre), look, stage}. */
   function render(ctx, t, opts = {}) {
@@ -351,14 +387,15 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c.setTransform(scale, 0, 0, scale, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
     if (opts.test) { L.view.camZ = 1; L.view.base = scale; testMode(opts.test, t); c.setTransform(1, 0, 0, 1, 0, 0); return { look: LOOK, stage: S.name, test: opts.test }; }
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
-      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect }); c.setTransform(scale, 0, 0, scale, 0, 0); textCues(t); textures(t); flash(t); c.setTransform(1, 0, 0, 1, 0, 0);
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect }); c.setTransform(scale, 0, 0, scale, 0, 0); textCues(t); textures(t); flash(t); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
     }
     const cam = camera(), z = cam.z; L.view.camZ = z; L.view.base = scale;
     c.fillStyle = S.bg; c.fillRect(0, 0, W, H);
     c.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z));
-    ground(); L.snap(c, 'ground', LOOK === 'exe' ? 3 + 4 * V('glass.back', 1) : 3);   // v12: exe glass blurs the ground more (depth)
+    ground(); L.snap(c, 'ground', LOOK === 'exe' || LOOK === 'player' ? 3 + 4 * V('glass.back', 1) : 3);   // v12: exe glass blurs the ground more (depth)
     const att = attention(t);
+    if (LOOK === 'player') playerShell(t);
     for (const id of IDS) card(id, t, att === id);
     hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
@@ -367,7 +404,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     result(t); hud(t, ev.shot(b)); textCues(t); textures(t);
     flash(t);
     glitch(t, scale);
-    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
     return { look: LOOK, stage: S.name, cam, attention: att };
   }
   /** Every scheduled visual event of the current cue sheet (beats + labels), for the sync test and the timeline. */

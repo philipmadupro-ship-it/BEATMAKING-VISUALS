@@ -18,7 +18,7 @@ export function createExporter(app) {
   const dims = (p) => { const { W, H } = ASPECTS[p.aspect], k = p.export.draft ? 2 / 3 : 1; return { W: Math.round(W * k / 2) * 2, H: Math.round(H * k / 2) * 2, mbps: p.export.draft ? Math.max(4, p.export.mbps * .5) : p.export.mbps }; };
   async function info() { const p = P(), tr = app.store.session.track; if (!tr) return; const { W, H, mbps } = dims(p), len = p.outT - p.inT;
     const c = await canOffline(app.libs.mediabunny, W, H, mbps, p.export.fps), nk = app.cues.sheet.tracks.reduce((s, t) => s + t.keys.length, 0);
-    $('#exKv').innerHTML = `<dt>Look</dt><dd>${LOOK_NAMES[p.look]} · ${STAGES[p.stage].name}</dd><dt>Cue sheet</dt><dd>${app.cues.sheet.tracks.length} tracks · ${nk} keys</dd><dt>Frame</dt><dd>${W}×${H} · ${p.export.fps} fps · ${mbps} Mbps${p.export.draft ? ' · draft' : ''}</dd>
+    $('#exKv').innerHTML = `<dt>Look</dt><dd>${LOOK_NAMES[p.look]} · ${(STAGES[p.stage].label || STAGES[p.stage].name)}</dd><dt>Cue sheet</dt><dd>${app.cues.sheet.tracks.length} tracks · ${nk} keys</dd><dt>Frame</dt><dd>${W}×${H} · ${p.export.fps} fps · ${mbps} Mbps${p.export.draft ? ' · draft' : ''}</dd>
       <dt>Section</dt><dd>${fmtTC(p.inT)} → ${fmtTC(p.outT)} (${len.toFixed(2)} s, ${Math.round(len / tr.barDur)} bars)</dd><dt>Encoder</dt><dd>${c ? `offline · ${c.container.toUpperCase()} · ${c.v === 'avc' ? 'H.264' : c.v.toUpperCase()} + ${c.a.toUpperCase()} 48 kHz` : 'real-time MediaRecorder'}</dd>`; }
   /** Render one section to a video blob: project (section, look, aspect), opt.sheet (default: the studio's). */
   async function renderVideo(project, label, onProg, sheet) {
