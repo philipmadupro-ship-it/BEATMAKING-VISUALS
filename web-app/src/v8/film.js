@@ -21,7 +21,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const L = createCore(D), lab = createLab(L), M = createMeters(L), BR = createBrand(L, assets), INTRO = createIntro(L, assets && assets.intro);
   const { F, FPS, BEAT, BAR, T, U, steps, rgba, mix, text, fmt, tc, bbt, fidx, clamp, lerp, hs, hash, kickEnv, labelAt, SANS, MONO, SERIF, HAND, DISPLAY, UI } = L;
   const port = aspect === '916', W = port ? 1080 : 1920, H = port ? 1920 : 1080, NB = D.bars;
-  let PRE = 0, RWB0 = 0, RWB = 0, c = null, ev = createEvaluator(emptySheet()), b = 0, IB = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
+  let PRE = 0, RWB0 = 0, RWB = 0, OUTD = false, c = null, ev = createEvaluator(emptySheet()), b = 0, IB = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
   const V = (path, def) => ev.value(path, b, def);
   // ---------------------------------------------------------------- tag variables (every on-screen word is editable)
   const titleCase = D.title.split(' ').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
@@ -70,8 +70,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // v17 closed-form spring punch (v17 prompt, build 2): the sum of one critically damped impulse response per kick, x(tau) = (tau / tp) e^(1 - tau / tp),
   // peak 1 at tau = tp (40 ms), settles with no overshoot; a pure function of time (L.kickHits = the on-grid kicks, at grid time, with strength)
   const KH = L.kickHits || [];
-  function punchSpring(tt) { const tp = 0.04; let s = 0, lo = 0, hi = KH.length; while (lo < hi) { const m = (lo + hi) >> 1; if (KH[m][0] <= tt) lo = m + 1; else hi = m; }
-    for (let j = lo - 1; j >= 0; j--) { const tau = tt - KH[j][0]; if (tau > 0.6) break; s += (tau / tp) * Math.exp(1 - tau / tp); } return Math.min(1.3, s); }
+  function punchSpring(tt, tMin = -1e9) { const tp = 0.04; let s = 0, lo = 0, hi = KH.length; while (lo < hi) { const m = (lo + hi) >> 1; if (KH[m][0] <= tt) lo = m + 1; else hi = m; }
+    for (let j = lo - 1; j >= 0; j--) { const tau = tt - KH[j][0]; if (tau > 0.6 || KH[j][0] < tMin) break; s += (tau / tp) * Math.exp(1 - tau / tp); } return Math.min(1.3, s); }
   function camera() {
     const s = ev.shot(b), A = framing(s.from), Bf = framing(s.to), u = s.u, zm = V('camera.zoom', 1);
     L.shotTo = s.to;   // meters can switch to their focus-shot version when the camera is on their window
@@ -80,7 +80,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     let op = IB ? INTRO.openCam(b, ev, IB, cam, { W, H, look: LOOK, aspect }) : null;
     // v17.1 loop: the beats before the rewind mirror the opening dolly (dolly IN onto the hero cover, same framing + streaks as the match cut)
     if (!op && RWB) { const open = ev.value('intro.open', 0, 2), b0 = RWB - open; if (open > 0 && b >= b0 && b < RWB) op = INTRO.openCam(IB + open * (1 - (b - b0) / open) - 1e-6, ev, IB, cam, { W, H, look: LOOK, aspect }); } L.openFx = op; if (op) return { x: op.x, y: op.y, z: op.z };
-    if (b >= IB) { const p = V('fx.punch', LOOK === 'player' ? 0.014 : 0); if (p > 0) cam.z *= 1 + p * punchSpring(T(b)); }   // v17: closed-form spring per kick
+    if (b >= IB) { const p = V('fx.punch', LOOK === 'player' ? 0.014 : 0), calm = LOOK === 'player' ? T(IB + ev.value('intro.open', 0, 2) + 4) : 0; if (p > 0 && !(RWB && b >= RWB - ev.value('intro.open', 0, 2) - 6)) cam.z *= 1 + p * punchSpring(T(b), calm); }   // v17: closed-form spring per kick; v21: still for one bar after the arrival and through the outro
     return cam;
   }
   // ---------------------------------------------------------------- attention: the window this beat is about
@@ -152,8 +152,11 @@ export function createFilm({ D, assets, aspect = '916' }) {
     for (let j = 0; j < P.K; j++) { const bi = P.bin[f0 * P.K + j]; if (bi < 0) continue; const lvv = P.lv[f0 * P.K + j], yy = row(bi), bl = 18 + 46 * lvv, th = 2 + 7 * lvv;
       const g = c.createRadialGradient(px, yy, 0, px, yy, 22 + 40 * lvv); g.addColorStop(0, rgba(ink, 0.35 * lvv)); g.addColorStop(1, rgba(ink, 0)); c.fillStyle = g; c.fillRect(px - 70, yy - 70, 140, 140);
       c.fillStyle = rgba(ink, 0.95); c.fillRect(px - bl, yy - th / 2, bl, th); }
-    // mini-rolls: the next bar of the 3 strongest voices
-    if (V('roll.mini', true)) { const mx = x + w * 0.79, mw = w * 0.18, mh = (h - 40) / 3 - 8, nF = Math.round(BAR * FPSr);
+    // v21 hero bands (user: "a block waveform like in Edison"): the right column = three complete block waveforms of the CURRENT BAR, one lane per band
+    // (LOW = kick + sub 20-150 Hz, MID 150 Hz-2 kHz, HIGH 2-20 kHz) from the real 1 ms band envelope (D.be), mirrored blocks, one per 1/32 note;
+    // played blocks solid, the rest of the bar dim, a playhead, the LOW lane lights on each kick. hero.bands = false brings back the mini-rolls.
+    if (V('hero.bands', true) && D.be) { bandLanes(x + w * 0.72, y + 14, w * 0.26, (h - 28 - 12) / 3, t, ink); }
+    else if (V('roll.mini', true)) { const mx = x + w * 0.79, mw = w * 0.18, mh = (h - 40) / 3 - 8, nF = Math.round(BAR * FPSr);
       for (let m = 0; m < 3; m++) { const my = y + 20 + m * (mh + 8); c.strokeStyle = rgba(ink, 0.35); c.lineWidth = 1; c.strokeRect(Math.round(mx) + 0.5, Math.round(my) + 0.5, Math.round(mw), Math.round(mh));
         c.fillStyle = rgba(ink, 0.5); for (const [cx2, cy2] of [[mx - 6, my - 6], [mx + mw + 6, my - 6]]) { c.fillRect(cx2 - 3, cy2, 7, 1); c.fillRect(cx2, cy2 - 3, 1, 7); }
         c.strokeStyle = rgba(ink, 0.8); c.lineWidth = 1.4; c.beginPath(); let started = false;
@@ -163,11 +166,30 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c.restore();
   }
   // v16 detection boxes (Y2K lab-scan): label tab (dark on scan green) + double frame + corner brackets + crosshair; re-acquire (hard step) each downbeat, flash on kicks
+  const BG3 = [[0, 1], [2, 3], [4, 5]], BNAME = ['LOW', 'MID', 'HIGH'];
+  function bandLevel(ta, tb, gi) { const BE = D.be; if (!BE) return 0; const [a2, b2] = BG3[gi]; let mx = 0;
+    for (let m = Math.max(0, Math.floor(ta * 1000)); m <= Math.min(BE.n - 1, Math.ceil(tb * 1000)); m++) { let e = 0; for (let j = a2; j <= b2; j++) e += Math.pow(10, (BE.q[m * BE.nb + j] / 2 - 120) / 10); if (e > mx) mx = e; } return Math.sqrt(mx); }
+  function bandRef(gi) { const BE = D.be; if (!BE._ref) BE._ref = []; if (BE._ref[gi] == null) { const v = []; const [a2, b2] = BG3[gi]; for (let m = 0; m < BE.n; m += 11) { let e = 0; for (let j = a2; j <= b2; j++) e += Math.pow(10, (BE.q[m * BE.nb + j] / 2 - 120) / 10); v.push(e); } v.sort((p1, p2) => p1 - p2); BE._ref[gi] = Math.sqrt(v[Math.floor(v.length * 0.995)] || 1e-9); } return BE._ref[gi]; }
+  function bandLanes(mx, y0, mw, mh, t, ink) {
+    // Edison-style (user: "complete waveforms, less sparse, no labels"): per lane a dense mirrored FILLED waveform of the current bar, one column per pixel
+    // (max of the band's 1 ms envelope over that column), the played part bright, the rest dim, a hairline centre, a playhead; LOW lights on each kick
+    const tt = Math.max(0, t), bar0 = Math.floor(tt / BAR + 1e-9) * BAR, u = (tt - bar0) / BAR, I = glowAt(fidx(tt)), cols = Math.max(24, Math.round(mw - 8));
+    for (let m = 0; m < 3; m++) { const my = y0 + m * (mh + 6), cy = my + mh / 2, hh = mh / 2 - 3, ref = bandRef(m), A = new Float32Array(cols);
+      for (let i = 0; i < cols; i++) { const ta = bar0 + i * BAR / cols; A[i] = Math.pow(clamp(bandLevel(ta, ta + BAR / cols, m) / ref * (m === 2 ? 1.25 : 1)), 0.8); }
+      c.fillStyle = rgba(ink, 0.1); c.fillRect(Math.round(mx), Math.round(my), Math.round(mw), Math.round(mh));
+      const X = (i) => mx + 4 + (mw - 8) * i / (cols - 1), split = Math.round(u * (cols - 1));
+      for (const played of [true, false]) { const i0 = played ? 0 : split, i1 = played ? split : cols - 1; if (i1 <= i0) continue;
+        c.beginPath(); c.moveTo(X(i0), cy - A[i0] * hh); for (let i = i0 + 1; i <= i1; i++) c.lineTo(X(i), cy - Math.max(0.6, A[i] * hh)); for (let i = i1; i >= i0; i--) c.lineTo(X(i), cy + Math.max(0.6, A[i] * hh)); c.closePath();
+        c.fillStyle = rgba(ink, played ? (m === 0 ? 0.78 + 0.22 * I : 0.88) : 0.3); c.fill(); }
+      c.fillStyle = rgba(ink, 0.25); c.fillRect(Math.round(mx + 2), Math.round(cy), Math.round(mw - 4), 1);
+      const px = Math.round(X(split)) + 0.5; c.strokeStyle = rgba(ink, 0.95); c.lineWidth = 1.2; c.beginPath(); c.moveTo(px, my + 2); c.lineTo(px, my + mh - 2); c.stroke(); }
+  }
+
   const DET = [[0.035, 0.12, 0.2, 0.52], [0.765, 0.08, 0.2, 0.44], [0.69, 0.6, 0.27, 0.32], [0.06, 0.7, 0.24, 0.24]];
   function detect(x, y, w, h, t, Sx) {
     const G = V('scan.color', Sx.grey ? '#0a0a0a' : Sx.hot), TXT = V('scan.text', Sx.grey ? '#f2f2f2' : '#0a0a0a'), labs = tag('player.detect') || [], bar = 0, I = 0, fz = port ? 17 : 15, th = fz + 8;   // v16.1: stage colours, static (no flash, no re-acquire)
     c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
-    DET.forEach(([fx, fy, fw, fh], i) => { if (!labs[i]) return;
+    DET.forEach(([fx, fy, fw, fh], i) => { if (!labs[i]) return; if (fx > 0.6 && V('hero.bands', true) && D.be && LOOK === 'player') return;   // v21: the right column belongs to the band lanes
       const jx = 0, jy = 0, bx = Math.round(x + fx * w + jx) + 0.5, by = Math.round(y + fy * h + jy + th) + 0.5, bw = Math.round(fw * w), bh = Math.round(fh * h - th);
       c.strokeStyle = rgba(G, 0.9); c.lineWidth = 1.2 + 1.2 * I; c.strokeRect(bx, by, bw, bh); c.lineWidth = 1; c.strokeStyle = rgba(G, 0.45); c.strokeRect(bx + 3, by + 3, bw - 6, bh - 6);
       const k = Math.min(14, bw * 0.18); c.strokeStyle = G; c.lineWidth = 2; c.beginPath();
@@ -493,12 +515,13 @@ export function createFilm({ D, assets, aspect = '916' }) {
   let MW = null;
   function mouseWays() { if (MW && MW.ev === ev) return MW.w; const w = [], P = PRE, rest = { sx: W * 0.8, sy: H * (port ? 0.84 : 0.88) };
     w.push({ t: -P, ...rest }); if (P > 0) w.push({ t: -0.06, play: true, click: true });
-    if (IB && LOOK === 'player' && P > 0) { const g = INTRO.geom(W, H); for (const bb of [-3, -2]) w.push({ t: T(bb) - 0.02, sx: g.cx - g.xs1 * 0.95, sy: g.cy + g.cw * 0.1, click: true }); w.push({ t: T(-1.25) - 0.02, sx: g.cx + g.cw * 0.12, sy: g.cy + g.cw * 0.25, click: true }); }   // v19.3: browse x2, choose
+    if (IB && LOOK === 'player' && P > 0) { const g = INTRO.geom(W, H); const br = Math.round(ev.value('intro.browse', -4, 1)); if (br) for (const bb of [-3, -2]) w.push({ t: T(bb) - 0.02, sx: g.cx - br * g.xs1 * 0.95, sy: g.cy + g.cw * 0.1, click: true }); w.push({ t: T(-1.25) - 0.02, sx: g.cx + g.cw * 0.12, sy: g.cy + g.cw * 0.25, click: true }); }   // v19.3: browse x2, choose; v21: browse side follows the seed (+1 left card, -1 right card, 0 direct)
     else if (IB) { const g = INTRO.geom(W, H); w.push({ t: T(Math.max(1, IB - 2)) - 0.02, sx: g.cx + g.cw * 0.18, sy: g.cy + g.cw * 0.2, click: true }); }
     for (const k of ev.keysIn('camera.shot', 0, 1e6)) { const r = k.v !== 'wide' && LY[k.v]; if (!r) continue; const d = k.dur ?? 1; w.push({ t: T(k.b - d) - 0.02, wx: r[0] + 92, wy: r[1] + (port ? 28 : 26), click: true }); }
     if (V('social.on', LOOK === 'player')) for (const [kk, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) { const at = V(`social.${kk}.at`, def), len = V(`social.${kk}.len`, 8);
       w.push({ t: T(at + len) - 0.02, sx: W / 2 - (port ? 450 : 380) + 26, sy: H * 0.5 - (port ? 95 : 84) + 21, click: true, cta: kk }); }
-    if (RWB0) w.push({ t: T(RWB0) - T(3) - 0.02, wx: (LY.stage || [W / 2, H / 2, 0, 0])[0] + (LY.stage ? LY.stage[2] * 0.5 : 0), wy: (LY.stage || [0, H / 2, 0, 0])[1] + (LY.stage ? LY.stage[3] * 0.55 : 0), click: true });
+    if (RWB0 && OUTD) { const w2 = outroWin(); w.push({ t: T(w2[1]) - 0.02, sx: W / 2 - (port ? 450 : 380) + 26, sy: H * 0.5 - (port ? 95 : 84) + 21, click: true }); }   // v21: the x of JOIN / CREATE PROJECT
+    else if (RWB0) w.push({ t: T(RWB0) - T(3) - 0.02, wx: (LY.stage || [W / 2, H / 2, 0, 0])[0] + (LY.stage ? LY.stage[2] * 0.5 : 0), wy: (LY.stage || [0, H / 2, 0, 0])[1] + (LY.stage ? LY.stage[3] * 0.55 : 0), click: true });
     w.push({ t: D.duration, ...rest }); w.sort((a2, b2) => a2.t - b2.t); MW = { ev, w }; return w; }
   const mj = (u) => u * u * u * (10 - 15 * u + 6 * u * u);
   // v19.4: click times in COMPOSITION seconds (film time + pre-roll), for the export's UI click sounds; call after one render()
@@ -515,6 +538,20 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c.translate(x, y); c.rotate(-0.04); c.scale(s, s); c.shadowColor = 'rgba(0,0,0,0.35)'; c.shadowBlur = 6; c.shadowOffsetX = 2; c.shadowOffsetY = 3; c.beginPath();
     [[0, 0], [0, 17], [4, 13], [7, 20], [9.5, 19], [6.5, 12], [12, 12]].forEach(([px2, py2], j) => (j ? c.lineTo(px2, py2) : c.moveTo(px2, py2))); c.closePath();
     c.fillStyle = '#ffffff'; c.fill(); c.shadowColor = 'transparent'; c.lineWidth = 1.2; c.strokeStyle = '#000000'; c.stroke(); c.restore();
+  }
+  // v21 outro dialog (screen space, on the hero shot): JOIN / CREATE PROJECT pops (spring) 5 beats before the cut back, the cursor closes it with x 2 beats later
+  const outroWin = () => (OUTD && RWB ? [RWB - 5, RWB - 3] : null);
+  function outroDialog(t) { const w2 = outroWin(); if (!w2 || b < w2[0] || b >= w2[1]) return; dialog(W / 2, H * 0.5, port ? 900 : 760, tag('social.outro.title') || 'U2C LAB', tag('social.outro.body') || 'JOIN / CREATE PROJECT', tag('social.outro.sub') || '', T(w2[0]), t, null); }
+  // v21 TERMINAL WORDS (user: "words that come in and out, like on a computer"): term.line clips type in one character per 64th note, hold, then delete backwards
+  // (one character per 128th) before the clip ends; a small system toast, bottom-left inside the safe zone; text is a tag string with {vars}
+  function terminal(t) {
+    if (!V('term.on', LOOK === 'player')) return;
+    for (const k of ev.clipsAt('term.line', b)) { const s0 = (typeof k.v === 'number' ? String((tag('social.terminal') || [])[k.v] || '') : L.sub(String(k.v ?? ''))).toUpperCase(); if (!s0) continue; const dur = k.dur ?? 4, age = t - T(k.b), left = T(k.b + dur) - t;
+      const nIn = Math.floor(age / T(1 / 16) + 1e-6) + 1, nOut = Math.floor(left / T(1 / 32) + 1e-6), n = Math.max(0, Math.min(s0.length, nIn, nOut)); if (!n) continue;
+      const str = s0.slice(0, n), fz = port ? 30 : 24, x0 = port ? 64 : 300, y0 = port ? 1380 : 940; c.font = `800 ${fz}px ${DISPLAY}`; const tw = c.measureText(s0).width * 1.06 + 64;
+      L.glass(c, x0, y0 - fz, tw, fz * 2, S, { r: 10, tint: 0.7, shadow: 0.8 }); c.fillStyle = rgba(S.ink, 0.9); c.fillRect(x0 + 16, y0 - 2, 10, 4);
+      text(c, str, x0 + 36, y0, { size: fz, fam: DISPLAY, w: 800, col: S.ink, maxW: W - x0 - 80 });
+      const caret = (Math.floor(age / T(1 / 8)) % 2 === 0) || n < s0.length; if (caret) { c.font = `800 ${fz}px ${DISPLAY}`; const cw = Math.min(W - x0 - 80, c.measureText(str).width * 1.06); c.fillStyle = S.ink; c.fillRect(x0 + 40 + cw, y0 - fz * 0.45, fz * 0.5, fz * 0.9); } }
   }
   function textCues(t) {
     for (const k of ev.clipsAt('text.cue', b)) {
@@ -595,9 +632,25 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c.setTransform(scale, 0, 0, scale, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
     if (opts.test) { L.view.camZ = 1; L.view.base = scale; testMode(opts.test, t); c.setTransform(1, 0, 0, 1, 0, 0); return { look: LOOK, stage: S.name, test: opts.test }; }
     // v17.1 seamless loop (player): the final bar plays the intro BACKWARDS (cubic ease-out into t = 0), so the last frame flows into frame 0
-    RWB = LOOK === 'player' && IB && V('outro.rewind', true) && D.duration > T(IB + 16) ? (D.duration - 2 * BAR) / BEAT : 0;   // v17.2: 2-bar rewind, sine in-out
+    OUTD = LOOK === 'player' && V('outro.mode', 'dialog') === 'dialog';
+    RWB = LOOK === 'player' && IB && V('outro.rewind', true) && D.duration > T(IB + 16) ? (OUTD ? D.duration / BEAT - 6 : (D.duration - 2 * BAR) / BEAT) : 0;   // v17.2: 2-bar rewind; v21 dialog outro: the cut back into the intro 6 beats before the end
     RWB0 = RWB;
-    if (RWB && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); t = T(IB) - e * (T(IB) + PRE) + 0.5 / fps * (1 - e); if (PRE) t = Math.max(-PRE + 0.5 / fps, t); else t = Math.max(0.5 / fps, t); paused = t < 0; b = t / BEAT; }   // v19.3: rewinds through the browse back to the first frame
+    if (RWB && OUTD && t >= RWB * BEAT) {
+      // v21 OUTRO (user: "a JOIN / CREATE PROJECT pop-up, the cursor presses x, it goes back and it stops"; never glitchy): the dialog lived on the hero (E-11 .. E-9),
+      // the camera dollied into the hero cover (E-9 .. E-6, the match cut in reverse); here: on the intro's pushed-in card, ONE zoom out (push 1 -> 0, decelerating,
+      // 3 beats), then the cover-flow glides back to its frame-0 card and the fan closes to its frame-0 state (2 beats, ease in-out), the hook dialog springs back in,
+      // the player is paused. The intro is drawn at frame-0 time, so the last frame IS frame 0.
+      const o = (t - RWB * BEAT) / BEAT, tI = -PRE + 0.5 / fps, bI = tI / BEAT, sm = (u) => { u = clamp(u); return u * u * u * (u * (6 * u - 15) + 10); };
+      const idx0 = ev.value('intro.index', bI, 0), ent0 = ev.value('intro.enter', bI, 1), u1 = clamp(o / 3), u2 = sm((o - 3) / 2);
+      const OV = { 'intro.push': Math.pow(1 - u1, 3), 'intro.index': lerp(0, idx0, u2), 'intro.enter': lerp(1, ent0, u2), 'intro.select': false };
+      b = bI; const Vo = (pth, d) => (pth in OV ? OV[pth] : V(pth, d));
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, tI, { S, V: Vo, ev, tag, W, H, look: LOOK, aspect, paused: true, playerIn: !!PRE });
+      c.setTransform(scale, 0, 0, scale, 0, 0);
+      if (o >= 4) { const sc2 = 0.9 + 0.1 * spr((o - 4) * BEAT / 0.45, 9), hy = port ? 330 : 150; c.save(); c.translate(W / 2, hy); c.scale(sc2, sc2); c.translate(-W / 2, -hy); social(tI, true); c.restore(); }
+      textures(tI); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+      return { look: LOOK, stage: S.name, intro: true, index: OV['intro.index'], push: OV['intro.push'], enter: OV['intro.enter'] };
+    }
+    if (RWB && !OUTD && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); t = T(IB) - e * (T(IB) + PRE) + 0.5 / fps * (1 - e); if (PRE) t = Math.max(-PRE + 0.5 / fps, t); else t = Math.max(0.5 / fps, t); paused = t < 0; b = t / BEAT; }   // v19.3: rewinds through the browse back to the first frame
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
       L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player' }); c.setTransform(scale, 0, 0, scale, 0, 0); social(t, true); textCues(t); textures(t); flash(t); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
@@ -625,7 +678,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     videoDraw('full', 0, 0, W, H);   // v19 video layer, full frame (screen space, over the windows, under halation / overlays)
     if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16));
     if (L.openFx) INTRO.streak(c, L.openFx.px, L.openFx.py, L.openFx.dl);   // v13 intro: directional streak copies on the opening dolly-out
-    result(t); hud(t, ev.shot(b)); social(t, false); textCues(t); textures(t); mouse(filmT, cam);
+    result(t); hud(t, ev.shot(b)); social(t, false); outroDialog(t); terminal(t); textCues(t); textures(t); mouse(filmT, cam);
     flash(t);
     glitch(t, scale);
     c.setTransform(1, 0, 0, 1, 0, 0); invertAll();

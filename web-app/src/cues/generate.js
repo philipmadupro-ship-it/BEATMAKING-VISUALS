@@ -15,6 +15,10 @@ export const PRESETS = {
   drop: { name: 'Drop-focused', blurb: 'logo hero + cut in on every drop, bigger swing, a flash per drop' },
   tour: { name: 'Meter tour', blurb: 'a different meter featured every 2 bars, pushes on bar lines' },
 };
+// v21 seeded randomness: mulberry32 on a string hash, so every beat gets its own (repeatable) variation; meta.seed overrides
+const hashStr = (str) => { let h = 2166136261; for (const ch of String(str)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+const shuffle = (R, arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
 const key = (b, v, extra = {}) => ({ id: newId(), b, v, ...extra });
 const track = (path, kind, lane, keys) => ({ id: newId('t'), path, kind, lane, auto: true, keys: keys.map((k) => ({ ...k, ease: k.ease || defaultEase(kind) })) });
 
@@ -22,6 +26,7 @@ const track = (path, kind, lane, keys) => ({ id: newId('t'), path, kind, lane, a
  * generateSheet({bars, labels (per clip bar), look, stage, aspect, preset, title}) -> internal sheet.
  */
 export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'nigredo', aspect = '916', preset = 'default', meta = {} } = {}) {
+  const seed = meta.seed != null && meta.seed !== '' ? hashStr('seed:' + meta.seed) : hashStr(meta.title || 'u2c');
   const S = stageOf(stage), sheet = emptySheet({ bars, look, aspect, preset, ...meta }), NB = bars, lab = (k) => labels[k] || 'groove';
   const ids = Object.keys(LAYOUT[look][aspect]), dropBars = []; for (let k = 0; k < NB; k++) if (lab(k) === 'drop' && (k === 0 || lab(k - 1) !== 'drop')) dropBars.push(k);
   sheet.base.look = look; sheet.base.stage = stage;
@@ -37,11 +42,19 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     // 1 beat long, landing ON the bar; one wide breath per cycle; the last 2 bars push into the hero and the final bar zooms into its cover
     // (camera.zoom) so the video ends on the cover and loops into the cover-flow intro, which opens on the same cover
     // v19.1: wide breaths in the cycle; the two CTA alerts land on the first two wide breaths (over the whole desktop, never over a zoomed panel)
-    const seq = ['spectrum', 'session', 'wide', 'inserts', 'wide', 'stereo', 'loud', 'stage', 'wide']   // v19.5: the rack gets its own visit (it lives under the TikTok caption at rest)
-     .filter((id) => id === 'wide' || ids.includes(id)), wides = []; let bar = 3;
-    for (; bar < NB - 4; bar += 2) { const id = seq[i++ % seq.length]; if (id === 'wide') wides.push(bar); cam.push(key(bar * 4, id, { transition: 'push', dur: aspect === '169' ? 3 : 2, ease: 'spring' })); }   // v19.1: YouTube 16:9 moves are calmer (3 beats)
+    // v21 seeded order (user: "random, the tapped window aleatoire; concentrate on the hero card sometimes"): groups of [panel, panel, wide, panel, wide] (two wide breaths per 16 bars for the two CTAs); the panels are a
+    // seeded shuffle where the hero (stage) comes twice per cycle and the rack once, never the same window twice in a row; the first panel is seeded too
+    const RND = rng(seed), others = ['spectrum', 'session', 'stereo', 'loud'].filter((id) => ids.includes(id)), wides = []; let bar = 3, last = 'stage';
+    const cyc = () => { const o = shuffle(RND, others.slice()), A = shuffle(RND, [...(ids.includes('stage') ? ['stage'] : []), ...(ids.includes('inserts') ? ['inserts'] : []), o[0]].filter(Boolean)), B = shuffle(RND, [o[1], ids.includes('stage') ? 'stage' : o[2]].filter(Boolean)); return [...A, ...B]; };   // the first 3 visits = hero + rack + one other
+    let pool = cyc(), pi = 0, slot = 0; const seq = { next() { { const sl = slot++ % 5; if (sl === 2 || sl === 4) return 'wide'; } if (pi >= pool.length) { pool = cyc(); pi = 0; } let id = pool[pi++]; if (id === last && pi < pool.length) { [pool[pi - 1], pool[pi]] = [pool[pi], pool[pi - 1]]; id = pool[pi - 1]; } last = id; return id; } };
+    for (; bar < NB - 4; bar += 2) { const id = seq.next(); if (id === 'wide') wides.push(bar); cam.push(key(bar * 4, id, { transition: 'push', dur: aspect === '169' ? 3 : 2, ease: 'spring' })); }   // v19.1: YouTube 16:9 moves are calmer (3 beats)
     if (wides[0] != null) { sheet.base['social.cta1.at'] = wides[0] * 4 + 1; sheet.base['social.cta1.len'] = 4; }
     if (wides[1] != null) { sheet.base['social.cta2.at'] = wides[1] * 4 + 1; sheet.base['social.cta2.len'] = 4; }
+    // v21 terminal words (tags social.terminal[0..3]): LOADING right after the arrival, ANALYSING one phrase later, LAB TEST on the negative bar (or bar 7), EXPORT
+    // COMPLETE before the hero outro; each clip types in, holds, deletes backwards. Never on a CTA beat.
+    { const neg = (() => { for (let k2 = 4; k2 < NB - 1; k2++) if ((k2 - 2) % 4 === 0 && lab(k2) === 'drop') return k2; return 9; })(), T0 = [[2 * 4 + 3, 0, 5], [4 * 4 + 1, 1, 5], [neg * 4 + 1, 2, 5], [(NB - 4) * 4 + 1, 3, 4]];
+      const busy = (b2) => [sheet.base['social.cta1.at'], sheet.base['social.cta2.at']].some((a2) => a2 != null && b2 + 5 > a2 && b2 < a2 + 4);
+      sheet.tracks.push(track('term.line', 'clip', 'text', T0.filter(([b2]) => b2 < (NB - 3) * 4 && !busy(b2)).map(([b2, v, d]) => key(b2, v, { dur: d })))); }
     if (ids.includes('stage') && NB >= 8) { cam.push(key((NB - 3) * 4, 'stage', { transition: 'push', dur: 2, ease: 'spring' })); sheet.tracks.push(track('intro.open', 'number', 'stage', [key(0, 3, { ease: 'step' })]));
       }   // v17.1: the final bar is the rewind (film.js): dolly into the hero cover, cut onto the intro's pushed-in card, play the intro backwards to frame 0
   } else if (preset === 'default') {
@@ -100,7 +113,10 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     // then clicks the chosen card = selection brackets), THEN the cursor clicks play at beat 0 (the music starts) and the push into the project
     // runs over the first bar (intro.length 1); the lab opens on the cover and dollies out (intro.open 3). Pre-roll = 4 beats (native --preroll).
     sheet.tracks.push(track('intro.length', 'number', 'stage', [key(0, 1, { ease: 'step' })]));
-    sheet.tracks.push(track('intro.index', 'number', 'stage', [key(-4.5, 2, { ease: 'step' }), key(-3, 2, { ease: 'easeInOut' }), key(-2.625, 1, { ease: 'step' }), key(-2, 1, { ease: 'easeInOut' }), key(-1.625, 0, { ease: 'step' })]));
+    // v21 seeded browse (user: "sometimes left, sometimes right, sometimes it clicks directly"): +1 = the cards step in from the left (2 -> 1 -> 0, the cursor
+    // clicks the left card), -1 = from the right (-2 -> -1 -> 0, clicks the right card), 0 = the beat cover is already centred and the cursor picks it directly
+    const BR = rng(seed ^ 0x9e3779b9)(), browse = BR < 0.4 ? 1 : BR < 0.8 ? -1 : 0, s0 = 2 * browse; sheet.base['intro.browse'] = browse;
+    sheet.tracks.push(track('intro.index', 'number', 'stage', browse ? [key(-4.5, s0, { ease: 'step' }), key(-3, s0, { ease: 'easeInOut' }), key(-2.625, browse, { ease: 'step' }), key(-2, browse, { ease: 'easeInOut' }), key(-1.625, 0, { ease: 'step' })] : [key(-4.5, 0, { ease: 'step' })]));
     sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(-4.5, 0.45, { ease: 'step' }), key(-4, 0.45, { ease: 'linear' }), key(-3.25, 1, { ease: 'step' })]));
     sheet.tracks.push(track('intro.select', 'enum', 'stage', [key(-1.25, true, { ease: 'step' })]));
     sheet.tracks.push(track('intro.push', 'number', 'stage', [key(0, 0, { ty: 'bezier', ob: [0.42, 0], ease: 'easeInOut' }), key(4, 1, { ib: [0, 0], ease: 'step' })]));

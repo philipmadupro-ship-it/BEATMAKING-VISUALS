@@ -10,7 +10,7 @@ import * as ML from './meterlib.js';
 import { glowAt, grFor } from './levelview.js';
 import { traceData, toneCols } from './spectrumview.js';
 
-export const LABELS = ['FILTER', 'LIMITER', 'WIDTH', '3D'];
+export const LABELS = ['SCOPE', 'LIMITER', 'WIDTH', '3D'];   // v21 (user ref): FILTER -> SCOPE (chaotic oscilloscope); the orbit lives in the imager window
 export const CUBE_EASE = 0.45;   // fraction of a beat the step takes (the last 45 % before the beat)
 
 /** Cube turn in steps (1 step = 90 degrees) at time t: it holds, then eases (in-out cubic) over the last `ease` of each beat so that at every beat
@@ -54,7 +54,7 @@ export function draw(ctx, rect, frame, opts) {
     if (ah < 10 || aw < 10) continue;
     ctx.save(); ctx.beginPath(); ctx.rect(tx + 2, y + 2, tw - 4, h - 4); ctx.clip();
     let rd = null;
-    if (i === 0) rd = spec(ctx, S, D, f, ax, ay, aw, ah, tone, g, rgba, ink);
+    if (i === 0) rd = opts.legacy ? spec(ctx, S, D, f, ax, ay, aw, ah, tone, g, rgba, ink) : scope(ctx, S, D, t, ax, ay, aw, ah, g, rgba, ink);
     else if (i === 1) rd = gr(ctx, S, D, t, FPS, ax, ay, aw, ah, g, rgba, ink, clamp);
     else if (i === 2) rd = width(ctx, S, F, D, f, FPS, ax, ay, aw, ah, g, rgba, ink, clamp);
     else cube(ctx, S, D, t, f, ax, ay, aw, ah, g, rgba, ink, L.BEAT);
@@ -125,4 +125,33 @@ function cube(ctx, S, D, t, f, x, y, w, h, g, rgba, ink, beat) {
   for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) { const a = V(r, c), al = 0.35 + 0.5 * clamp01(0.5 - a[2] * 0.25) + 0.25 * g;
     if (c + 1 < C) seg(a, V(r, c + 1), Math.min(1, al), 1.1); if (r + 1 < R) seg(a, V(r + 1, c), Math.min(1, al * 0.8), 1.1); }
   ctx.restore();
+}
+
+// v21 SCOPE (user ref "SCOPE" panel): the real L+R waveform of the last 1/16 note (D.scope, 8 kHz), one polyline, a faint centre line and
+// quarter grid, the trace glows on the kick. Readout = the window's peak in dBFS.
+function scope(ctx, S, D, t, x, y, w, h, g, rgba, ink) {
+  // raw samples, no envelope: the last half beat of L (bright) and R (dim) as two jagged polylines at the full 8 kHz scope rate, so the trace
+  // is as busy as the audio really is (user: "really chaotic"); auto-gain to the window peak, clipped to the tile
+  const SC = D.scope; if (!SC) return '';
+  const span = Math.max(0.1, D.beat / 2), e = Math.min(SC.L.length - 1, Math.floor(Math.max(0, t) * SC.rate)), n0 = Math.max(0, e - Math.round(span * SC.rate)), N = e - n0, cy = y + h / 2, k = SC.scale;
+  ctx.fillStyle = ink(0.1); ctx.fillRect(x, Math.round(cy), w, 1); for (let q = 1; q < 4; q++) ctx.fillRect(Math.round(x + w * q / 4), y + 2, 1, h - 4);
+  if (N < 2) return '-INF';
+  let pk = 1e-5; for (let i = n0; i <= e; i++) pk = Math.max(pk, Math.abs(SC.L[i] * k), Math.abs(SC.R[i] * k));
+  const gain = 0.48 / Math.max(0.12, pk), line = (A, col, lw) => { ctx.beginPath(); for (let i = n0; i <= e; i++) { const xx = x + w * (i - n0) / N, yy = cy - A[i] * k * gain * h; if (i === n0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy); } ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineJoin = 'miter'; ctx.stroke(); };
+  ctx.save(); line(SC.R, ink(0.45), 1); if (g > 0.02) { ctx.shadowColor = rgba(S.hot, 1); ctx.shadowBlur = 3 + 9 * g; } line(SC.L, ink(0.95), 1.2); ctx.restore();
+  return `${(20 * Math.log10(pk)).toFixed(1)} DB`;
+}
+// v21 ORBIT (user ref "VECTOR" panel): a vectorscope cloud of the last ~1/8 note: every scope sample as a point at (S, M) rotated 45 degrees
+// (mono = vertical line, wide = round cloud), inside a circle with L / R marks and a crosshair; points older in the window fade. Readout = correlation.
+function orbit(ctx, S, D, F, f, t, x, y, w, h, g, rgba, ink) {
+  const SC = D.scope; if (!SC) return '';
+  const r = Math.min(w, h) * 0.46, cx = x + w / 2, cy = y + h / 2 + 2, span = D.beat / 2, e = Math.min(SC.L.length - 1, Math.floor(Math.max(0, t) * SC.rate)), n0 = Math.max(0, e - Math.round(span * SC.rate)), k = SC.scale;
+  ctx.strokeStyle = ink(0.22); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.2832); ctx.stroke(); ctx.beginPath(); ctx.arc(cx, cy, r * 0.5, 0, 6.2832); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx - r * 0.707, cy - r * 0.707); ctx.lineTo(cx + r * 0.707, cy + r * 0.707); ctx.moveTo(cx + r * 0.707, cy - r * 0.707); ctx.lineTo(cx - r * 0.707, cy + r * 0.707); ctx.stroke();
+  let pk = 1e-4; for (let i = n0; i <= e; i += 3) pk = Math.max(pk, Math.abs(SC.L[i] * k), Math.abs(SC.R[i] * k));
+  let sp = 1e-4; for (let i = n0; i <= e; i += 3) sp = Math.max(sp, Math.abs(SC.L[i] - SC.R[i]) * k * 0.707);
+  const gain = 0.9 / Math.max(0.25, pk), N = e - n0 + 1, zS = Math.max(1, Math.min(4, 0.55 / Math.max(1e-4, sp * gain)));   // side-axis auto zoom (x1..x4), like a vectorscope's zoom
+  for (let i = n0; i <= e; i++) { const l = SC.L[i] * k * gain, rr = SC.R[i] * k * gain, sx = (l - rr) * 0.707 * zS, sy = (l + rr) * 0.707, age = (e - i) / N;
+    const px = cx + Math.max(-1, Math.min(1, sx)) * r, py = cy - Math.max(-1, Math.min(1, sy)) * r; ctx.fillStyle = rgba(S.ink, (0.15 + 0.55 * (1 - age)) * (0.8 + 0.2 * g)); ctx.fillRect(px, py, 1.4, 1.4); }
+  const c = F && F.corr ? F.corr[f] : 0; return `${c >= 0 ? '+' : ''}${c.toFixed(2)}`;
 }

@@ -29,7 +29,9 @@ export const DEFAULT_TAGS = {
   "title": "EXPERIMENT_{titleWord}.EXE",
   "hook": "THIS BEAT FAILED THE LAB TEST",
   "cta1": { "title": "U2C ALERT", "body": "COMMENT \"LAB\"", "sub": "FOR THE FREE DOWNLOAD" },
-  "cta2": { "title": "U2C SYSTEM", "body": "FULL BEAT: LINK IN BIO", "sub": "{bpm} BPM \u00b7 {key} \u00b7 PROD. {producer}" }
+  "cta2": { "title": "U2C SYSTEM", "body": "FULL BEAT: LINK IN BIO", "sub": "{bpm} BPM \u00b7 {key} \u00b7 PROD. {producer}" },
+  "outro": { "title": "U2C LAB", "body": "JOIN / CREATE PROJECT", "sub": "SAVE {title} TO YOUR LAB" },
+  "terminal": ["LOADING {titleWord}.WAV", "ANALYSING\u2026 {bpm} BPM \u00b7 {key}", "LAB TEST: FAILED", "EXPORT COMPLETE"]
  },
  "player": {
   "nav": ["PLAYER", "LIBRARY", "ANALYSIS", "TOOLS", "PROJECTS", "ARCHIVE"],
@@ -38,7 +40,7 @@ export const DEFAULT_TAGS = {
   "mark": "U2C\u00ae",
   "coords": [],
   "tabs": ["PLAYER"],
-  "inserts": ["FILTER", "LIMITER", "WIDTH", "3D"],
+  "inserts": ["SCOPE", "LIMITER", "WIDTH", "3D"],
   "detect": ["{title}", "{bpm} BPM", "{key}", "PROD. {producer}"],
   "sub": "U2C \u00b7 ARCHIVE",
   "info": "{bpm} BPM \u2022 {key}",

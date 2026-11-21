@@ -92,7 +92,7 @@ if (ENGINE === 'v9') {
   const { parseSheet, serializeSheet } = await import('./film/v9/src/cues/schema.js');
   const { generateSheet } = await import('./film/v9/src/cues/generate.js');
   const { clipBarLabels } = await import('./film/v9/src/v8/data.js');
-  let sheet = cueSheet || generateSheet({ bars: D.bars, labels: clipBarLabels(D), look, stage, aspect, preset: String(args.preset || 'default'), meta: { title: D.title } });
+  let sheet = cueSheet || generateSheet({ bars: D.bars, labels: clipBarLabels(D), look, stage, aspect, preset: String(args.preset || 'default'), meta: { title: D.title, seed: args.seed } });
   // explicit --look / --stage flags win over the sheet's tracks
   for (const [p, v] of [['look', look], ['stage', stage]]) { sheet.base[p] = v; for (const tr of sheet.tracks) if (tr.path === p) tr.keys = [{ ...(tr.keys[0] || {}), b: 0, v }]; }
   if (args.hook !== undefined) sheet.base['social.hookIdx'] = +args.hook;   // v19.1 A/B hook variant (tags social.hooks)
@@ -100,15 +100,15 @@ if (ENGINE === 'v9') {
   const introFlag = args.intro === undefined ? null : !/^(off|0|false|no)$/i.test(String(args.intro));
   if (introFlag === false) { sheet.base['intro.on'] = false; sheet.tracks = sheet.tracks.filter((tr) => !tr.path.startsWith('intro.')); }
   else if (!args.test && (introFlag === true || sheet.base['intro.on'] !== false) && !sheet.tracks.some((tr) => tr.path === 'intro.index' || tr.path === 'intro.on' && tr.keys.some((k) => k.v === false))) {
-    const gen = generateSheet({ bars: D.bars, labels: clipBarLabels(D), look, stage, aspect, preset: 'default', meta: { title: D.title } });   // sheets from before v11 get the default intro tracks
+    const gen = generateSheet({ bars: D.bars, labels: clipBarLabels(D), look, stage, aspect, preset: 'default', meta: { title: D.title, seed: args.seed } });   // sheets from before v11 get the default intro tracks
     sheet.tracks.push(...gen.tracks.filter((tr) => tr.path.startsWith('intro.')));
   }
   // v19 click times (composition seconds) = the mouse layer's clicks (same rules as film.js mouseWays): play, card, camera travels, CTA closes, hero
   if (look === 'player' && !args.test) { const BT = D.beat, ilT = sheet.tracks.find((tr) => tr.path === 'intro.length'), IBb = sheet.base['intro.on'] === false ? 0 : 4 * (ilT ? ilT.keys[0].v : 2), T2 = (bb) => bb * BT, w = [];
-    if (PRE > 0) w.push(-0.06); if (IBb && PRE > 0) w.push(T2(-3) - 0.02, T2(-2) - 0.02, T2(-1.25) - 0.02); else if (IBb) w.push(T2(Math.max(1, IBb - 2)) - 0.02);   // v19.3 browse x2 + choose, then play
+    if (PRE > 0) w.push(-0.06); if (IBb && PRE > 0) w.push(...(sheet.base['intro.browse'] === 0 ? [] : [T2(-3) - 0.02, T2(-2) - 0.02]), T2(-1.25) - 0.02);   // v21: no browse clicks on a direct pick else if (IBb) w.push(T2(Math.max(1, IBb - 2)) - 0.02);   // v19.3 browse x2 + choose, then play
     for (const tr of sheet.tracks) if (tr.path === 'camera.shot') for (const k of tr.keys) if (k.v !== 'wide') w.push(T2(k.b - (k.dur ?? 1)) - 0.02);
     for (const kk of ['cta1', 'cta2']) { const at = sheet.base[`social.${kk}.at`], ln = sheet.base[`social.${kk}.len`]; if (at != null) w.push(T2(at + (ln ?? 8)) - 0.02); }
-    if (IBb && D.duration > T2(IBb + 16)) w.push(D.duration - 2 * 4 * BT - T2(3) - 0.02);
+    if (IBb && D.duration > T2(IBb + 16)) w.push((sheet.base['outro.mode'] ?? 'dialog') === 'dialog' ? D.duration - T2(9) - 0.02 : D.duration - 2 * 4 * BT - T2(3) - 0.02);   // v21: the x of JOIN / CREATE PROJECT (E-9 beats)
     CLICKS = w.filter((x) => x + PRE >= 0 && x < D.duration).map((x) => +(x + PRE).toFixed(4)); }
   const cuesTags = {}; if (args.title) cuesTags.title = String(args.title);
   cuesTags.date = args.date ? String(args.date) : (tags.date === '{today}' || !tags.date ? today : tags.date);

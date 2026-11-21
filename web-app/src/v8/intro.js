@@ -297,8 +297,11 @@ export function createIntro(L, A = {}) {
   function openCam(b, ev, IB, cam, o) {
     const open = ev.value('intro.open', 0, 2); if (!IB || !(open > 0) || b < IB - 1e-9 || b >= IB + open) return null;
     const [tx0, ty0, tw, th] = coverTarget(L, o.look, o.aspect), cx = tx0 + tw / 2, cy = ty0 + th / 2, zf = o.look === 'player' ? Math.min(o.W / tw, o.H / th) : fillZoom(tw, th, o.W, o.H);
-    const e = (bb) => easeOut3((bb - IB) / open), ee = e(b), z = Math.exp(lerp(Math.log(zf), Math.log(cam.z), ee)), x = lerp(cx, cam.x, ee), y = lerp(cy, cam.y, ee);
-    const uu = (b - IB) / open, dl = Math.log(zf / cam.z) * 3 * (1 - uu) * (1 - uu) / open * (0.9 / D.fps / BEAT);   // d(ease)/db x one frame: full blur on the first lab frame too
+    // v21 (user: "when it arrives, motionless; use the scale, the spring"): a closed-form critically damped spring with launch velocity, x(u) = 1 - e^(-wu)(1 + (w - v0)u),
+    // w 7, v0 6: it leaves the cut fast (speed continuity with the push), lands by ~60 % of the window and is then still (no slow creep); normalised so x(1) = 1
+    const SW = 7, SV = 6, sp = (u) => { u = clamp(u); return (1 - Math.exp(-SW * u) * (1 + (SW - SV) * u)) / (1 - Math.exp(-SW) * (1 + SW - SV)); }, dsp = (u) => Math.exp(-SW * clamp(u)) * (SV + SW * (SW - SV) * clamp(u)) / (1 - Math.exp(-SW) * (1 + SW - SV));
+    const uu = (b - IB) / open, ee = sp(uu), z = Math.exp(lerp(Math.log(zf), Math.log(cam.z), ee)), x = lerp(cx, cam.x, ee), y = lerp(cy, cam.y, ee);
+    const dl = Math.log(zf / cam.z) * dsp(uu) / open * (0.9 / D.fps / BEAT);   // d(ease)/db x one frame: the streak / blur follows the spring's speed
     return { x, y, z, dl, px: o.W / 2 + (cx - x) * z, py: o.H / 2 + (cy - y) * z };
   }
   /** Events for the sync test / the timeline (beats): the enter, the selection steps, the hard cut into the lab, the dolly-out landing. */

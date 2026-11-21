@@ -77,24 +77,24 @@ export function createImagerView(L, M8, H) {
     let cx = x0 + w / 2, cy = top + R, balY = y0 + h - 12 - rowH, corY = balY - rowH - gap;   // CORR + BAL anchored to the bottom
     let mkTop = cy + below, mkH = corY - gap - mkTop, mkCx = cx, mkCy = mkTop + mkH / 2, mkR = Dm / 2;
     // v14 player: half disc on top, then WIDTH / CORR / BAL slider rows, then the 4 band widths (no elephant mark, no dB labels under the disc)
-    let plLay = null; const PL = opt.variant === 'player', plRow = Math.max(28, LH + 8), plBand = Math.round(fz(11) + fz(16) * 0.74 + 14), plPad = 6;
-    if (PL) { Dm = 0; const rowsH = 3 * plRow + plBand + 4 * 6, topPl = y0 + Math.round(LH * 0.9) + 4; R = Math.max(40, Math.min(R0, h - rowsH - (topPl - y0) - 12)); cx = x0 + w / 2; cy = topPl + R;
-      const spare = Math.max(0, h - (cy - y0) - 8 - rowsH - 8), ex = Math.min(spare / 4, 26), stp = plRow + ex * 0.6; plLay = { widY: cy + 8 + ex * 0.5, step: stp, bandY: cy + 8 + ex * 0.5 + 3 * stp + ex * 0.2 };
+    let plLay = null; const PL = opt.variant === 'player', FULL = PL && L.meter('stereo', 'orbit', true), plRow = Math.max(28, LH + 8), plBand = Math.round(fz(11) + fz(16) * 0.74 + 14), plPad = 6;
+    if (PL) { Dm = 0; const rowsH = 3 * plRow + plBand + 4 * 6, topPl = y0 + Math.round(LH * 0.9) + 4; R = Math.max(FULL ? 30 : 40, Math.min(R0, FULL ? (h - rowsH - (topPl - y0) - 20) / 2 : h - rowsH - (topPl - y0) - 12)); cx = x0 + w / 2; cy = topPl + R; const cyB = FULL ? cy + R : cy;
+      const spare = Math.max(0, h - (cyB - y0) - 8 - rowsH - 8), ex = Math.min(spare / 4, 26), stp = plRow + ex * 0.6; plLay = { widY: cyB + 8 + ex * 0.5, step: stp, bandY: cyB + 8 + ex * 0.5 + 3 * stp + ex * 0.2 };
       corY = plLay.widY + stp; balY = corY + stp; }
     // v14.1 player, wide cell: the disc on the left (as big as the cell allows), the WIDTH / CORR / BAL rows + bands on the right
     let plX = x0, plW = w;
-    if (PL && w > 1.45 * h) { const topPl = y0 + Math.round(LH * 0.9) + 4, dW = Math.round(w * 0.47); cy = y0 + h - 22; R = Math.max(40, Math.min(dW / 2 - 10, cy - topPl - 22)); cx = x0 + 10 + dW / 2;
+    if (PL && w > 1.45 * h) { const topPl = y0 + Math.round(LH * 0.9) + 4, dW = Math.round(w * 0.47); cy = y0 + h - 22; R = Math.max(40, Math.min(dW / 2 - 10, cy - topPl - 22)); cx = x0 + 10 + dW / 2; if (FULL) { R = Math.max(30, Math.min(dW / 2 - 14, (y0 + h - 10 - topPl) / 2)); cy = topPl + R; }
       const rowsH = 3 * plRow + plBand + 12, avail = y0 + h - 10 - topPl, ex = Math.min(Math.max(0, avail - rowsH) / 4, 22), stp = plRow + ex * 0.6, y1 = topPl + Math.max(0, (avail - rowsH - ex * 2) / 2) + plRow * 0.5;
       plLay = { widY: y1, step: stp, bandY: y1 + 3 * stp + ex * 0.2 }; corY = y1 + stp; balY = corY + stp; plX = x0 + dW + 8; plW = w - dW - 8; }
     if (Dm) L.portholeRect = [mkCx, mkCy, mkR];
     // ---- density
-    const CELL = R >= 150 ? 2 : 1.5, gw = Math.ceil(2 * R / CELL) + 2, gh = Math.ceil(R / CELL) + 2, gk = gw + 'x' + gh;
+    const CELL = R >= 150 ? 2 : 1.5, gw = Math.ceil(2 * R / CELL) + 2, gh = Math.ceil((FULL ? 2 : 1) * R / CELL) + 2, gk = gw + 'x' + gh;
     let G = GRID[gk]; if (!G) { G = GRID[gk] = { acc: new Float32Array(gw * gh), cv: document.createElement('canvas') }; G.cv.width = gw; G.cv.height = gh; G.im = G.cv.getContext('2d').createImageData(gw, gh); }
     const acc = G.acc; acc.fill(0);
-    const Tp = Math.max(1 / FPS, L.meter('stereo', 'persist', 0.42)), keep = Math.min(Math.round(Tp * FPS * 1.6), f), sc = SC.scale * gain, ox = R / CELL + 1, oy = R / CELL + 0.5;
+    const Tp = Math.max(1 / FPS, L.meter('stereo', 'persist', 0.42)), keep = Math.min(Math.round(Tp * FPS * 1.6), f), sc = SC.scale * gain, ox = R / CELL + 1, oy = R / CELL + 0.5, unf = (p, i) => (FULL && p && SC.L[i] + SC.R[i] < 0 ? [-p[0], -p[1]] : p);
     for (let back = keep; back >= 0; back--) {
       const ff = f - back, wgt = Math.exp(-back / FPS / (0.45 * Tp)), [a0, a1] = scopeSpan(ff);
-      for (let i = a0; i < a1; i++) { const p = ML.polarSample(SC.L[i] * sc, SC.R[i] * sc, range); if (!p) continue;
+      for (let i = a0; i < a1; i++) { const p = unf(ML.polarSample(SC.L[i] * sc, SC.R[i] * sc, range), i); if (!p) continue;
         const fx = ox + p[0] * R / CELL - 0.5, fy = oy - p[1] * R / CELL - 0.5, gx = Math.floor(fx), gy = Math.floor(fy), ux = fx - gx, uy = fy - gy;
         if (gx >= 0 && gx < gw - 1 && gy >= 0 && gy < gh - 1) { const o = gy * gw + gx; acc[o] += wgt * (1 - ux) * (1 - uy); acc[o + 1] += wgt * ux * (1 - uy); acc[o + gw] += wgt * (1 - ux) * uy; acc[o + gw + 1] += wgt * ux * uy; } }
     }
@@ -102,22 +102,22 @@ export function createImagerView(L, M8, H) {
     for (let i = 0; i < gw * gh; i++) { const v = acc[i], q = (v <= 0 ? 0 : Math.round(255 * (1 - Math.exp(-v * KD)))) * 4; d[i * 4] = lut[q]; d[i * 4 + 1] = lut[q + 1]; d[i * 4 + 2] = lut[q + 2]; d[i * 4 + 3] = lut[q + 3]; }
     G.cv.getContext('2d').putImageData(G.im, 0, 0);
     // ---- grid: dB rings, angle spokes (M 0°, L / R ±45°, S ±90°), rim ticks
-    ctx.lineWidth = 1; const arc = (rho) => { ctx.beginPath(); ctx.arc(cx, cy, R * rho, Math.PI, 2 * Math.PI); ctx.stroke(); };
+    ctx.lineWidth = 1; const arc = (rho) => { ctx.beginPath(); ctx.arc(cx, cy, R * rho, FULL ? 0 : Math.PI, 2 * Math.PI); ctx.stroke(); };
     ctx.strokeStyle = ink(0.13); for (const dB of [-10, -20, -30]) arc(1 + dB / range);
     { const gk = glowAt(D, t, FPS); if (gk > 0.02) { ctx.save(); ctx.shadowColor = rgba(S.hot, 1); ctx.shadowBlur = 6 + 18 * gk; ctx.strokeStyle = rgba(S.grey ? S.ink : S.hot, 0.25 + 0.6 * gk); ctx.lineWidth = 1 + 2.2 * gk; arc(1 + 0.025 * gk); ctx.restore(); } }   // v14.2: the rim kicks on the beat
     ctx.strokeStyle = ink(0.4); arc(1);
     const spoke = (deg, a) => { const th = deg * Math.PI / 180; ctx.strokeStyle = ink(a); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(th) * R, cy - Math.cos(th) * R); ctx.stroke(); };
-    spoke(-67.5, 0.07); spoke(-22.5, 0.07); spoke(22.5, 0.07); spoke(67.5, 0.07); spoke(-45, 0.26); spoke(45, 0.26); spoke(0, 0.26);
+    spoke(-67.5, 0.07); spoke(-22.5, 0.07); spoke(22.5, 0.07); spoke(67.5, 0.07); spoke(-45, 0.26); spoke(45, 0.26); spoke(0, 0.26); if (FULL) { spoke(135, 0.26); spoke(-135, 0.26); spoke(180, 0.26); spoke(112.5, 0.07); spoke(157.5, 0.07); spoke(-112.5, 0.07); spoke(-157.5, 0.07); }
     ctx.strokeStyle = ink(0.4); ctx.beginPath(); ctx.moveTo(cx - R, Math.round(cy) + 0.5); ctx.lineTo(cx + R, Math.round(cy) + 0.5); ctx.stroke();
-    ctx.beginPath(); for (let a = -90; a <= 90; a += 15) { const th = a * Math.PI / 180, l = a % 45 === 0 ? 9 : 5; ctx.moveTo(cx + Math.sin(th) * R, cy - Math.cos(th) * R); ctx.lineTo(cx + Math.sin(th) * (R - l), cy - Math.cos(th) * (R - l)); } ctx.stroke();
+    ctx.beginPath(); for (let a = FULL ? -180 : -90; a <= (FULL ? 165 : 90); a += 15) { const th = a * Math.PI / 180, l = a % 45 === 0 ? 9 : 5; ctx.moveTo(cx + Math.sin(th) * R, cy - Math.cos(th) * R); ctx.lineTo(cx + Math.sin(th) * (R - l), cy - Math.cos(th) * (R - l)); } ctx.stroke();
     // clip lights the rim
     let clip = false; { const lv = D.lv, b1 = Math.min(lv.n, Math.floor(f / FPS * lv.rate)), b0 = Math.max(0, b1 - Math.round(lv.rate / FPS)); for (let b = b0; b < b1; b++) if (lv.clipL[b] || lv.clipR[b]) clip = true; }
     if (clip) { ctx.strokeStyle = C.neg; ctx.lineWidth = 2.5; arc(1); ctx.lineWidth = 1; }
     // ---- the cloud (clipped to the disc), then the newest frame's own samples as sharp bright dots
-    ctx.save(); ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.arc(cx, cy, R + 0.5, Math.PI, 2 * Math.PI); ctx.closePath(); ctx.clip();
+    ctx.save(); ctx.beginPath(); if (FULL) ctx.arc(cx, cy, R + 0.5, 0, 2 * Math.PI); else { ctx.moveTo(cx - R, cy); ctx.arc(cx, cy, R + 0.5, Math.PI, 2 * Math.PI); } ctx.closePath(); ctx.clip();
     ctx.imageSmoothingEnabled = false; ctx.drawImage(G.cv, 0, 0, gw, gh, cx - ox * CELL, cy - oy * CELL, gw * CELL, gh * CELL);
     { const [a0, a1] = scopeSpan(f); ctx.fillStyle = rgba(C.hi, 0.95); ctx.beginPath(); const ds = Math.max(2, Math.round(R / 100));
-      for (let i = a0; i < a1; i++) { const p = ML.polarSample(SC.L[i] * sc, SC.R[i] * sc, range); if (p) ctx.rect(Math.round(cx + p[0] * R - ds / 2), Math.round(cy - p[1] * R - ds / 2), ds, ds); } ctx.fill(); }
+      for (let i = a0; i < a1; i++) { const p = unf(ML.polarSample(SC.L[i] * sc, SC.R[i] * sc, range), i); if (p) ctx.rect(Math.round(cx + p[0] * R - ds / 2), Math.round(cy - p[1] * R - ds / 2), ds, ds); } ctx.fill(); }
     // held peak ring (6 dB/s fall after 0.4 s): the level the cloud last reached
     { const peakAt = (ff) => { const [a0, a1] = scopeSpan(ff); let m = 0; for (let i = a0; i < a1; i++) m = Math.max(m, Math.hypot((SC.L[i] + SC.R[i]) * ML.SQ, (SC.R[i] - SC.L[i]) * ML.SQ)); return 20 * Math.log10(Math.max(1e-6, m * sc)); };
       const pk = ML.releaseAt(peakAt, f, FPS, 6, -range - 1, 0.4), rho = clamp(1 + pk / range, 0, 1); if (rho > 0.02) { ctx.strokeStyle = rgba(C.hi, 0.7); ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.arc(cx, cy, R * rho, Math.PI * 1.17, Math.PI * 1.83); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; } }

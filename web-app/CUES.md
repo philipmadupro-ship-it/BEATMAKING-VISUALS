@@ -263,3 +263,18 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - **Blur** (viewer bar): the preview runs the export's motion blur (shared `createBlur` in `engine/render.js`) on the export frame grid.
 - **Review** (Export tab): key moments rendered as the MP4 will have them (pre-roll, blur), checks (loop seam vs frame 0, covers, length, blur, intro, clicks, video layer, long text) and every word in the video as live, undoable fields.
 - Fix: switching look / stage also updates the sheet base, and the film reads look / stage at beat 0 during the pre-roll. Before this fix, a web Player export opened its intro without the hook, cursor and play icon.
+
+## v21 motion (PROMPT-v21)
+- **Seeded variation** (`generate.js`): seed = hash of the title, or `meta.seed`; native `--seed N`.
+  - `intro.browse`: +1 = cards come from the left, −1 = from the right, 0 = the cursor clicks the beat cover directly.
+  - The window order is a seeded shuffle. The first three visits are always hero + rack + one other, and there are two wide breaths per 16 bars for the CTAs.
+- **Arrival:** after the push, the lab settles on a closed-form spring (w 7, launch v0 6) and is then still. The kick punch waits one bar.
+- **Outro** (`outro.mode` dialog | rewind):
+  1. The JOIN / CREATE PROJECT dialog (tags `social.outro.*`) pops on the hero, and the cursor clicks its × at E−9.
+  2. The camera dollies into the cover and cuts to the intro.
+  3. One decelerating zoom out (3 beats).
+  4. The cover-flow and fan glide back to their frame-0 state (2 beats), the hook dialog springs back, the player is paused, and the last frame equals frame 0.
+- **Terminal words:** `term.line` clips (number = `social.terminal[n]`, or text) type in one character per 1/64, hold, and delete backwards. `term.on` switches them.
+- **Hero:** `hero.bands` puts three Edison-style filled waveforms (low / mid / high band envelopes, current bar, no labels) in the right column. The right detection boxes are dropped while it is on.
+- **Imager:** `meter.stereo.orbit` turns the disc into a full-circle vectorscope (orbit), smaller, with both halves.
+- **Rack:** SCOPE (raw L/R oscilloscope, half a beat, auto-gain) replaces FILTER. WIDTH stays.
