@@ -195,7 +195,7 @@ export function createIntro(L, A = {}) {
 
   /** Draw the intro at clip time t. o = { S (stage), V (path, default -> value at this beat), ev, tag, W, H, look, aspect } */
   function draw(c, t, o) {
-    const { S, V, W, H, ev } = o, g = geom(W, H), b = t / BEAT, f = fidx(t), kick0 = kickEnv[f];
+    const { S, V, W, H, ev } = o, g = geom(W, H), b = t / BEAT, f = Math.max(0, fidx(t)), kick0 = t < 0 ? 0 : kickEnv[f] || 0;   // v19.3: t < 0 = the silent pre-roll browse
     const title = o.tag('intro.title') || D.title, credit = o.tag('intro.credit') || 'prod. @uche2crazy', names = o.tag('intro.cards');
     const pos = V('intro.index', 0), push = clamp(V('intro.push', 0)), kick = kick0 * (1 - push);   // the kick punch dies out as the push lands (exact match cut)
     // v13 match cut: the push ends with the cover filling the frame EXACTLY as the lab's cover card does at the lab's opening zoom

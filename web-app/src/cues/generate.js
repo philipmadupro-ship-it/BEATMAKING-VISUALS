@@ -94,7 +94,16 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
   // (ZOOM INTO THE PROJECT) runs from there to the downbeat of bar 3: exponential zoom, EASE-IN (cubic-bezier(.7,0,1,1)): the speed peaks
   // exactly at the cut, where the lab opens on the same cover card (match cut) and dollies out (intro.open, default 2 beats, speed peaks at
   // the cut too): one move through the cover, with streak copies on both sides.
-  if (NB >= 8) {
+  if (NB >= 8 && look === 'player') {
+    // v19.3 player intro logic (user): FIRST browse + choose (silent pre-roll, negative beats: the cursor clicks the cover-flow twice, 2 -> 1 -> 0,
+    // then clicks the chosen card = selection brackets), THEN the cursor clicks play at beat 0 (the music starts) and the push into the project
+    // runs over the first bar (intro.length 1); the lab opens on the cover and dollies out (intro.open 3). Pre-roll = 4 beats (native --preroll).
+    sheet.tracks.push(track('intro.length', 'number', 'stage', [key(0, 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.index', 'number', 'stage', [key(-4, 2, { ease: 'step' }), key(-3, 2, { ease: 'easeInOut' }), key(-2.625, 1, { ease: 'step' }), key(-2, 1, { ease: 'easeInOut' }), key(-1.625, 0, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(-4, 0.45, { ease: 'linear' }), key(-3.25, 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.select', 'enum', 'stage', [key(-1.25, true, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.push', 'number', 'stage', [key(0, 0, { ty: 'bezier', ob: [0.42, 0], ease: 'easeInOut' }), key(4, 1, { ib: [0, 0], ease: 'step' })]));
+  } else if (NB >= 8) {
     // v17.1: the cover-flow OPENS on the beat's cover (cover 0, so frame 0 = the loop's last frame), browses to the other covers and comes back:
     // 0 -> 1 -> 2 -> 1 -> 0, one eased snap per beat, landing on beats 3, 4, 5, 6; the push still ends on cover 0 (the match cut)
     const IL = 2, land = IL * 4 - 2, SEQ = [0, 1, 2, 1, 0], idx = [key(0, SEQ[0], { ease: 'step' })];

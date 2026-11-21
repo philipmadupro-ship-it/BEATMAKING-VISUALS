@@ -128,9 +128,12 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function rollPeaks() { if (PK) return PK; const NB2 = D.spectroBins || 128, SP = D.spectro, NFr = Math.floor(SP.length / NB2), lo = 31, hi = 84, K = 5;
     const bin = new Int16Array(NFr * K).fill(-1), lv = new Float32Array(NFr * K);
     for (let f = 0; f < NFr; f++) { const o = f * NB2, row = []; for (let i = lo; i <= hi; i++) row.push(SP[o + i]); const med = row.slice().sort((a2, b2) => a2 - b2)[row.length >> 1], cand = [];
-      for (let i = lo + 1; i < hi; i++) { const v = SP[o + i]; if (v > SP[o + i - 1] && v >= SP[o + i + 1] && v > med + 16 && v > 70) cand.push([v, i]); }
+      for (let i = lo + 1; i < hi; i++) { const v = SP[o + i]; if (v > SP[o + i - 1] && v >= SP[o + i + 1] && v > med + 22 && v > 78) cand.push([v, i]); }
       cand.sort((a2, b2) => b2[0] - a2[0]); for (let j = 0; j < Math.min(K, cand.length); j++) { bin[f * K + j] = cand[j][1]; lv[f * K + j] = Math.min(1, (cand[j][0] - med) / 70); } }
-    return (PK = { bin, lv, K, lo, hi, NFr }); }
+    // v19.3: notes must persist (a peak within +-1 bin in the previous AND next frame), so drum transients and noise drop out
+    const has = (f, bi) => { if (f < 0 || f >= NFr) return false; for (let j = 0; j < K; j++) { const q = bin[f * K + j]; if (q >= 0 && Math.abs(q - bi) <= 1) return true; } return false; };
+    const keep = new Int16Array(bin.length).fill(-1); for (let f = 0; f < NFr; f++) for (let j = 0; j < K; j++) { const bi = bin[f * K + j]; if (bi >= 0 && has(f - 1, bi) && has(f + 1, bi) && (has(f - 2, bi) || has(f + 2, bi))) keep[f * K + j] = bi; }
+    return (PK = { bin: keep, lv, K, lo, hi, NFr }); }
   function pianoRoll(x, y, w, h, t, Sx) {
     const P = rollPeaks(), fry = V('hero.fry', Sx.grey ? 'negative' : Sx.name === 'RUBEDO' ? 'thermal' : 'stage'), ink = V('roll.color', fry === 'negative' ? '#0b0b0b' : Sx.grey ? Sx.ink : Sx.hot), f0 = Math.min(P.NFr - 1, fidx(t));
     const span = V('roll.span', 4) * BEAT, px = x + w * V('roll.playhead', 0.56), pxPerS = (px - x) / span, row = (i) => y + h * 0.1 + h * 0.8 * (1 - (i - P.lo) / (P.hi - P.lo)), FPSr = FPS;
@@ -259,7 +262,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   // v12: the hero logo dwells fully threaded between an IN and an OUT (logo.hold bars, default 10 -> a 48-beat period, ~80 % complete);
   // the break sits around beat 28-36, clear of the usual stills at 10 s and 18 s
-  const HOLD = (C) => ((LOOK === 'exe' || LOOK === 'player') && V('hero.on', true) ? Math.round(V('logo.hold', 10) * 4) : 0), HOLD_OFF = 16;
+  const HOLD = (C) => ((LOOK === 'exe' || LOOK === 'player') && V('hero.on', true) ? Math.round(V('logo.hold', LOOK === 'player' ? 0 : 10) * 4) : 0), HOLD_OFF = 16;
   function heroArt(cx, t) {   // draws into ctx cx (world transform already set)
     const g = heroGeom(t), hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4)), I = glowAt(fidx(t));
     BR.logo(cx, S, [0, 0, 0, 0], t, { at: { cx: g.cx, cy: g.cy, w: g.w }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero,
@@ -473,7 +476,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
   let MW = null;
   function mouseWays() { if (MW && MW.ev === ev) return MW.w; const w = [], P = PRE, rest = { sx: W * 0.8, sy: H * (port ? 0.84 : 0.88) };
     w.push({ t: -P, ...rest }); if (P > 0) w.push({ t: -0.06, play: true, click: true });
-    if (IB) { const g = INTRO.geom(W, H); w.push({ t: T(Math.max(1, IB - 2)) - 0.02, sx: g.cx + g.cw * 0.18, sy: g.cy + g.cw * 0.2, click: true }); }
+    if (IB && LOOK === 'player' && P > 0) { const g = INTRO.geom(W, H); for (const bb of [-3, -2]) w.push({ t: T(bb) - 0.02, sx: g.cx - g.xs1 * 0.95, sy: g.cy + g.cw * 0.1, click: true }); w.push({ t: T(-1.25) - 0.02, sx: g.cx + g.cw * 0.12, sy: g.cy + g.cw * 0.25, click: true }); }   // v19.3: browse x2, choose
+    else if (IB) { const g = INTRO.geom(W, H); w.push({ t: T(Math.max(1, IB - 2)) - 0.02, sx: g.cx + g.cw * 0.18, sy: g.cy + g.cw * 0.2, click: true }); }
     for (const k of ev.keysIn('camera.shot', 0, 1e6)) { const r = k.v !== 'wide' && LY[k.v]; if (!r) continue; const d = k.dur ?? 1; w.push({ t: T(k.b - d) - 0.02, wx: r[0] + 92, wy: r[1] + (port ? 28 : 26), click: true }); }
     if (V('social.on', LOOK === 'player')) for (const [kk, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) { const at = V(`social.${kk}.at`, def), len = V(`social.${kk}.len`, 8);
       w.push({ t: T(at + len) - 0.02, sx: W / 2 - (port ? 410 : 380) + 26, sy: H * 0.5 - 84 + 21, click: true, cta: kk }); }
@@ -509,7 +513,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const grain = [];
   for (let q = 0; q < 4; q++) { const g = document.createElement('canvas'); g.width = g.height = 256; const gx = g.getContext('2d'), im = gx.createImageData(256, 256); for (let i = 0; i < 65536; i++) { const v = hash(i * 1.37 + q * 9173.1) * 255; im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = v; im.data[i * 4 + 3] = 255; } gx.putImageData(im, 0, 0); grain.push(g); }
   function textures(t) {
-    const f = fidx(t), g = grain[Math.floor(t / T(U.s16)) % 4], gr = V('fx.grain', S.grain), vg = V('fx.vignette', S.vignette), sc = V('fx.scan', 0);
+    const f = fidx(t), g = grain[((Math.floor(t / T(U.s16)) % 4) + 4) % 4], gr = V('fx.grain', S.grain), vg = V('fx.vignette', S.vignette), sc = V('fx.scan', 0);
     if (gr > 0) { c.save(); c.globalCompositeOperation = 'overlay'; c.globalAlpha = gr * 0.8; const ox = (hash(f * 3.1) * 256) | 0, oy = (hash(f * 7.7) * 256) | 0;
       for (let yy = -oy; yy < H; yy += 256) for (let xx = -ox; xx < W; xx += 256) c.drawImage(g, xx, yy); c.restore(); }
     if (sc > 0) { c.fillStyle = `rgba(0,0,0,${0.45 * sc})`; for (let y = 0; y < H; y += 4) c.fillRect(0, y, W, 2); }
@@ -566,15 +570,15 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c = ctx; ev = opts.ev || ev; tagDoc = opts.tags || DEFAULT_TAGS; IB = INTRO.beats(ev);
     const fps = opts.fps || FPS, scale = ctx.canvas.width / W;
     L.view.minPx = LOOK === 'player' && port ? 25 : 0;   // v19.1: phone legibility floor (player 9:16)
-    PRE = Math.max(0, opts.preroll || 0); const filmT = t - PRE; let paused = filmT < 0; t = Math.max(0, filmT);   // v19: click-to-play pre-roll (native passes opts.preroll); filmT < 0 = paused
-    t = clamp(t, 0, D.duration - 1 / fps) + 0.5 / fps; b = t / BEAT;
+    PRE = Math.max(0, opts.preroll || 0); const filmT = t - PRE; let paused = filmT < 0; t = filmT;   // v19.3: negative t = the silent pre-roll browse (intro keys at negative beats)   // v19: click-to-play pre-roll (native passes opts.preroll); filmT < 0 = paused
+    t = clamp(t, -PRE, D.duration - 1 / fps) + 0.5 / fps; b = t / BEAT;
     setState(V('look', opts.look || 'exe'), V('stage', opts.stage || 'nigredo')); pendulum();
     c.setTransform(scale, 0, 0, scale, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
     if (opts.test) { L.view.camZ = 1; L.view.base = scale; testMode(opts.test, t); c.setTransform(1, 0, 0, 1, 0, 0); return { look: LOOK, stage: S.name, test: opts.test }; }
     // v17.1 seamless loop (player): the final bar plays the intro BACKWARDS (cubic ease-out into t = 0), so the last frame flows into frame 0
     RWB = LOOK === 'player' && IB && V('outro.rewind', true) && D.duration > T(IB + 16) ? (D.duration - 2 * BAR) / BEAT : 0;   // v17.2: 2-bar rewind, sine in-out
     RWB0 = RWB;
-    if (RWB && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); if (u > 0.985) paused = true; t = Math.max(0.5 / fps, T(IB) * (1 - e) - 0.5 / fps); b = t / BEAT; }
+    if (RWB && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); t = T(IB) - e * (T(IB) + PRE) + 0.5 / fps * (1 - e); if (PRE) t = Math.max(-PRE + 0.5 / fps, t); else t = Math.max(0.5 / fps, t); paused = t < 0; b = t / BEAT; }   // v19.3: rewinds through the browse back to the first frame
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
       L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player' }); c.setTransform(scale, 0, 0, scale, 0, 0); social(t, true); textCues(t); textures(t); flash(t); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
@@ -586,6 +590,11 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const att = attention(t);
     if (LOOK === 'player') playerShell(t);
     for (const id of IDS) card(id, t, att === id);
+    // v19.3 window focus (user): a clicked panel comes to the front: everything else sinks behind a scrim, the panel is redrawn on top, 3 % bigger
+    if (LOOK === 'player' && V('focus.window', true)) { const s2 = ev.shot(b), id2 = s2.to !== 'wide' ? s2.to : s2.from !== 'wide' ? s2.from : null;
+      if (id2 && LY[id2]) { const amt = s2.to !== 'wide' ? (s2.from === s2.to ? 1 : s2.u) : 1 - s2.u; if (amt > 0.01) { const r2 = LY[id2], cx2 = r2[0] + r2[2] / 2, cy2 = r2[1] + r2[3] / 2, sc2 = 1 + 0.03 * amt;
+        c.fillStyle = rgba(S.bg, 0.55 * amt * V('focus.dim', 1)); c.fillRect(-W, -H, 3 * W, 3 * H);
+        c.save(); c.translate(cx2, cy2); c.scale(sc2, sc2); c.translate(-cx2, -cy2); card(id2, t, true); c.restore(); } } }
     if (LOOK === 'player' && V('focus.bracket', true)) focusBracket(t);
     hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
