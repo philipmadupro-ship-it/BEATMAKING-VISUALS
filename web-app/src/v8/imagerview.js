@@ -80,6 +80,11 @@ export function createImagerView(L, M8, H) {
     if (PL) { Dm = 0; const rowsH = 3 * plRow + plBand + 4 * 6, topPl = y0 + Math.round(LH * 0.9) + 4; R = Math.max(40, Math.min(R0, h - rowsH - (topPl - y0) - 12)); cx = x0 + w / 2; cy = topPl + R;
       const spare = Math.max(0, h - (cy - y0) - 8 - rowsH - 8), ex = Math.min(spare / 4, 26), stp = plRow + ex * 0.6; plLay = { widY: cy + 8 + ex * 0.5, step: stp, bandY: cy + 8 + ex * 0.5 + 3 * stp + ex * 0.2 };
       corY = plLay.widY + stp; balY = corY + stp; }
+    // v14.1 player, wide cell: the disc on the left (as big as the cell allows), the WIDTH / CORR / BAL rows + bands on the right
+    let plX = x0, plW = w;
+    if (PL && w > 1.45 * h) { const topPl = y0 + Math.round(LH * 0.9) + 4, dW = Math.round(w * 0.47); cy = y0 + h - 22; R = Math.max(40, Math.min(dW / 2 - 10, cy - topPl - 22)); cx = x0 + 10 + dW / 2;
+      const rowsH = 3 * plRow + plBand + 12, avail = y0 + h - 10 - topPl, ex = Math.min(Math.max(0, avail - rowsH) / 4, 22), stp = plRow + ex * 0.6, y1 = topPl + Math.max(0, (avail - rowsH - ex * 2) / 2) + plRow * 0.5;
+      plLay = { widY: y1, step: stp, bandY: y1 + 3 * stp + ex * 0.2 }; corY = y1 + stp; balY = corY + stp; plX = x0 + dW + 8; plW = w - dW - 8; }
     if (Dm) L.portholeRect = [mkCx, mkCy, mkR];
     // ---- density
     const CELL = R >= 150 ? 2 : 1.5, gw = Math.ceil(2 * R / CELL) + 2, gh = Math.ceil(R / CELL) + 2, gk = gw + 'x' + gh;
@@ -120,7 +125,7 @@ export function createImagerView(L, M8, H) {
     lb('M', cx, cy - R - LH * 0.55); lb('L', cx - q45, cy - q45 - 2); lb('R', cx + q45, cy - q45 - 2);
     if (!PL) { lb('−S', cx - R + 3, cy + LH * 0.75, { align: 'left' }); lb('+S', cx + R - 3, cy + LH * 0.75, { align: 'right' }); }
     if (!PL) for (const dB of (R < 190 ? [-20] : [-10, -30])) lb(String(dB).replace('-', '−'), cx + R * (1 + dB / range) - 4, cy + LH * 0.75, { a: 0.45, size: 20, maxW: R * 0.23 });
-    if (PL) { playerRows(ctx, S, x0, w, plLay, plRow, f, tf, C); ctx.restore(); return; }
+    if (PL) { playerRows(ctx, S, plX, plW, plLay, plRow, f, tf, C); ctx.restore(); return; }
     // ---- correlation: a horizontal bar -1 .. +1, the value ticked (half beat) as a number, the last 0.5 s as ghost ticks
     const bx0 = x0 + 8 + LH * 3.2, bx1 = x0 + w - 8 - LH * 3.6, Xc = (v) => bx0 + (bx1 - bx0) * (clamp(v, -1, 1) + 1) / 2, cv = F.corr[f], ct = F.corr[tf], cyb = corY + rowH / 2;
     lbl(ctx, S, 'CORR', x0 + 6, cyb, { size: 22, a: 0.7 });

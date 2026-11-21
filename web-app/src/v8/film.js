@@ -46,7 +46,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // ---------------------------------------------------------------- windows: rect, open steps, content
   const rectOf = (id) => { const r = LAYOUT[LOOK][aspect][id]; return [V(`win.${id}.x`, r[0]), V(`win.${id}.y`, r[1]), V(`win.${id}.w`, r[2]), V(`win.${id}.h`, r[3])]; };
   // v11 intro: with an intro of IB beats the lab builds after it (default open beats shift by IB; -2 = open at the cut)
-  const winOpen = (id) => { if (IB && (id === 'now' || (id === 'stage' && LOOK !== 'player'))) return 0;   // v13: the cover card is already there at the cut (the intro push ends on it), it does not build in
+  const winOpen = (id) => { if (IB && (id === 'now' || id === 'stage')) return 0;   // v13: the cover card is already there at the cut (the intro push ends on it), it does not build in
     const d = openBeat(LOOK, aspect, id); return V(`win.${id}.open`, IB ? (d < 0 ? IB : d + IB) : d); };
   function openStep(id, t) {
     const n0 = steps(t, winOpen(id), 6, U.t32), k = ev.lastKey(`win.${id}.visible`, t / BEAT);
@@ -238,6 +238,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // the caption block bottom right, registration crosses. L.heroRect (set here) = the cell.
   function playerHero(cr, t, k, Sx) {
     const [x, y, w, h] = L.winRect, cx = x + w / 2 + V('hero.x', 0), cy = y + h * 0.40 + V('hero.y', 0), bb = BR.logoBBox(), lw = Math.min(w * (port ? 0.52 : 0.43), h * 0.62 * bb.w / bb.h) * V('hero.scale', 1) * V('logo.scale', 1), lh = lw * bb.h / bb.w;
+    if (V('hero.cover', true)) coverBody(cr, t, k, Sx);   // v14.1: the darkened cover-0 behind the logo = the intro's match-cut target
     c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip();
     const hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4)), I = glowAt(fidx(t));
     BR.logo(c, Sx, [0, 0, 0, 0], t, { at: { cx, cy, w: lw }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero, glow: V('logo.glow', 1), kickI: I, pulse: I, bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
@@ -249,7 +250,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const nowCover = (r) => { const [x, y, w, h] = r, cp = w > 700 && h < 220; return cp ? [x + 20, y + 20, h - 40, h - 40] : [x + 20, y + 20, w - 40, Math.round((w - 40) * 0.5)]; };
   function playerNow(cr, t, k, Sx) {
     const r = L.winRect; c.save(); c.beginPath(); c.rect(r[0], r[1], r[2], r[3] * k); c.clip();
-    PL.now(c, Sx, r, t, { cover: INTRO.coverCanvas ? INTRO.coverCanvas(0, Sx) : null, dim: V('cover.dim', 1), onCover: (rc, rd) => { L.coverRect = rc; L.coverRadius = rd; } });
+    PL.now(c, Sx, r, t, { cover: INTRO.coverCanvas ? INTRO.coverCanvas(0, Sx) : null, dim: V('cover.dim', 1) });
     c.restore();
   }
   function playerInserts(cr, t, k, Sx) {
@@ -364,7 +365,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     LOOK = LAYOUT[look] ? look : 'exe';
     const over = {}; for (const k of STAGE_COLOR_KEYS) { const v = V('stage.' + k, null); if (v) over[k] = v; }
     S = stageOf(stage, over); LY = {}; IDS = Object.keys(LAYOUT[LOOK][aspect]); for (const id of IDS) LY[id] = rectOf(id);
-    L.look = LOOK; L.coverRect = LOOK === 'player' ? nowCover(LY.now) : (LY.stage || null); L.coverRadius = LOOK === 'player' ? 14 : V('glass.radius', 22);   // the match-cut target is known on intro frames too (not only after the lab drew)
+    L.look = LOOK; L.coverRect = LY.stage || null; L.coverRadius = V('glass.radius', 22);   // the match-cut target is known on intro frames too (not only after the lab drew)
     setVars(); L.pendantMark = LOOK === 'exe' ? (ctx, Sx, cx, cy, d) => BR.elephantMark(ctx, Sx, cx, cy, d, d) : null;
   }
   function pendulum() {

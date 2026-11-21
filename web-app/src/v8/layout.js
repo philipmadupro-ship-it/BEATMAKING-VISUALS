@@ -33,13 +33,13 @@ const EXE12 = {
 const PLAYER = {
   // 16:9 (YouTube): time stack on top (waveform + spectrogram share the time axis), a taller hero row (levels | hero | imager), the spectrum
   // across the bottom; right column = now playing, inserts, metadata. 16 px gutters, every edge on the same 4 px grid.
-  '169': { session: [268, 108, 1192, 150], spectro: [268, 274, 1192, 134], loud: [268, 424, 300, 416], stage: [584, 424, 560, 416], stereo: [1160, 424, 300, 416],
-    spectrum: [268, 856, 1192, 200], now: [1476, 108, 420, 436], inserts: [1476, 560, 420, 140], meta: [1476, 716, 420, 340] },
+  '169': { session: [268, 108, 1192, 176], spectro: [268, 300, 1192, 130], loud: [268, 446, 252, 364], stage: [536, 446, 560, 364], stereo: [1112, 446, 348, 364],
+    spectrum: [268, 826, 1192, 230], now: [1476, 108, 420, 416], inserts: [1476, 540, 420, 186], meta: [1476, 742, 420, 314] },
   // 9:16 (TikTok / Reels): built on the platform safe zones (1080x1920): y < 200 = app header, y > 1548 = caption + sound, x > 960 = button rail
   // from y ~1000. Everything that must read sits in y 208..1544; the rows under the rail stop at x 960. The spectrogram + inserts live
   // under the caption (texture there, full reading on the camera pushes). Tabs-only top bar; the now-playing strip carries title + cover.
-  '916': { now: [48, 280, 984, 112], session: [48, 408, 984, 190], stage: [48, 614, 984, 360], spectrum: [48, 990, 912, 196],
-    loud: [48, 1202, 448, 342], stereo: [512, 1202, 448, 342], spectro: [48, 1560, 984, 150], inserts: [48, 1726, 984, 160] },
+  '916': { now: [48, 280, 984, 112], session: [48, 408, 984, 236], stage: [48, 660, 984, 290], spectrum: [48, 966, 912, 254],
+    loud: [48, 1236, 368, 308], stereo: [432, 1236, 528, 308], spectro: [48, 1560, 984, 150], inserts: [48, 1726, 984, 160] },
 };
 export const SIDEBAR = { '169': [24, 20, 220, 1036], '916': null };
 export const TOPBAR = { '169': [268, 20, 1628, 76], '916': [48, 208, 984, 56] };

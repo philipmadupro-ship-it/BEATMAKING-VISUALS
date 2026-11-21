@@ -197,7 +197,7 @@ export function createIntro(L, A = {}) {
     const title = o.tag('intro.title') || D.title, credit = o.tag('intro.credit') || 'prod. @uche2crazy', names = o.tag('intro.cards');
     const pos = V('intro.index', 0), push = clamp(V('intro.push', 0)), kick = kick0 * (1 - push);   // the kick punch dies out as the push lands (exact match cut)
     // v13 match cut: the push ends with the cover filling the frame EXACTLY as the lab's cover card does at the lab's opening zoom
-    const tgt = coverTarget(L, o.look, o.aspect), zf = fillZoom(tgt[2], tgt[3], W, H), zmax = V('intro.zoom', 0) || Math.max(tgt[2], tgt[3]) * zf / g.cw;
+    const tgt = coverTarget(L, o.look, o.aspect), zf = o.look === 'player' ? Math.min(W / tgt[2], H / tgt[3]) : fillZoom(tgt[2], tgt[3], W, H), zmax = V('intro.zoom', 0) || Math.max(tgt[2], tgt[3]) * zf / g.cw;
     // v13 start: enter 0 -> 1 over the first 2 beats (linear keys; the shapes live here): the cards fan out of one stack and land on beat 2
     // (index 1 of the 4), the player rises into place and lands on beat 3. Without the key (old sheets) enter = 1 = the carousel as it was.
     const enter = clamp(V('intro.enter', 1)), fanU = clamp(enter * 2), playerE = easeOut3(enter), groupS = lerp(0.6, 1, backOut(fanU, 0.8));
@@ -294,7 +294,7 @@ export function createIntro(L, A = {}) {
    */
   function openCam(b, ev, IB, cam, o) {
     const open = ev.value('intro.open', 0, 2); if (!IB || !(open > 0) || b < IB - 1e-9 || b >= IB + open) return null;
-    const [tx0, ty0, tw, th] = coverTarget(L, o.look, o.aspect), cx = tx0 + tw / 2, cy = ty0 + th / 2, zf = fillZoom(tw, th, o.W, o.H);
+    const [tx0, ty0, tw, th] = coverTarget(L, o.look, o.aspect), cx = tx0 + tw / 2, cy = ty0 + th / 2, zf = o.look === 'player' ? Math.min(o.W / tw, o.H / th) : fillZoom(tw, th, o.W, o.H);
     const e = (bb) => easeOut3((bb - IB) / open), ee = e(b), z = Math.exp(lerp(Math.log(zf), Math.log(cam.z), ee)), x = lerp(cx, cam.x, ee), y = lerp(cy, cam.y, ee);
     const uu = (b - IB) / open, dl = Math.log(zf / cam.z) * 3 * (1 - uu) * (1 - uu) / open * (0.9 / D.fps / BEAT);   // d(ease)/db x one frame: full blur on the first lab frame too
     return { x, y, z, dl, px: o.W / 2 + (cx - x) * z, py: o.H / 2 + (cy - y) * z };

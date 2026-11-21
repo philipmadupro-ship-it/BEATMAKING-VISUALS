@@ -45,15 +45,17 @@ export function draw(ctx, rect, frame, opts) {
     const tx = x + i * (tw + gap), r = Math.max(8, Math.min(16, h * 0.16));
     if (L.panel) L.panel(ctx, tx, y, tw, h, S, { r }); else { ctx.fillStyle = ink(0.06); ctx.fillRect(tx, y, tw, h); ctx.strokeStyle = ink(0.25); ctx.strokeRect(tx + 0.5, y + 0.5, tw - 1, h - 1); }
     // label (Synkopy, top-left); the art sits in the rest of the tile
-    const lh = Math.round(sL + 4), ax = tx + 6, ay = y + lh + 4, aw = tw - 12, ah = h - lh - 10;
-    text(ctx, LABELS[i], tx + 8, y + 6 + sL * 0.5, { size: 11, col: ink(0.7), w: 500, maxW: tw - 16 });
+    const fz = Math.round(Math.max(11, Math.min(17, h * 0.1))), narrow = tw < 170, lh = Math.round((narrow ? 2.3 : 1.2) * fz + 6), ax = tx + 6, ay = y + lh + 4, aw = tw - 12, ah = h - lh - 10;
+    text(ctx, LABELS[i], tx + 10, y + 8 + fz * 0.5, { size: fz, col: ink(0.7), w: 500, maxW: tw * 0.5 });
     if (ah < 10 || aw < 10) continue;
     ctx.save(); ctx.beginPath(); ctx.rect(tx + 2, y + 2, tw - 4, h - 4); ctx.clip();
-    if (i === 0) spec(ctx, S, D, f, ax, ay, aw, ah, tone, g, rgba, ink);
-    else if (i === 1) gr(ctx, S, D, t, FPS, ax, ay, aw, ah, g, rgba, ink, clamp);
-    else if (i === 2) width(ctx, S, F, D, f, FPS, ax, ay, aw, ah, g, rgba, ink, clamp);
+    let rd = null;
+    if (i === 0) rd = spec(ctx, S, D, f, ax, ay, aw, ah, tone, g, rgba, ink);
+    else if (i === 1) rd = gr(ctx, S, D, t, FPS, ax, ay, aw, ah, g, rgba, ink, clamp);
+    else if (i === 2) rd = width(ctx, S, F, D, f, FPS, ax, ay, aw, ah, g, rgba, ink, clamp);
     else cube(ctx, S, D, t, f, ax, ay, aw, ah, g, rgba, ink, L.BEAT);
     ctx.restore();
+    if (rd) text(ctx, rd, narrow ? tx + 10 : tx + tw - 10, y + 8 + fz * (narrow ? 1.7 : 0.5), { size: fz, col: ink(0.95), w: 800, align: narrow ? 'left' : 'right', fam: '"Akira Expanded", "Unbounded", sans-serif', maxW: tw * 0.48 });   // live value (Akira)
   }
   ctx.restore();
 }
@@ -67,6 +69,7 @@ function spec(ctx, S, D, f, x, y, w, h, tone, g, rgba, ink) {
   ctx.beginPath(); P.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.save(); if (g > 0.02) { ctx.shadowColor = rgba(tone[2], 1); ctx.shadowBlur = 4 + 10 * g; }
   ctx.strokeStyle = rgba(tone[2], 0.95); ctx.lineWidth = 1.3; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
   ctx.fillStyle = ink(0.12); ctx.fillRect(x, Math.round(y + h) - 0.5, w, 1);
+  let mx = -120; for (let b = 0; b < nb; b++) mx = Math.max(mx, T.disp[f * nb + b]); return `${Math.round(mx)} DB`;
 }
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
@@ -82,6 +85,7 @@ function gr(ctx, S, D, t, FPS, x, y, w, h, g, rgba, ink, clamp) {
   const ny = P[P.length - 1][1], R = 3 + 9 * g;   // the notch at the now edge
   if (g > 0.01) { const rg = ctx.createRadialGradient(x + w, ny, 0, x + w, ny, R * 2.4); rg.addColorStop(0, rgba(S.hot, 0.8 * g)); rg.addColorStop(1, rgba(S.hot, 0)); ctx.fillStyle = rg; ctx.fillRect(x + w - R * 3, ny - R * 3, R * 3, R * 6); }
   ctx.fillStyle = S.ink; ctx.beginPath(); ctx.arc(x + w - 2, ny, 2.2 + 1.6 * g, 0, 6.2832); ctx.fill();
+  const v = t < 0 ? 0 : ML.grAt(G, t, n / span, rate); return `${v > -0.05 ? '0.0' : v.toFixed(1)} DB`;
 }
 
 function width(ctx, S, F, D, f, FPS, x, y, w, h, g, rgba, ink, clamp) {
@@ -97,11 +101,12 @@ function width(ctx, S, F, D, f, FPS, x, y, w, h, g, rgba, ink, clamp) {
   ctx.beginPath(); ctx.moveTo(x, bot); for (const p of W) ctx.lineTo(p[0], p[1]); ctx.lineTo(x + w, bot); ctx.closePath(); ctx.fillStyle = gw; ctx.fill(); line(W, ink(0.6), 1.1);
   ctx.save(); if (g > 0.02) { ctx.shadowColor = rgba(S.hot, 1); ctx.shadowBlur = 3 + 8 * g; } line(C, ink(0.95), 1.4); ctx.restore();
   const e = C[C.length - 1]; ctx.fillStyle = S.hot; ctx.beginPath(); ctx.arc(e[0] - 1, e[1], 2.4 + 1.4 * g, 0, 6.2832); ctx.fill();
+  return `${Math.round(F.width[f] * 100)}%`;
 }
 
 function cube(ctx, S, D, t, f, x, y, w, h, g, rgba, ink, beat) {
   const R = 9, C = 9, H = surfaceGrid(D, f, R, C, 3), th = cubeStep(t, beat) * Math.PI / 2, tilt = 0.62, cy0 = Math.cos(th), sy0 = Math.sin(th), ct = Math.cos(tilt), st = Math.sin(tilt);
-  const sc = Math.min(w * 0.36, h * 0.36), ox = x + w / 2, oy = y + h / 2;
+  const sc = Math.min(w * 0.42, h * 0.42), ox = x + w / 2, oy = y + h / 2;
   const P = (px, py, pz) => { const rx = px * cy0 + pz * sy0, rz = -px * sy0 + pz * cy0, ry = py * ct - rz * st, rz2 = py * st + rz * ct, k = 1 / (1 + rz2 * 0.18); return [ox + rx * sc * k, oy - ry * sc * k, rz2]; };
   const seg = (a, b, al, lw = 1) => { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.strokeStyle = ink(al); ctx.lineWidth = lw; ctx.stroke(); };
   const co = []; for (const px of [-1, 1]) for (const py of [-1, 1]) for (const pz of [-1, 1]) co.push(P(px, py, pz));

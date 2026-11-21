@@ -81,9 +81,9 @@ export function createWaveView(L, M, H) {
       ctx.fillStyle = bc[1]; ctx.globalAlpha = 0.95 * k; if (path((i) => cy - rb[i] * sc, (i) => cy + rb[i] * sc)) ctx.fill();
       ctx.fillStyle = bc[2]; ctx.globalAlpha = 0.9 * k; if (path((i) => cy - rb[i] * sc * clamp(0.06 + hb[i] * 1.3, 0, 0.5), (i) => cy + rb[i] * sc * clamp(0.06 + hb[i] * 1.3, 0, 0.5))) ctx.fill();
       // transients: columns that spike over their surroundings are drawn bright, full height (kicks read as white spikes)
-      ctx.fillStyle = bc[2]; for (let i = 0; i < nc; i++) { if (!has[i] || trn[i] < 0.04) continue; ctx.globalAlpha = Math.min(1, trn[i] * 1.1) * (played ? 0.95 : 0.5); ctx.fillRect(Xc(i) - cwp / 2, cy - Math.max(e2[i], fMx[i]) * sc, cwp, (Math.max(e2[i], fMx[i]) - Math.min(n2[i], fMn[i])) * sc); }
+      if (L.meter('session', 'spikes', false)) for (let i = 0; i < nc; i++) { ctx.fillStyle = bc[2]; if (!has[i] || trn[i] < 0.04) continue; ctx.globalAlpha = Math.min(1, trn[i] * 1.1) * (played ? 0.95 : 0.5); ctx.fillRect(Xc(i) - cwp / 2, cy - Math.max(e2[i], fMx[i]) * sc, cwp, (Math.max(e2[i], fMx[i]) - Math.min(n2[i], fMn[i])) * sc); }
       // kick flash: the played side brightens for ~120 ms after each kick
-      if (played && fl > 0.01) { ctx.fillStyle = bc[2]; ctx.globalAlpha = 0.75 * fl; if (path((i) => cy - e2[i] * sc, (i) => cy - n2[i] * sc)) ctx.fill(); }
+      if (played && fl > 0.01 && L.meter('session', 'kickflash', false)) { ctx.fillStyle = bc[2]; ctx.globalAlpha = 0.75 * fl; if (path((i) => cy - e2[i] * sc, (i) => cy - n2[i] * sc)) ctx.fill(); }
       ctx.restore();
     }
     ctx.globalAlpha = 1;

@@ -216,3 +216,5 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 
 - `hero.caption` (player look, bool, default false): the title / prod. / vol. caption inside the hero cell. Off by default: the title is already in the top bar and the now-playing card.
 - `glass.bezel` (player look, 0..2, default 1): the double-bezel inner core hairline + top light inside every card.
+- `meter.session.spikes` / `meter.session.kickflash` (bool, default false): the bright transient columns and the played-side kick flash on the waveform (off: they flickered while scrolling).
+- `hero.cover` (player, bool, default true): the darkened cover-0 behind the hero logo; the intro match-cut lands on it at width-fit zoom.
