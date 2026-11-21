@@ -21,15 +21,19 @@ export function createInspector(app, root) {
   const playBeat = () => tl().state.playhead, grid = () => SNAPS[P().timeline.snap] || 0;
   const edit = (fn, label) => { selfEdit = true; cues.edit(fn, label); selfEdit = false; };
   const winIds = () => Object.keys(LAYOUT[P().look][P().aspect]);
-  function control(prop, v, attrs = '') {
-    const k = prop.kind;
-    if (k === 'number') return `<div class="num"><input class="inp mono" type="number" step="${prop.step ?? 'any'}" ${prop.min != null ? `min="${prop.min}"` : ''} ${prop.max != null ? `max="${prop.max}"` : ''} value="${fmtNum(v, prop.step)}" ${attrs} data-type="number" aria-label="${esc(prop.label)}">${prop.unit ? `<span class="unit">${esc(prop.unit)}</span>` : ''}</div>` +
-      (prop.min != null && prop.max != null ? `<input type="range" min="${prop.min}" max="${prop.max}" step="${prop.step ?? 'any'}" value="${v}" ${attrs} data-type="number" aria-label="${esc(prop.label)} slider">` : '');
-    if (k === 'color') return `<div class="num"><input type="color" value="${esc(v)}" ${attrs} data-type="color" aria-label="${esc(prop.label)}"><input class="inp mono" value="${esc(v)}" ${attrs} data-type="color" aria-label="${esc(prop.label)} hex"></div>`;
-    if (k === 'enum' || k === 'shot') { const opts = k === 'shot' ? ['wide', ...winIds()] : prop.options || []; return `<select class="inp mono" ${attrs} data-type="enum" aria-label="${esc(prop.label)}">${opts.map((o) => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`; }
-    if (k === 'bool' || k === 'event') return `<label class="tog"><input type="checkbox" ${v ? 'checked' : ''} ${attrs} data-type="bool"> ${v ? 'on' : 'off'}</label>`;
-    return `<textarea class="inp mono" rows="${String(v).length > 40 ? 3 : 1}" ${attrs} data-type="text" aria-label="${esc(prop.label)}">${esc(v)}</textarea>`;
+  /** One value control, compact. Returns [main, extra]: main sits right of the label, extra (slider) under it. */
+  function ctlParts(prop, v, attrs = '') {
+    const k = prop.kind, al = esc(prop.label);
+    if (k === 'number') return [`<div class="num"><input class="inp mono" type="number" step="${prop.step ?? 'any'}" ${prop.min != null ? `min="${prop.min}"` : ''} ${prop.max != null ? `max="${prop.max}"` : ''} value="${fmtNum(v, prop.step)}" ${attrs} data-type="number" aria-label="${al}">${prop.unit ? `<span class="unit">${esc(prop.unit)}</span>` : ''}</div>`,
+      prop.min != null && prop.max != null ? `<input type="range" min="${prop.min}" max="${prop.max}" step="${prop.step ?? 'any'}" value="${v}" ${attrs} data-type="number" aria-label="${al} slider">` : ''];
+    if (k === 'color') return [`<div class="num swatch"><input type="color" value="${esc(v)}" ${attrs} data-type="color" aria-label="${al}"><input class="inp mono hex" value="${esc(v)}" ${attrs} data-type="color" aria-label="${al} hex" spellcheck="false"></div>`, ''];
+    if (k === 'enum' || k === 'shot') { const opts = k === 'shot' ? ['wide', ...winIds()] : prop.options || [];
+      if (k === 'enum' && opts.length > 1 && opts.length <= 4 && opts.every((o) => String(o).length <= 10)) return ['', `<div class="segc" role="radiogroup" aria-label="${al}">${opts.map((o) => `<label><input type="radio" name="rg-${esc(prop.path || 'v')}" value="${esc(o)}" ${o === v ? 'checked' : ''} ${attrs} data-type="enum"><span>${esc(o)}</span></label>`).join('')}</div>`];
+      return [`<select class="inp mono" ${attrs} data-type="enum" aria-label="${al}">${opts.map((o) => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`, '']; }
+    if (k === 'bool' || k === 'event') return [`<label class="sw"><input type="checkbox" role="switch" ${v ? 'checked' : ''} ${attrs} data-type="bool" aria-label="${al}"><i aria-hidden="true"></i></label>`, ''];
+    return ['', `<textarea class="inp mono" rows="${String(v).length > 40 ? 3 : 1}" ${attrs} data-type="text" aria-label="${al}">${esc(v)}</textarea>`];
   }
+  const control = (prop, v, attrs = '') => ctlParts(prop, v, attrs).join('');
   const readInput = (el) => (el.dataset.type === 'number' ? +el.value : el.dataset.type === 'bool' ? el.checked : el.value);
   const sel = (o, v) => o.map(([id, l]) => `<option value="${id}" ${id === v ? 'selected' : ''}>${esc(l)}</option>`).join('');
   /** Mini key strip: the keys of one track over the timeline's visible beats, the playhead, click a key to select it. */
@@ -96,28 +100,43 @@ export function createInspector(app, root) {
       <div class="inrow"><button class="btn small danger" data-act="m-del">Delete marker</button></div>`;
   }
   // ---------------------------------------------------------------- element view (Effect Controls)
+  const trimLabel = (l) => String(l).replace(/\s*\(.*\)\s*$/, '');
   function propRow(p, b, ev) {
     const tr = cues.sheet.tracks.find((t) => t.path === p.path), hasKeys = tr && tr.keys.length, onKey = hasKeys && tr.keys.some((k) => Math.abs(k.b - b) < 1e-3);
-    const v = p.kind === 'shot' ? ev.shot(b).to : p.kind === 'clip' || p.kind === 'event' ? null : ev.value(p.path, b, p.default), scrub = p.kind === 'number';
+    const v = p.kind === 'shot' ? ev.shot(b).to : p.kind === 'clip' || p.kind === 'event' ? null : ev.value(p.path, b, p.default), scrub = p.kind === 'number', timed = p.kind === 'clip' || p.kind === 'event';
+    const [main, extra] = timed ? ['', ''] : ctlParts(p, v, 'data-k="prop"');
     return `<div class="prop${hasKeys ? ' anim' : ''}" data-path="${esc(p.path)}"><div class="prop-h"><button class="kf${hasKeys ? ' on' : ''}${onKey ? ' here' : ''}" data-act="kf" aria-label="${hasKeys ? 'Add or select key at the playhead' : 'Keyframe'} ${esc(p.label)}" title="${hasKeys ? 'key at the playhead' : 'animate: create a track'}">◆</button>
-      <span class="lbl${scrub ? ' scrub' : ''}" ${scrub ? `data-scrub="${esc(p.path)}" title="drag sideways to change (Shift: ×10)"` : ''}>${esc(p.label)}</span>
+      <span class="lbl${scrub ? ' scrub' : ''}${/\d/.test(p.label) ? ' dig' : ''}" title="${esc(p.label)}${scrub ? ' (drag sideways to change, Shift: x10)' : ''}" ${scrub ? `data-scrub="${esc(p.path)}"` : ''}>${esc(trimLabel(p.label))}</span>
       ${hasKeys ? `<button class="btn tiny" data-act="pk" aria-label="Previous key of ${esc(p.label)}">‹</button><button class="btn tiny" data-act="nk" aria-label="Next key of ${esc(p.label)}">›</button><button class="btn tiny" data-act="lane" title="reveal the lane">lane</button>` : ''}</div>
-      ${p.kind === 'clip' || p.kind === 'event' ? `<span class="hint">${hasKeys ? tr.keys.length + ' on its lane' : 'timed: ◆ adds one at the playhead'}</span>` : control(p, v, 'data-k="prop"')}${hasKeys ? strip(tr) : ''}</div>`;
+      ${timed ? `<span class="hint pc">${hasKeys ? tr.keys.length + ' on its lane' : 'timed: ◆ adds one at the playhead'}</span>` : main ? `<div class="pc">${main}</div>` : ''}${extra ? `<div class="pe">${extra}</div>` : ''}${hasKeys ? strip(tr) : ''}</div>`;
   }
+  // Inspector sections: the elements of the registry grouped the way a designer looks for them.
+  const SECTIONS = [['Scene', (e) => ['scene', 'intro', 'ground', 'overlays'].includes(e.id)], ['Camera', (e) => ['camera', 'focus'].includes(e.id)], ['Hero', (e) => ['hero', 'logo', 'pendant'].includes(e.id)],
+    ['Windows', (e) => e.id.startsWith('win.')], ['Meters', (e) => e.id.startsWith('meter.')], ['Colours', (e) => ['stagecol', 'wavecols'].includes(e.id)], ['FX', (e) => e.id === 'fx'], ['Tags', (e) => e.id === 'text' || e.id.startsWith('tag.')]];
+  const secOf = (e) => (SECTIONS.find(([, f]) => f(e)) || ['Other'])[0];
+  const secOpen = { Camera: true };
   function elementView() {
-    const R = reg(), groups = {}; for (const e of R.elements) if (!e.hidden || e.id === element) (groups[e.group] = groups[e.group] || []).push(e);   // v12: hidden elements (the EQ meter keys) stay registered but are not listed
-    const el = R.elements.find((e) => e.id === element) || R.elements[0]; element = el.id;
-    const b = playBeat(), ev = cues.ev(), animated = new Set(cues.sheet.tracks.filter((t) => t.keys.length).map((t) => t.path));
-    let h = `<div class="ins-h"><b>Effect controls</b><span class="hint">at ${beatsToBbt(snapBeat(b, 1 / 960))} · ◆ keyframe · drag a label to scrub</span></div>
-      <label class="field"><span class="lbl">Element (add a track from any property)</span><select class="inp mono" data-k="element">${Object.entries(groups).map(([gname, es]) => `<optgroup label="${esc(gname)}">${es.map((e) => `<option value="${e.id}" ${e.id === el.id ? 'selected' : ''}>${esc(e.label)}${e.props.some((p) => animated.has(p.path)) ? ' ◆' : ''}</option>`).join('')}</optgroup>`).join('')}</select></label>`;
-    const others = R.elements.filter((e) => e.id !== el.id && e.props.some((p) => animated.has(p.path)));
-    for (const e of [el, ...others]) { const mine = e === el, props = mine ? e.props : e.props.filter((p) => animated.has(p.path)), n = e.props.filter((p) => animated.has(p.path)).length, isOpen = open[e.id] ?? mine;
-      h += `<details class="fx" data-el="${e.id}" ${isOpen ? 'open' : ''}><summary><span>${esc(e.label)}</span><span class="hint">${n ? n + ' animated' : 'static'}</span></summary><div class="props">${isOpen ? props.map((p) => propRow(p, b, ev)).join('') : ''}</div></details>`; }
+    const R = reg(), el = R.elements.find((e) => e.id === element) || R.elements[0]; element = el.id;
+    const b = playBeat(), ev = cues.ev(), animated = new Set(cues.sheet.tracks.filter((t) => t.keys.length).map((t) => t.path)), nAnim = (e) => e.props.filter((p) => animated.has(p.path)).length;
+    const groups = {}; for (const e of R.elements) if (!e.hidden || e.id === element) (groups[secOf(e)] = groups[secOf(e)] || []).push(e);   // v12: hidden elements (the EQ meter keys) stay registered but are not listed
+    const elDetails = (e, cls = '', title = '') => { const isOpen = open[e.id] ?? e.id === el.id, n = nAnim(e);
+      return `<details class="fx ${cls}" data-el="${e.id}" ${isOpen ? 'open' : ''}><summary><span>${esc(title || e.label)}</span><span class="hint">${n ? '◆ ' + n : ''}</span></summary><div class="props">${isOpen ? e.props.map((p) => propRow(p, b, ev)).join('') : ''}</div></details>`; };
+    let h = `<div class="ins-h"><b>Inspector</b><span class="hint">at ${beatsToBbt(snapBeat(b, 1 / 960))} · ◆ keyframe · drag a label to scrub</span></div>
+      <label class="field"><span class="lbl">Layer (add a track from any property)</span><select class="inp mono" data-k="element">${Object.entries(groups).map(([gname, es]) => `<optgroup label="${esc(gname)}">${es.map((e) => `<option value="${e.id}" ${e.id === el.id ? 'selected' : ''}>${esc(e.label)}${nAnim(e) ? ' ◆' : ''}</option>`).join('')}</optgroup>`).join('')}</select></label>`;
+    const chips = R.elements.filter((e) => nAnim(e));
+    if (chips.length) h += `<div class="chips" role="group" aria-label="Animated elements">${chips.map((e) => `<button class="chip${e.id === el.id ? ' on' : ''}" data-act="goto" data-el="${e.id}" title="${esc(e.label)}">◆ ${esc(trimLabel(e.label))}</button>`).join('')}</div>`;
+    h += `<div class="secs">`;
+    for (const [name] of [...SECTIONS, ['Other']]) { const es = groups[name]; if (!es) continue;
+      if (es.length === 1) { h += elDetails(es[0], 'sec', name); continue; }
+      const isOpen = secOpen[name] ?? es.some((e) => e.id === el.id), n = es.reduce((a, e) => a + nAnim(e), 0);
+      h += `<details class="sec" data-sec="${name}" ${isOpen ? 'open' : ''}><summary><span>${name}</span><span class="hint">${n ? '◆ ' + n : es.length}</span></summary><div class="subs">${isOpen ? es.map((e) => elDetails(e)).join('') : ''}</div></details>`; }
+    h += `</div>`;
     const presets = tl().presets();
     h += `<div class="tools"><div class="tool-h lbl">Key presets</div><div class="inrow"><select class="inp mono small" data-k="preset" aria-label="Key preset">${presets.map((p) => `<option value="${p.id}" ${p.id === presetSel ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select><button class="btn small" data-act="preset-apply">At playhead</button></div>
       <div class="inrow"><button class="btn small" data-act="preset-stamp">Stamp</button><select class="inp mono small" data-k="stamp-rule" aria-label="Stamp on">${sel(RULES, stampRule)}</select><span class="hint">${tl().state.loop ? 'in the loop' : 'whole video'}</span>${presets.find((p) => p.id === presetSel && p.id.startsWith('u')) ? '<button class="btn small danger" data-act="preset-del">Delete</button>' : ''}</div></div>`;
     return h;
   }
+  const reveal = (id) => { const e = reg().elements.find((x) => x.id === id); if (e) { open[id] = true; secOpen[secOf(e)] = true; } };
   function render() {
     const S = tl() ? tl().selected() : [], mk = tl() && tl().state.selMarker ? (cues.sheet.markers || []).find((m) => m.id === tl().state.selMarker) : null;
     root.innerHTML = S.length ? keyView(S) : mk ? markerView(mk) : elementView();
@@ -157,7 +176,7 @@ export function createInspector(app, root) {
     if (f === 'strength') { setKeyField('strength', el.value); return; }
     if (PASSIVE.includes(f) || f.startsWith('m-') || f.startsWith('h-')) return; if (el.type === 'number' || el.tagName === 'SELECT' || el.type === 'checkbox') setKeyField(f, el.type === 'checkbox' ? el.checked : el.value); });
   root.addEventListener('change', (e) => { const el = e.target, f = el.dataset.k; if (!f) return;
-    if (f === 'element') { element = el.value; open[element] = true; render(); return; }
+    if (f === 'element') { element = el.value; reveal(element); render(); return; }
     if (f === 'q-to') { quantTo = el.value; return; } if (f === 'stamp-rule') { stampRule = el.value; return; } if (f === 'preset') { presetSel = el.value; render(); return; }
     if (f.startsWith('m-')) { setMarker(f, el.value); return; }
     if (f === 'interp' || f.startsWith('h-') || f === 'strength') { setKeyField(f, el.value); render(); return; }
@@ -165,12 +184,16 @@ export function createInspector(app, root) {
     if (f === 'at') setKeyField('at', el.value); });
   // live typing for text values and range sliders on keys
   root.addEventListener('input', (e) => { const el = e.target; if (el.dataset.k === 'v' && (el.type === 'range' || el.type === 'color' || el.tagName === 'TEXTAREA')) { const v = readInput(el); syncSibling(el, v); setKeyField('v', v); } });
-  function syncSibling(el, v) { const box = el.closest('.field,.prop'); if (!box) return; box.querySelectorAll(`[data-type="${el.dataset.type}"]`).forEach((o) => { if (o !== el) { if (o.type === 'checkbox') o.checked = !!v; else o.value = v; } }); }
-  root.addEventListener('toggle', (e) => { const d = e.target; if (d.tagName === 'DETAILS' && d.dataset.el) { const was = open[d.dataset.el]; open[d.dataset.el] = d.open; if (d.open && !was && !d.querySelector('.prop')) render(); } }, true);
+  function syncSibling(el, v) { const box = el.closest('.field,.prop'); if (!box) return; box.querySelectorAll(`[data-type="${el.dataset.type}"]`).forEach((o) => { if (o !== el && o.type !== 'radio') { if (o.type === 'checkbox') o.checked = !!v; else o.value = v; } }); }
+  root.addEventListener('toggle', (e) => { const d = e.target; if (d.tagName !== 'DETAILS') return; let changed = false;
+    if (d.dataset.el && (open[d.dataset.el] ?? d.dataset.el === element) !== d.open) { open[d.dataset.el] = d.open; changed = true; }
+    if (d.dataset.sec && (secOpen[d.dataset.sec] ?? false) !== d.open && !d.dataset.el) { secOpen[d.dataset.sec] = d.open; changed = true; }
+    if (changed && d.open) render(); }, true);
   root.addEventListener('click', (e) => { const sk = e.target.closest('.kstrip i[data-key]'); if (sk) { const f = tl().findKey(sk.dataset.key); if (f) { tl().focusRowOf(f[0].path); tl().select([f[1].id]); } return; }
     const b = e.target.closest('[data-act]'); if (!b) return; const a = b.dataset.act, T = tl(), path = b.closest('.prop') && b.closest('.prop').dataset.path;
     if (a === 'del') T.del(); else if (a === 'copy') T.copy(); else if (a === 'nudge-l') T.nudge(-1); else if (a === 'nudge-r') T.nudge(1);
     else if (a === 'jump') { const s = T.selected()[0]; if (s) { const bt = app.store.session.track.spb; app.actions.seek(P().inT + Math.round(s[1].b * bt * 30) / 30); } }
+    else if (a === 'goto') { element = b.dataset.el; reveal(element); T.clearSel(); render(); if (app.layers) app.layers.update(true); }
     else if (a === 'kf') keyframe(path);
     else if (a === 'lane') { const i = T.focusRowOf(path); if (i >= 0) { const r = T.rows()[i]; if (r.kind === 'number' && r.h < 40) T.toggleLaneHeight(r); } }
     else if (a === 'pk' || a === 'nk') { const i = T.focusRowOf(path); if (i >= 0) T.navKey(a === 'nk' ? 1 : -1, [T.rows()[i]]); }
@@ -202,8 +225,8 @@ export function createInspector(app, root) {
     /** Refresh values and the mini strips while the playhead or the timeline view moves (not while typing or scrubbing). */
     tick() { if (root.dataset.mode !== 'element') return; const b = playBeat(), now = performance.now(), V = tl().view(), vk = `${V.a.toFixed(3)}|${V.z.toFixed(3)}`;
       if ((Math.abs(b - lastB) > 1e-6 || vk !== lastV) && now - lastT > (app.clock.playing ? 300 : 60) && !root.contains(document.activeElement) && !scrub) { lastB = b; lastT = now; lastV = vk; render(); } },
-    showTrack(path) { const p = reg().byPath[path]; if (p) { element = p.element; open[element] = true; if (!tl().selected().length) render(); } },
-    showElement(id) { element = id; open[id] = true; tl().clearSel(); render(); },
+    showTrack(path) { const p = reg().byPath[path]; if (p) { element = p.element; reveal(element); if (!tl().selected().length) render(); } },
+    showElement(id) { element = id; reveal(id); tl().clearSel(); render(); const n = root.querySelector(`details[data-el="${id}"]`); if (n && n.scrollIntoView) n.scrollIntoView({ block: 'nearest' }); },
     focusValue() { const el = root.querySelector('[data-k="v"]'); if (el) el.focus(); },
     get element() { return element; },
   };

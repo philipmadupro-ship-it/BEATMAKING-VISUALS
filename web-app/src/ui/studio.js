@@ -5,6 +5,7 @@ import { SNAPS, snapBeat, parseSheet, validateSheet, serializeSheet } from '../c
 import { PRESETS } from '../cues/generate.js';
 import { saveFile } from '../export/save.js';
 import { fmtTC, clamp, slug } from '../util/draw.js';
+import { createLayers } from './layers.js';
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const SAFE = { '916': { hard: { x0: 162, x1: 918, y0: 288, y1: 1248 }, relaxed: { x0: 108, x1: 972, y0: 288, y1: 1440 }, zones: [{ x: 0, y: 0, w: 1080, h: 288, label: 'status + top bar' }, { x: 0, y: 1248, w: 1080, h: 672, label: 'caption · CTA · audio' }, { x: 918, y: 1000, w: 162, h: 248, label: 'like/share' }] },
   '169': { hard: { x0: 96, x1: 1824, y0: 80, y1: 900 }, relaxed: { x0: 64, x1: 1856, y0: 54, y1: 960 }, zones: [{ x: 0, y: 960, w: 1920, h: 120, label: 'player controls' }] } };
@@ -27,6 +28,7 @@ export function createStudio(app) {
     $('#readout').innerHTML = `<span>song bar <b>${sb}</b></span><span>len <b>${len.toFixed(1)} s · ${Math.round(len / tr.barDur)} bars</b></span><span><b>${Math.round(tr.bpm * 100) / 100}</b> bpm</span>`;
     $('#lgCounts').textContent = `${fmtTC(p.inT)} → ${fmtTC(p.outT)} · drag the region or pick a length`; }
   // ---- pick + drag windows on the preview
+  let layers = null;
   const surf = { canvas: view, ctx: vctx, get w() { return view.width; }, get h() { return view.height; } };
   function world(e) { const r = view.getBoundingClientRect(), { W, H } = ASPECTS[P().aspect], x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H, c = info.cam || { x: W / 2, y: H / 2, z: 1 };
     return { x: (x - W / 2) / c.z + c.x, y: (y - H / 2) / c.z + c.y, sx: x, sy: y, W, H }; }
@@ -43,6 +45,8 @@ export function createStudio(app) {
     app.actions.setProp(`win.${drag.id}.x`, drag.r0[0] + dx, true); app.actions.setProp(`win.${drag.id}.y`, drag.r0[1] + dy, true); showPick(); });
   const endDrag = () => { if (drag && drag.moved) app.cues.commit('move window'); drag = null; view.classList.remove('grabbing'); app.inspector.show(); };
   view.addEventListener('pointerup', endDrag); view.addEventListener('pointercancel', endDrag);
+  layers = createLayers(app, $('#layerList'), { pick: (id) => { pick = id; showPick(); } });
+  if (window.ResizeObserver) new ResizeObserver(() => { if (!$('#studio').hidden) layout(); }).observe(stage);
   // ---- transport
   const setPlayIcon = () => { const pl = app.clock.playing; $('#playIco').innerHTML = pl ? '<path d="M3 2h4v12H3zM9 2h4v12H9z" fill="currentColor"/>' : '<path d="M4 2l10 6-10 6z" fill="currentColor"/>'; $('#playBtn').setAttribute('aria-label', pl ? 'Pause' : 'Play'); };
   app.clock.onChange(setPlayIcon);
@@ -133,7 +137,7 @@ export function createStudio(app) {
     else if (k === ',' || k === '.') { const f = (k === '.' ? 1 : -1) / 30; app.actions.seek(clamp(app.clock.time() + f, P().inT, P().outT - 1 / 30)); }
   });
   // ---- loop
-  let lastUI = 0;
+  let lastUI = 0, lastLayers = 0;
   function frame(now) {
     requestAnimationFrame(frame); const tr = track(); if ($('#studio').hidden || !tr || app.store.session.exporting) return;
     const p = P(); let t = app.clock.time();
@@ -144,6 +148,7 @@ export function createStudio(app) {
     tl().setTime(t - p.inT);
     if (app.clock.playing || dirty) { dirty = false; info = {}; app.renderFrame(t, surf, p, tr, { info }); $('#measuring').textContent = info.look ? '' : 'measuring the section…'; if (pick) showPick();
       app.timeline.setTime(t, !app.clock.playing); app.inspector.tick && app.inspector.tick(); }
+    if (now - lastLayers > 250) { lastLayers = now; layers.update(); }
     tl().draw(); if (!app.clock.playing) app.inspector.tick && app.inspector.tick();
     if (now - lastUI > 40 || !app.clock.playing) { lastUI = now; $('#tc').textContent = fmtTC(Math.max(0, t - p.inT)); $('#barPill').textContent = tl().bbt(Math.max(0, (t - p.inT) / tr.spb)); }
   }
