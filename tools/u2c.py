@@ -3,6 +3,7 @@
 
   python3 tools/u2c.py sync                      # web-app -> native renderer
   python3 tools/u2c.py stills -t 3.7,12 [-l player] [-s nigredo,white] [-a 9:16,16:9]   # PNG stills + one contact sheet (TikTok safe zones on 9:16)
+  python3 tools/u2c.py beats --bars 2:4 [--bpm 128]           # one still per beat (pre-render grid check)
   python3 tools/u2c.py strip VIDEO -t 3.3:4.3:0.15            # frames from an MP4 in one strip (transitions)
   python3 tools/u2c.py crop PNG x,y,w,h                       # zoom into a still (panel review)
   python3 tools/u2c.py render [-l player] [-s ...] [-a ...] [--len 30]   # final MP4s (sequential) -> out/v14 + deliver dir
@@ -51,6 +52,10 @@ def stills(a):
         for i in r: sheet.paste(i, (x, y)); x += i.width
         y += max(i.height for i in r)
     p = os.path.join(OUT, f'sheet-{a.l}.jpg'); sheet.save(p, quality=82); print(p)
+
+def beats(a):
+    # one still per beat over a bar range (clip time 0 = bar 1 beat 1): the pre-render check from the v17 prompt
+    b0, b1 = map(int, a.bars.split(':')); spb = 60.0 / a.bpm; a.t = ','.join(f'{(k + 0.02) * spb:.3f}' for k in range(b0 * 4, b1 * 4)); stills(a)
 
 def strip(a):
     from PIL import Image
@@ -102,6 +107,8 @@ for name, fn in (('stills', stills), ('render', render)):
     q = sp.add_parser(name); q.set_defaults(fn=fn); q.add_argument('-l', default='player'); q.add_argument('-s', default='nigredo'); q.add_argument('-a', default='9:16,16:9')
     q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3')
     if name == 'stills': q.add_argument('-t', default='12'); q.add_argument('--safe', type=int, default=1)
+q = sp.add_parser('beats'); q.set_defaults(fn=beats); q.add_argument('-l', default='player'); q.add_argument('-s', default='nigredo'); q.add_argument('-a', default='9:16')
+q.add_argument('--bars', default='0:4'); q.add_argument('--bpm', type=float, default=128); q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3'); q.add_argument('--safe', type=int, default=0)
 q = sp.add_parser('strip'); q.set_defaults(fn=strip); q.add_argument('video'); q.add_argument('-t', default='3.3:4.3:0.15')
 q = sp.add_parser('crop'); q.set_defaults(fn=crop); q.add_argument('png'); q.add_argument('box')
 q = sp.add_parser('bright'); q.set_defaults(fn=bright); q.add_argument('video')
