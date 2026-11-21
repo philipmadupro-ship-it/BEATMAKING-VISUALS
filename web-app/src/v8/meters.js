@@ -8,6 +8,7 @@
 import * as ML from './meterlib.js';
 import { createLevelView } from './levelview.js';
 import { createImagerView } from './imagerview.js';
+import { draw as drawInserts } from './inserts.js';
 import * as SG from './spectrogramview.js';
 import { createWaveView, createWaveLODs } from './waveview.js';
 import { createEqView } from './eqview.js';
@@ -223,6 +224,8 @@ export function createMeters(L) {
   function hatch(ctx, x, y, w, h, col) { ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.beginPath(); for (let d = -h; d < w + h; d += 4) { ctx.moveTo(x + d, y + h); ctx.lineTo(x + d + h, y); } ctx.stroke(); ctx.restore(); }
   { const IV = createImagerView(L, M8, { lbl, reveal, cr, hatch, tickF }); M8.imager = IV.imager; }
   M8.stereo = M8.imager;
+  // v14 player: four live insert tiles (SPEC / GR / WIDTH / 3D cube)
+  M8.inserts = (ctx, S, r, t, k) => { reveal(ctx, r[0], r[1], r[2], r[3], k); drawInserts(ctx, r, t * L.FPS, { L, S }); ctx.restore(); };
 
   // ---------------------------------------------------------------- SCOPE: L/R traces, sample-accurate (wave2), triggered on the beat
     const W2 = L.W2;

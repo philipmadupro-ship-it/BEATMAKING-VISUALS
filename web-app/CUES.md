@@ -213,3 +213,5 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - Tags (all editable): `player.nav[]`, `player.vol`, `player.tracks[]`, `player.mark`, `player.coords[]`, `player.tabs[]`, `player.sub`, `player.info`, `player.pill`, `player.now.title|sub`, `player.caption[]`, `player.meta.labels[]`, `player.meta.tags` (default "EXPERIMENTAL, TRAP"), `windows.inserts|meta`.
 - `fx.flash` is now OFF by default in every look (generated sheets carry no flash keys); the track and the 1-frame invert stay keyframeable.
 - `stage: white` ("NIGREDO INVERSE"): the Nigredo palette, then the whole finished frame (HUD, intro included) is inverted as the last pass (`difference` with white, the same op as fx.flash). Greys only (R=G=B), works in every look; native `--stage white`.
+
+- `hero.caption` (player look, bool, default false): the title / prod. / vol. caption inside the hero cell. Off by default: the title is already in the top bar and the now-playing card.

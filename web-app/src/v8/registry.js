@@ -58,6 +58,8 @@ export function buildRegistry({ look = 'exe', aspect = '916', stage = 'nigredo',
     num('pendant.react', 'Bass reaction', 0.32, 0, 1, 0.01, ''),
     num('pendant.links', 'Chain links', 10, 3, 24, 1, ''), num('pendant.wave', 'Chain looseness (joint friction; high = slack)', 0.75, 0.05, 1.5, 0.01, ''), num('pendant.damp', 'Pendulum damping', 0.35, 0.1, 0.9, 0.01, 'ζ'),
     num('pendant.chain', 'Chain length (of the window)', 0.3, 0, 0.6, 0.01, ''), num('pendant.size', 'Size', 1, 0.4, 1.6, 0.01, '×'), num('pendant.x', 'Pivot X offset', 0, -300, 300, 1, 'px'), num('pendant.y', 'Pivot Y offset', 0, -300, 300, 1, 'px')]);
+  if (look === 'player') el('hero', 'Hero (U2C logo + static elephant)', 'Brand', [bool('hero.on', 'Hero on', true), num('hero.scale', 'Scale (logo)', 1, 0.5, 1.6, 0.01, '×'), num('hero.x', 'Offset X', 0, -400, 400, 1, 'px'),
+    num('hero.y', 'Offset Y', 0, -400, 400, 1, 'px'), bool('hero.caption', 'Caption block (title / prod. / vol.)', false)]);
   if (look === 'exe') el('hero', 'Hero (U2C logo, front layer)', 'Brand', [bool('hero.on', 'Hero on', true), num('hero.scale', 'Scale (logo)', 1, 0.5, 1.6, 0.01, '×'), num('hero.x', 'Offset X', 0, -400, 400, 1, 'px'),
     num('hero.y', 'Offset Y', 0, -400, 400, 1, 'px'), num('hero.shadow', 'Shadow', 1, 0, 2, 0.05, '×'), num('hero.vignette', 'Dark pool under the hero', 0.7, 0, 1.5, 0.05, '×'),
     num('cover.pulse', 'Cover kick pulse (scale + brightness)', 1, 0, 3, 0.05, '×'), num('cover.dim', 'Cover darkening (card scrim)', 1, 0, 2, 0.05, '×'), bool('stepgrid.on', '16-step beat grid (off by default)', false), num('stepgrid.glow', 'Step grid brightness', 1, 0, 2, 0.05, '×'),

@@ -154,7 +154,7 @@ const syncEval = () => ev(async () => {
 });
 const sync = await syncEval();
 ok('sync: every scheduled event on the 32nd grid within 1 frame', sync.n > 100 && sync.worst <= 1, `${sync.n} events · worst ${sync.worst.toFixed(3)} frame`);
-ok('sync: the 1-frame invert lands on its key frame', sync.flash && sync.flash.off === 0 && sync.flash.ratio > 1.5, sync.flash ? `peak at offset ${sync.flash.off} frame, ${sync.flash.ratio.toFixed(1)}x brighter than its neighbours` : 'no flash key');
+ok('sync: the 1-frame invert lands on its key frame (off by default since v14)', !sync.flash || sync.flash.off === 0 && sync.flash.ratio > 1.5, sync.flash ? `peak at offset ${sync.flash.off} frame, ${sync.flash.ratio.toFixed(1)}x brighter than its neighbours` : 'no flash key');
 ok('sync: pendant extremes within 1 frame of the beats', sync.pn > 8 && sync.pw <= 1 + 1e-6, `${sync.pn} extremes · worst ${sync.pw.toFixed(2)} frame`);
 ok('sync: camera push lands on its key (zoom settled at the landing frame)', sync.land && Math.abs(sync.land.z - sync.land.z3) < 0.01 && sync.land.z > 1.1, sync.land ? `z ${sync.land.z.toFixed(3)} at landing, ${sync.land.z3.toFixed(3)} three frames later` : 'no focus key');
 ok('sync: kick onsets quantised to the 16th grid', sync.onsets);

@@ -238,7 +238,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     BR.logo(c, Sx, [0, 0, 0, 0], t, { at: { cx, cy, w: lw }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero, glow: V('logo.glow', 1), kickI: I, pulse: I, bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
     const d = lw * V('pendant.size', 1) * 0.5; BR.elephantMark(c, Sx, cx - lw * (port ? 0.2 : 0.16) + V('pendant.x', 0), cy + lh / 2 + d * 0.28 + V('pendant.y', 0), d, d);
     const ink = Sx.ink; PL.crosses(c, Sx, [[x + 30, cy], [x + w - 30, cy]], 20);
-    PL.heroCaption(c, Sx, port ? x + w - 24 : x + w - 24, y + h - 22 - 25 * 3, 'right', 205);
+    if (V('hero.caption', false)) PL.heroCaption(c, Sx, port ? x + w - 24 : x + w - 24, y + h - 22 - 25 * 3, 'right', 205);
     c.restore();
   }
   const nowCover = (r) => { const [x, y, w, h] = r, cp = w > 700 && h < 220; return cp ? [x + 20, y + 20, h - 40, h - 40] : [x + 20, y + 20, w - 40, Math.round((w - 40) * 0.5)]; };
@@ -254,7 +254,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   const BODY = { hero: playerHero, now: playerNow, inserts: playerInserts, meta: (cr, t, k, Sx) => PL.meta(c, Sx, cr, t, { cover: INTRO.coverCanvas ? INTRO.coverCanvas(0, Sx) : null }),
     cover: coverBody, logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),
-    eq: (cr, t, k, Sx) => M.eq(c, Sx, cr, t, k), spectrum: drawSpectrum, loudness: (cr, t, k, Sx) => M.loud(c, Sx, cr, t, k), stereo: (cr, t, k, Sx) => M.stereo(c, Sx, cr, t, k),
+    eq: (cr, t, k, Sx) => M.eq(c, Sx, cr, t, k), spectrum: drawSpectrum, loudness: (cr, t, k, Sx) => (LOOK === 'player' ? M.levels(c, Sx, cr, t, k, { variant: 'player' }) : M.loud(c, Sx, cr, t, k)), stereo: (cr, t, k, Sx) => M.stereo(c, Sx, cr, t, k, LOOK === 'player' ? { variant: 'player' } : undefined),
     spectrogram: drawSpectrogram, surface: (cr, t, k, Sx) => M.surface(c, Sx, cr, t, k),
     levels: (cr, t, k, Sx) => M.levels(c, Sx, cr, t, k), ghost: (cr, t, k, Sx) => M.ghost(c, Sx, cr, t, k) };
   // v14 player shell: sidebar (16:9) + top bar, in the world under the camera, drawn before the cards
