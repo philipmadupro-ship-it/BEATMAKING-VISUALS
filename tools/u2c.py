@@ -101,7 +101,7 @@ def review(a):
     pre, spb = a.pre, 60.0 / a.bpm; dur = float(sh(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', a.video]).stdout or 0)
     marks = [('frame 0', 0.0), ('click play', pre + 0.02), ('browse', 0.45), ('choose', max(0.0, pre - 0.55)), ('push', pre + 2 * spb), ('cut', pre + 4 * spb + 0.05), ('build', pre + 5 * spb),
              ('first move', pre + 12 * spb - 0.5), ('negative', pre + 24.5 * spb), ('CTA 1', pre + 33 * spb), ('CTA 2', pre + 45 * spb), ('rewind', dur - 3.6), ('last', dur - 1 / 30)]
-    ims = []
+    ims = []; marks = [m for m in marks if m[0] == 'last' or m[1] < dur - 0.1]
     for name, t in marks:
         if os.path.exists('/tmp/u2c_r.png'): os.remove('/tmp/u2c_r.png')
         sh(['ffmpeg', '-v', 'error', '-y'] + (['-sseof', '-0.04'] if name == 'last' else ['-ss', f'{max(0, t):.3f}']) + ['-i', a.video, '-frames:v', '1', '/tmp/u2c_r.png'])
