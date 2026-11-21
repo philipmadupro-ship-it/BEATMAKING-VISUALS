@@ -71,7 +71,7 @@ export function buildRegistry({ look = 'exe', aspect = '916', stage = 'nigredo',
   el('stagecol', 'Stage colours', 'Finish', STAGE_COLOR_KEYS.map((k) => col('stage.' + k, k, S[k])));
   el('overlays', 'Overlays', 'Overlays', [bool('hud.on', 'HUD', true), bool('result.on', 'Result card', true),
     num('result.at', 'Result card at', Math.max(0, (bars - (bars >= 8 ? 2 : 1)) * 4), 0, bars * 4, 0.25, 'beats'), bool('bracket.on', 'Accent rim on the hero window', true),
-    num('glass.radius', 'Glass corner radius', 22, 0, 48, 1, 'px'), num('glass.tint', 'Glass tint', 0.36, 0, 0.9, 0.01)]);
+    num('glass.radius', 'Glass corner radius', 22, 0, 48, 1, 'px'), num('glass.bezel', 'Double bezel (player look: inner core hairline)', 1, 0, 2, 0.05, '×'), num('glass.tint', 'Glass tint', 0.36, 0, 0.9, 0.01)]);
   for (const id of ids) { const r = L[id], c = CONTENT[id];
     el('win.' + id, WINDOW_LABELS[id] || id, 'Windows', [num(`win.${id}.x`, 'X', r[0], -400, 2400, 1, 'px'), num(`win.${id}.y`, 'Y', r[1], -400, 2400, 1, 'px'), num(`win.${id}.w`, 'Width', r[2], 60, 2000, 1, 'px'), num(`win.${id}.h`, 'Height', r[3], 60, 2000, 1, 'px'),
       bool(`win.${id}.visible`, 'Visible (key = open / close)', true), num(`win.${id}.open`, 'Opens at', openBeat(look, aspect, id), -2, bars * 4, 0.125, 'beats'),

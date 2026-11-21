@@ -31,13 +31,18 @@ const EXE12 = {
 // turns the now-playing card into a strip under it. Window ids: session (waveform), loud (levels), stage (hero: logo + static pendant mark + caption),
 // stereo (imager), spectro, spectrum, now (now-playing), inserts (4 live tiles), meta (metadata).
 const PLAYER = {
-  '169': { session: [268, 108, 1192, 190], loud: [268, 314, 300, 380], stage: [584, 314, 560, 380], stereo: [1160, 314, 300, 380], spectro: [268, 710, 1192, 140], spectrum: [268, 866, 1192, 190],
-    now: [1476, 108, 420, 440], inserts: [1476, 564, 420, 130], meta: [1476, 710, 420, 346] },
-  '916': { now: [32, 148, 1016, 120], session: [32, 284, 1016, 200], loud: [32, 500, 250, 440], stage: [298, 500, 484, 440], stereo: [798, 500, 250, 440], spectro: [32, 956, 1016, 150],
-    spectrum: [32, 1122, 1016, 318], inserts: [32, 1456, 1016, 184], meta: [32, 1656, 1016, 236] },
+  // 16:9 (YouTube): time stack on top (waveform + spectrogram share the time axis), a taller hero row (levels | hero | imager), the spectrum
+  // across the bottom; right column = now playing, inserts, metadata. 16 px gutters, every edge on the same 4 px grid.
+  '169': { session: [268, 108, 1192, 150], spectro: [268, 274, 1192, 134], loud: [268, 424, 300, 416], stage: [584, 424, 560, 416], stereo: [1160, 424, 300, 416],
+    spectrum: [268, 856, 1192, 200], now: [1476, 108, 420, 436], inserts: [1476, 560, 420, 140], meta: [1476, 716, 420, 340] },
+  // 9:16 (TikTok / Reels): built on the platform safe zones (1080x1920): y < 200 = app header, y > 1548 = caption + sound, x > 960 = button rail
+  // from y ~1000. Everything that must read sits in y 208..1544; the rows under the rail stop at x 960. The spectrogram + inserts live
+  // under the caption (texture there, full reading on the camera pushes). Tabs-only top bar; the now-playing strip carries title + cover.
+  '916': { now: [48, 280, 984, 112], session: [48, 408, 984, 190], stage: [48, 614, 984, 360], spectrum: [48, 990, 912, 196],
+    loud: [48, 1202, 448, 342], stereo: [512, 1202, 448, 342], spectro: [48, 1560, 984, 150], inserts: [48, 1726, 984, 160] },
 };
 export const SIDEBAR = { '169': [24, 20, 220, 1036], '916': null };
-export const TOPBAR = { '169': [268, 20, 1628, 76], '916': [32, 20, 1016, 124] };
+export const TOPBAR = { '169': [268, 20, 1628, 76], '916': [48, 208, 984, 56] };
 /** Hero = the U2C logo only (front layer, centred on its bbox in the stage card): width in px at scale 1. The centre is the stage rect's centre. */
 export const HERO = { '916': { logoW: 384 }, '169': { logoW: 300 } };
 /** v13 match-cut API: the cover card rect (world px, exe look) the cover-0 image fills (object-fit: cover, corner radius 22). */

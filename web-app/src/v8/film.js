@@ -114,6 +114,11 @@ export function createFilm({ D, assets, aspect = '916' }) {
     // v12 depth (exe): the meter windows sit behind the hero: darker, calmer glass (lower edge light, softer shadow)
     const back = LOOK === 'exe' || LOOK === 'player' ? V('glass.back', 1) : 0;
     L.glass(c, x, y, w, h, Sx, { r: rad, tint: V('glass.tint', LOOK === 'scope' ? 0.5 : 0.36) + 0.2 * back, active: active && V('bracket.on', LOOK !== 'player'), edge: 1 - 0.4 * back, shadow: 1 - 0.25 * back });
+    // v14 player: double bezel, the glass is the tray and an inner core sits 6 px in (concentric radius, top-lit hairline) = machined hardware
+    if (LOOK === 'player' && V('glass.bezel', 1) > 0) { const bz = V('glass.bezel', 1), q = 6; c.save(); c.lineWidth = 1;
+      c.strokeStyle = rgba(S.ink, 0.07 * bz); c.stroke(L.rr(x + q + 0.5, y + q + 0.5, w - 2 * q - 1, h - 2 * q - 1, Math.max(4, rad - q)));
+      const g = c.createLinearGradient(0, y + q, 0, y + q + 40); g.addColorStop(0, rgba(S.ink, 0.10 * bz)); g.addColorStop(1, rgba(S.ink, 0));
+      c.strokeStyle = g; c.beginPath(); c.moveTo(x + q + rad, y + q + 1.5); c.lineTo(x + w - q - rad, y + q + 1.5); c.stroke(); c.restore(); }
     if (LOOK === 'lab') { c.save(); c.clip(L.rr(x, y, w, h, rad)); lab.graphPaper(c, x, y, w, h, Sx, 10, 50, 0.45); c.restore(); }
     if (LOOK === 'scope') { const sr = screenRect(id, r); c.fillStyle = rgba(Sx.bg, 0.62); c.fill(L.rr(sr[0], sr[1], sr[2], sr[3], 12)); c.strokeStyle = rgba(Sx.ink, 0.12); c.stroke(L.rr(sr[0] + 0.5, sr[1] + 0.5, sr[2] - 1, sr[3] - 1, 12)); }
     label(id, x, y, w, Sx, active);
@@ -232,11 +237,11 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // hero: the U2C chain logo centred in its cell (thread in/out + exponential kick glow unchanged), the elephant STATIC under the U (a logo mark, no swing),
   // the caption block bottom right, registration crosses. L.heroRect (set here) = the cell.
   function playerHero(cr, t, k, Sx) {
-    const [x, y, w, h] = L.winRect, cx = x + w / 2 + V('hero.x', 0), cy = y + h / 2 + V('hero.y', 0), bb = BR.logoBBox(), lw = Math.min(w * (port ? 0.52 : 0.43), h * 0.82 * bb.w / bb.h) * V('hero.scale', 1) * V('logo.scale', 1), lh = lw * bb.h / bb.w;
+    const [x, y, w, h] = L.winRect, cx = x + w / 2 + V('hero.x', 0), cy = y + h * 0.40 + V('hero.y', 0), bb = BR.logoBBox(), lw = Math.min(w * (port ? 0.52 : 0.43), h * 0.62 * bb.w / bb.h) * V('hero.scale', 1) * V('logo.scale', 1), lh = lw * bb.h / bb.w;
     c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip();
     const hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4)), I = glowAt(fidx(t));
     BR.logo(c, Sx, [0, 0, 0, 0], t, { at: { cx, cy, w: lw }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero, glow: V('logo.glow', 1), kickI: I, pulse: I, bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
-    const d = lw * V('pendant.size', 1) * 0.5; BR.elephantMark(c, Sx, cx - lw * (port ? 0.2 : 0.16) + V('pendant.x', 0), cy + lh / 2 + d * 0.28 + V('pendant.y', 0), d, d);
+    const d = lw * V('pendant.size', 1) * 0.5; BR.elephantMark(c, Sx, cx - lw * (port ? 0.2 : 0.16) + V('pendant.x', 0), cy + lh / 2 + d * 0.52 + V('pendant.y', 0), d, d);
     const ink = Sx.ink; PL.crosses(c, Sx, [[x + 30, cy], [x + w - 30, cy]], 20);
     if (V('hero.caption', false)) PL.heroCaption(c, Sx, port ? x + w - 24 : x + w - 24, y + h - 22 - 25 * 3, 'right', 205);
     c.restore();

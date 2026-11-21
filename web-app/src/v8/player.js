@@ -72,6 +72,7 @@ export function createPlayer(L, { tag, V }) {
   function topbar(c, S, rect, t, o) {
     const [x, y, w, h] = rect, ink = S.ink, dim = rgba(ink, 0.55), title = String(tag('title')).toUpperCase(), tabs = tag('player.tabs') || TABS;
     const sub = tag('player.sub'), info = tag('player.info'), pill = String(tag('player.pill'));
+    if (o.port) return topbarPort(c, S, rect, tabs, pill, o);
     const ts = 40; const tw = text(c, title, x, y + (o.port ? 30 : 28), { size: ts, fam: DISPLAY, w: 800, col: ink, ls: 0.5, maxW: o.port ? w * 0.56 : 520 });
     text(c, String(sub).toUpperCase(), x + 2, y + (o.port ? 74 : 68), { size: 22, fam: UI, w: 500, ls: 2, col: dim, maxW: o.port ? w * 0.56 : 520 });
     // pill + bpm / key
@@ -91,6 +92,17 @@ export function createPlayer(L, { tag, V }) {
     });
   }
 
+
+  // 9:16: one row, tabs left (the camera follows the active one), the U2C pill right. Title + cover are in the now-playing strip below.
+  function topbarPort(c, S, rect, tabs, pill, o) {
+    const [x, y, w, h] = rect, ink = S.ink, cy = y + h / 2; let tx = x + 18;
+    tabs.forEach((s, i) => { const act = i === o.tab, lab = String(s).toUpperCase(); c.font = `500 22px ${UI}`; const tw = c.measureText(lab).width + lab.length * 1.2;
+      if (act) { c.fillStyle = rgba(ink, 0.08); c.fill(rr(tx - 16, cy - 20, tw + 32, 40, 20)); c.strokeStyle = rgba(ink, 0.7); c.lineWidth = 1.2; c.stroke(rr(tx - 16, cy - 20, tw + 32, 40, 20)); }
+      text(c, lab, tx, cy + 1, { size: 22, fam: UI, w: act ? 600 : 500, ls: 1.2, col: act ? ink : rgba(ink, 0.45) }); tx += tw + 44; });
+    const pw = 96, ph = 38, px = x + w - pw, py = cy - ph / 2;
+    c.strokeStyle = rgba(ink, 0.75); c.lineWidth = 1.4; c.stroke(rr(px, py, pw, ph, ph / 2));
+    text(c, pill, px + pw / 2, cy + 1, { size: 22, fam: DISPLAY, w: 800, col: ink, align: 'center', maxW: pw - 22 });
+  }
   // ---------------------------------------------------------------- now playing (cover card; compact strip when wide and short)
   /** Draws into the window rect r = [x, y, w, h]. o = {cover (canvas), I (kick env 0..1), t, onCover(rect, rad) callback to publish the match-cut rect}. */
   function now(c, S, r, t, o) {
