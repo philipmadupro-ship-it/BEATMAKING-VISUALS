@@ -501,6 +501,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (RWB0) w.push({ t: T(RWB0) - T(3) - 0.02, wx: (LY.stage || [W / 2, H / 2, 0, 0])[0] + (LY.stage ? LY.stage[2] * 0.5 : 0), wy: (LY.stage || [0, H / 2, 0, 0])[1] + (LY.stage ? LY.stage[3] * 0.55 : 0), click: true });
     w.push({ t: D.duration, ...rest }); w.sort((a2, b2) => a2.t - b2.t); MW = { ev, w }; return w; }
   const mj = (u) => u * u * u * (10 - 15 * u + 6 * u * u);
+  // v19.4: click times in COMPOSITION seconds (film time + pre-roll), for the export's UI click sounds; call after one render()
+  const clickTimes = () => mouseWays().filter((q) => q.click).map((q) => q.t + PRE).filter((x) => x >= 0);
   function mousePos(q, cam) { if (q.play) return INTRO_HIT.play || [W * 0.3, H * 0.8]; if (q.wx != null) { if (!cam) return [W / 2, H / 2]; return [(q.wx - cam.x) * cam.z + W / 2, (q.wy - cam.y) * cam.z + H / 2]; } return [q.sx, q.sy]; }
   function mouse(tf, cam) {
     if (!V('cursor.on', LOOK === 'player')) return; const w = mouseWays(); let i = w.findIndex((q) => q.t > tf); if (i < 0) i = w.length - 1; if (i === 0) i = 1;
@@ -644,6 +646,6 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function rects(evx, bb, look) { ev = evx; IB = INTRO.beats(ev); b = bb; setState(look || V('look', 'exe'), V('stage', 'nigredo')); return { ...LY }; }
   // motion trace in the pendant test geometry (testRect): hand, every joint, every link angle, the body angle
   const trace = (t, evx) => { if (evx) ev = evx; b = 0; pendulum(); const g = pendantGeom(testRect()); return BR.tracePts(g.ax, g.ay, g.size, t + 0.5 / FPS, g.len); };
-  return { W, H, D, render, schedule, rects, trace, testRect, waveRect, registry: (o = {}) => buildRegistry({ aspect, bars: NB, ...o }), core: L, brand: BR, WINDOW_IDS };
+  return { W, H, D, render, clickTimes, schedule, rects, trace, testRect, waveRect, registry: (o = {}) => buildRegistry({ aspect, bars: NB, ...o }), core: L, brand: BR, WINDOW_IDS };
 }
 export { mergeDeep };

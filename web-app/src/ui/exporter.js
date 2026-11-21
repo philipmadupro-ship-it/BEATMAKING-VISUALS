@@ -29,7 +29,8 @@ export function createExporter(app) {
     status(`Preparing audio for ${label}…`);
     const au = await prepareAudio(buf, project, { loopSafe: ex.loopSafe, xf: Math.min(tr.spb, (project.outT - project.inT) / 4), loudness: ex.loudness, voiceTag: ex.voiceTag ? app.store.session.voiceTag : null, voiceEvery: ex.voiceEvery });
     $('#loudKv').innerHTML = `<dt>Measured in</dt><dd>${au.stats.inLufs.toFixed(1)} LUFS</dd><dt>Gain</dt><dd>${au.stats.gainDb >= 0 ? '+' : ''}${au.stats.gainDb.toFixed(1)} dB</dd><dt>Out</dt><dd>${au.stats.outLufs.toFixed(1)} LUFS · peak ${au.stats.peakDb.toFixed(1)} dBTP (4× oversampled)</dd>`;
-    const work = makeSurface(W, H), renderOne = (t, surf, info) => app.renderFrame(t, surf, project, tr, { entry, sheet, fps: ex.fps, info }), blur = ex.mblur !== false, SH = ex.shutter ?? 0.5;
+    const PRE = ex.preroll !== false && project.look === 'player' ? 1.9 : 0;   // v19.4 click-to-play pre-roll (as the native --preroll)
+    const work = makeSurface(W, H), renderOne = (t, surf, info) => app.renderFrame(t, surf, project, tr, { entry, sheet, fps: ex.fps, info, preroll: PRE }), blur = ex.mblur !== false, SH = ex.shutter ?? 0.5;
     // Motion blur (as the native renderer): the frame, then, only if the camera / intro moved vs the previous frame, 2 sub-frames at t +- shutter/2 averaged in (running mean, alpha 1/2 then 1/3).
     let prev = null, prevT = -1, off = null;
     const moving = (a, p) => { if (!p) return true; if (a.intro || p.intro) return !a.intro || !p.intro || Math.abs(a.index - p.index) > 0.002 || Math.abs(a.push - p.push) > 0.0005 || Math.abs(a.enter - p.enter) > 0.002;
@@ -40,8 +41,20 @@ export function createExporter(app) {
       for (const d of [-0.5, 0.5]) { renderOne(t + d * SH / ex.fps, off, {}); k++; work.ctx.save(); work.ctx.setTransform(1, 0, 0, 1, 0, 0); work.ctx.globalCompositeOperation = 'source-over'; work.ctx.globalAlpha = 1 / k; work.ctx.drawImage(off.canvas, 0, 0); work.ctx.restore(); }
       return cv; };
     const rate = (q, s, n) => { const fps = n / Math.max(.001, s), eta = q >= 1 ? 0 : Math.max(0, Math.round((n / Math.max(q, 1e-6) - n) / Math.max(fps, .001))); $('#exRate').textContent = `${fps.toFixed(1)} fps · ETA ${eta} s`; };
+    // v19.4 audio: delay the beat by the pre-roll and mix the synthesized UI clicks (port of motion/tools/clicks.py) at the film's click times
+    let audioOut = au.buffer;
+    if (PRE > 0 || (ex.clicks !== false && project.look === 'player')) {
+      renderOne(project.inT - PRE, work, {}); const film = app.clip.film(entry, project.aspect), times = ex.clicks !== false && film && film.clickTimes ? film.clickTimes() : [];
+      const src = au.buffer, sr = src.sampleRate, n = src.length + Math.round(PRE * sr), outB = new AudioBuffer({ numberOfChannels: src.numberOfChannels, length: n, sampleRate: sr }), off0 = Math.round(PRE * sr);
+      const click = (lv) => { const m = Math.round(0.012 * sr), o = new Float32Array(m); let prevN = 0, seed = 7; for (let i = 0; i < m; i++) { const tt = i / sr; seed = (seed * 16807) % 2147483647; const nz = (seed / 2147483647 - 0.5) * 2 * Math.exp(-tt / 0.0012), hp = nz - prevN; prevN = nz;
+        o[i] = lv * (hp * 0.5 + Math.sin(2 * Math.PI * 3400 * tt) * Math.exp(-tt / 0.0025) * 0.6 + Math.sin(2 * Math.PI * 1200 * tt) * Math.exp(-tt / 0.004) * 0.3); } return o; };
+      const press = click(1), rel = click(0.45), g = Math.pow(10, -16 / 20) / 1.4;
+      for (let ch = 0; ch < src.numberOfChannels; ch++) { const d = outB.getChannelData(ch); d.set(src.getChannelData(ch), off0);
+        for (const tc of times) for (const [dt, snd] of [[0, press], [0.055, rel]]) { const i0 = Math.round((tc + dt) * sr); for (let i = 0; i < snd.length && i0 + i < n; i++) if (i0 + i >= 0) d[i0 + i] += snd[i] * g; } }
+      audioOut = outB;
+    }
     const vl = app.videoLayer && app.videoLayer.loaded ? app.videoLayer : null, codecs = await canOffline(app.libs.mediabunny, W, H, mbps, ex.fps); let res;
-    if (codecs) { try { res = await exportOffline({ mb: app.libs.mediabunny, codecs, W, H, fps: ex.fps, mbps, inT: project.inT, outT: project.outT, audio: au.buffer, render, beforeFrame: vl ? (t) => vl.seek(t, project) : undefined, isCancelled: () => cancel,
+    if (codecs) { try { res = await exportOffline({ mb: app.libs.mediabunny, codecs, W, H, fps: ex.fps, mbps, inT: project.inT - PRE, outT: project.outT, audio: audioOut, render, beforeFrame: vl ? (t) => vl.seek(t, project) : undefined, isCancelled: () => cancel,
         onProgress: (q, s, n) => { onProg(q); rate(q, s, n); status(`Encoding ${label}: ${Math.round(q * 100)}%`); } }); } catch (e) { console.warn('[u2c] offline export failed, falling back to real time', e); res = undefined; } }
     if (res === undefined) res = await exportRealtime({ ac: app.clock.ctx, W, H, fps: ex.fps, mbps, inT: project.inT, outT: project.outT, audio: au.buffer, monitor: false, render: vl ? (t) => { vl.nudge(t, project); return render(t); } : render, isCancelled: () => cancel,
       onProgress: (q) => { onProg(q); status(`Recording ${label} in real time: ${Math.round(q * 100)}%`); } });

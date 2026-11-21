@@ -72,7 +72,7 @@ export function createPanels(app) {
   // ---- export segs + toggles
   const segs = [['exFps', 'export.fps', Number], ['exMbps', 'export.mbps', Number], ['exLufs', 'export.loudness', (v) => (v === 'off' ? 'off' : +v)]];
   segs.forEach(([id, path, parse]) => $$('#' + id + ' button').forEach((b) => b.addEventListener('click', () => { set(path, parse(b.dataset.v)); if (path === 'export.loudness') app.clip.clear(); sync(); app.exporter.info(); app.studio.markDirty(); })));
-  [['exLoop', 'export.loopSafe'], ['exDraft', 'export.draft'], ['vtOn', 'export.voiceTag'], ['exBoth', 'export.both'], ['exBlur', 'export.mblur']].forEach(([id, path]) => $('#' + id).addEventListener('change', (e) => { set(path, e.target.checked); app.exporter.info(); }));
+  [['exLoop', 'export.loopSafe'], ['exDraft', 'export.draft'], ['vtOn', 'export.voiceTag'], ['exBoth', 'export.both'], ['exBlur', 'export.mblur'], ['exPre', 'export.preroll'], ['exClicks', 'export.clicks']].forEach(([id, path]) => $('#' + id).addEventListener('change', (e) => { set(path, e.target.checked); app.exporter.info(); }));
   // Seamless loop = the outro.rewind cue property (the last bar rewinds into the intro) + the audio crossfade into bar 1
   const seamNow = () => { try { const R = app.registry(), d = R.byPath['outro.rewind']; return !!app.cues.ev().value('outro.rewind', app.cuetl ? app.cuetl.state.playhead : 0, d ? d.default : false); } catch (_) { return false; } };
   $('#exSeam').addEventListener('change', (e) => { app.actions.setProp('outro.rewind', e.target.checked); set('export.loopSafe', e.target.checked); $('#exLoop').checked = e.target.checked; app.exporter.info(); app.studio.markDirty(); });
@@ -87,7 +87,7 @@ export function createPanels(app) {
     const p = P(), tr = app.store.session.track;
     texts.forEach(([id, path]) => { const el = $('#' + id); if (document.activeElement !== el) el.value = getp(p, path) ?? (path === 'text.titleFormat' ? DEFAULT_FORMAT : ''); });
     segs.forEach(([id, path]) => { const v = String(getp(p, path)); $$('#' + id + ' button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === v)); });
-    $('#exBlur').checked = p.export.mblur !== false; $('#exShutter').value = p.export.shutter ?? 0.5; $('#exShutter').nextElementSibling.textContent = (+(p.export.shutter ?? 0.5)).toFixed(2);
+    $('#exBlur').checked = p.export.mblur !== false; $('#exPre').checked = p.export.preroll !== false; $('#exClicks').checked = p.export.clicks !== false; $('#exShutter').value = p.export.shutter ?? 0.5; $('#exShutter').nextElementSibling.textContent = (+(p.export.shutter ?? 0.5)).toFixed(2);
     $('#exBoth').checked = !!p.export.both; $('#exSeam').checked = seamNow(); $('#exBtn').textContent = p.export.both ? 'Export both formats' : 'Export MP4';
     $('#exLoop').checked = !!p.export.loopSafe; $('#exDraft').checked = !!p.export.draft; $('#vtOn').checked = !!p.export.voiceTag; $('#vtEvery').value = p.export.voiceEvery; $('#vtEvery').nextElementSibling.textContent = p.export.voiceEvery + 's';
     ['fKey', 'sKey'].forEach((id) => { const el = $('#' + id); if (document.activeElement !== el) { el.value = p.key; el.placeholder = tr ? 'detected ' + tr.key : 'detected'; } });

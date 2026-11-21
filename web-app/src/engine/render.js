@@ -20,7 +20,8 @@ export function createRenderer(app) {
     const ev = opt.sheet ? (opt.sheet.__ev || (Object.defineProperty(opt.sheet, '__ev', { value: createEvaluator(opt.sheet), enumerable: false }), opt.sheet.__ev)) : app.cues.ev();
     const tags = opt.tags || app.cues.tags(today());
     if (project.producer && tags.producer === '@uche2crazy' && project.producer !== '@uche2crazy') tags.producer = project.producer;
-    const info = film.render(ctx, t - e.inT, { ev, tags, fps: opt.fps || 30, look: project.look, stage: project.stage });
+    const pre = opt.preroll || 0;   // v19.4: click-to-play pre-roll (export): t runs from inT - pre; the film gets composition time and opts.preroll
+    const info = film.render(ctx, t - e.inT + pre, { ev, tags, fps: opt.fps || 30, look: project.look, stage: project.stage, preroll: pre });
     if (opt.target) opt.target.drawImage(surf.canvas, 0, 0, opt.target.canvas.width, opt.target.canvas.height);
     if (opt.info) Object.assign(opt.info, info);
     return surf.canvas;
