@@ -30,6 +30,7 @@ export const DEFAULT_TAGS = {
   "coords": [],
   "tabs": ["PLAYER"],
   "inserts": ["FILTER", "LIMITER", "WIDTH", "3D"],
+  "detect": ["{title}", "{bpm} BPM", "{key}", "PROD. {producer}"],
   "sub": "U2C \u00b7 ARCHIVE",
   "info": "{bpm} BPM \u2022 {key}",
   "pill": "U2C",

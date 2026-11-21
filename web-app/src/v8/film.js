@@ -104,12 +104,30 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // v15.2 macOS window chrome: three traffic lights top-left (close x / minimise - / zoom +), real colours (chrome.lightsColor) pre-inverted when the
   // frame will be inverted (white stage XOR fx.invert) so they always read red / yellow / green
   const invHex = (h) => '#' + (0xffffff ^ parseInt(h.slice(1), 16)).toString(16).padStart(6, '0');
+  // v16 detection boxes (Y2K lab-scan): label tab (dark on scan green) + double frame + corner brackets + crosshair; re-acquire (hard step) each downbeat, flash on kicks
+  const DET = [[0.035, 0.12, 0.2, 0.52], [0.765, 0.08, 0.2, 0.44], [0.69, 0.6, 0.27, 0.32], [0.06, 0.7, 0.24, 0.24]];
+  function detect(x, y, w, h, t, Sx) {
+    const G = V('scan.color', '#39ff6a'), labs = tag('player.detect') || [], bar = Math.floor(b / 4), I = glowAt(fidx(t)), fz = port ? 17 : 15, th = fz + 8;
+    c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
+    DET.forEach(([fx, fy, fw, fh], i) => { if (!labs[i]) return;
+      const jx = (hs(bar * 7 + i) - 0.5) * 0.03 * w, jy = (hs(bar * 13 + i) - 0.5) * 0.04 * h, bx = Math.round(x + fx * w + jx) + 0.5, by = Math.round(y + fy * h + jy + th) + 0.5, bw = Math.round(fw * w), bh = Math.round(fh * h - th);
+      c.strokeStyle = rgba(G, 0.9); c.lineWidth = 1.2 + 1.2 * I; c.strokeRect(bx, by, bw, bh); c.lineWidth = 1; c.strokeStyle = rgba(G, 0.45); c.strokeRect(bx + 3, by + 3, bw - 6, bh - 6);
+      const k = Math.min(14, bw * 0.18); c.strokeStyle = G; c.lineWidth = 2; c.beginPath();
+      for (const [cx2, cy2, sx, sy] of [[bx + 6, by + 6, 1, 1], [bx + bw - 6, by + 6, -1, 1], [bx + 6, by + bh - 6, 1, -1], [bx + bw - 6, by + bh - 6, -1, -1]]) { c.moveTo(cx2, cy2 + sy * k); c.lineTo(cx2, cy2); c.lineTo(cx2 + sx * k, cy2); } c.stroke();
+      const mx = bx + bw / 2, my = by + bh / 2; c.lineWidth = 1; c.strokeStyle = rgba(G, 0.7); c.beginPath(); c.moveTo(mx - 6, my); c.lineTo(mx + 6, my); c.moveTo(mx, my - 6); c.lineTo(mx, my + 6); c.stroke();
+      const lab = String(labs[i]).toUpperCase(), conf = `${78 + Math.floor(hs(bar * 31 + i) * 21)}%`; c.font = `600 ${fz}px ${UI}`; const tw2 = Math.min(bw + 60, c.measureText(lab).width * 1.12 + lab.length * 1.5 + 20);
+      c.fillStyle = rgba(G, 0.92 + 0.08 * I); c.fillRect(bx - 0.5, by - th, tw2, th); text(c, lab, bx + 7, by - th / 2, { size: fz, fam: UI, w: 600, col: '#06140a', maxW: tw2 - 10 });
+      text(c, conf, bx + bw, by - th / 2, { size: fz - 2, w: 700, col: rgba(G, 0.95), align: 'right' });
+      if (I > 0.05) { c.fillStyle = rgba(G, 0.08 * I); c.fillRect(bx, by, bw, bh); } });
+    c.restore();
+  }
   function lights(x, y, Sx, active) {
-    const col = V('chrome.lightsColor', true), neg = !S.inverse !== !ev.clipsAt('fx.invert', b).some((q) => q.v !== false && q.v !== 0), r = port ? 8 : 7, gp = port ? 24 : 21;
-    ['#ff5f57', '#febc2e', '#28c840'].forEach((h, i) => { const cx = x + i * gp, cc = col ? (neg ? invHex(h) : h) : rgba(Sx.ink, 0.35);
+    // v16: stage colours (Nigredo = black buttons with an ink hairline; colour stages = hot / sig2 / sig1); the white stage / negative invert them naturally
+    const col = V('chrome.lightsColor', true), r = port ? 8 : 7, gp = port ? 24 : 21, neg = false, P3 = Sx.grey ? ['#0a0a0a', '#0a0a0a', '#0a0a0a'] : [Sx.hot, Sx.sig2, Sx.sig1];
+    P3.forEach((h, i) => { const cx = x + i * gp, cc = col ? h : rgba(Sx.ink, 0.35);
       c.beginPath(); c.arc(cx, y, r, 0, 2 * Math.PI); c.fillStyle = cc; c.globalAlpha = active || !col ? 1 : 0.85; c.fill(); c.globalAlpha = 1;
-      c.strokeStyle = neg ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'; c.lineWidth = 0.8; c.stroke();
-      if (V('chrome.glyphs', true)) { const gcol = neg ? 'rgba(255,255,255,0.62)' : 'rgba(0,0,0,0.55)', d = r * 0.45; c.strokeStyle = gcol; c.lineWidth = 1.3; c.beginPath();
+      c.strokeStyle = Sx.grey ? rgba(Sx.ink, 0.55) : 'rgba(0,0,0,0.25)'; c.lineWidth = 0.8; c.stroke();
+      if (V('chrome.glyphs', true)) { const gcol = Sx.grey ? rgba(Sx.ink, 0.75) : 'rgba(0,0,0,0.55)', d = r * 0.45; c.strokeStyle = gcol; c.lineWidth = 1.3; c.beginPath();
         if (i === 0) { c.moveTo(cx - d, y - d); c.lineTo(cx + d, y + d); c.moveTo(cx + d, y - d); c.lineTo(cx - d, y + d); } else { c.moveTo(cx - d * 1.2, y); c.lineTo(cx + d * 1.2, y); if (i === 2) { c.moveTo(cx, y - d * 1.2); c.lineTo(cx, y + d * 1.2); } }
         c.stroke(); } });
     return 3 * gp + 4;
@@ -235,13 +253,13 @@ export function createFilm({ D, assets, aspect = '916' }) {
     }
   }
   function coverBody(cr, t, k, Sx) {
-    const r = L.winRect, [x, y, w, h] = r, rad = V('glass.radius', 22), I = glowAt(fidx(t)) * V('cover.pulse', 1), cv = INTRO.coverCanvas ? INTRO.coverCanvas(Math.round(V('player.cover', 0)), Sx) : null;
+    const fry = LOOK === 'player' ? V('hero.fry', Sx.grey ? 'negative' : 'thermal') : 'none', r = L.winRect, [x, y, w, h] = r, rad = V('glass.radius', 22), I = glowAt(fidx(t)) * V('cover.pulse', 1), cv = INTRO.coverFried ? INTRO.coverFried(Math.round(V('player.cover', 0)), Sx, fry) : null;
     L.coverRect = r; L.coverRadius = rad;
     c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip(); c.clip(L.rr(x, y, w, h, rad));
     if (cv) { const z = L.openFx ? 1 : 1 + 0.012 * I, sc = Math.max(w, h) / cv.width * z; c.drawImage(cv, x + w / 2 - cv.width * sc / 2, y + h / 2 - cv.height * sc / 2, cv.width * sc, cv.height * sc); }   // (the scale pulse waits for the dolly to land: the match cut is an exact crop)
     else { c.fillStyle = Sx.card; c.fillRect(x, y, w, h); }
     const light = L.isLight(Sx);
-    coverScrim(c, Sx, x, y, w, h, { dim: V('cover.dim', 1), light });   // v13: darker, so the logo reads (the intro push darkens into this same scrim)
+    coverScrim(c, Sx, x, y, w, h, { dim: V('cover.dim', fry === 'negative' ? 0.9 : fry !== 'none' ? 0.55 : 1), light });   // v13: darker, so the logo reads (the intro push darkens into this same scrim)
     if (I > 0.02) { c.fillStyle = rgba(light ? Sx.bg : '#ffffff', 0.05 * I); c.fillRect(x, y, w, h); }   // kick lift, a brightness step that decays (no fade in)
     if (V('stepgrid.on', false) && k >= 1) stepGrid(x, y, w, h, t, Sx, I);
     c.restore();
@@ -260,6 +278,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     BR.logo(c, Sx, [0, 0, 0, 0], t, { at: { cx, cy, w: lw }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero, glow: V('logo.glow', 1), kickI: I, pulse: I, bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
     const d = lw * V('pendant.size', 1) * 0.5; if (V('hero.elephant', false)) BR.elephantMark(c, Sx, cx - lw * (port ? 0.2 : 0.16) + V('pendant.x', 0), cy + lh / 2 + d * 0.52 + V('pendant.y', 0), d, d);
     const ink = Sx.ink; PL.crosses(c, Sx, [[x + 30, cy], [x + w - 30, cy]], 20);
+    if (V('scan.on', true)) detect(x, y, w, h, t, Sx);
     if (V('hero.caption', false)) PL.heroCaption(c, Sx, port ? x + w - 24 : x + w - 24, y + h - 22 - 25 * 3, 'right', 205);
     c.restore();
   }

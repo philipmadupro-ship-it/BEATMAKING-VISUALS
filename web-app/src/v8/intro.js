@@ -308,5 +308,22 @@ export function createIntro(L, A = {}) {
     const op = ev.value('intro.open', 0, 2); if (op > 0) out.push([ib + op, 'lab dolly-out lands']);
     return out;
   }
-  return { draw, beats, events, geom, cardTex, coverCanvas, openCam, streak, coverTarget: (look, aspect) => coverTarget(L, look, aspect) };
+  // v16 deep-fried cover (hero.fry): negative | thermal | night, contrast-crushed, posterized, grain (deterministic hash noise)
+  const FRY = { thermal: ['#0c0018', '#4b00a8', '#c400d0', '#ff2f8a', '#ff8a1e', '#fff36a'], night: ['#020600', '#173005', '#6f9e1c', '#d6f06a', '#fbffd8'] };
+  function coverFried(i, S, mode) {
+    if (!mode || mode === 'none') return coverCanvas(i, S);
+    const key = `fr${i}|${S.name}|${mode}`; if (CACHE.v !== (covers.v || 0)) { CACHE.clear(); CACHE.v = covers.v || 0; } let cv = CACHE.get(key); if (cv) return cv;
+    const src = coverCanvas(i, S); cv = mk(src.width, src.height); const g = cv.getContext('2d'); g.drawImage(src, 0, 0);
+    const d = g.getImageData(0, 0, cv.width, cv.height), px = d.data, lut = FRY[mode] ? FRY[mode].map(hexRgb) : null, R = ramp(S);
+    for (let p = 0, n = 0; p < px.length; p += 4, n++) {
+      let l = (0.299 * px[p] + 0.587 * px[p + 1] + 0.114 * px[p + 2]) / 255; if (mode === 'negative') l = 1 - l;
+      l = Math.min(1, Math.max(0, (l - 0.5) * 1.7 + 0.5)); l = Math.round(l * 6) / 6;   // crush + posterize (7 levels)
+      l = Math.min(1, Math.max(0, l + ((((n * 2654435761) >>> 0) % 1000) / 1000 - 0.5) * 0.16));   // grain
+      const pal = lut || R;
+      if (!pal) { const v = Math.round(255 * l); px[p] = px[p + 1] = px[p + 2] = v; }
+      else { const f = l * (pal.length - 1), j = Math.min(pal.length - 2, Math.floor(f)), k = f - j; for (let q = 0; q < 3; q++) px[p + q] = Math.round(pal[j][q] + (pal[j + 1][q] - pal[j][q]) * k); }
+    }
+    g.putImageData(d, 0, 0); CACHE.set(key, cv); return cv;
+  }
+  return { draw, beats, events, geom, cardTex, coverCanvas, coverFried, openCam, streak, coverTarget: (look, aspect) => coverTarget(L, look, aspect) };
 }
