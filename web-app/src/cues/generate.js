@@ -99,8 +99,8 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     // then clicks the chosen card = selection brackets), THEN the cursor clicks play at beat 0 (the music starts) and the push into the project
     // runs over the first bar (intro.length 1); the lab opens on the cover and dollies out (intro.open 3). Pre-roll = 4 beats (native --preroll).
     sheet.tracks.push(track('intro.length', 'number', 'stage', [key(0, 1, { ease: 'step' })]));
-    sheet.tracks.push(track('intro.index', 'number', 'stage', [key(-4, 2, { ease: 'step' }), key(-3, 2, { ease: 'easeInOut' }), key(-2.625, 1, { ease: 'step' }), key(-2, 1, { ease: 'easeInOut' }), key(-1.625, 0, { ease: 'step' })]));
-    sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(-4, 0.45, { ease: 'linear' }), key(-3.25, 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.index', 'number', 'stage', [key(-4.5, 2, { ease: 'step' }), key(-3, 2, { ease: 'easeInOut' }), key(-2.625, 1, { ease: 'step' }), key(-2, 1, { ease: 'easeInOut' }), key(-1.625, 0, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(-4.5, 0.45, { ease: 'step' }), key(-4, 0.45, { ease: 'linear' }), key(-3.25, 1, { ease: 'step' })]));
     sheet.tracks.push(track('intro.select', 'enum', 'stage', [key(-1.25, true, { ease: 'step' })]));
     sheet.tracks.push(track('intro.push', 'number', 'stage', [key(0, 0, { ty: 'bezier', ob: [0.42, 0], ease: 'easeInOut' }), key(4, 1, { ib: [0, 0], ease: 'step' })]));
   } else if (NB >= 8) {
