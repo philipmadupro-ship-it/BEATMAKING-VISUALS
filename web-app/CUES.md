@@ -235,3 +235,6 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - Detection boxes v16.1: stage colours (`scan.color` black in Nigredo / hot in colour stages, `scan.text`), static, no % (`scan.conf` off).
 - Player intro cut: panels open centre-out from the hero, one 32nd note per ring (motion-design skill: dashboard-load choreography).
 - Eases `emphasized` (MD3 0.05,0.7,0.1,1) and `standard` (0.2,0,0,1) for camera keys; the 9:16 pushes use them.
+- v17 player camera: never-cut travel panel to panel every 2 bars (MD3 emphasized, 1 beat, lands on the bar), one wide breath per cycle; last 2 bars push into the hero and `camera.zoom` dives into it on the final bar (loop into the intro).
+- v17 `fx.punch` uses a closed-form critically damped spring per on-grid kick (peak at 40 ms, no overshoot).
+- Player: `result.on` off (no end card).

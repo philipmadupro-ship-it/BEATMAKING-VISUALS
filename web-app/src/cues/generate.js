@@ -25,15 +25,21 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
   const S = stageOf(stage), sheet = emptySheet({ bars, look, aspect, preset, ...meta }), NB = bars, lab = (k) => labels[k] || 'groove';
   const ids = Object.keys(LAYOUT[look][aspect]), dropBars = []; for (let k = 0; k < NB; k++) if (lab(k) === 'drop' && (k === 0 || lab(k - 1) !== 'drop')) dropBars.push(k);
   sheet.base.look = look; sheet.base.stage = stage;
-  if (look === 'player') sheet.base['meter.session.span'] = 1;   // v14.2: the player waveform shows one bar = twice the detail
+  if (look === 'player') sheet.base['meter.session.span'] = 1;
+  if (look === 'player') sheet.base['result.on'] = false;   // v17: no end card: the film ends inside the hero cover and loops into the intro   // v14.2: the player waveform shows one bar = twice the detail
   // camera
   const cam = [];
   const push = (bar, id, hold, ease = 'easeInOut', dur = 1) => { cam.push(key(bar * 4, id, { transition: 'push', dur, ease })); cam.push(key((bar + hold) * 4, 'wide', { transition: 'push', dur, ease })); };
-  if (preset === 'default' && look === 'player' && aspect === '916') {
+  if (preset === 'default' && look === 'player') {
     // v15.2 TikTok rhythm: in on a panel for 1 bar, back to wide for 1 bar, every 2 bars from bar 3; snappy half-beat moves
     const rot = ['spectrum', 'session', 'stereo', 'loud', 'stage'].filter((id) => ids.includes(id)); let i = 0;
-    // v16.1 (motion-design skill): push in = MD3 Emphasized (decelerate, 1 beat ~ 470 ms = 'page transition'), back to wide = MD3 Standard; both land ON the beat
-    for (let bar = 3; bar + 1 < NB - 1; bar += 2) { cam.push(key(bar * 4, rot[i++ % rot.length], { transition: 'push', dur: 1, ease: 'emphasized' })); cam.push(key((bar + 1) * 4, 'wide', { transition: 'push', dur: 1, ease: 'standard' })); }
+    // v17 never-cut (v17 prompt): the camera TRAVELS panel to panel (no return to wide between them), one move every 2 bars, MD3 Emphasized,
+    // 1 beat long, landing ON the bar; one wide breath per cycle; the last 2 bars push into the hero and the final bar zooms into its cover
+    // (camera.zoom) so the video ends on the cover and loops into the cover-flow intro, which opens on the same cover
+    const seq = [...rot, 'wide']; let bar = 3;
+    for (; bar < NB - 3; bar += 2) cam.push(key(bar * 4, seq[i++ % seq.length], { transition: 'push', dur: 1, ease: i % seq.length === 0 ? 'standard' : 'emphasized' }));
+    if (ids.includes('stage') && NB >= 8) { cam.push(key((NB - 2) * 4, 'stage', { transition: 'push', dur: 1, ease: 'emphasized' }));
+      sheet.tracks.push(track('camera.zoom', 'number', 'camera', [key((NB - 1) * 4, 1, { ease: 'emphasized' }), key(NB * 4 - 0.5, aspect === '916' ? 3.2 : 2.2, { ease: 'step' })])); }
   } else if (preset === 'default') {
     const rot = FOCUS_PLAN[look].map(([, id, n]) => [id, n]), used = [];
     let i = 0;

@@ -66,13 +66,18 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const [x, y, w, h] = LY[id], pad = 40, z = clamp(Math.min(W / (w + 2 * pad), H / (h + 2 * pad)), 1.15, 2.2), mx = 30;
     return { x: clamp(x + w / 2, W / (2 * z) - mx, W - W / (2 * z) + mx), y: clamp(y + h / 2, H / (2 * z) - mx, H - H / (2 * z) + mx), z };
   }
+  // v17 closed-form spring punch (v17 prompt, build 2): the sum of one critically damped impulse response per kick, x(tau) = (tau / tp) e^(1 - tau / tp),
+  // peak 1 at tau = tp (40 ms), settles with no overshoot; a pure function of time (L.kickHits = the on-grid kicks, at grid time, with strength)
+  const KH = L.kickHits || [];
+  function punchSpring(tt) { const tp = 0.04; let s = 0, lo = 0, hi = KH.length; while (lo < hi) { const m = (lo + hi) >> 1; if (KH[m][0] <= tt) lo = m + 1; else hi = m; }
+    for (let j = lo - 1; j >= 0; j--) { const tau = tt - KH[j][0]; if (tau > 0.6) break; s += (tau / tp) * Math.exp(1 - tau / tp); } return Math.min(1.3, s); }
   function camera() {
     const s = ev.shot(b), A = framing(s.from), Bf = framing(s.to), u = s.u, zm = V('camera.zoom', 1);
     L.shotTo = s.to;   // meters can switch to their focus-shot version when the camera is on their window
     const cam = { x: lerp(A.x, Bf.x, u) + V('camera.x', 0), y: lerp(A.y, Bf.y, u) + V('camera.y', 0), z: lerp(A.z, Bf.z, u) * zm };
     // v13 (intro agent): the lab opens ON the cover (match cut from the intro push) and dollies out; L.openFx drives the streak copies + hides the HUD
     const op = IB ? INTRO.openCam(b, ev, IB, cam, { W, H, look: LOOK, aspect }) : null; L.openFx = op; if (op) return { x: op.x, y: op.y, z: op.z };
-    if (b >= IB) { const p = V('fx.punch', LOOK === 'player' ? 0.014 : 0); if (p > 0) cam.z *= 1 + p * glowAt(fidx(T(b))); }   // v15: the frame punches in on every kick (exponential, frame-exact)
+    if (b >= IB) { const p = V('fx.punch', LOOK === 'player' ? 0.014 : 0); if (p > 0) cam.z *= 1 + p * punchSpring(T(b)); }   // v17: closed-form spring per kick
     return cam;
   }
   // ---------------------------------------------------------------- attention: the window this beat is about
