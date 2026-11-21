@@ -227,3 +227,5 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - `fx.punch` (0..0.06, player default 0.014): camera zoom per kick.
 - `meter.session.style` (smooth|blocks, player default blocks): the cut-box waveform.
 - `meter.session.low|mid|high` (colours): the waveform's 3 band boxes (LOW 20-150 Hz kick/808, MID 150 Hz-2 kHz snare/vocals, HIGH 2-20 kHz hats). Defaults follow the stage (greys in Nigredo).
+- `chrome.lights` / `chrome.lightsColor` / `chrome.glyphs` (player default on): macOS traffic lights on every window (not the now-playing card), true colours even on the white stage and in the negative.
+- Player 9:16 camera: in on a panel 1 bar, wide 1 bar, every 2 bars from bar 3 (spectrum, waveform, imager, levels, hero), half-beat ease-out pushes.

@@ -101,7 +101,21 @@ export function createFilm({ D, assets, aspect = '916' }) {
     return [x + PAD, y + top, w - 2 * PAD, h - top - PAD];
   }
   const screenRect = (id, r) => { const [x, y, w, h] = r, top = NO_LABEL.has(contentOf(id)) ? 16 : LABEL_H - 4; return [x + 16, y + top, w - 32, h - top - 16]; };
+  // v15.2 macOS window chrome: three traffic lights top-left (close x / minimise - / zoom +), real colours (chrome.lightsColor) pre-inverted when the
+  // frame will be inverted (white stage XOR fx.invert) so they always read red / yellow / green
+  const invHex = (h) => '#' + (0xffffff ^ parseInt(h.slice(1), 16)).toString(16).padStart(6, '0');
+  function lights(x, y, Sx, active) {
+    const col = V('chrome.lightsColor', true), neg = !S.inverse !== !ev.clipsAt('fx.invert', b).some((q) => q.v !== false && q.v !== 0), r = port ? 8 : 7, gp = port ? 24 : 21;
+    ['#ff5f57', '#febc2e', '#28c840'].forEach((h, i) => { const cx = x + i * gp, cc = col ? (neg ? invHex(h) : h) : rgba(Sx.ink, 0.35);
+      c.beginPath(); c.arc(cx, y, r, 0, 2 * Math.PI); c.fillStyle = cc; c.globalAlpha = active || !col ? 1 : 0.85; c.fill(); c.globalAlpha = 1;
+      c.strokeStyle = neg ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'; c.lineWidth = 0.8; c.stroke();
+      if (V('chrome.glyphs', true)) { const gcol = neg ? 'rgba(255,255,255,0.62)' : 'rgba(0,0,0,0.55)', d = r * 0.45; c.strokeStyle = gcol; c.lineWidth = 1.3; c.beginPath();
+        if (i === 0) { c.moveTo(cx - d, y - d); c.lineTo(cx + d, y + d); c.moveTo(cx + d, y - d); c.lineTo(cx - d, y + d); } else { c.moveTo(cx - d * 1.2, y); c.lineTo(cx + d * 1.2, y); if (i === 2) { c.moveTo(cx, y - d * 1.2); c.lineTo(cx, y + d * 1.2); } }
+        c.stroke(); } });
+    return 3 * gp + 4;
+  }
   function label(id, x, y, w, Sx, active) {
+    if (V('chrome.lights', LOOK === 'player') && contentOf(id) !== 'now') { const lw = lights(x + PAD + 8, y + (port ? 26 : 24), Sx, active); if (NO_LABEL.has(contentOf(id))) return; x += lw; }
     if (NO_LABEL.has(contentOf(id))) return;
     if (LOOK === 'player') { PL.icon(c, contentOf(id) === 'inserts' ? 'bars' : contentOf(id) === 'meta' ? 'meta' : 'bars', x + PAD + 10, y + (port ? 26 : 24), 22, rgba(Sx.ink, active ? 0.95 : 0.7), true); x += 30; }
     text(c, String(WIN(id)).toUpperCase(), x + PAD + 2, y + (port ? 26 : 24), { size: 18, fam: UI, w: 500, ls: 2.4, col: rgba(Sx.ink, active ? 0.95 : 0.52), maxW: w - 2 * PAD });
