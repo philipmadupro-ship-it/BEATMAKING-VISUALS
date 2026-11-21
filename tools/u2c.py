@@ -20,8 +20,8 @@ DELIVER = os.environ.get('U2C_DELIVER', '/home/user/beatmaking-visuals/deliver-v
 SAFE_916 = [(0, 0, 1080, 200), (0, 1548, 1080, 1920), (960, 1000, 1080, 1548)]   # TikTok/Reels header, caption + sound, button rail
 
 def sh(cmd, cwd=None, quiet=True, timeout=None):
-    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
-    if r.returncode and not quiet: print(r.stdout[-800:], r.stderr[-800:])
+    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=cmd[0] != 'ffmpeg', timeout=timeout)
+    if r.returncode and not quiet: print(str(r.stdout)[-800:], str(r.stderr)[-800:])
     return r
 
 def sync(_=None):
@@ -85,6 +85,12 @@ def test(_=None):
         for ln in (r.stdout + r.stderr).splitlines():
             if ln.startswith('FAIL') or 'passed' in ln: print(t, ln)
 
+def bright(a):
+    import numpy as np
+    raw = sh(['ffmpeg', '-v', 'error', '-i', a.video, '-vf', 'scale=36:64,format=gray', '-f', 'rawvideo', '-']).stdout
+    v = np.frombuffer(raw.encode('latin1') if isinstance(raw, str) else raw, np.uint8).reshape(-1, 64, 36).mean(axis=(1, 2)); hi = np.where(v > v.mean() * 2)[0]
+    print(f'{os.path.basename(a.video)}: {len(v)} frames, mean {v.mean():.0f}, negative/bright frames', f'{hi[0]/30:.2f}-{hi[-1]/30:.2f}s ({len(hi)})' if len(hi) else 'none')
+
 def stage(a):
     if not PUB: sys.exit('set U2C_PUB')
     for f in a.files:
@@ -98,5 +104,6 @@ for name, fn in (('stills', stills), ('render', render)):
     if name == 'stills': q.add_argument('-t', default='12'); q.add_argument('--safe', type=int, default=1)
 q = sp.add_parser('strip'); q.set_defaults(fn=strip); q.add_argument('video'); q.add_argument('-t', default='3.3:4.3:0.15')
 q = sp.add_parser('crop'); q.set_defaults(fn=crop); q.add_argument('png'); q.add_argument('box')
+q = sp.add_parser('bright'); q.set_defaults(fn=bright); q.add_argument('video')
 q = sp.add_parser('stage'); q.set_defaults(fn=stage); q.add_argument('files', nargs='+')
 a = p.parse_args(); a.fn(a)
