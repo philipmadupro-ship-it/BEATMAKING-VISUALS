@@ -316,6 +316,16 @@ export function createIntro(L, A = {}) {
   // v16 deep-fried cover (hero.fry): negative | thermal | night, contrast-crushed, posterized, grain (deterministic hash noise)
   const FRY = { thermal: ['#0c0018', '#4b00a8', '#c400d0', '#ff2f8a', '#ff8a1e', '#fff36a'], night: ['#020600', '#173005', '#6f9e1c', '#d6f06a', '#fbffd8'] };
   function coverFried(i, S, mode) {
+    // v21 '+ht' suffix (user ref: Selphie magazine): the fried cover re-printed as a 45-degree halftone (dot radius = luminance), cached like the fry
+    if (mode && mode.endsWith('+ht')) { const base = mode.slice(0, -3), key2 = `ht${i}|${S.name}|${base}`; if (CACHE.v !== (covers.v || 0)) { CACHE.clear(); CACHE.v = covers.v || 0; } let hv = CACHE.get(key2); if (hv) return hv;
+      const src = coverFried(i, S, base), W2 = src.width, H2 = src.height, sd = src.getContext('2d').getImageData(0, 0, W2, H2).data; hv = mk(W2, H2); const g2 = hv.getContext('2d');
+      const lumAt = (xx, yy) => { const q = (Math.min(H2 - 1, Math.max(0, yy | 0)) * W2 + Math.min(W2 - 1, Math.max(0, xx | 0))) * 4; return [sd[q], sd[q + 1], sd[q + 2]]; };
+      g2.globalAlpha = 1; g2.drawImage(src, 0, 0); g2.fillStyle = 'rgba(0,0,0,0.62)'; g2.fillRect(0, 0, W2, H2);   // the paper: the fry, darkened
+      const cell = Math.max(5, Math.round(W2 / 120)), ca = Math.cos(Math.PI / 4), sa = Math.sin(Math.PI / 4), ext = Math.hypot(W2, H2);
+      for (let u = -ext; u < ext; u += cell) for (let v = -ext; v < ext; v += cell) { const xx = W2 / 2 + u * ca - v * sa, yy = H2 / 2 + u * sa + v * ca; if (xx < -cell || yy < -cell || xx > W2 + cell || yy > H2 + cell) continue;
+        const [r, gg, bb] = lumAt(xx, yy), l = (0.299 * r + 0.587 * gg + 0.114 * bb) / 255, rad = cell * 0.62 * Math.sqrt(l); if (rad < 0.3) continue;
+        g2.fillStyle = `rgb(${r},${gg},${bb})`; g2.beginPath(); g2.arc(xx, yy, rad, 0, 6.2832); g2.fill(); }
+      CACHE.set(key2, hv); return hv; }
     if (!mode || mode === 'none') return coverCanvas(i, S);
     const key = `fr${i}|${S.name}|${mode}`; if (CACHE.v !== (covers.v || 0)) { CACHE.clear(); CACHE.v = covers.v || 0; } let cv = CACHE.get(key); if (cv) return cv;
     const src = coverCanvas(i, S); cv = mk(src.width, src.height); const g = cv.getContext('2d'); g.drawImage(src, 0, 0);

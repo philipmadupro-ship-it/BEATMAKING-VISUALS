@@ -153,18 +153,43 @@ export function createPlayer(L, { tag, V }) {
 
   // ---------------------------------------------------------------- metadata
   function meta(c, S, cr, t, o) {
-    // v14.2: the five rows only. Keys in Synkopy (UI), values in Akira (DISPLAY); the rows spread over the card height.
-    const [x, y, w, h] = cr, ink = S.ink, dim = rgba(ink, 0.5), fi = D.fileInfo || {}, sr = fi.sr || (D.wave3 && D.wave3.sr) || 48000;
-    const fmt = fi.bits ? `WAV ${fi.bits}-BIT · ${+(sr / 1000).toFixed(1)} KHZ` : `WAV · ${+(sr / 1000).toFixed(1)} KHZ`;
-    const size = fi.bytes ? `${(fi.bytes / 1048576).toFixed(1)} MB` : '—';
+    // v21 DOSSIER (user ref "SUBJECT A-34"): a file card for the beat. A SUBJECT header, ruled rows (keys Synkopy, values Akira), STATUS, and a live
+    // signal box (the low-band envelope as a wave over a grid + a grid of real band levels in dB), drawn twice: a soft phosphor glow pass under a crisp pass.
+    // Tall cell = one column; wide cell (9:16 strip) = signal box left, rows in two columns right. Tags: player.meta.labels / tags / status.
+    const [x, y, w, h] = cr, ink = S.ink, fi = D.fileInfo || {}, sr = fi.sr || (D.wave3 && D.wave3.sr) || 48000, sub = (q) => (L.sub ? L.sub(q) : q);
+    const fmt = fi.bits ? `WAV ${fi.bits}-BIT · ${+(sr / 1000).toFixed(1)} KHZ` : `WAV · ${+(sr / 1000).toFixed(1)} KHZ`, size = fi.bytes ? `${(fi.bytes / 1048576).toFixed(1)} MB` : '—';
     const lab = tag('player.meta.labels') || ['FORMAT', 'DURATION', 'SIZE', 'DATE', 'TAGS'];
-    const vals = [fmt, mmss(D.song.duration || D.duration), size, String(tag('date')).toUpperCase(), String(tag('player.meta.tags')).toUpperCase()];
-    const n = lab.length, rowH = Math.min(64, Math.max(30, h / n)), y0 = y + Math.max(0, (h - rowH * n) / 2) + rowH / 2, fs = rowH > 48 ? 22 : 20;
-    lab.forEach((l, i) => { const yy = y0 + i * rowH;
-      text(c, String(l).toUpperCase(), x, yy, { size: fs, fam: UI, w: 500, col: dim, ls: 1.2, maxW: w * 0.4 });
-      text(c, vals[i] == null ? '' : vals[i], x + w, yy, { size: fs, fam: DISPLAY, w: 800, col: ink, align: 'right', maxW: w * 0.6 });
-      if (i < n - 1) { c.fillStyle = rgba(ink, 0.1); c.fillRect(x, yy + rowH / 2, w, 1); } });
+    const valOf = { FORMAT: fmt, DURATION: mmss(D.song.duration || D.duration), SIZE: size, DATE: String(tag('date')).toUpperCase(), TAGS: String(tag('player.meta.tags')).toUpperCase(), BPM: sub('{bpm}'), KEY: sub('{key}'), STATUS: String(tag('player.meta.status') || 'UNSTABLE').toUpperCase(), NAME: String(tag('title') || D.title || '').toUpperCase() };
+    const wide = w > 2.4 * h, rows = (h < 420 ? ['NAME', 'BPM', 'KEY', 'DURATION', 'FORMAT', 'STATUS'].filter((q) => lab.map((l) => String(l).toUpperCase()).includes(q) || q === 'NAME') : lab.map((l) => String(l).toUpperCase())).map((l) => [l, valOf[l] ?? '']);   // the 9:16 strip keeps the six that matter
+    const f = Math.max(0, fidx(Math.max(0, t))), fz = wide ? 17 : 18;
+    const draw = (glow) => {
+      c.save(); if (glow) { c.shadowColor = rgba(ink, 0.9); c.shadowBlur = 10; c.globalAlpha = 0.55; }
+      // header
+      const hy = y + 14; if (!wide) text(c, String(tag('player.meta.subject') || 'SUBJECT').toUpperCase() + ' · ' + valOf.NAME, x, hy, { size: wide ? 18 : 18, fam: DISPLAY, w: 800, col: ink, maxW: w * 0.68 });
+      if (!wide && w > 560) text(c, 'FILE ' + String(1 + Math.floor(hash(D.title.length * 7.1) * 89)).padStart(2, '0'), x + w, hy, { size: 14, fam: UI, w: 600, col: rgba(ink, 0.6), align: 'right', ls: 1.4 });
+      if (!wide) { c.fillStyle = rgba(ink, 0.55); c.fillRect(x, hy + 14, w, 1.2); }
+      const top = wide ? y + 6 : hy + 24, sigW = wide ? Math.round(w * 0.34) : w, sigH = wide ? y + h - top - 4 : Math.max(56, Math.round(h * 0.3));
+      const sx = x, sy = wide ? top : y + h - sigH - 2, rx = wide ? x + sigW + 16 : x, rw = wide ? w - sigW - 16 : w, ry = top, rh = wide ? y + h - top - 4 : sy - top - 8;
+      // rows
+      const cols = wide ? 3 : 1, per = Math.ceil(rows.length / cols), rH = rh / per, cw = (rw - (cols - 1) * 16) / cols;
+      rows.forEach(([k, v], i) => { const col2 = Math.floor(i / per), r = i % per, xx = rx + col2 * (cw + 16), yy = ry + r * rH + rH / 2;
+        text(c, k, xx + 2, yy, { size: Math.round(fz * 0.72), fam: UI, w: 500, col: rgba(ink, 0.55), ls: 1.6, maxW: cw * 0.36 });   // big / small contrast: small dim keys, big values
+        text(c, v, xx + cw - 2, yy, { size: Math.round(fz * 1.2), fam: DISPLAY, w: 800, col: ink, align: 'right', maxW: cw * 0.62 });
+        c.fillStyle = rgba(ink, 0.32); c.fillRect(xx, Math.round(ry + (r + 1) * rH) - 0.5, cw, 1); });
+      // signal box: grid + the low band as a smooth wave + a number grid of real band levels
+      c.strokeStyle = rgba(ink, 0.5); c.lineWidth = 1; c.strokeRect(Math.round(sx) + 0.5, Math.round(sy) + 0.5, Math.round(sigW) - 1, Math.round(sigH) - 1);
+      const gh = sigH * (wide ? 0.96 : 0.6); c.fillStyle = rgba(ink, 0.14); for (let q = 1; q < 8; q++) c.fillRect(Math.round(sx + sigW * q / 8), sy + 2, 1, gh); for (let q = 1; q < 4; q++) c.fillRect(sx + 2, Math.round(sy + gh * q / 4), sigW - 4, 1);
+      const FB = L.F && L.F.bands; c.beginPath(); const NW = Math.max(24, Math.round(sigW / 3));
+      for (let k = 0; k < NW; k++) { const ff = Math.max(0, f - (NW - 1 - k) * 2), v = FB ? FB[Math.min(FB.length - 1, ff)][0] : 0.5, yy = sy + gh * 0.5 - (clamp(v) - 0.5) * gh * 0.8, xx = sx + 4 + (sigW - 8) * k / (NW - 1); if (k) c.lineTo(xx, yy); else c.moveTo(xx, yy); }
+      c.strokeStyle = ink; c.lineWidth = 1.6; c.stroke();
+      if (FB && !wide) { const b6 = FB[Math.min(FB.length - 1, f)], ny = sy + gh + 6, nh = sigH - gh - 8, nr = 1, nc = 4;
+        for (let q = 0; q < nr * nc; q++) { const bi = [0, 2, 3, 5][q % nc], back = Math.floor(q / nc) * 8, v = FB[Math.max(0, f - back)][bi], db = (20 * Math.log10(Math.max(1e-4, v))).toFixed(1);
+          text(c, db, sx + 6 + (sigW - 12) * (q % nc + 0.5) / nc, ny + nh * (Math.floor(q / nc) + 0.5) / nr, { size: 11, fam: DISPLAY, w: 700, col: rgba(ink, 0.75), align: 'center', maxW: (sigW - 12) / nc - 2 }); } void b6; }
+      c.restore();
+    };
+    draw(true); draw(false);
   }
+
 
   // ---------------------------------------------------------------- hero extras: caption block + registration crosses
   function heroCaption(c, S, x, y, align = 'left', maxW = 200) {

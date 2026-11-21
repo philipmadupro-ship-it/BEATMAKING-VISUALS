@@ -39,7 +39,7 @@ const PLAYER = {
   // from y ~1000. Everything that must read sits in y 208..1544; the rows under the rail stop at x 960. The spectrogram + inserts live
   // under the caption (texture there, full reading on the camera pushes). Tabs-only top bar; the now-playing strip carries title + cover.
   '916': { session: [48, 276, 984, 280], stage: [48, 568, 984, 260], spectrum: [48, 840, 912, 300],
-    loud: [48, 1152, 368, 280], stereo: [428, 1152, 532, 280], now: [48, 1444, 984, 104], spectro: [48, 1560, 984, 150], inserts: [48, 1722, 984, 170] },   // v19.3: the player (now) at the bottom (user)
+    loud: [48, 1152, 368, 280], stereo: [428, 1152, 532, 280], now: [48, 1444, 984, 104], meta: [48, 1560, 984, 150], inserts: [48, 1722, 984, 170] },   // v21: the metadata dossier replaces the spectrogram strip under the caption (visited + lifted like the rack)   // v19.3: the player (now) at the bottom (user)
 };
 export const SIDEBAR = { '169': [24, 20, 220, 1036], '916': null };
 export const TOPBAR = { '169': [268, 20, 1628, 76], '916': [48, 208, 984, 52] };

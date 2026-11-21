@@ -333,7 +333,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     }
   }
   function coverBody(cr, t, k, Sx) {
-    const fry = LOOK === 'player' ? V('hero.fry', Sx.grey ? 'negative' : Sx.name === 'RUBEDO' ? 'thermal' : 'stage') : 'none', r = L.winRect, [x, y, w, h] = r, rad = V('glass.radius', 22), I = glowAt(fidx(t)) * V('cover.pulse', 1), cv = INTRO.coverFried ? INTRO.coverFried(Math.round(V('player.cover', 0)), Sx, fry) : null;
+    const fry = LOOK === 'player' ? V('hero.fry', Sx.grey ? 'negative' : Sx.name === 'RUBEDO' ? 'thermal' : 'stage') : 'none', r = L.winRect, [x, y, w, h] = r, rad = V('glass.radius', 22), I = glowAt(fidx(t)) * V('cover.pulse', 1), cv = INTRO.coverFried ? INTRO.coverFried(Math.round(V('player.cover', 0)), Sx, fry + (V('hero.halftone', true) ? '+ht' : '')) : null;
     L.coverRect = r; L.coverRadius = rad;
     c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip(); c.clip(L.rr(x, y, w, h, rad));
     if (cv) { const z = L.openFx ? 1 : 1 + 0.012 * I, sc = Math.max(w, h) / cv.width * z; c.drawImage(cv, x + w / 2 - cv.width * sc / 2, y + h / 2 - cv.height * sc / 2, cv.width * sc, cv.height * sc); }   // (the scale pulse waits for the dolly to land: the match cut is an exact crop)
@@ -576,6 +576,27 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (vg > 0) { const v = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.hypot(W, H) * 0.62);
       v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, `rgba(0,0,0,${vg * 0.7})`); c.fillStyle = v; c.fillRect(0, 0, W, H); }
   }
+  // v21 EDITORIAL GROUND (user refs: lyric sheet / ANGEL(s) / CORTEX): organised chaos behind the glass. Static (cached per stage + aspect + title):
+  // huge soft words (big/small contrast), hairline registration lines with crosshairs, FIG labels and tiny annotation blocks. The glass blurs it further.
+  const EDC = new Map();
+  function editorial() {
+    const words = (tag('ground.words') || []).map((q) => String(q).toUpperCase()).filter(Boolean), key = S.name + '|' + aspect + '|' + words.join('/') + '|' + D.title;
+    let cv = EDC.get(key); if (cv) return cv; cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'), ink = S.ink;
+    // big words: blurred, very faint, stacked like the lyric sheet
+    g.save(); try { g.filter = 'blur(5px)'; } catch (_) {} g.fillStyle = rgba(ink, 0.16); g.textBaseline = 'alphabetic';
+    const bs = port ? 150 : 132; words.forEach((wd, i) => { g.font = `800 ${bs}px ${DISPLAY}`; const tw = g.measureText(wd).width, sx = Math.min(1, (W - 60) / tw); g.save(); g.translate(30, (port ? 420 : 300) + i * bs * (port ? 2.6 : 2.2)); g.scale(sx, 1); g.fillText(wd, 0, 0); g.restore(); });
+    g.restore();
+    // registration hairlines + crosshairs (a seeded but static grid)
+    const R = (n) => hash(n * 12.9898 + D.title.length * 7.7), xs = [0.18, 0.47, 0.83].map((q, i) => Math.round(W * (q + (R(i) - 0.5) * 0.06)) + 0.5), ys = [0.24, 0.51, 0.77].map((q, i) => Math.round(H * (q + (R(i + 9) - 0.5) * 0.06)) + 0.5);
+    g.strokeStyle = rgba(ink, 0.22); g.lineWidth = 1; g.beginPath(); for (const xx of xs) { g.moveTo(xx, 0); g.lineTo(xx, H); } for (const yy of ys) { g.moveTo(0, yy); g.lineTo(W, yy); } g.stroke();
+    g.strokeStyle = rgba(ink, 0.5); g.beginPath(); for (const xx of xs) for (const yy of ys) { g.moveTo(xx - 9, yy); g.lineTo(xx + 9, yy); g.moveTo(xx, yy - 9); g.lineTo(xx, yy + 9); } g.stroke();
+    // small type: FIG labels at intersections + annotation blocks (tags ground.notes)
+    const notes = (tag('ground.notes') || []).map((q) => String(q).toUpperCase());
+    let k = 0; for (const xx of xs) for (const yy of ys) { if (R(k + 30) < 0.45) { k++; continue; } g.font = `600 13px ${UI}`; g.fillStyle = rgba(ink, 0.55); g.fillText(`FIG ${String(k + 1).padStart(3, '0')}`, xx + 6, yy - 6);
+      const nt = notes[k % Math.max(1, notes.length)]; if (nt) { g.font = `500 11px ${UI}`; g.fillStyle = rgba(ink, 0.38); nt.split('|').forEach((ln, j) => g.fillText(ln.trim(), xx + 6, yy + 16 + j * 14)); } k++; }
+    g.font = `800 28px ${DISPLAY}`; g.fillStyle = rgba(ink, 0.3); g.fillText('[01]', xs[1] + 14, ys[2] + 40); g.textAlign = 'right'; g.fillText('07/??', W - 40, ys[0] - 14);
+    EDC.set(key, cv); return cv;
+  }
   function ground() {
     c.fillStyle = S.paper; c.fillRect(-W, -H, 3 * W, 3 * H);
     // v11: two soft light pools in the ground (the ink colour, so Nigredo stays grey) give the glass something to blur
@@ -586,6 +607,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (p === 'graph') lab.graphPaper(c, 0, 0, W, H, Object.assign({}, S, { gridA: gA }), 20, 100, 1);
     else if (p === 'dots') { c.fillStyle = rgba(S.ink, 0.13 * gA / (S.gridA || 0.07)); for (let y = 30; y < H; y += 40) for (let x = 20; x < W; x += 40) c.fillRect(x, y, 2, 2); }
     else if (p === 'scan') { c.fillStyle = rgba(S.ink, 0.05 * gA / (S.gridA || 0.07)); for (let y = 0; y < H; y += 6) c.fillRect(0, y, W, 1); }
+    if (LOOK === 'player' && V('ground.editorial', true)) c.drawImage(editorial(), 0, 0);
   }
   // opt-in glitch: on each beat inside a glitch clip, 3-4 thin horizontal slices shifted sideways for <= 80 ms
   function glitch(t, scale) {

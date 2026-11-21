@@ -22,6 +22,7 @@ export const DEFAULT_TAGS = {
   "inserts": "inserts",
   "meta": "metadata"
  },
+ "ground": { "words": ["{titleWord}", "LAB TEST", "NO SIMULATION"], "notes": ["SUBJECT {title}|{bpm} BPM \u00b7 {key}", "NO SIMULATION|IT'S GONNA BE TRUE", "SIGNAL DETECTED|SOURCE: U2C LAB", "PROD. {producer}|ALL RIGHTS RESERVED", "ENTRY ONE|FIELD REPORT", "WARNING|UNSTABLE MATERIAL"] },
  "social": {
   "caption": "{title} \u00b7 {bpm} BPM \u00b7 {key}. this beat failed the lab test. comment LAB for the file \ud83e\uddea",
   "hashtags": "#typebeat #producer #beatmaker #flstudio #y2k #prod{producer}",
@@ -47,7 +48,7 @@ export const DEFAULT_TAGS = {
   "pill": "U2C",
   "now": { "title": "{title}", "sub": "U2C \u00b7 {bpm} BPM \u00b7 {key}" },
   "caption": ["{title}", "PROD. {producer}", "U2C\u00ae"],
-  "meta": { "labels": ["FORMAT", "DURATION", "SIZE", "DATE", "TAGS"], "tags": "EXPERIMENTAL, TRAP" }
+  "meta": { "labels": ["NAME", "BPM", "KEY", "FORMAT", "DURATION", "SIZE", "DATE", "STATUS"], "tags": "EXPERIMENTAL, TRAP", "status": "UNSTABLE", "subject": "SUBJECT" }
  },
  "result": {
   "title": "{Title}",

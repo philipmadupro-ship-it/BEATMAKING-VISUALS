@@ -278,3 +278,7 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - **Hero:** `hero.bands` puts three Edison-style filled waveforms (low / mid / high band envelopes, current bar, no labels) in the right column. The right detection boxes are dropped while it is on.
 - **Imager:** `meter.stereo.orbit` turns the disc into a full-circle vectorscope (orbit), smaller, with both halves.
 - **Rack:** SCOPE (raw L/R oscilloscope, half a beat, auto-gain) replaces FILTER. WIDTH stays.
+- **v21.1 references:**
+  - SUBJECT dossier metadata with a phosphor glow: ruled rows, small keys and big values, a live signal box. The 9:16 strip shows 6 fields in 3 columns, and the dossier replaces the 9:16 spectrogram strip; it is visited and lifted like the rack.
+  - `hero.halftone` prints the hero cover as a 45° halftone.
+  - `ground.editorial` adds big soft words plus registration lines, crosshairs and FIG notes behind the glass (tags `ground.words` / `ground.notes`).
