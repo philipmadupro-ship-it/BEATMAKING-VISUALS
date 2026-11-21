@@ -81,7 +81,7 @@ def render(a):
         jobs = []
         for asp in a.a.split(','):
             f = os.path.join(od, f'{a.l}-{st}-{tag(asp)}.mp4')
-            jobs.append((f, subprocess.Popen(['node', 'render.mjs', '--look', a.l, '--stage', st, '--aspect', asp, '--len', str(a.len), '--title', a.title, '--intro', 'on', '--mblur', str(a.mblur), '--out', f], cwd=NAT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)))
+            jobs.append((f, subprocess.Popen(['node', 'render.mjs', '--look', a.l, '--stage', st, '--aspect', asp, '--len', str(a.len), '--title', a.title, '--intro', 'on', '--mblur', str(a.mblur)] + (['--hook', str(a.hook)] if a.hook is not None else []) + ['--out', f], cwd=NAT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)))
         for f, p in jobs:
             p.wait(); ok = p.returncode == 0 and os.path.exists(f)
             if ok: shutil.copy(f, DELIVER)
@@ -130,7 +130,7 @@ p = argparse.ArgumentParser(); sp = p.add_subparsers(dest='cmd', required=True)
 sp.add_parser('sync').set_defaults(fn=sync); sp.add_parser('test').set_defaults(fn=test)
 for name, fn in (('stills', stills), ('render', render)):
     q = sp.add_parser(name); q.set_defaults(fn=fn); q.add_argument('-l', default='player'); q.add_argument('-s', default='nigredo'); q.add_argument('-a', default='9:16,16:9')
-    q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3'); q.add_argument('--mblur', type=int, default=3)
+    q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3'); q.add_argument('--mblur', type=int, default=3); q.add_argument('--hook', type=int, default=None)
     if name == 'stills': q.add_argument('-t', default='12'); q.add_argument('--safe', type=int, default=1)
 q = sp.add_parser('beats'); q.set_defaults(fn=beats); q.add_argument('-l', default='player'); q.add_argument('-s', default='nigredo'); q.add_argument('-a', default='9:16')
 q.add_argument('--bars', default='0:4'); q.add_argument('--bpm', type=float, default=128); q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3'); q.add_argument('--safe', type=int, default=0)

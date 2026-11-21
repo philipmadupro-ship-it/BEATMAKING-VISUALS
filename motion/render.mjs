@@ -13,6 +13,7 @@
 //   --start-bar <n>     force the section (song bar number); default = one bar before the first drop that fits
 //   --title <text>      on-screen title (default from the filename)
 //   --out <mp4>         output path (default out/v8/<look>-<stage>-<916|169>-<len>s.mp4)
+//   --clicks on|off [--click-db -16]  v19: synthesized UI mouse clicks under the beat at every cursor click (player)
 //   --mblur N [--shutter 0.5]  v17: N sub-frames per frame averaged over shutter x 1 frame (default 3, 180 deg; 1 = off)
 //   --stills <t,t,...>  render PNG frames at these seconds instead of a video (fast review)
 //   --filmstrip         also write a filmstrip PNG next to the video
@@ -84,7 +85,7 @@ if (tags.date === '{today}') tags.date = today;
 if (args.title) tags.title = String(args.title);
 const tagFile = `data/tags-${look}-${stage}-${aspect}-${id}.js`;
 fs.writeFileSync(path.join(FILM, tagFile), 'window.U2C_TAGS=' + JSON.stringify(tags) + ';\n');
-let comp;
+let comp, CLICKS = [];
 if (ENGINE === 'v9') {
   const sync = spawnSync('node', [path.join(ROOT, 'tools', 'sync_web.mjs'), '--check'], { encoding: 'utf8' });
   if (sync.status !== 0) console.warn('[v9] ' + sync.stdout.trim().split('\n').pop());
@@ -94,6 +95,7 @@ if (ENGINE === 'v9') {
   let sheet = cueSheet || generateSheet({ bars: D.bars, labels: clipBarLabels(D), look, stage, aspect, preset: String(args.preset || 'default'), meta: { title: D.title } });
   // explicit --look / --stage flags win over the sheet's tracks
   for (const [p, v] of [['look', look], ['stage', stage]]) { sheet.base[p] = v; for (const tr of sheet.tracks) if (tr.path === p) tr.keys = [{ ...(tr.keys[0] || {}), b: 0, v }]; }
+  if (args.hook !== undefined) sheet.base['social.hookIdx'] = +args.hook;   // v19.1 A/B hook variant (tags social.hooks)
   // v11 --intro on|off (default on): the 2-bar player + cover-flow intro at the clip start; off = start in the lab (as v10)
   const introFlag = args.intro === undefined ? null : !/^(off|0|false|no)$/i.test(String(args.intro));
   if (introFlag === false) { sheet.base['intro.on'] = false; sheet.tracks = sheet.tracks.filter((tr) => !tr.path.startsWith('intro.')); }
@@ -101,6 +103,13 @@ if (ENGINE === 'v9') {
     const gen = generateSheet({ bars: D.bars, labels: clipBarLabels(D), look, stage, aspect, preset: 'default', meta: { title: D.title } });   // sheets from before v11 get the default intro tracks
     sheet.tracks.push(...gen.tracks.filter((tr) => tr.path.startsWith('intro.')));
   }
+  // v19 click times (composition seconds) = the mouse layer's clicks (same rules as film.js mouseWays): play, card, camera travels, CTA closes, hero
+  if (look === 'player' && !args.test) { const BT = D.beat, IBb = sheet.base['intro.on'] === false ? 0 : 8, T2 = (bb) => bb * BT, w = [];
+    if (PRE > 0) w.push(-0.06); if (IBb) w.push(T2(Math.max(1, IBb - 2)) - 0.02);
+    for (const tr of sheet.tracks) if (tr.path === 'camera.shot') for (const k of tr.keys) if (k.v !== 'wide') w.push(T2(k.b - (k.dur ?? 1)) - 0.02);
+    for (const kk of ['cta1', 'cta2']) { const at = sheet.base[`social.${kk}.at`], ln = sheet.base[`social.${kk}.len`]; if (at != null) w.push(T2(at + (ln ?? 8)) - 0.02); }
+    if (IBb && D.duration > T2(IBb + 16)) w.push(D.duration - 2 * 4 * BT - T2(3) - 0.02);
+    CLICKS = w.filter((x) => x + PRE >= 0 && x < D.duration).map((x) => +(x + PRE).toFixed(4)); }
   const cuesTags = {}; if (args.title) cuesTags.title = String(args.title);
   cuesTags.date = args.date ? String(args.date) : (tags.date === '{today}' || !tags.date ? today : tags.date);
   if (args.tags) Object.assign(cuesTags, JSON.parse(fs.readFileSync(path.resolve(String(args.tags)), 'utf8')));
@@ -153,7 +162,10 @@ const env = { ...process.env, HYPERFRAMES_NO_TELEMETRY: '1', DO_NOT_TRACK: '1', 
 const q = args.quality ? ['--quality', String(args.quality)] : ['--video-bitrate', '12M', '--max-bitrate', '14M'];
 const t0 = Date.now();
 run('npx', ['hyperframes', 'render', '.', '-c', comp, '-o', tmp, ...q, '--fps', '30', '--quiet'], { cwd: FILM, env, quiet: true });
-run('ffmpeg', ['-v', 'error', '-y', '-i', tmp, '-i', path.join(FILM, 'data', id + '.wav'), '-map', '0:v:0', ...(PRE > 0 ? ['-af', `adelay=${Math.round(PRE * 1000)}:all=1`] : []), '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-movflags', '+faststart', '-shortest', out], { quiet: true });
+const useClicks = CLICKS.length && !/^(off|0|false|no)$/i.test(String(args.clicks ?? 'on'));
+if (useClicks) run('python3', [path.join(ROOT, 'tools', 'clicks.py'), '--out', path.join(FILM, 'renders', 'clicks.wav'), '--dur', String(D.duration + PRE), '--times', CLICKS.join(','), '--gain-db', String(args['click-db'] ?? -16)], { quiet: true });
+const audioIn = path.join(FILM, 'data', id + '.wav'), dly = PRE > 0 ? `adelay=${Math.round(PRE * 1000)}:all=1,` : '';
+run('ffmpeg', ['-v', 'error', '-y', '-i', tmp, '-i', audioIn, ...(useClicks ? ['-i', path.join(FILM, 'renders', 'clicks.wav'), '-filter_complex', `[1:a]${dly}aresample=48000[b];[2:a]aresample=48000[k];[b][k]amix=inputs=2:normalize=0:duration=first[a]`, '-map', '0:v:0', '-map', '[a]'] : ['-map', '0:v:0', ...(PRE > 0 ? ['-af', `adelay=${Math.round(PRE * 1000)}:all=1`] : []), '-map', '1:a:0']), '-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-movflags', '+faststart', '-shortest', out], { quiet: true });
 const lo = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', out, '-af', 'ebur128=peak=true', '-f', 'null', '-'], { encoding: 'utf8' }).stderr;
 const s = lo.slice(lo.lastIndexOf('Summary:'));
 console.log(`${out}  ${((Date.now() - t0) / 1000).toFixed(0)} s  I ${s.match(/I:\s+(-?[\d.]+)/)[1]} LUFS  TP ${s.match(/Peak:\s+(-?[\d.]+)/)[1]} dBTP  section: song bars ${D.song.startBar}-${D.song.startBar + D.bars - 1}`);

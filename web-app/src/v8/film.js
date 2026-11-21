@@ -459,7 +459,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function social(t, intro) {
     if (!V('social.on', LOOK === 'player')) return;
     const wD = port ? 820 : 760, cx = W / 2;
-    if (intro) { const p = clamp(t / T(IB)); dialog(cx, port ? 330 : 150, wD, tag('social.title'), tag('social.hook'), null, -1, t, p); return; }
+    if (intro) { const p = clamp(t / T(IB)); const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hookTxt = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); dialog(cx, port ? 330 : 150, wD, tag('social.title'), hookTxt, null, -1, t, p); return; }   // v19.1: A/B hook variants
     for (const [k, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) {
       const at = V(`social.${k}.at`, def), len = V(`social.${k}.len`, 8); if (b < at || b >= at + len) continue;
       dialog(cx, port ? H * 0.5 : H * 0.5, wD, tag(`social.${k}.title`), tag(`social.${k}.body`), tag(`social.${k}.sub`), T(at), t, null);
