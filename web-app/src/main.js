@@ -128,7 +128,9 @@ async function boot() {
     console.info('[u2c] analysis ' + ((performance.now() - t0) / 1000).toFixed(2) + ' s');
   }
   async function loadFile(file) {
-    try { const buf = await decodeFile(file, clock.ctx); await load(buf, metaFromFilename(file.name)); }
+    try { const buf = await decodeFile(file, clock.ctx); const fm = metaFromFilename(file.name);
+      let bits = null; try { const h = new DataView(await file.slice(0, 64).arrayBuffer()); if (h.getUint32(0) === 0x52494646 && h.getUint32(8) === 0x57415645) bits = h.getUint16(34, true); } catch (_) {}   // v14 metadata card: real wav header
+      fm.fileInfo = { sr: buf.sampleRate, bits, bytes: file.size, ch: buf.numberOfChannels }; await load(buf, fm); }
     catch (e) { console.warn(e); status('That file could not be decoded. Try an mp3, wav, flac or m4a export.'); }
   }
   async function loadDemo() { status('Building the demo beat…'); const buf = await synthDemo(); await load(buf, { name: 'demo beat (synthesised)', title: 'Night Shift', bpm: null }); status($('#status').innerHTML + ' · <b>demo</b>: drop your own beat to replace it'); }

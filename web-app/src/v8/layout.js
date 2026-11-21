@@ -1,8 +1,8 @@
 // Look tables of the v8 composition (u2c-motion film/v8/film.js): window layouts per look and aspect (world =
 // the screen, the overview is zoom 1), windows that are already open at frame 0, the v8 focus plan, chrome names.
-export const LOOKS = ['exe', 'lab', 'scope'];
-export const LOOK_NAMES = { exe: 'EXE', lab: 'LAB', scope: 'SCOPE' };
-export const LOOK_BLURB = { exe: 'liquid-glass plugin windows', lab: 'glass on faint graph paper', scope: 'glass rack · CRT screens' };
+export const LOOKS = ['exe', 'lab', 'scope', 'player'];
+export const LOOK_NAMES = { exe: 'EXE', lab: 'LAB', scope: 'SCOPE', player: 'PLAYER' };
+export const LOOK_BLURB = { exe: 'liquid-glass plugin windows', lab: 'glass on faint graph paper', scope: 'glass rack · CRT screens', player: 'desktop beat player' };
 export const ASPECTS = { '916': { W: 1080, H: 1920, label: '9:16 · 1080×1920', platform: 'Reels / TikTok / Shorts' }, '169': { W: 1920, H: 1080, label: '16:9 · 1920×1080', platform: 'YouTube' } };
 // v9: no clock.sys / bands.dat windows in any look; the freed space goes to the waveform (session), the logo and the
 // bottom-row meters.
@@ -27,6 +27,17 @@ const EXE12 = {
   '916': { session: [32, 112, 1016, 366], stage: [334, 502, 412, 744], loud: [32, 502, 272, 744], stereo: [776, 502, 272, 744], spectro: [32, 1270, 1016, 200], spectrum: [32, 1494, 1016, 316] },
   '169': { session: [44, 92, 1100, 262], spectro: [44, 378, 1100, 190], spectrum: [44, 592, 1100, 412], stage: [1172, 92, 704, 306], loud: [1172, 420, 300, 584], stereo: [1496, 420, 380, 584] },
 };
+// v14 player look (U2C.PLAYER): final rects. 16:9 has a sidebar (SIDEBAR) and the top bar band (TOPBAR); 9:16 drops the sidebar, condenses the top bar and
+// turns the now-playing card into a strip under it. Window ids: session (waveform), loud (levels), stage (hero: logo + static pendant mark + caption),
+// stereo (imager), spectro, spectrum, now (now-playing), inserts (4 live tiles), meta (metadata).
+const PLAYER = {
+  '169': { session: [268, 108, 1192, 190], loud: [268, 314, 300, 380], stage: [584, 314, 560, 380], stereo: [1160, 314, 300, 380], spectro: [268, 710, 1192, 140], spectrum: [268, 866, 1192, 190],
+    now: [1476, 108, 420, 440], inserts: [1476, 564, 420, 130], meta: [1476, 710, 420, 346] },
+  '916': { now: [32, 148, 1016, 120], session: [32, 284, 1016, 200], loud: [32, 500, 250, 440], stage: [298, 500, 484, 440], stereo: [798, 500, 250, 440], spectro: [32, 956, 1016, 150],
+    spectrum: [32, 1122, 1016, 318], inserts: [32, 1456, 1016, 184], meta: [32, 1656, 1016, 236] },
+};
+export const SIDEBAR = { '169': [24, 20, 220, 1036], '916': null };
+export const TOPBAR = { '169': [268, 20, 1628, 76], '916': [32, 20, 1016, 124] };
 /** Hero = the U2C logo only (front layer, centred on its bbox in the stage card): width in px at scale 1. The centre is the stage rect's centre. */
 export const HERO = { '916': { logoW: 384 }, '169': { logoW: 300 } };
 /** v13 match-cut API: the cover card rect (world px, exe look) the cover-0 image fills (object-fit: cover, corner radius 22). */
@@ -46,20 +57,22 @@ function airy(rects, aspect) {
   }
   return out;
 }
-export const LAYOUT = { exe: EXE12, ...Object.fromEntries(Object.entries(V10_LAYOUT).map(([look, A]) => [look, Object.fromEntries(Object.entries(A).map(([asp, R]) => [asp, airy(R, asp)]))])) };
+export const LAYOUT = { exe: EXE12, player: PLAYER, ...Object.fromEntries(Object.entries(V10_LAYOUT).map(([look, A]) => [look, Object.fromEntries(Object.entries(A).map(([asp, R]) => [asp, airy(R, asp)]))])) };
 
 /** Every window id any look uses, in a stable order. */
-export const WINDOW_IDS = ['session', 'chains', 'elephant', 'spectrum', 'loud', 'stereo', 'spectro', 'surface', 'eq', 'stage'];   // eq: legacy (v12 has no EQ window)
+export const WINDOW_IDS = ['session', 'chains', 'elephant', 'spectrum', 'loud', 'stereo', 'spectro', 'surface', 'eq', 'stage', 'now', 'inserts', 'meta'];   // eq: legacy (v12 has no EQ window)
 /** What a window shows (its content can be swapped per window in the cue sheet). */
-export const CONTENT = { chains: 'logo', session: 'waveform', clock: 'clock', bands: 'bands', elephant: 'pendant', eq: 'eq', spectrum: 'spectrum', loud: 'loudness', stereo: 'stereo', spectro: 'spectrogram', surface: 'surface', stage: 'cover' };
-export const CONTENT_KINDS = ['logo', 'waveform', 'clock', 'bands', 'pendant', 'eq', 'spectrum', 'loudness', 'stereo', 'spectrogram', 'surface', 'levels', 'ghost', 'cover'];
-export const WINDOW_LABELS = { chains: 'Logo (chains.dll)', session: 'Waveform (session.exe)', clock: 'Clock', bands: 'Bands', elephant: 'Pendant (elephant.sys)', eq: 'EQ', spectrum: 'Spectrum', loud: 'Loudness', stereo: 'Imager', spectro: 'Spectrogram', surface: 'Surface 3D', stage: 'Cover + logo (stage)' };
+export const CONTENT = { chains: 'logo', session: 'waveform', clock: 'clock', bands: 'bands', elephant: 'pendant', eq: 'eq', spectrum: 'spectrum', loud: 'loudness', stereo: 'stereo', spectro: 'spectrogram', surface: 'surface', stage: 'cover', now: 'now', inserts: 'inserts', meta: 'meta' };
+export const CONTENT_KINDS = ['logo', 'waveform', 'clock', 'bands', 'pendant', 'eq', 'spectrum', 'loudness', 'stereo', 'spectrogram', 'surface', 'levels', 'ghost', 'cover', 'hero', 'now', 'inserts', 'meta'];
+export const WINDOW_LABELS = { chains: 'Logo (chains.dll)', session: 'Waveform (session.exe)', clock: 'Clock', bands: 'Bands', elephant: 'Pendant (elephant.sys)', eq: 'EQ', spectrum: 'Spectrum', loud: 'Loudness', stereo: 'Imager', spectro: 'Spectrogram', surface: 'Surface 3D', stage: 'Cover + logo (stage)', now: 'Now playing', inserts: 'Inserts', meta: 'Metadata' };
 /** Windows that are already open at frame 0 (the rest step in on the half beats of the build bar). */
-export const FIRST_OPEN = { exe: ['session', 'stage', 'loud', 'stereo'], lab: ['chains', 'session', 'elephant'], scope: ['chains', 'elephant', 'loud'] };
+export const FIRST_OPEN = { exe: ['session', 'stage', 'loud', 'stereo'], lab: ['chains', 'session', 'elephant'], scope: ['chains', 'elephant', 'loud'], player: ['session', 'loud', 'stage', 'stereo', 'spectro', 'spectrum', 'now', 'inserts', 'meta'] };
 /** v8 focus plan (clip bar, window, hold bars). */
-export const FOCUS_PLAN = { exe: [[3, 'session', 2], [7, 'spectrum', 2], [11, 'stereo', 2], [15, 'loud', 1]], lab: [[3, 'elephant', 2], [7, 'spectrum', 2], [11, 'chains', 1]], scope: [[3, 'spectrum', 2], [7, 'elephant', 2], [11, 'chains', 2]] };
+export const FOCUS_PLAN = { exe: [[3, 'session', 2], [7, 'spectrum', 2], [11, 'stereo', 2], [15, 'loud', 1]], lab: [[3, 'elephant', 2], [7, 'spectrum', 2], [11, 'chains', 1]], scope: [[3, 'spectrum', 2], [7, 'elephant', 2], [11, 'chains', 2]],
+  // v14 player: pushes are motivated by the UI: the top tab switches on the beat (PLAYER > ANALYSIS > MIX > MASTER) and the camera goes to its panel
+  player: [[3, 'spectrum', 2], [7, 'stereo', 2], [11, 'session', 2], [15, 'loud', 1]] };
 /** v12: the window a section's push goes to (drop / build / break), per look; falls back to the plan rotation when the look lacks it. */
-export const SECTION_PUSH = { exe: { drop: 'spectrum', build: 'session', break: 'stereo' }, lab: { drop: 'chains', build: 'spectrum', break: 'elephant' }, scope: { drop: 'chains', build: 'spectrum', break: 'elephant' } };
+export const SECTION_PUSH = { exe: { drop: 'spectrum', build: 'session', break: 'stereo' }, lab: { drop: 'chains', build: 'spectrum', break: 'elephant' }, scope: { drop: 'chains', build: 'spectrum', break: 'elephant' }, player: { drop: 'spectrum', build: 'session', break: 'stereo' } };
 /** Default open beat of a window in a look (-2 = already open at frame 0). */
 export function openBeat(look, aspect, id) {
   const ids = Object.keys(LAYOUT[look][aspect]), first = FIRST_OPEN[look];

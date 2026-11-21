@@ -51,8 +51,9 @@ if (!AUDIO) ok('test beat available', false, 'pass an audio file: node tests/smo
 const ana = await ev(() => { const tr = window.u2c.store.session.track; return { bpm: tr.bpm, t0: tr.t0, phrases: tr.song.phrases.map((q) => q.bar + ':' + q.label).join(' '), key: tr.key }; });
 ok('analysis: tempo, downbeat, sections', ana.bpm > 60 && ana.phrases.includes('drop'), `${ana.bpm} BPM · bar 1 at ${ana.t0.toFixed(4)} s · ${ana.key} · ${ana.phrases}`);
 await page.waitForFunction(() => window.u2c.grid.entry && window.u2c.grid.entry.ready, null, { timeout: 60000 }); await page.waitForTimeout(1500); await shot('home-1440.png');
+await page.evaluate(() => { const c = document.querySelectorAll('#grid .card'); if (c.length) c[c.length - 1].scrollIntoView({ block: 'center' }); }); await page.waitForTimeout(1200);   // v14: four looks, the last may sit below the fold
 const cards = await page.$$eval('#grid .card canvas', (cs) => cs.map((c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let mn = 765, mx = 0; for (let i = 0; i < d.length; i += 400) { const v = d[i] + d[i + 1] + d[i + 2]; mn = Math.min(mn, v); mx = Math.max(mx, v); } return mx - mn; }));
-ok('home: three look cards draw the beat', cards.length === 3 && cards.every((v) => v > 60), cards.join(' / '));
+ok('home: four look cards draw the beat', cards.length === 4 && cards.every((v) => v > 60), cards.join(' / '));
 // ---- studio + default cue sheet
 await page.click('#grid .card >> nth=0');
 await page.waitForFunction(() => !document.querySelector('#studio').hidden && window.u2c.clip.current().ready, null, { timeout: 60000 }); await page.waitForTimeout(800);
@@ -244,6 +245,7 @@ await page.keyboard.press('Escape'); await tlEv(() => { window.u2c.cuetl.clearSe
 await page.selectOption('#insp [data-k="preset"]', 'zoom-punch'); await page.selectOption('#insp [data-k="stamp-rule"]', 'bar'); await page.click('#insp [data-act="preset-stamp"]');
 const zp = await tlEv(() => { const t = window.u2c.cues.sheet.tracks.find((q) => q.path === 'camera.zoom'); return t ? t.keys.length : 0; }), nb = await tlEv(() => window.u2c.cues.sheet.meta.bars || 16);
 await page.focus('#cueCv'); await page.keyboard.press('ControlOrMeta+z');
+await tlEv(() => { const t = window.u2c.cues.sheet.tracks.find((q) => q.path === 'fx.flash'); if (t && !t.keys.length) { window.u2c.cues.sheet.tracks.find((q) => q.path === 'fx.flash').keys.push({ id: 'k-flash-test', b: 20, v: true, ease: 'step' }); } });   // v14: flash is OFF by default (no keys): seed one
 const fl = await tlEv(() => window.u2c.cues.sheet.tracks.find((t) => t.path === 'fx.flash').keys.map((k) => k.id)); await tlEv((ids) => window.u2c.cuetl.select(ids.slice(0, 1)), fl);
 await page.selectOption('#insp [data-k="stamp-rule"]', 'kick'); await page.click('#insp [data-act="stamp"]');
 const st = await ev(async () => { const app = window.u2c, Mk = await import('/src/cues/markers.js'), kicks = new Set(Mk.analysisMarkers(app.clip.current()).filter((m) => m.kind === 'kick').map((m) => m.b)); const K = app.cues.sheet.tracks.find((t) => t.path === 'fx.flash').keys; return { n: K.length, onKicks: K.filter((k) => [...kicks].some((b) => Math.abs(b - k.b) < 1e-6)).length }; });

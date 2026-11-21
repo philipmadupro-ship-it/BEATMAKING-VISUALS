@@ -1,0 +1,169 @@
+// v14 "U2C.PLAYER" look: the desktop beat-player shell (sidebar, top bar, now-playing card, metadata card, barcode, hero caption).
+// Pure drawing helpers; every string is a tag (L.tag 'player.*', editable in the studio) or real data (BPM, key, the real song time and
+// duration, the wav's sample rate / bit depth / size, the date). Nothing here tweens opacity: states are steps on the grid.
+// createPlayer(L, {tag, V}) -> { sidebar, topbar, now, meta, barcode, heroCaption, crosses, icon }
+import { coverScrim } from './intro.js';
+
+export const TABS = ['PLAYER', 'ANALYSIS', 'MIX', 'MASTER'];
+/** Which top tab a camera target belongs to (the tab switches on the beat the push starts; wide = PLAYER). */
+export const TAB_OF = { spectrum: 1, spectro: 1, loud: 2, stereo: 2, session: 3 };
+
+export function createPlayer(L, { tag, V }) {
+  const { rgba, text, rr = L.rr, clamp, DISPLAY, UI, hash, BEAT, D, fidx } = L, TAU = Math.PI * 2;
+  const mmss = (s) => { s = Math.max(0, Math.floor(s + 1e-6)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+  const stroke = (c, col, w = 1.6) => { c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'round'; c.lineJoin = 'round'; };
+  // ---------------------------------------------------------------- icons (24 box centred on cx, cy; s = size in px)
+  function icon(c, name, cx, cy, s, col, fill = false) {
+    const k = s / 24; c.save(); c.translate(cx, cy); c.scale(k, k); stroke(c, col, 1.7 / Math.max(0.6, k * 0.75)); c.fillStyle = col; c.beginPath();
+    const ln = (...p) => { c.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) c.lineTo(p[i], p[i + 1]); };
+    switch (name) {
+      case 'play': ln(-6, -8, 7, 0, -6, 8); c.closePath(); fill ? c.fill() : c.stroke(); break;
+      case 'pause': c.rect(-6, -8, 4.5, 16); c.rect(2, -8, 4.5, 16); c.fill(); break;
+      case 'next': ln(-8, -8, 3, 0, -8, 8); c.closePath(); c.fill(); c.rect(5, -8, 3, 16); c.fill(); break;
+      case 'prev': ln(8, -8, -3, 0, 8, 8); c.closePath(); c.fill(); c.rect(-8, -8, 3, 16); c.fill(); break;
+      case 'shuffle': ln(-9, 5, -4, 5, 4, -5, 9, -5); ln(-9, -5, -4, -5, -1, -1.5); ln(1, 1.5, 4, 5, 9, 5); ln(6, -8, 9, -5, 6, -2); ln(6, 2, 9, 5, 6, 8); c.stroke(); break;
+      case 'repeat': ln(-9, 0, -9, -4, -5, -6, 6, -6); ln(3, -9, 6, -6, 3, -3); ln(9, 0, 9, 4, 5, 6, -6, 6); ln(-3, 3, -6, 6, -3, 9); c.stroke(); break;
+      case 'heart': c.moveTo(0, 8); c.bezierCurveTo(-13, -1, -8, -11, 0, -5); c.bezierCurveTo(8, -11, 13, -1, 0, 8); c.stroke(); break;
+      case 'dots': c.fill(); for (const y of [-6, 0, 6]) { c.beginPath(); c.arc(0, y, 1.6, 0, TAU); c.fill(); } break;
+      case 'expand': ln(-3, -9, 9, -9, 9, 3); ln(3, 9, -9, 9, -9, -3); c.stroke(); break;
+      case 'link': c.arc(-4, 0, 5, 0.6 * Math.PI, 1.9 * Math.PI); c.stroke(); c.beginPath(); c.arc(4, 0, 5, 1.6 * Math.PI, 2.9 * Math.PI); c.stroke(); break;
+      case 'cross': ln(-7, 0, 7, 0); ln(0, -7, 0, 7); c.stroke(); break;
+      case 'target': c.arc(0, 0, 6.5, 0, TAU); c.moveTo(0, -10); c.lineTo(0, -3); c.moveTo(0, 3); c.lineTo(0, 10); c.moveTo(-10, 0); c.lineTo(-3, 0); c.moveTo(3, 0); c.lineTo(10, 0); c.stroke(); break;
+      case 'bars': c.fill(); for (const [x, h0] of [[-7.5, 5], [-2.5, 11], [2.5, 8], [7.5, 14]]) c.fillRect(x - 1.4, -h0 / 2, 2.8, h0); break;
+      case 'library': c.rect(-8, -7, 16, 14); c.stroke(); c.beginPath(); ln(-8, -3, 8, -3); c.stroke(); break;
+      case 'tools': c.arc(0, 0, 4.5, 0, TAU); for (let i = 0; i < 6; i++) { const a = i * TAU / 6; c.moveTo(Math.cos(a) * 6.5, Math.sin(a) * 6.5); c.lineTo(Math.cos(a) * 9.5, Math.sin(a) * 9.5); } c.stroke(); break;
+      case 'projects': c.rect(-8, -8, 7, 7); c.rect(1, -8, 7, 7); c.rect(-8, 1, 7, 7); c.rect(1, 1, 7, 7); c.stroke(); break;
+      case 'archive': c.rect(-8, -8, 16, 5); c.rect(-6, -3, 12, 11); c.stroke(); c.beginPath(); ln(-2.5, 1, 2.5, 1); c.stroke(); break;
+      case 'meta': c.fill(); for (const y of [-6, 0, 6]) { c.fillRect(-8, y - 1.2, 3, 2.4); c.fillRect(-3, y - 1.2, 11, 2.4); } break;
+      default: break;
+    }
+    c.restore();
+  }
+  const navIcon = ['play', 'library', 'bars', 'tools', 'projects', 'archive'];
+
+  // ---------------------------------------------------------------- sidebar (16:9 only)
+  /** rect = [x, y, w, h] of the sidebar glass (already drawn by the caller); beat = kick envelope 0..1 (the active dot ticks on it). */
+  function sidebar(c, S, rect, t, o) {
+    const [x, y, w, h] = rect, ink = S.ink, dim = rgba(ink, 0.5), P = 22, nav = tag('player.nav') || [], tracks = tag('player.tracks') || [];
+    o.logo([x + w / 2, y + 62], w - 70);
+    let yy = y + 150; const rowH = 52;
+    nav.forEach((n, i) => {
+      const act = i === 0, cy = yy + i * rowH;
+      if (act) { c.strokeStyle = rgba(ink, 0.7); c.lineWidth = 1.2; c.stroke(rr(x + 14, cy - 22, w - 28, 44, 10)); c.fillStyle = rgba(ink, 0.06); c.fill(rr(x + 14, cy - 22, w - 28, 44, 10)); }
+      icon(c, navIcon[i % navIcon.length], x + P + 14, cy, 22, act ? ink : dim);
+      text(c, String(n).toUpperCase(), x + P + 36, cy, { size: 22, fam: UI, w: act ? 600 : 500, ls: 1.2, col: act ? ink : dim, maxW: w - P - 50 });
+    });
+    yy += nav.length * rowH + 10; c.fillStyle = rgba(ink, 0.18); c.fillRect(x + P, yy, w - 2 * P, 1);
+    text(c, String(tag('player.vol')).toUpperCase(), x + P, yy + 34, { size: 22, fam: UI, w: 500, ls: 2, col: dim });
+    tracks.forEach((n, i) => {
+      const cy = yy + 80 + i * 40, act = i === 0, r = act ? 4 + 2.4 * o.pulse : 3;
+      c.beginPath(); c.arc(x + P + 6, cy, r, 0, TAU); c.fillStyle = act ? rgba(ink, 0.95) : rgba(ink, 0.35); c.fill();
+      text(c, String(n).toUpperCase(), x + P + 22, cy, { size: 22, fam: UI, w: act ? 600 : 500, col: act ? ink : rgba(ink, 0.5), maxW: w - P - 32 });
+    });
+    // bottom: U2C® mark with the coordinates
+    const cd = tag('player.coords') || [], by = y + h - 28 - 24 * cd.length;
+    icon(c, 'bars', x + P + 10, by - 44, 22, ink);
+    text(c, String(tag('player.mark')), x + P + 30, by - 44, { size: 22, fam: DISPLAY, w: 800, col: ink, maxW: w - P - 40 });
+    cd.forEach((s, i) => text(c, String(s), x + P, by + i * 26, { size: 22, fam: UI, w: 500, col: dim, maxW: w - 2 * P }));
+  }
+
+  // ---------------------------------------------------------------- top bar
+  /** o.port: condensed 9:16. tab = active tab index. rect = the bar band. */
+  function topbar(c, S, rect, t, o) {
+    const [x, y, w, h] = rect, ink = S.ink, dim = rgba(ink, 0.55), title = String(tag('title')).toUpperCase(), tabs = tag('player.tabs') || TABS;
+    const sub = tag('player.sub'), info = tag('player.info'), pill = String(tag('player.pill'));
+    const ts = 40; const tw = text(c, title, x, y + (o.port ? 30 : 28), { size: ts, fam: DISPLAY, w: 800, col: ink, ls: 0.5, maxW: o.port ? w * 0.56 : 520 });
+    text(c, String(sub).toUpperCase(), x + 2, y + (o.port ? 74 : 68), { size: 22, fam: UI, w: 500, ls: 2, col: dim, maxW: o.port ? w * 0.56 : 520 });
+    // pill + bpm / key
+    c.font = `800 22px ${DISPLAY}`; const pw = 96, ph = 38, px = x + w - pw, py = y + (o.port ? 10 : 10);
+    c.strokeStyle = rgba(ink, 0.75); c.lineWidth = 1.4; c.stroke(rr(px, py, pw, ph, ph / 2)); c.fillStyle = rgba(ink, 0.05); c.fill(rr(px, py, pw, ph, ph / 2));
+    text(c, pill, px + pw / 2, py + ph / 2 + 1, { size: 22, fam: DISPLAY, w: 800, col: ink, align: 'center', maxW: pw - 22 });
+    text(c, String(info).toUpperCase(), px - 24, py + ph / 2 + 1, { size: 22, fam: UI, w: 500, ls: 1.4, col: dim, align: 'right', maxW: o.port ? 300 : 360 });
+    // tabs
+    const ty = o.port ? y + h - 20 : y + 29, gap = o.port ? 40 : 32, widths = tabs.map((s) => { c.font = `500 22px ${UI}`; c.letterSpacing = '1.2px'; const m = c.measureText(String(s).toUpperCase()).width; c.letterSpacing = '0px'; return m; });
+    const totalW = widths.reduce((a, b) => a + b, 0) + gap * (tabs.length - 1) + 56;
+    let tx = o.port ? x + (w - totalW) / 2 + 28 : x + 500;
+    tabs.forEach((s, i) => {
+      const act = i === o.tab, tw2 = widths[i];
+      if (act) { c.strokeStyle = rgba(ink, 0.8); c.lineWidth = 1.3; c.stroke(rr(tx - 18, ty - 20, tw2 + 36, 40, 8)); text(c, '[', tx - 11, ty, { size: 22, fam: UI, col: dim }); text(c, ']', tx + tw2 + 11, ty, { size: 22, fam: UI, col: dim, align: 'right' }); }
+      text(c, String(s).toUpperCase(), tx, ty, { size: 22, fam: UI, w: act ? 600 : 500, ls: 1.2, col: act ? ink : rgba(ink, 0.5) });
+      tx += tw2 + gap;
+    });
+  }
+
+  // ---------------------------------------------------------------- now playing (cover card; compact strip when wide and short)
+  /** Draws into the window rect r = [x, y, w, h]. o = {cover (canvas), I (kick env 0..1), t, onCover(rect, rad) callback to publish the match-cut rect}. */
+  function now(c, S, r, t, o) {
+    const [x, y, w, h] = r, ink = S.ink, dim = rgba(ink, 0.55), compact = w > 700 && h < 220, P = 20;
+    const elapsed = (D.song.startTime || 0) + t, total = D.song.duration || D.duration, frac = clamp(elapsed / total);
+    const beatE = Math.exp(-(((t / BEAT) % 1) * BEAT) / 0.16);   // the pause icon pulses on the beat
+    const title = String(tag('player.now.title')).toUpperCase(), sub = String(tag('player.now.sub')).toUpperCase();
+    let cx0, cy0, cw, ch, rad = 14;
+    if (compact) { ch = h - 2 * P; cw = ch; cx0 = x + P; cy0 = y + P; } else { cx0 = x + P; cy0 = y + P; cw = w - 2 * P; ch = Math.round(cw * 0.5); }
+    const draw = (ix, iy, iw, ih, rd, zoom = 1, fx = 0.5, fy = 0.5) => {
+      c.save(); c.clip(rr(ix, iy, iw, ih, rd));
+      if (o.cover) { const sc = Math.max(iw, ih) / o.cover.width * zoom; c.drawImage(o.cover, ix + iw / 2 - o.cover.width * sc * fx, iy + ih / 2 - o.cover.height * sc * fy, o.cover.width * sc, o.cover.height * sc); }
+      else { c.fillStyle = S.card; c.fillRect(ix, iy, iw, ih); }
+      coverScrim(c, S, ix, iy, iw, ih, { dim: 0.7 * o.dim, light: L.isLight(S) }); c.restore();
+      c.strokeStyle = rgba(ink, 0.3); c.lineWidth = 1.1; c.stroke(rr(ix + 0.5, iy + 0.5, iw - 1, ih - 1, rd));
+    };
+    draw(cx0, cy0, cw, ch, rad); if (o.onCover) o.onCover([cx0, cy0, cw, ch], rad);
+    if (!compact) icon(c, 'expand', cx0 + cw - 24, cy0 + 24, 20, rgba(ink, 0.8));
+    // text block
+    const tx = compact ? cx0 + cw + 18 : x + P, ty = compact ? y + 34 : cy0 + ch + 34, aw = compact ? w - (tx - x) - 340 : w - 2 * P - 80;
+    text(c, title, tx, ty, { size: compact ? 30 : 32, fam: DISPLAY, w: 800, col: ink, maxW: Math.max(160, aw) });
+    text(c, sub, tx, ty + (compact ? 32 : 36), { size: 22, fam: UI, w: 500, ls: 1.2, col: dim, maxW: compact ? aw : w - 2 * P });
+    if (!compact) { icon(c, 'heart', x + w - P - 48, ty - 2, 24, ink); icon(c, 'dots', x + w - P - 10, ty - 2, 22, ink); }
+    // progress bar (real song position) + times
+    const bx = compact ? tx : x + P, bw = compact ? Math.max(200, w - (tx - x) - P - 280) : w - 2 * P, by = compact ? y + h - 24 : ty + 68;
+    c.fillStyle = rgba(ink, 0.2); c.fill(rr(bx, by - 2, bw, 4, 2)); c.fillStyle = rgba(ink, 0.95); c.fill(rr(bx, by - 2, Math.max(4, bw * frac), 4, 2));
+    c.beginPath(); c.arc(bx + bw * frac, by, 6.5, 0, TAU); c.fillStyle = '#fff'; c.fillStyle = rgba(ink, 1); c.fill();
+    if (!compact) { text(c, mmss(elapsed), bx, by + 28, { size: 22, col: dim }); text(c, mmss(total), bx + bw, by + 28, { size: 22, col: dim, align: 'right' }); }
+    else { text(c, mmss(elapsed), bx + bw + 14, by, { size: 22, col: dim }); }
+    // transport
+    const trY = compact ? y + h / 2 + 4 : by + 72, trX = compact ? x + w - P - 120 : x + w / 2, sp = compact ? 54 : 76;
+    if (compact) { icon(c, 'prev', trX - sp, trY, 22, ink); icon(c, 'next', trX + sp, trY, 22, ink); }
+    else { icon(c, 'shuffle', trX - 2 * sp, trY, 24, dim); icon(c, 'prev', trX - sp, trY, 24, ink); icon(c, 'next', trX + sp, trY, 24, ink); icon(c, 'repeat', trX + 2 * sp, trY, 24, dim); }
+    const pr = compact ? 26 : 32, ps = 1 + 0.07 * beatE;   // pause pill: outline + two bars, a subtle pulse
+    c.save(); c.translate(trX, trY); c.scale(ps, ps); c.strokeStyle = rgba(ink, 0.85); c.lineWidth = 1.6; c.stroke(rr(-pr * 1.55, -pr * 0.78, pr * 3.1, pr * 1.56, pr * 0.78)); c.fillStyle = rgba(ink, 0.06); c.fill(rr(-pr * 1.55, -pr * 0.78, pr * 3.1, pr * 1.56, pr * 0.78)); c.restore();
+    icon(c, 'pause', trX, trY, compact ? 22 : 26, ink);
+  }
+
+  // ---------------------------------------------------------------- barcode (deterministic from a string)
+  function barcode(c, S, x, y, w, h, str, col) {
+    let seed = 7; for (const ch of String(str)) seed = (seed * 131 + ch.charCodeAt(0)) % 100003;
+    const mods = []; let total = 0;   // alternating bar / space widths in modules (1..3), 8-module guards at both ends
+    for (let i = 0; i < 72; i++) { const m = 1 + Math.floor(hash(seed * 0.37 + i * 3.17) * 3); mods.push(m); total += m; }
+    const u = w / total; let X = x; c.fillStyle = col;
+    mods.forEach((m, i) => { if (i % 2 === 0) c.fillRect(Math.round(X), y, Math.max(1, Math.round(m * u) - (m * u > 2.4 ? 1 : 0)), h); X += m * u; });
+  }
+
+  // ---------------------------------------------------------------- metadata
+  function meta(c, S, cr, t, o) {
+    const [x, y, w, h] = cr, ink = S.ink, dim = rgba(ink, 0.5), wide = w > 700, slim = wide && h < 260, fi = D.fileInfo || {}, sr = fi.sr || (D.wave3 && D.wave3.sr) || 48000;
+    const fmt = fi.bits ? `WAV ${fi.bits}-BIT · ${+(sr / 1000).toFixed(1)} kHz` : `WAV · ${+(sr / 1000).toFixed(1)} kHz`;
+    const size = fi.bytes ? `${(fi.bytes / 1048576).toFixed(1)} MB` : '—';
+    const lab = tag('player.meta.labels') || ['FORMAT', 'DURATION', 'SIZE', 'DATE', 'TAGS'];
+    const vals = [fmt, mmss(D.song.duration || D.duration), size, String(tag('date')).toUpperCase(), String(tag('player.meta.tags')).toUpperCase()];
+    const rowH = wide ? 31 : 36, rw = slim ? w * 0.46 : wide ? w * 0.52 : w;
+    lab.forEach((l, i) => { const yy = y + 14 + i * rowH; text(c, String(l).toUpperCase(), x, yy, { size: 22, fam: UI, w: 500, col: dim, ls: 1.2 }); text(c, vals[i], x + rw, yy, { size: 22, fam: UI, w: 500, col: ink, align: 'right', maxW: rw - 124 });
+      c.fillStyle = rgba(ink, 0.1); c.fillRect(x, yy + rowH / 2 - 1, rw, 1); });
+    // image tile: a crop of cover-0 + barcode + mark
+    const tile = slim ? h - 6 : wide ? Math.min(h - 8, w * 0.4) : 92, tx = wide ? x + w - tile : x, ty = wide ? y + 2 : y + 14 + 5 * rowH + 2;
+    c.save(); c.clip(rr(tx, ty, tile, tile, 10)); if (o.cover) { const sc = Math.max(tile, tile) / o.cover.width * 3.2; c.drawImage(o.cover, tx + tile / 2 - o.cover.width * sc * 0.62, ty + tile / 2 - o.cover.height * sc * 0.5, o.cover.width * sc, o.cover.height * sc); } else { c.fillStyle = S.card; c.fillRect(tx, ty, tile, tile); }
+    c.fillStyle = rgba(S.bg, 0.25); c.fillRect(tx, ty, tile, tile); c.restore(); c.strokeStyle = rgba(ink, 0.3); c.lineWidth = 1; c.stroke(rr(tx + 0.5, ty + 0.5, tile - 1, tile - 1, 10));
+    const bw = wide ? rw : w - tile - 150, bx = wide ? x : x + tile + 18, by = wide ? y + h - 52 : ty + 8;
+    if (slim) { const bx2 = x + rw + 36, bw2 = tx - 36 - bx2; barcode(c, S, bx2, y + 6, bw2, h - 64, tag('title'), rgba(ink, 0.8)); text(c, String(tag('player.mark')), bx2, y + h - 18, { size: 22, fam: DISPLAY, w: 800, col: ink }); text(c, String(tag('player.vol')).toUpperCase(), bx2 + bw2, y + h - 18, { size: 22, fam: UI, w: 500, col: dim, align: 'right' }); icon(c, 'target', tx + tile - 14, y + h - 18, 22, dim); return; }
+    if (wide) { barcode(c, S, x, y + h - 56, rw, 44, tag('title'), rgba(ink, 0.8)); text(c, `${String(tag('player.mark'))}`, x, y + h - 14, { size: 22, fam: DISPLAY, w: 800, col: ink }); text(c, String(tag('player.vol')).toUpperCase(), x + rw, y + h - 14, { size: 22, fam: UI, w: 500, col: dim, align: 'right' }); }
+    else { barcode(c, S, bx, ty + 4, bw, tile - 8, tag('title'), rgba(ink, 0.8)); text(c, String(tag('player.mark')), x + w, ty + tile / 2 - 12, { size: 22, fam: DISPLAY, w: 800, col: ink, align: 'right' }); text(c, String(tag('player.vol')).toUpperCase(), x + w, ty + tile / 2 + 18, { size: 22, fam: UI, w: 500, col: dim, align: 'right' }); icon(c, 'target', x + w - 8, ty + tile - 6, 22, dim); }
+    if (wide) icon(c, 'target', tx + tile - 12, y + h - 20, 22, dim);
+  }
+
+  // ---------------------------------------------------------------- hero extras: caption block + registration crosses
+  function heroCaption(c, S, x, y, align = 'left', maxW = 200) {
+    const lines = tag('player.caption') || [], ink = S.ink;
+    lines.forEach((s, i) => text(c, String(s).toUpperCase(), x, y + i * 25, { size: 22, fam: i === 0 ? DISPLAY : UI, w: i === 0 ? 800 : 500, col: i === 0 ? ink : rgba(ink, 0.6), align, maxW }));
+  }
+  function crosses(c, S, pts, s = 20) { for (const [px, py] of pts) icon(c, 'cross', px, py, s, rgba(S.ink, 0.55)); }
+  return { sidebar, topbar, now, meta, barcode, heroCaption, crosses, icon, mmss };
+}

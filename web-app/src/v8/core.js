@@ -27,6 +27,9 @@ export const STAGES = {
     waveLo: '#ff5cc8', waveHi: '#a35cf0', spec: ['#1a0d22', '#5a1020', '#a35cf0', '#ff9be0'],
     grain: 0.09, gloss: true, vignette: 0.5, gridA: 0.08, swing: 7.5, zoom: 1.14, gutter: 1.0, embodied: true, residue: ['ink', 'bone', 'brass'] },
 };
+// v14 white: "NIGREDO INVERSE" = the Nigredo palette with the finished frame inverted as a last pass (film.render), the look of the old 1-frame flash.
+// It keeps name 'NIGREDO' so every palette lookup is the Nigredo one; `inverse` / `label` / `short` are the only differences.
+STAGES.white = Object.assign({}, STAGES.nigredo, { n: 5, inverse: true, label: 'NIGREDO INVERSE', short: 'INV' });
 export const STAGE_IDS = Object.keys(STAGES);
 export const STAGE_COLOR_KEYS = ['bg', 'paper', 'card', 'ink', 'dim', 'rule', 'sig1', 'sig2', 'hot', 'stamp', 'tape'];
 export const BAND_COLS = { NIGREDO: ['#ffffff', '#bdbdbd', '#8a8a8a'], ALBEDO: ['#1a1917', '#a8432e', '#6e4433'], CITRINITAS: ['#d79a35', '#b8975a', '#ecd9b0'], RUBEDO: ['#a35cf0', '#ff5cc8', '#c79bf0'] };

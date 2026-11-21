@@ -7,7 +7,7 @@ import { generateSheet } from '../cues/generate.js';
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 export function createGrid(app) {
   const box = $('#grid'), home = $('#home'); let cards = [], aspect = '916', loop = [0, 8], t0 = performance.now(), hovered = null, tick = 0, surf = null, entry = null, io = null;
-  $('#gridStage').innerHTML = STAGE_IDS.map((id) => `<button data-stage="${id}" aria-pressed="${id === app.store.project.stage}">${STAGES[id].name.slice(0, 3)}</button>`).join('');
+  $('#gridStage').innerHTML = STAGE_IDS.map((id) => `<button data-stage="${id}" aria-pressed="${id === app.store.project.stage}">${(STAGES[id].short || STAGES[id].name.slice(0, 3))}</button>`).join('');
   $$('#gridStage button').forEach((b) => (b.onclick = () => { app.actions.setStage(b.dataset.stage); $$('#gridStage button').forEach((x) => x.setAttribute('aria-pressed', x === b)); sheets(); }));
   $$('#gridAspect button').forEach((b) => (b.onclick = () => { $$('#gridAspect button').forEach((x) => x.setAttribute('aria-pressed', x === b)); aspect = b.dataset.a; build(); }));
   function sheets() { if (!entry || !entry.ready) return; for (const c of cards) { c.sheet = generateSheet({ bars: entry.bars, labels: entry.labels, look: c.id, stage: app.store.project.stage, aspect }); c.sheet.base['result.on'] = false; } }  // cards loop: keep the bench live

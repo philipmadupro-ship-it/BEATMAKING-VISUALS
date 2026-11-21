@@ -66,7 +66,7 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
   sheet.tracks.push(track('pendant.amp', 'number', 'pendant', amp));
   sheet.tracks.push(track('text.cue', 'clip', 'text', []));
   // FX: the drop downbeat flash (v8: once per video), glitch opt-in (empty)
-  const flash = preset === 'calm' ? [] : (preset === 'drop' ? dropBars : dropBars.slice(0, 1).length ? dropBars.slice(0, 1) : [NB >= 8 ? 5 : 1]).map((d) => (NB >= 8 && d < 2 ? d + 4 : d)).filter((d) => d < NB).map((d) => key(d * 4, true));
+  const flash = [];   // v14: the 1-frame invert reads as a glitch on a phone: OFF by default in every look (still keyframeable: fx.flash)
   sheet.tracks.push(track('fx.flash', 'event', 'fx', flash));
   sheet.tracks.push(track('fx.glitch', 'clip', 'fx', []));
   // v11/v13 intro (2 bars at the clip start). START (v13): nothing is static: on beat 1 (t = 0) the cards fan out of one stack and the player

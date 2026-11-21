@@ -16,7 +16,25 @@ export const DEFAULT_TAGS = {
   "loud": "levels",
   "gonio": "imager",
   "scope": "scope",
-  "surface": "surface"
+  "surface": "surface",
+  "now": "",
+  "stage": "",
+  "inserts": "inserts",
+  "meta": "metadata"
+ },
+ "player": {
+  "nav": ["PLAYER", "LIBRARY", "ANALYSIS", "TOOLS", "PROJECTS", "ARCHIVE"],
+  "vol": "VOL.03",
+  "tracks": ["{title}", "ATELMANSION 2", "ATELMANSION 1"],
+  "mark": "U2C\u00ae",
+  "coords": ["48.8566\u00b0 N", "2.3522\u00b0 E"],
+  "tabs": ["PLAYER", "ANALYSIS", "MIX", "MASTER", "ARCHIVE"],
+  "sub": "U2C \u00b7 ARCHIVE \u00b7 VOL.03",
+  "info": "{bpm} BPM \u2022 {key}",
+  "pill": "U2C",
+  "now": { "title": "{title}", "sub": "U2C \u00b7 VOL.03 \u00b7 {bpm} BPM \u00b7 {key}" },
+  "caption": ["{title}", "PROD. {producer}", "VOL.03", "U2C\u00ae"],
+  "meta": { "labels": ["FORMAT", "DURATION", "SIZE", "DATE", "TAGS"], "tags": "EXPERIMENTAL, TRAP" }
  },
  "result": {
   "title": "{Title}",
