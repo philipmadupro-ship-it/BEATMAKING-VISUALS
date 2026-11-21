@@ -100,8 +100,21 @@ body{background:var(--bg);color:var(--fg)}
 
 <section id="studio" hidden>
  <aside class="layers" id="layers" aria-label="Layers">
-  <div class="pane-h"><h2 class="ttl">Layers</h2><span class="hint" id="layerCount"></span></div>
+  <div class="rail" data-pane="layers">
+  <div class="pane-h rail-tabs" id="railTabs" role="tablist"><button role="tab" data-pane="layers" aria-selected="true">Layers</button><button role="tab" data-pane="media" aria-selected="false">Media</button><span class="hint" id="layerCount"></span></div>
   <div class="layer-list" id="layerList"></div>
+  <div class="media" id="pane-media" aria-label="Media bin">
+    <div class="group-h"><span class="lbl">Covers</span><span class="inrow"><button class="btn small" id="mediaAdd">Add images</button><button class="btn small" id="mediaReset">Reset</button></span></div>
+    <p class="hint" id="mediaInfo"></p>
+    <div class="cv-grid" id="mediaCovers"></div>
+    <input type="file" id="mediaFile" accept="image/*" multiple hidden>
+    <div class="group-h"><span class="lbl">Video layer</span></div>
+    <div class="inrow"><label class="btn small" for="vidFile">Load video</label><span class="hint" id="mediaVid">drop a DAW screen recording here</span></div>
+    <div class="group-h"><span class="lbl">Audio</span></div>
+    <div class="inrow"><label class="btn small" for="file">Replace beat</label><span class="hint" id="mediaAud"></span></div>
+    <p class="hint">Drop images, a video or a beat anywhere on this panel. Everything stays in this browser.</p>
+  </div>
+  </div>
  </aside>
  <div class="stage-col">
   <div class="stage-bar">
@@ -109,6 +122,7 @@ body{background:var(--bg);color:var(--fg)}
     <div class="ctrls">
       <div class="seg" id="aspectSeg"><button data-a="916" aria-pressed="true">9:16</button><button data-a="169" aria-pressed="false">16:9</button></div>
       <div class="seg" id="zoomSeg"><button data-z="fit" aria-pressed="true">Fit</button><button data-z="100" aria-pressed="false">100%</button></div>
+      <button class="btn small" id="blurBtn" aria-pressed="false" title="Preview the export's motion blur (same sub-frames as the MP4)">Blur</button>
       <button class="btn small" id="safeBtn" aria-pressed="false">Safe area</button>
       <button class="btn small" id="fsBtn">Fullscreen</button>
     </div>
@@ -183,7 +197,7 @@ body{background:var(--bg);color:var(--fg)}
       <div class="inrow"><span class="lbl w70">Loudness</span><div class="seg" id="exLufs"><button data-v="-14">−14 LUFS</button><button data-v="-12">−12</button><button data-v="off">off</button></div></div>
       <label class="tog"><span class="sw"><input type="checkbox" role="switch" id="exLoop"><i aria-hidden="true"></i></span> Loop-safe audio (1-beat crossfade into bar 1)</label>
       <label class="tog"><span class="sw"><input type="checkbox" role="switch" id="exDraft"><i aria-hidden="true"></i></span> Draft (720p, fast)</label>
-      <div class="exfoot inrow"><button class="btn primary" id="exBtn">Export MP4</button><button class="btn" id="exCancel" hidden>Cancel</button><button class="btn small" id="cueSave">Cue sheet .json</button></div>
+      <div class="exfoot inrow"><button class="btn" id="reviewBtn">Review</button><button class="btn primary" id="exBtn">Export MP4</button><button class="btn" id="exCancel" hidden>Cancel</button><button class="btn small" id="cueSave">Cue sheet .json</button></div>
       <div class="prog"><i id="exProg"></i></div>
       <div class="hint mono" id="exRate" aria-live="polite"></div>
       <div class="status" id="exStatus">Frame-exact offline render (WebCodecs) from the cue sheet. Falls back to real-time recording if the browser cannot encode.</div>
@@ -230,4 +244,15 @@ body{background:var(--bg);color:var(--fg)}
  <div class="sheet" id="sheet" aria-live="polite"><div class="sheet-h"><span class="lbl">Key</span><button class="btn small" id="sheetClose">Done</button></div><div id="sheetBody"></div></div>
 </section>
 </main>
+<dialog class="review" id="review" aria-labelledby="revTtl">
+  <div class="rev-h"><h2 class="ttl" id="revTtl">Review before export</h2><span class="hint" id="revSum"></span><button class="btn small" id="revClose">Close</button></div>
+  <div class="rev-body">
+    <div class="rev-frames" id="revFrames"></div>
+    <div class="rev-side">
+      <div class="group-h"><span class="lbl">Checks</span></div><ul class="rev-checks" id="revChecks"></ul>
+      <div class="group-h"><span class="lbl">Every word in the video</span></div><div class="rev-fields" id="revFields"></div>
+    </div>
+  </div>
+  <div class="rev-f"><span class="hint" id="revNote">Text edits apply live. Click a frame to move the playhead there.</span><button class="btn" id="revRefresh">Refresh frames</button><button class="btn primary" id="revExport">Export MP4</button></div>
+</dialog>
 <script type="module" src="src/main.js"></script>

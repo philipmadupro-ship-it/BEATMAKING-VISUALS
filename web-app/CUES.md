@@ -257,3 +257,9 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - v19.3 player intro: silent pre-roll browse (negative beats: intro.index 2 -> 1 -> 0 on cursor clicks, intro.enter, intro.select at -1.25), then the cursor clicks play at beat 0 and the push runs over bar 1 (intro.length 1); native `--preroll` default 1.9 s; the rewind outro runs back through the browse to the first frame.
 - v19.3 `focus.window` / `focus.dim`: the clicked panel comes to the front (3 percent bigger), the rest dims behind it.
 - v19.3 player logo threads in/out every 4 bars (`logo.hold` 0); MIDI map notes must persist over 3+ frames (no drum / noise ghosts); the now-playing player sits at the bottom (9:16 above the caption zone, 16:9 right column bottom).
+
+## v20 editor (U2C Studio)
+- **Media bin** (left rail → Media): 5 cover slots. Slot 0 is the beat cover: the hero, now playing, the card the cursor chooses, and the loop's last frame. Slots 1-4 are the browse covers. You can drop many images at once, drag one slot onto another to swap, × resets a slot, and covers persist in IndexedDB. Video layer and beat are also replaceable by drop. API: `u2c.media.{setCover, resetCover, swap, addFiles, list}`.
+- **Blur** (viewer bar): the preview runs the export's motion blur (shared `createBlur` in `engine/render.js`) on the export frame grid.
+- **Review** (Export tab): key moments rendered as the MP4 will have them (pre-roll, blur), checks (loop seam vs frame 0, covers, length, blur, intro, clicks, video layer, long text) and every word in the video as live, undoable fields.
+- Fix: switching look / stage also updates the sheet base, and the film reads look / stage at beat 0 during the pre-roll. Before this fix, a web Player export opened its intro without the hook, cursor and play icon.

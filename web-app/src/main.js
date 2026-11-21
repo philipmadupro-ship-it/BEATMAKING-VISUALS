@@ -20,6 +20,8 @@ import { createInspector } from './ui/inspector.js';
 import { createGrid } from './ui/grid.js';
 import { createStudio } from './ui/studio.js';
 import { createPanels } from './ui/panels.js';
+import { createMedia } from './ui/media.js';
+import { createReview } from './ui/review.js';
 import { createExporter } from './ui/exporter.js';
 import { slug } from './util/draw.js';
 
@@ -44,9 +46,6 @@ async function boot() {
   await Promise.race([loadFonts(), new Promise((r) => setTimeout(r, 3000))]).catch(() => {});
   const clock = createClock(), motion = createMotion(libs.gsap), cues = createCueStore();
   const app = { store, clock, libs, assets, cues, motion, hook, actions: {} };
-  // v14.2: Upload cover = the beat's own cover (replaces cover 0 everywhere: intro carousel, hero, now playing). Session only, never uploaded.
-  document.getElementById('coverFile')?.addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; try { const im = new Image(); im.src = URL.createObjectURL(f); await im.decode();
-    const cv = assets.intro && assets.intro.covers; if (cv) { cv[0] = im; cv.v = (cv.v || 0) + 1; } document.getElementById('coverInfo').textContent = f.name; } catch { document.getElementById('coverInfo').textContent = 'could not read that image'; } });
   app.clip = createClipManager(app); app.renderFrame = createRenderer(app);
   const A = app.actions; window.u2c = app;
   // the property registry of the look at the playhead (cached per look / stage / aspect / bars / tags)
@@ -57,6 +56,8 @@ async function boot() {
   app.timeline = createTimeline(app); app.grid = createGrid(app); app.studio = createStudio(app);
   app.cuetl = createCueTimeline(app, $('#cueCv')); app.inspector = createInspector(app, $('#insp'));
   app.panels = createPanels(app); app.exporter = createExporter(app);
+  app.media = createMedia(app); app.review = createReview(app);   // v20: media bin (covers / video / audio) + review before export
+  store.subscribe(() => { const tr = store.session.track, el = document.getElementById('mediaAud'); if (el) el.textContent = tr ? `${tr.meta.name} · ${Math.round(tr.bpm)} BPM · ${tr.key || ''}` : ''; });
   motion.press(document.body);
   let userClip = false;
 
@@ -73,8 +74,8 @@ async function boot() {
   A.setClip = (a, b, why) => { userClip = true; store.set({ project: { inT: a, outT: b } }, why); app.timeline.setClip(a, b); afterClip(); };
   A.applyHook = (sec) => { const tr = store.session.track; if (!tr) return; const [a, b] = hook(tr, sec); store.set({ project: { inT: a, outT: b, clipLen: sec } }); app.timeline.setClip(a, b); clock.seek(a); afterClip(); };
   function afterClip() { app.studio.readouts(); app.cuetl.fit(); const e = app.clip.current(); if (e) e.promise.then(() => syncCues()); app.exporter.info(); app.studio.markDirty(); }
-  A.setLook = (id) => { store.set({ project: { look: id } }); cues.edit((s) => { setFirst(s, 'look', id); refreshAutoIn(s); }, 'look'); app.panels.sync(); app.exporter.info(); };
-  A.setStage = (id) => { store.set({ project: { stage: id } }); cues.edit((s) => { setFirst(s, 'stage', id); refreshAutoIn(s); }, 'stage'); accent(); app.panels.sync(); app.exporter.info(); };
+  A.setLook = (id) => { store.set({ project: { look: id } }); cues.edit((s) => { setFirst(s, 'look', id); s.base.look = id; refreshAutoIn(s); }, 'look'); app.panels.sync(); app.exporter.info(); };
+  A.setStage = (id) => { store.set({ project: { stage: id } }); cues.edit((s) => { setFirst(s, 'stage', id); s.base.stage = id; refreshAutoIn(s); }, 'stage'); accent(); app.panels.sync(); app.exporter.info(); };
   A.setAspect = (a) => { store.set({ project: { aspect: a } }); cues.edit((s) => { s.meta.aspect = a; refreshAutoIn(s); }, 'aspect'); app.studio.setAspectUI(); app.studio.layout(); app.exporter.info(); };
   function setFirst(s, path, v) { const t = s.tracks.find((x) => x.path === path); if (t && t.keys.length) t.keys[0].v = v; else s.base[path] = v; }
   /** Regenerate the auto tracks for the current section / look / stage (keeps tracks the user edited). */

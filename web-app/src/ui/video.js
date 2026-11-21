@@ -9,7 +9,7 @@ export function createVideoLayer(app) {
   const spb = () => (app.store.session.track ? app.store.session.track.spb : 0.5);
   const offsetAt = (clipT) => +ev().value('video.offset', clipT / spb(), 0) || 0;
   const target = (clipT) => { const d = el.duration || 0, v = clipT + offsetAt(clipT); return Math.max(0, Math.min(Math.max(0, d - 0.001), v)); };
-  function info(txt) { $('#vidInfo').textContent = txt; $('#vidClear').hidden = !el; }
+  function info(txt) { $('#vidInfo').textContent = txt; const m = $('#mediaVid'); if (m) m.textContent = el ? txt : 'drop a DAW screen recording here'; $('#vidClear').hidden = !el; }
   function clear() { if (el) { el.pause(); el.removeAttribute('src'); el.load(); } if (url) URL.revokeObjectURL(url); url = ''; el = null; globalThis.u2cVideoLayer = null; info('a DAW screen recording blends into the film'); app.studio.markDirty(); }
   async function load(file) {
     clear(); url = URL.createObjectURL(file); const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = url;
@@ -22,6 +22,7 @@ export function createVideoLayer(app) {
   $('#vidOn').addEventListener('change', (e) => { app.actions.setProp('video.on', e.target.checked); app.studio.markDirty(); });
   app.cues.subscribe(() => { const o = $('#vidOn'); if (o && document.activeElement !== o) o.checked = !!ev().value('video.on', app.cuetl ? app.cuetl.state.playhead : 0, false); });
   return {
+    load,
     get loaded() { return !!el; },
     /** Live preview: follow the clock (t = absolute audio time). */
     sync(t) { if (!el) return; const want = target(t - P().inT), playing = app.clock.playing;

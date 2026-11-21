@@ -591,7 +591,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     L.view.minPx = LOOK === 'player' && port ? 25 : 0;   // v19.1: phone legibility floor (player 9:16)
     PRE = Math.max(0, opts.preroll || 0); const filmT = t - PRE; let paused = filmT < 0; t = filmT;   // v19.3: negative t = the silent pre-roll browse (intro keys at negative beats)   // v19: click-to-play pre-roll (native passes opts.preroll); filmT < 0 = paused
     t = clamp(t, -PRE, D.duration - 1 / fps) + 0.5 / fps; b = t / BEAT;
-    setState(V('look', opts.look || 'exe'), V('stage', opts.stage || 'nigredo')); pendulum();
+    { const b0 = Math.max(0, b); setState(ev.value('look', b0, opts.look || 'exe'), ev.value('stage', b0, opts.stage || 'nigredo')); } pendulum();   // v20: the pre-roll (b < 0) uses the look / stage of beat 0 (the base could be stale in old sheets)
     c.setTransform(scale, 0, 0, scale, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
     if (opts.test) { L.view.camZ = 1; L.view.base = scale; testMode(opts.test, t); c.setTransform(1, 0, 0, 1, 0, 0); return { look: LOOK, stage: S.name, test: opts.test }; }
     // v17.1 seamless loop (player): the final bar plays the intro BACKWARDS (cubic ease-out into t = 0), so the last frame flows into frame 0

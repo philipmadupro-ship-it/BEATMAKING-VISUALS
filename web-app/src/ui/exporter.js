@@ -2,7 +2,7 @@
 // (look x length, each with a cue sheet rebuilt from the analysis of its own section), voice tag, cue sheet JSON.
 import { ASPECTS, LOOKS, LOOK_NAMES } from '../v8/layout.js';
 import { STAGES } from '../v8/core.js';
-import { makeSurface } from '../engine/render.js';
+import { makeSurface, createBlur } from '../engine/render.js';
 import { prepareAudio } from '../export/audio.js';
 import { canOffline, exportOffline } from '../export/offline.js';
 import { exportRealtime } from '../export/recorder.js';
@@ -31,15 +31,8 @@ export function createExporter(app) {
     $('#loudKv').innerHTML = `<dt>Measured in</dt><dd>${au.stats.inLufs.toFixed(1)} LUFS</dd><dt>Gain</dt><dd>${au.stats.gainDb >= 0 ? '+' : ''}${au.stats.gainDb.toFixed(1)} dB</dd><dt>Out</dt><dd>${au.stats.outLufs.toFixed(1)} LUFS · peak ${au.stats.peakDb.toFixed(1)} dBTP (4× oversampled)</dd>`;
     const PRE = ex.preroll !== false && project.look === 'player' ? 1.9 : 0;   // v19.4 click-to-play pre-roll (as the native --preroll)
     const work = makeSurface(W, H), renderOne = (t, surf, info) => app.renderFrame(t, surf, project, tr, { entry, sheet, fps: ex.fps, info, preroll: PRE }), blur = ex.mblur !== false, SH = ex.shutter ?? 0.5;
-    // Motion blur (as the native renderer): the frame, then, only if the camera / intro moved vs the previous frame, 2 sub-frames at t +- shutter/2 averaged in (running mean, alpha 1/2 then 1/3).
-    let prev = null, prevT = -1, off = null;
-    const moving = (a, p) => { if (!p) return true; if (a.intro || p.intro) return !a.intro || !p.intro || Math.abs(a.index - p.index) > 0.002 || Math.abs(a.push - p.push) > 0.0005 || Math.abs(a.enter - p.enter) > 0.002;
-      if (!a.cam || !p.cam) return true; return Math.abs(a.cam.z - p.cam.z) / a.cam.z * W + Math.abs(a.cam.x - p.cam.x) + Math.abs(a.cam.y - p.cam.y) > 2; };
-    const render = (t) => { const info = {}, cv = renderOne(t, work, info) || work.canvas; if (!blur) return cv;
-      const mv = Math.abs(t - prevT - 1 / ex.fps) > 1e-4 || moving(info, prev); prev = info; prevT = t; if (!mv) return cv;
-      off = off || makeSurface(W, H); let k = 1;
-      for (const d of [-0.5, 0.5]) { renderOne(t + d * SH / ex.fps, off, {}); k++; work.ctx.save(); work.ctx.setTransform(1, 0, 0, 1, 0, 0); work.ctx.globalCompositeOperation = 'source-over'; work.ctx.globalAlpha = 1 / k; work.ctx.drawImage(off.canvas, 0, 0); work.ctx.restore(); }
-      return cv; };
+    // Motion blur: the shared engine/render.js createBlur (the preview's Blur button runs the same code)
+    const blurF = createBlur(), render = (t) => (blur ? blurF(renderOne, t, work, ex.fps, SH) : renderOne(t, work, {}) || work.canvas);
     const rate = (q, s, n) => { const fps = n / Math.max(.001, s), eta = q >= 1 ? 0 : Math.max(0, Math.round((n / Math.max(q, 1e-6) - n) / Math.max(fps, .001))); $('#exRate').textContent = `${fps.toFixed(1)} fps · ETA ${eta} s`; };
     // v19.4 audio: delay the beat by the pre-roll and mix the synthesized UI clicks (port of motion/tools/clicks.py) at the film's click times
     let audioOut = au.buffer;

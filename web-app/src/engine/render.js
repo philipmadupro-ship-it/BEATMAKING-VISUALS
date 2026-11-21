@@ -27,3 +27,24 @@ export function createRenderer(app) {
     return surf.canvas;
   };
 }
+
+/**
+ * v20 shared motion blur (export + preview use the SAME code, so what you see is what the MP4 gets; it mirrors the native renderer):
+ * render the frame; if the camera / intro moved against the previous frame (or this is a jump), render 2 sub-frames at
+ * t +- shutter/2 frames and average them in (running mean, alpha 1/2 then 1/3). Still frames are never blurred.
+ * createBlur(W, H) -> (renderOne(t, surf, info) -> canvas, t, work, fps, shutter, force?) -> canvas
+ */
+export function createBlur() {
+  let prev = null, prevT = -1, off = null;
+  const moving = (a, p, W) => { if (!p) return true; if (a.intro || p.intro) return !a.intro || !p.intro || Math.abs(a.index - p.index) > 0.002 || Math.abs(a.push - p.push) > 0.0005 || Math.abs(a.enter - p.enter) > 0.002;
+    if (!a.cam || !p.cam) return true; return Math.abs(a.cam.z - p.cam.z) / a.cam.z * W + Math.abs(a.cam.x - p.cam.x) + Math.abs(a.cam.y - p.cam.y) > 2; };
+  return function blurFrame(renderOne, t, work, fps, shutter = 0.5, force = false) {
+    const info = {}, cv = renderOne(t, work, info) || work.canvas;
+    let mv = force || Math.abs(t - prevT - 1 / fps) > 1e-4 || moving(info, prev, work.w);
+    if (!force && Math.abs(t - prevT - 1 / fps) > 1e-4) { const pi = {}; off = off && off.w === work.w ? off : makeSurface(work.w, work.h); renderOne(t - 1 / fps, off, pi); mv = moving(info, pi, work.w); }   // a jump (preview scrub): compare with the frame before
+    prev = info; prevT = t; if (!mv) return cv;
+    off = off && off.w === work.w ? off : makeSurface(work.w, work.h); let k = 1;
+    for (const d of [-0.5, 0.5]) { renderOne(t + d * shutter / fps, off, {}); k++; work.ctx.save(); work.ctx.setTransform(1, 0, 0, 1, 0, 0); work.ctx.globalCompositeOperation = 'source-over'; work.ctx.globalAlpha = 1 / k; work.ctx.drawImage(off.canvas, 0, 0); work.ctx.restore(); }
+    return cv;
+  };
+}

@@ -6,6 +6,7 @@ import { PRESETS } from '../cues/generate.js';
 import { saveFile } from '../export/save.js';
 import { fmtTC, clamp, slug } from '../util/draw.js';
 import { createLayers } from './layers.js';
+import { createBlur } from '../engine/render.js';
 import { createVideoLayer } from './video.js';
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const SAFE = { '916': { hard: { x0: 162, x1: 918, y0: 288, y1: 1248 }, relaxed: { x0: 108, x1: 972, y0: 288, y1: 1440 }, zones: [{ x: 0, y: 0, w: 1080, h: 288, label: 'status + top bar' }, { x: 0, y: 1248, w: 1080, h: 672, label: 'caption · CTA · audio' }, { x: 918, y: 1000, w: 162, h: 248, label: 'like/share' }] },
@@ -139,7 +140,10 @@ export function createStudio(app) {
     else if (k === ',' || k === '.') { const f = (k === '.' ? 1 : -1) / 30; app.actions.seek(clamp(app.clock.time() + f, P().inT, P().outT - 1 / 30)); }
   });
   // ---- loop
-  let lastUI = 0, lastLayers = 0;
+  let lastUI = 0, lastLayers = 0, lastTq = -1, blurOn = false; const blurF = createBlur();
+  try { blurOn = localStorage.getItem('u2c.previewBlur') === '1'; } catch {}
+  const blurBtn = $('#blurBtn'); blurBtn.setAttribute('aria-pressed', blurOn);
+  blurBtn.addEventListener('click', () => { blurOn = !blurOn; blurBtn.setAttribute('aria-pressed', blurOn); lastTq = -1; markDirty(); try { localStorage.setItem('u2c.previewBlur', blurOn ? '1' : '0'); } catch {} });
   function frame(now) {
     requestAnimationFrame(frame); const tr = track(); if ($('#studio').hidden || !tr || app.store.session.exporting) return;
     const p = P(); let t = app.clock.time();
@@ -148,7 +152,10 @@ export function createStudio(app) {
     if (app.clock.playing) { if (L) { const a = p.inT + L.a * tr.spb, b = p.inT + L.b * tr.spb; if (t >= b) { app.clock.play(a); t = a; } }
       else if (app.clock.mode === 'track' && t >= p.outT) { if (p.loop) { app.actions.playLoop(p.inT); t = p.inT; } else { app.clock.pause(); app.clock.seek(p.outT - 1 / 30); } } }
     tl().setTime(t - p.inT); if (app.videoLayer.loaded) app.videoLayer.sync(t);
-    if (app.clock.playing || dirty) { dirty = false; info = {}; app.renderFrame(t, surf, p, tr, { info }); $('#measuring').textContent = info.look ? '' : 'measuring the section…'; if (pick) showPick();
+    if (blurOn) { const fps = p.export.fps || 30, tq = p.inT + Math.round((t - p.inT) * fps) / fps; if (tq !== lastTq) { lastTq = tq; dirty = true; } }   // v20: blur previews on the export's frame grid
+    if (app.clock.playing ? (!blurOn || dirty) : dirty) { dirty = false; info = {};
+      if (blurOn) { let first = true; blurF((tt, s2, inf) => { const r = app.renderFrame(tt, s2, p, tr, { info: inf }); if (first) { first = false; info = inf; } return r; }, lastTq, surf, p.export.fps || 30, p.export.shutter ?? 0.5); }
+      else app.renderFrame(t, surf, p, tr, { info }); $('#measuring').textContent = info.look ? '' : 'measuring the section…'; if (pick) showPick();
       app.timeline.setTime(t, !app.clock.playing); app.inspector.tick && app.inspector.tick(); }
     if (now - lastLayers > 250) { lastLayers = now; layers.update(); }
     tl().draw(); if (!app.clock.playing) app.inspector.tick && app.inspector.tick();

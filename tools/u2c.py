@@ -8,6 +8,9 @@
   python3 tools/u2c.py crop PNG x,y,w,h                       # zoom into a still (panel review)
   python3 tools/u2c.py render [-l player] [-s ...] [-a ...] [--len 30]   # final MP4s (sequential) -> out/v14 + deliver dir
   python3 tools/u2c.py test                      # web meters + smoke (prints pass counts + failures only)
+  python3 tools/u2c.py covers DIR|IMG... [--web]  # your covers -> the native renderer (slot 0 = the beat cover, 1-4 = browse); --web also into web-app/assets
+  python3 tools/u2c.py batch MANIFEST.json       # many beats in one go (see docs/AUTOMATION.md): each job = beat + covers + cue sheet + stages + lengths
+  render / stills also take --beat WAV --covers DIR --cues SHEET.json (a sheet saved from U2C Studio: every edit, tag and text you made there)
   python3 tools/u2c.py stage FILE...             # copy web files into the artifact publish dir (keeps relative paths)
 Paths come from env: U2C_WEB (web-app), U2C_NATIVE (HyperFrames project), U2C_OUT (review images), U2C_PUB (publish dir), U2C_DELIVER.
 """
@@ -30,14 +33,38 @@ def sync(_=None):
 
 def tag(a): return a.replace(':', 'x')
 
+COVER_DIRS = lambda: [os.path.join(NAT, 'film', 'v9', 'assets', 'covers')]
+def cover_files(src):
+    """A folder (sorted by name; a file named cover/beat/0* goes first) or a list of image paths -> up to 5 paths."""
+    fs = []
+    for x in (src if isinstance(src, list) else [src]):
+        if os.path.isdir(x): fs += sorted([os.path.join(x, f) for f in os.listdir(x) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))], key=lambda f: (not os.path.basename(f).lower().startswith(('cover', 'beat', '0')), f))
+        elif os.path.isfile(x): fs.append(x)
+    return fs[:5]
+def apply_covers(src, dirs=None, quiet=False):
+    """Square-crop (centre) each image to 1024 px JPEG into cover-0..4.jpg of the native renderer (call AFTER sync: sync restores the web covers)."""
+    from PIL import Image
+    fs = cover_files(src)
+    if not fs: print('covers: no images found in', src); return []
+    for d in (dirs or COVER_DIRS()):
+        os.makedirs(d, exist_ok=True)
+        for i, f in enumerate(fs):
+            im = Image.open(f).convert('RGB'); w, h = im.size; s0 = min(w, h); im = im.crop(((w - s0) // 2, (h - s0) // 2, (w - s0) // 2 + s0, (h - s0) // 2 + s0)).resize((1024, 1024), Image.LANCZOS)
+            im.save(os.path.join(d, f'cover-{i}.jpg'), quality=92)
+    if not quiet: print('covers: ' + ', '.join(f'{i}={os.path.basename(f)}' + (' (low res)' if min(Image.open(f).size) < 1000 else '') for i, f in enumerate(fs)))
+    return fs
+def covers(a):
+    sync(); dirs = COVER_DIRS() + ([os.path.join(WEB, 'assets', 'covers')] if a.web else []); apply_covers(a.src, dirs)
+    if a.web: print('note: web-app/assets/covers changed; the repo is PUBLIC, do not commit covers you do not want public')
+
 def stills(a):
     from PIL import Image, ImageDraw
-    sync(); os.makedirs(OUT, exist_ok=True); rows = []
+    sync(); a.covers and apply_covers(a.covers); os.makedirs(OUT, exist_ok=True); rows = []
     for st in a.s.split(','):
         for asp in a.a.split(','):
             d = os.path.join(OUT, f'{a.l}-{st}-{tag(asp)}')
             for old in glob.glob(os.path.join(d, 't-*.png')): os.remove(old)   # only this command's own stills
-            sh(['node', 'render.mjs', '--look', a.l, '--stage', st, '--aspect', asp, '--len', str(a.len), '--title', a.title, '--stills', a.t, '--out', d], cwd=NAT, quiet=False, timeout=900)
+            sh(['node', 'render.mjs', '--look', a.l, '--stage', st, '--aspect', asp, '--len', str(a.len), '--title', a.title, '--stills', a.t, '--out', d] + extra(a), cwd=NAT, quiet=False, timeout=900)
             fs = sorted([f for f in glob.glob(d + '/t-*.png') if '-crop' not in f], key=lambda f: float(f.split('t-')[1][:-4]))
             ims = []
             for f in fs:
@@ -76,16 +103,42 @@ def crop(a):
 
 def render(a):
     # v17.2: one render per format, the formats in PARALLEL (9:16 + 16:9 at the same time); adaptive motion blur in the native boot
-    sync(); od = os.path.join(NAT, 'out', 'v14'); os.makedirs(od, exist_ok=True); os.makedirs(DELIVER, exist_ok=True)
+    if not getattr(a, 'nosync', False): sync()
+    a.covers and apply_covers(a.covers); od = os.path.join(NAT, 'out', 'v14'); dl = getattr(a, 'deliver', None) or DELIVER; os.makedirs(od, exist_ok=True); os.makedirs(dl, exist_ok=True); pre = (a.prefix + '-') if getattr(a, 'prefix', '') else ''
     for st in a.s.split(','):
         jobs = []
         for asp in a.a.split(','):
-            f = os.path.join(od, f'{a.l}-{st}-{tag(asp)}' + ('' if a.len == 30 else f'-{a.len}s') + '.mp4')  # short cuts never overwrite the full render
-            jobs.append((f, subprocess.Popen(['node', 'render.mjs', '--look', a.l, '--stage', st, '--aspect', asp, '--len', str(a.len), '--title', a.title, '--intro', 'on', '--mblur', str(a.mblur)] + (['--hook', str(a.hook)] if a.hook is not None else []) + ['--out', f], cwd=NAT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)))
+            f = os.path.join(od, pre + f'{a.l}-{st}-{tag(asp)}' + ('' if a.len == 30 else f'-{a.len}s') + '.mp4')  # short cuts never overwrite the full render
+            jobs.append((f, subprocess.Popen(['node', 'render.mjs', '--look', a.l, '--stage', st, '--aspect', asp, '--len', str(a.len), '--title', a.title, '--intro', 'on', '--mblur', str(a.mblur)] + (['--hook', str(a.hook)] if a.hook is not None else []) + extra(a) + ['--out', f], cwd=NAT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)))
         for f, p in jobs:
             p.wait(); ok = p.returncode == 0 and os.path.exists(f)
-            if ok: shutil.copy(f, DELIVER)
+            if ok: shutil.copy(f, dl)
             print(('ok  ' if ok else 'FAIL') + ' ' + f + ('' if ok else ' ' + p.stderr.read().decode()[-400:]))
+
+def extra(a):
+    """Pass-through options for render.mjs: the beat, a cue sheet from U2C Studio, a tags file."""
+    x = []
+    if getattr(a, 'beat', None): x += ['--beat', os.path.abspath(a.beat)]
+    if getattr(a, 'cues', None): x += ['--cues', os.path.abspath(a.cues)]
+    if getattr(a, 'tags', None): x += ['--tags', os.path.abspath(a.tags)]
+    return x
+
+def batch(a):
+    """MANIFEST.json = {"defaults": {...}, "jobs": [{"name", "beat", "covers", "cues", "tags", "title", "stages", "aspects", "lengths", "look", "hook", "mblur"}]}
+    Every job renders stages x aspects x lengths (aspects in parallel) into DELIVER/<name>/; relative paths are relative to the manifest."""
+    import json, time
+    M = json.load(open(a.manifest)); base = os.path.dirname(os.path.abspath(a.manifest)); D0 = M.get('defaults', {}); rp = lambda v: v if not v or os.path.isabs(v) else os.path.join(base, v)
+    sync(); t0 = time.time(); n = 0
+    for j in M['jobs']:
+        J = {**D0, **j}; name = J.get('name') or os.path.splitext(os.path.basename(J.get('beat', 'beat')))[0]
+        L = J.get('lengths', [30]); L = L if isinstance(L, list) else [L]
+        if True:
+            for ln in L:
+                ns = argparse.Namespace(l=J.get('look', 'player'), s=','.join(J.get('stages', ['nigredo'])), a=','.join(J.get('aspects', ['9:16', '16:9'])), len=int(ln), title=J.get('title', name.upper()),
+                                        mblur=J.get('mblur', 3), hook=J.get('hook'), beat=rp(J.get('beat')), cues=rp(J.get('cues')), tags=rp(J.get('tags')), covers=rp(J.get('covers')), prefix=name, deliver=os.path.join(DELIVER, name), nosync=True)
+                print(f'== {name} · {ns.s} · {ns.a} · {ln}s'); render(ns); n += 1
+        if J.get('covers'): sync()   # restore the default covers for the next job
+    print(f'batch: {n} render sets in {(time.time() - t0) / 60:.1f} min -> {DELIVER}')
 
 def test(_=None):
     env = dict(os.environ, NOEXPORT='1', CDN_CACHE='/tmp/cdncache')
@@ -131,9 +184,12 @@ sp.add_parser('sync').set_defaults(fn=sync); sp.add_parser('test').set_defaults(
 for name, fn in (('stills', stills), ('render', render)):
     q = sp.add_parser(name); q.set_defaults(fn=fn); q.add_argument('-l', default='player'); q.add_argument('-s', default='nigredo'); q.add_argument('-a', default='9:16,16:9')
     q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3'); q.add_argument('--mblur', type=int, default=3); q.add_argument('--hook', type=int, default=None)
+    q.add_argument('--beat'); q.add_argument('--covers'); q.add_argument('--cues'); q.add_argument('--tags'); q.add_argument('--prefix', default='')
     if name == 'stills': q.add_argument('-t', default='12'); q.add_argument('--safe', type=int, default=1)
 q = sp.add_parser('beats'); q.set_defaults(fn=beats); q.add_argument('-l', default='player'); q.add_argument('-s', default='nigredo'); q.add_argument('-a', default='9:16')
 q.add_argument('--bars', default='0:4'); q.add_argument('--bpm', type=float, default=128); q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3'); q.add_argument('--safe', type=int, default=0)
+q = sp.add_parser('covers'); q.set_defaults(fn=covers); q.add_argument('src', nargs='+'); q.add_argument('--web', action='store_true')
+q = sp.add_parser('batch'); q.set_defaults(fn=batch); q.add_argument('manifest')
 q = sp.add_parser('strip'); q.set_defaults(fn=strip); q.add_argument('video'); q.add_argument('-t', default='3.3:4.3:0.15')
 q = sp.add_parser('crop'); q.set_defaults(fn=crop); q.add_argument('png'); q.add_argument('box')
 q = sp.add_parser('review'); q.set_defaults(fn=review); q.add_argument('video'); q.add_argument('--pre', type=float, default=0.7); q.add_argument('--bpm', type=float, default=128)
