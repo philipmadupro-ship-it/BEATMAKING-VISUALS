@@ -87,5 +87,7 @@ export function createExporter(app) {
   // voice tag
   $('#vtFile').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; try { const b = await app.clock.ctx.decodeAudioData(await f.arrayBuffer()); app.store.set({ session: { voiceTag: b }, project: { export: { voiceTag: true } } }); $('#vtInfo').textContent = `${f.name} · ${b.duration.toFixed(1)} s`; $('#vtOn').checked = true; } catch (_) { $('#vtInfo').textContent = 'could not decode that file'; } });
   syncBatch();
-  return { info, syncBatch, run, renderVideo };
+  return { info, syncBatch, run, renderVideo, addResult, nameFor, sheetFor, dims,
+    /** v21 queue: cancel the running render / reset the flag before a new one. */
+    cancel() { cancel = true; }, resetCancel() { cancel = false; }, get cancelled() { return cancel; } };
 }
