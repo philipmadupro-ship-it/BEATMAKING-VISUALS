@@ -38,7 +38,7 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     // (camera.zoom) so the video ends on the cover and loops into the cover-flow intro, which opens on the same cover
     // v19.1: wide breaths in the cycle; the two CTA alerts land on the first two wide breaths (over the whole desktop, never over a zoomed panel)
     const seq = ['spectrum', 'session', 'wide', 'stereo', 'wide', 'loud', 'stage', 'wide'].filter((id) => id === 'wide' || ids.includes(id)), wides = []; let bar = 3;
-    for (; bar < NB - 4; bar += 2) { const id = seq[i++ % seq.length]; if (id === 'wide') wides.push(bar); cam.push(key(bar * 4, id, { transition: 'push', dur: 2, ease: 'spring' })); }
+    for (; bar < NB - 4; bar += 2) { const id = seq[i++ % seq.length]; if (id === 'wide') wides.push(bar); cam.push(key(bar * 4, id, { transition: 'push', dur: aspect === '169' ? 3 : 2, ease: 'spring' })); }   // v19.1: YouTube 16:9 moves are calmer (3 beats)
     if (wides[0] != null) { sheet.base['social.cta1.at'] = wides[0] * 4 + 1; sheet.base['social.cta1.len'] = 4; }
     if (wides[1] != null) { sheet.base['social.cta2.at'] = wides[1] * 4 + 1; sheet.base['social.cta2.len'] = 4; }
     if (ids.includes('stage') && NB >= 8) { cam.push(key((NB - 3) * 4, 'stage', { transition: 'push', dur: 2, ease: 'spring' })); sheet.tracks.push(track('intro.open', 'number', 'stage', [key(0, 3, { ease: 'step' })]));

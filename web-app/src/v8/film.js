@@ -132,7 +132,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
       cand.sort((a2, b2) => b2[0] - a2[0]); for (let j = 0; j < Math.min(K, cand.length); j++) { bin[f * K + j] = cand[j][1]; lv[f * K + j] = Math.min(1, (cand[j][0] - med) / 70); } }
     return (PK = { bin, lv, K, lo, hi, NFr }); }
   function pianoRoll(x, y, w, h, t, Sx) {
-    const P = rollPeaks(), fry = V('hero.fry', Sx.grey ? 'negative' : 'thermal'), ink = V('roll.color', fry === 'negative' ? '#0b0b0b' : Sx.grey ? Sx.ink : Sx.hot), f0 = Math.min(P.NFr - 1, fidx(t));
+    const P = rollPeaks(), fry = V('hero.fry', Sx.grey ? 'negative' : Sx.name === 'RUBEDO' ? 'thermal' : 'stage'), ink = V('roll.color', fry === 'negative' ? '#0b0b0b' : Sx.grey ? Sx.ink : Sx.hot), f0 = Math.min(P.NFr - 1, fidx(t));
     const span = V('roll.span', 4) * BEAT, px = x + w * V('roll.playhead', 0.56), pxPerS = (px - x) / span, row = (i) => y + h * 0.1 + h * 0.8 * (1 - (i - P.lo) / (P.hi - P.lo)), FPSr = FPS;
     c.save(); c.strokeStyle = rgba(ink, 0.55); c.lineWidth = 1; c.beginPath(); c.moveTo(px + 0.5, y); c.lineTo(px + 0.5, y + h); c.stroke();
     c.setLineDash([2, 4]); c.strokeStyle = rgba(ink, 0.35); c.beginPath(); c.moveTo(px - BEAT * pxPerS + 0.5, y); c.lineTo(px - BEAT * pxPerS + 0.5, y + h); c.stroke(); c.setLineDash([]);
@@ -308,7 +308,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     }
   }
   function coverBody(cr, t, k, Sx) {
-    const fry = LOOK === 'player' ? V('hero.fry', Sx.grey ? 'negative' : 'thermal') : 'none', r = L.winRect, [x, y, w, h] = r, rad = V('glass.radius', 22), I = glowAt(fidx(t)) * V('cover.pulse', 1), cv = INTRO.coverFried ? INTRO.coverFried(Math.round(V('player.cover', 0)), Sx, fry) : null;
+    const fry = LOOK === 'player' ? V('hero.fry', Sx.grey ? 'negative' : Sx.name === 'RUBEDO' ? 'thermal' : 'stage') : 'none', r = L.winRect, [x, y, w, h] = r, rad = V('glass.radius', 22), I = glowAt(fidx(t)) * V('cover.pulse', 1), cv = INTRO.coverFried ? INTRO.coverFried(Math.round(V('player.cover', 0)), Sx, fry) : null;
     L.coverRect = r; L.coverRadius = rad;
     c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip(); c.clip(L.rr(x, y, w, h, rad));
     if (cv) { const z = L.openFx ? 1 : 1 + 0.012 * I, sc = Math.max(w, h) / cv.width * z; c.drawImage(cv, x + w / 2 - cv.width * sc / 2, y + h / 2 - cv.height * sc / 2, cv.width * sc, cv.height * sc); }   // (the scale pulse waits for the dolly to land: the match cut is an exact crop)
