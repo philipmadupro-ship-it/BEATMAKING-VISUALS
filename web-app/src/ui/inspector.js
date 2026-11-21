@@ -111,7 +111,7 @@ export function createInspector(app, root) {
       ${timed ? `<span class="hint pc">${hasKeys ? tr.keys.length + ' on its lane' : 'timed: ◆ adds one at the playhead'}</span>` : main ? `<div class="pc">${main}</div>` : ''}${extra ? `<div class="pe">${extra}</div>` : ''}${hasKeys ? strip(tr) : ''}</div>`;
   }
   // Inspector sections: the elements of the registry grouped the way a designer looks for them.
-  const SECTIONS = [['Scene', (e) => ['scene', 'intro', 'ground', 'overlays'].includes(e.id)], ['Camera', (e) => ['camera', 'focus'].includes(e.id)], ['Hero', (e) => ['hero', 'logo', 'pendant'].includes(e.id)],
+  const SECTIONS = [['Scene', (e) => ['scene', 'intro', 'video', 'ground', 'overlays'].includes(e.id)], ['Camera', (e) => ['camera', 'focus'].includes(e.id)], ['Hero', (e) => ['hero', 'logo', 'pendant'].includes(e.id)],
     ['Windows', (e) => e.id.startsWith('win.')], ['Meters', (e) => e.id.startsWith('meter.')], ['Colours', (e) => ['stagecol', 'wavecols'].includes(e.id)], ['FX', (e) => e.id === 'fx'], ['Tags', (e) => e.id === 'text' || e.id.startsWith('tag.')]];
   const secOf = (e) => (SECTIONS.find(([, f]) => f(e)) || ['Other'])[0];
   const secOpen = { Camera: true };

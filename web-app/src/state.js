@@ -8,7 +8,7 @@ export const DEFAULT_PROJECT = {
   text: { artistA: 'Travis Scott', artistB: 'Future', price: '$29', link: 'link in bio', titleFormat: '' },
   inT: 0, outT: 15, loop: true, clipLen: 30,
   timeline: { snap: 'beat', pxPerBeat: 0, collapsed: null, compact: null, closed: {}, density: 'fewer', magnet: true },
-  export: { fps: 30, mbps: 12, loudness: -14, loopSafe: false, draft: false, voiceTag: false, voiceEvery: 25, batch: ['exe', 'lab', 'scope'], batchLens: [15], both: false },
+  export: { fps: 30, mbps: 12, loudness: -14, loopSafe: false, draft: false, voiceTag: false, voiceEvery: 25, batch: ['exe', 'lab', 'scope'], batchLens: [15], both: false, mblur: true, shutter: 0.5 },
 };
 const clone = (o) => JSON.parse(JSON.stringify(o));
 function deepMerge(a, b) { for (const k in b) { const v = b[k]; if (v && typeof v === 'object' && !Array.isArray(v) && a[k] && typeof a[k] === 'object' && !Array.isArray(a[k])) deepMerge(a[k], v); else a[k] = v; } return a; }

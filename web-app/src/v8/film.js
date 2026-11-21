@@ -318,12 +318,29 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   // v12: spectrum + spectrogram calls are wrapped here so the merge can switch them to SV.draw / SG.draw(ctx, rect, frame, opts)
   const drawSpectrum = (cr, t, k, Sx) => M.spectrum(c, Sx, cr, t, k), drawSpectrogram = (cr, t, k, Sx) => M.spectro(c, Sx, cr, t, k);
+  // ---------------------------------------------------------------- v19 VIDEO LAYER hook (UI-provided)
+  // L.videoLayer = { src, w, h } (assets.videoLayer, else globalThis.u2cVideoLayer: app.assets is frozen) (src: HTMLVideoElement | canvas | ImageBitmap, already at the right frame; null = no video) is set from assets.videoLayer.
+  // Cue props: video.on / .target (hero | full | waveform) / .blend / .opacity / .fit / .desat (offset is read by the UI, which seeks the source).
+  // Every draw is wrapped in save()/restore(): the blend op, alpha and filter must never leak (a leaked op broke the invert pass once).
+  Object.defineProperty(L, 'videoLayer', { get: () => (assets && assets.videoLayer) || globalThis.u2cVideoLayer || null, configurable: true });
+  const VBLEND = ['screen', 'multiply', 'overlay', 'difference', 'lighten', 'darken', 'luminosity', 'soft-light'];
+  function videoDraw(target, rx, ry, rw, rh) {
+    const vl = L.videoLayer; if (!vl || !vl.w || !vl.h || (vl.src.readyState != null && vl.src.readyState < 2) || !V('video.on', false)) return;
+    const tg = V('video.target', 'hero'); if (tg !== target && !(target === 'full' && tg === 'hero' && LOOK !== 'player')) return;
+    const bl = V('video.blend', 'screen'), fit = V('video.fit', 'cover'), ds = clamp(V('video.desat', S.grey ? 1 : 0), 0, 1), sc = (fit === 'cover' ? Math.max : Math.min)(rw / vl.w, rh / vl.h), dw = vl.w * sc, dh = vl.h * sc;
+    c.save(); c.beginPath(); c.rect(rx, ry, rw, rh); c.clip();
+    c.globalAlpha = clamp(V('video.opacity', 0.8), 0, 1); c.globalCompositeOperation = VBLEND.includes(bl) ? bl : 'screen';
+    if (ds > 0 && 'filter' in c) c.filter = `grayscale(${ds})`;
+    try { c.drawImage(vl.src, rx + (rw - dw) / 2, ry + (rh - dh) / 2, dw, dh); } catch (_) { /* source not decodable yet */ }
+    c.restore();
+  }
   // ---------------------------------------------------------------- v14 player: hero, now-playing, inserts, metadata
   // hero: the U2C chain logo centred in its cell (thread in/out + exponential kick glow unchanged), the elephant STATIC under the U (a logo mark, no swing),
   // the caption block bottom right, registration crosses. L.heroRect (set here) = the cell.
   function playerHero(cr, t, k, Sx) {
     const [x, y, w, h] = L.winRect, cx = x + w / 2 + V('hero.x', 0), cy = y + h * (V('hero.elephant', false) ? 0.40 : 0.5) + V('hero.y', 0), bb = BR.logoBBox(), lw = Math.min(w * (port ? 0.52 : 0.43), h * 0.62 * bb.w / bb.h) * V('hero.scale', 1) * V('logo.scale', 1), lh = lw * bb.h / bb.w;
     if (V('hero.cover', true)) coverBody(cr, t, k, Sx);   // v14.1: the darkened cover-0 behind the logo = the intro's match-cut target
+    videoDraw('hero', x, y, w, h * k);   // v19 video layer: after the cover, before the MIDI map
     if (V('roll.on', true)) { const [rx, ry, rw, rh] = L.winRect; c.save(); c.beginPath(); c.rect(rx, ry, rw, rh * k); c.clip(); c.clip(L.rr(rx, ry, rw, rh, V('glass.radius', 22))); pianoRoll(rx, ry, rw, rh, t, Sx); c.restore(); }
     c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip();
     const hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4)), I = glowAt(fidx(t));
@@ -346,7 +363,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const g = 12, tw = (w - 3 * g) / 4; for (let i = 0; i < 4; i++) L.panel(c, x + i * (tw + g), y, tw, h, Sx, { r: 10 });   // placeholder: empty glass tiles until the module exists
   }
   const BODY = { hero: playerHero, now: playerNow, inserts: playerInserts, meta: (cr, t, k, Sx) => PL.meta(c, Sx, cr, t, { cover: INTRO.coverCanvas ? INTRO.coverCanvas(Math.round(V('player.cover', 0)), Sx) : null }),
-    cover: coverBody, logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),
+    cover: coverBody, logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => { M.session(c, Sx, cr, t, k); videoDraw('waveform', cr[0], cr[1], cr[2], cr[3] * k); }, clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),
     eq: (cr, t, k, Sx) => M.eq(c, Sx, cr, t, k), spectrum: drawSpectrum, loudness: (cr, t, k, Sx) => (LOOK === 'player' ? M.levels(c, Sx, cr, t, k, { variant: 'player' }) : M.loud(c, Sx, cr, t, k)), stereo: (cr, t, k, Sx) => M.stereo(c, Sx, cr, t, k, LOOK === 'player' ? { variant: 'player' } : undefined),
     spectrogram: drawSpectrogram, surface: (cr, t, k, Sx) => M.surface(c, Sx, cr, t, k),
     levels: (cr, t, k, Sx) => M.levels(c, Sx, cr, t, k), ghost: (cr, t, k, Sx) => M.ghost(c, Sx, cr, t, k) };
@@ -555,6 +572,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (LOOK === 'player' && V('cursor.on', true)) cursor(t);
     hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
+    videoDraw('full', 0, 0, W, H);   // v19 video layer, full frame (screen space, over the windows, under halation / overlays)
     if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16));
     if (L.openFx) INTRO.streak(c, L.openFx.px, L.openFx.py, L.openFx.dl);   // v13 intro: directional streak copies on the opening dolly-out
     result(t); hud(t, ev.shot(b)); social(t, false); textCues(t); textures(t);

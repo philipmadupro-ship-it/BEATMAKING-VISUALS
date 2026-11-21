@@ -6,6 +6,7 @@ import { PRESETS } from '../cues/generate.js';
 import { saveFile } from '../export/save.js';
 import { fmtTC, clamp, slug } from '../util/draw.js';
 import { createLayers } from './layers.js';
+import { createVideoLayer } from './video.js';
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const SAFE = { '916': { hard: { x0: 162, x1: 918, y0: 288, y1: 1248 }, relaxed: { x0: 108, x1: 972, y0: 288, y1: 1440 }, zones: [{ x: 0, y: 0, w: 1080, h: 288, label: 'status + top bar' }, { x: 0, y: 1248, w: 1080, h: 672, label: 'caption · CTA · audio' }, { x: 918, y: 1000, w: 162, h: 248, label: 'like/share' }] },
   '169': { hard: { x0: 96, x1: 1824, y0: 80, y1: 900 }, relaxed: { x0: 64, x1: 1856, y0: 54, y1: 960 }, zones: [{ x: 0, y: 960, w: 1920, h: 120, label: 'player controls' }] } };
@@ -45,6 +46,7 @@ export function createStudio(app) {
     app.actions.setProp(`win.${drag.id}.x`, drag.r0[0] + dx, true); app.actions.setProp(`win.${drag.id}.y`, drag.r0[1] + dy, true); showPick(); });
   const endDrag = () => { if (drag && drag.moved) app.cues.commit('move window'); drag = null; view.classList.remove('grabbing'); app.inspector.show(); };
   view.addEventListener('pointerup', endDrag); view.addEventListener('pointercancel', endDrag);
+  app.videoLayer = createVideoLayer(app);
   layers = createLayers(app, $('#layerList'), { pick: (id) => { pick = id; showPick(); } });
   if (window.ResizeObserver) new ResizeObserver(() => { if (!$('#studio').hidden) layout(); }).observe(stage);
   // ---- transport
@@ -145,7 +147,7 @@ export function createStudio(app) {
     const L = tl().state.loop;
     if (app.clock.playing) { if (L) { const a = p.inT + L.a * tr.spb, b = p.inT + L.b * tr.spb; if (t >= b) { app.clock.play(a); t = a; } }
       else if (app.clock.mode === 'track' && t >= p.outT) { if (p.loop) { app.actions.playLoop(p.inT); t = p.inT; } else { app.clock.pause(); app.clock.seek(p.outT - 1 / 30); } } }
-    tl().setTime(t - p.inT);
+    tl().setTime(t - p.inT); if (app.videoLayer.loaded) app.videoLayer.sync(t);
     if (app.clock.playing || dirty) { dirty = false; info = {}; app.renderFrame(t, surf, p, tr, { info }); $('#measuring').textContent = info.look ? '' : 'measuring the section…'; if (pick) showPick();
       app.timeline.setTime(t, !app.clock.playing); app.inspector.tick && app.inspector.tick(); }
     if (now - lastLayers > 250) { lastLayers = now; layers.update(); }

@@ -171,6 +171,10 @@ body{background:var(--bg);color:var(--fg)}
       <label class="row-sw" for="exBoth"><span>Render both formats<small>one 9:16 and one 16:9 file, same look and cue sheet</small></span><span class="sw"><input type="checkbox" role="switch" id="exBoth"><i aria-hidden="true"></i></span></label>
     </div>
     <div class="group">
+      <label class="row-sw" for="exBlur"><span>Motion blur<small>adaptive sub-frames while the camera or intro moves (export only, the preview stays sharp)</small></span><span class="sw"><input type="checkbox" role="switch" id="exBlur"><i aria-hidden="true"></i></span></label>
+      <div class="ctl"><label class="lbl" for="exShutter">Shutter</label><input type="range" id="exShutter" min="0.1" max="1" step="0.05"><output for="exShutter"></output></div>
+    </div>
+    <div class="group">
       <dl class="kv" id="exKv"></dl>
       <div class="inrow"><span class="lbl w70">Frame rate</span><div class="seg" id="exFps"><button data-v="30" aria-pressed="true">30</button><button data-v="60" aria-pressed="false">60</button></div></div>
       <div class="inrow"><span class="lbl w70">Bitrate</span><div class="seg" id="exMbps"><button data-v="10">10</button><button data-v="12">12</button><button data-v="14">14 Mbps</button></div></div>
@@ -182,6 +186,11 @@ body{background:var(--bg);color:var(--fg)}
       <div class="hint mono" id="exRate" aria-live="polite"></div>
       <div class="status" id="exStatus">Frame-exact offline render (WebCodecs) from the cue sheet. Falls back to real-time recording if the browser cannot encode.</div>
       <dl class="kv" id="loudKv"></dl>
+    </div>
+    <div class="group">
+      <div class="group-h"><span class="lbl">Video layer</span><label class="tog"><span class="sw"><input type="checkbox" role="switch" id="vidOn"><i aria-hidden="true"></i></span> on</label></div>
+      <div class="inrow"><label class="btn small" for="vidFile">Upload video</label><input type="file" id="vidFile" accept="video/*,.mp4,.mov,.webm,.m4v" hidden><button class="btn small" id="vidClear" hidden>Remove</button><span class="hint" id="vidInfo">a DAW screen recording blends into the film</span></div>
+      <p class="hint">Stays in this browser tab. Target, blend, opacity, offset, fit and desaturate: Inspector, Scene, Video layer.</p>
     </div>
     <div class="group">
       <div class="group-h"><span class="lbl">Cover</span></div>
