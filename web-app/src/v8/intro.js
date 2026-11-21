@@ -26,6 +26,7 @@ const GAP_CARD = 14;   // inset of the fallback cover rect inside the compartmen
  * Preference: L.coverRect (array or function, set by the lab composition when it draws the cover card in the middle compartment),
  * else the centre rect of the compartment between LEVELS and IMAGER (exe 9:16), else a square on the hero position.
  */
+export const INTRO_HIT = { play: null };   // v19: screen positions the cursor targets (set while drawing)
 export function coverTarget(L, look, aspect) {
   const cr = L && L.coverRect, r = typeof cr === 'function' ? cr() : cr;
   if (r && r.length === 4 && r.every(Number.isFinite)) return r;
@@ -181,6 +182,7 @@ export function createIntro(L, A = {}) {
   }
   function icon(c, kind, x, y, s, col) {   // transport icons: prev, next, pause (vector, centred on x,y)
     c.fillStyle = col; c.beginPath();
+    if (kind === 'play') { c.beginPath(); c.moveTo(x - s * 0.4, y - s * 0.55); c.lineTo(x + s * 0.55, y); c.lineTo(x - s * 0.4, y + s * 0.55); c.closePath(); c.fill(); return; }
     if (kind === 'pause') { rr(c, x - s * 0.48, y - s * 0.55, s * 0.34, s * 1.1, s * 0.07); c.fill(); c.beginPath(); rr(c, x + s * 0.14, y - s * 0.55, s * 0.34, s * 1.1, s * 0.07); c.fill(); return; }
     const d = kind === 'next' ? 1 : -1;
     for (const o of [-0.42, 0.42]) { const x0 = x + o * s * d * 0.9; c.moveTo(x0 - d * s * 0.46, y - s * 0.46); c.lineTo(x0 + d * s * 0.46, y); c.lineTo(x0 - d * s * 0.46, y + s * 0.46); c.closePath(); }
@@ -253,12 +255,12 @@ export function createIntro(L, A = {}) {
     // ---- player: liquid-glass bar (transport, now-playing pill with cover thumb + title + credit + scrub bar, level bars)
     const ps = V('intro.player.scale', 1), pa = clamp(V('intro.player.opacity', 1));
     if (pa > 0.001) {
-      const psE = ps * (0.88 + 0.12 * playerE), rise = (1 - playerE) * (H - g.pl[1] + 40);   // v13: the player rises from below the frame into place
+      const pE = o.playerIn ? 1 : playerE, psE = ps * (0.88 + 0.12 * pE), rise = (1 - pE) * (H - g.pl[1] + 40);   // v19: o.playerIn = the player is already in place (click-to-play opening)   // v13: the player rises from below the frame into place
       const [px0, py0, pw0, ph0] = g.pl, pw = pw0 * psE, ph = ph0 * psE, px = px0 + (pw0 - pw) / 2, py = py0 + (ph0 - ph) / 2 + rise, v = psE * ph0 / 150, hz = psE;   // v: vertical / type scale, hz: horizontal
       c.save(); c.globalAlpha = pa;
       glass(c, S, bloom, px, py, pw, ph, ph / 2);
       const cy = py + ph / 2, ink = 'rgba(255,255,255,0.92)';
-      icon(c, 'prev', px + 96 * hz, cy, 30 * v, ink); icon(c, 'pause', px + 182 * hz, cy, 40 * v, ink); icon(c, 'next', px + 268 * hz, cy, 30 * v, ink);
+      icon(c, 'prev', px + 96 * hz, cy, 30 * v, ink); icon(c, o.paused ? 'play' : 'pause', px + 182 * hz, cy, 40 * v, ink); INTRO_HIT.play = [px + 182 * hz, cy]; icon(c, 'next', px + 268 * hz, cy, 30 * v, ink);
       const x0 = px + 348 * hz, x1 = px + pw - 200 * hz, y0 = py + 17 * v, y1 = py + ph - 17 * v;
       glass(c, S, bloom, x0, y0, x1 - x0, y1 - y0, 30 * v, { dark: true, shadow: 0, frost: 0.4 });
       const th = 76 * v, tX = x0 + 16 * v, tY = (y0 + y1) / 2 - th / 2 - 6 * v;

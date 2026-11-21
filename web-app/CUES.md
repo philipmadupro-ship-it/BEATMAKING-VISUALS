@@ -249,3 +249,5 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - v18 `social.on` (player): HOOK dialog on frame 0 with a loading bar over the intro, CTA 1 at `social.cta1.at` (beat 32) and CTA 2 at `social.cta2.at` (beats from the end), Y2K system dialogs; texts in tags `social.*`.
 - v18 `cursor.on`: Y2K arrow cursor glides to each camera target and clicks on the beat the travel starts.
 - v18 `roll.on` / `roll.mini` / `roll.span` / `roll.playhead` / `roll.color`: MIDI map on the hero (melodic peaks as dot trails, ink bars at the playhead, onset circles, next-bar mini-rolls).
+- v19 mouse layer (`cursor.on`, screen space): pre-roll on the paused player (native `--preroll`, default 0.7 s for the player, audio delayed by it), the cursor clicks PLAY, clicks the chosen card (push), clicks each panel before the camera travels, closes each CTA with its x, clicks the hero before the outro, and returns to rest (last frame = frame 0). Minimum-jerk curved paths, press + ring.
+- v19 `hero.ride` / `hero.rideAmt`: the hero logo rides the melody (MIDI-map strongest note), +-7 percent of the cell.

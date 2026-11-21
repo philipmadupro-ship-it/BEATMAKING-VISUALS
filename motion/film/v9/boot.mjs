@@ -12,7 +12,7 @@ const [assets] = await Promise.all([loadAssets('v9/assets/'), loadFonts()]);
 const film = createFilm({ D, assets, aspect }), sheet = parseSheet(C.sheet), ev = createEvaluator(sheet);
 const tags = mergeDeep(mergeDeep(DEFAULT_TAGS, sheet.tags || {}), C.tags || {});
 const ctx = document.getElementById('stage').getContext('2d');
-const opts = { ev, tags, fps: D.fps, look: html.dataset.look, stage: html.dataset.stage, test };
+const opts = { ev, tags, fps: D.fps, look: html.dataset.look, stage: html.dataset.stage, test, preroll: C.preroll || 0 };
 if (C.waveDebug) film.core.waveDebug = {};
 // v17.2 adaptive motion blur: the frame itself first; only when the camera / intro is moving (vs the previous frame, if adjacent) are 2 more
 // sub-frames rendered at +-shutter/2 of a frame and averaged in (running mean). Static frames cost 1 render, moving ones 3.

@@ -50,6 +50,8 @@ const look = String(args.look || 'exe').toLowerCase();
 if (!['exe', 'lab', 'scope', 'player'].includes(look)) throw new Error('look must be exe, lab, scope or player');
 const aspect = String(args.aspect || '9:16').replace(':', '').replace('x', '');
 const len = Number(args.len || 30);
+// v19 --preroll <s> (player look default 0.7): silent pause on the stopped player before the cursor clicks play; the audio starts on the click
+const PRE = args.test ? 0 : Math.max(0, +(args.preroll ?? ((args.look || 'exe') === 'player' ? 0.7 : 0)));
 if (!['nigredo', 'albedo', 'citrinitas', 'rubedo', 'white'].includes(stage)) throw new Error('unknown stage ' + stage);
 if (!['916', '169'].includes(aspect)) throw new Error('aspect must be 9:16 or 16:9');
 const base = path.basename(beat).replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
@@ -103,10 +105,10 @@ if (ENGINE === 'v9') {
   cuesTags.date = args.date ? String(args.date) : (tags.date === '{today}' || !tags.date ? today : tags.date);
   if (args.tags) Object.assign(cuesTags, JSON.parse(fs.readFileSync(path.resolve(String(args.tags)), 'utf8')));
   const cuesFile = `data/cues-${look}-${stage}-${aspect}-${id}${args.test ? '-test' : ''}.js`;
-  fs.writeFileSync(path.join(FILM, cuesFile), 'window.U2C_CUES=' + JSON.stringify({ sheet: serializeSheet(sheet), tags: cuesTags, waveDebug: !!args['wave-debug'], mblur: args.stills ? 1 : Math.max(1, Math.round(+(args.mblur ?? 3))), shutter: +(args.shutter ?? 0.5) }) + ';\n');
+  fs.writeFileSync(path.join(FILM, cuesFile), 'window.U2C_CUES=' + JSON.stringify({ sheet: serializeSheet(sheet), tags: cuesTags, waveDebug: !!args['wave-debug'], preroll: PRE, mblur: args.stills ? 1 : Math.max(1, Math.round(+(args.mblur ?? 3))), shutter: +(args.shutter ?? 0.5) }) + ';\n');
   fs.writeFileSync(path.join(FILM, 'data', `cues-${look}-${stage}-${aspect}-${id}.json`), JSON.stringify(serializeSheet(sheet), null, 1));
   comp = `v9-${look}${args.test ? '-test-' + args.test : ''}-${stage}-${aspect}-${id}.html`;
-  const DUR9 = args.test ? +(Math.min(D.duration, 4 * 4 * D.beat)).toFixed(6) : D.duration;
+  const DUR9 = args.test ? +(Math.min(D.duration, 4 * 4 * D.beat)).toFixed(6) : +(D.duration + PRE).toFixed(6);   // v19: + the silent click-to-play pre-roll
   fs.writeFileSync(path.join(FILM, comp), fs.readFileSync(path.join(FILM, 'v9', 'template.html'), 'utf8')
     .replaceAll('{{W}}', W).replaceAll('{{H}}', H).replaceAll('{{DUR}}', DUR9).replaceAll('{{TEST}}', args.test || '').replaceAll('{{STAGE}}', stage).replaceAll('{{LOOK}}', look)
     .replaceAll('{{ASPECT}}', aspect).replaceAll('{{DATA}}', `data/${id}.js`).replaceAll('{{CUES}}', cuesFile).replaceAll('{{RES}}', aspect === '169' ? 'landscape' : 'portrait'));
@@ -151,7 +153,7 @@ const env = { ...process.env, HYPERFRAMES_NO_TELEMETRY: '1', DO_NOT_TRACK: '1', 
 const q = args.quality ? ['--quality', String(args.quality)] : ['--video-bitrate', '12M', '--max-bitrate', '14M'];
 const t0 = Date.now();
 run('npx', ['hyperframes', 'render', '.', '-c', comp, '-o', tmp, ...q, '--fps', '30', '--quiet'], { cwd: FILM, env, quiet: true });
-run('ffmpeg', ['-v', 'error', '-y', '-i', tmp, '-i', path.join(FILM, 'data', id + '.wav'), '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-movflags', '+faststart', '-shortest', out], { quiet: true });
+run('ffmpeg', ['-v', 'error', '-y', '-i', tmp, '-i', path.join(FILM, 'data', id + '.wav'), '-map', '0:v:0', ...(PRE > 0 ? ['-af', `adelay=${Math.round(PRE * 1000)}:all=1`] : []), '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-movflags', '+faststart', '-shortest', out], { quiet: true });
 const lo = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', out, '-af', 'ebur128=peak=true', '-f', 'null', '-'], { encoding: 'utf8' }).stderr;
 const s = lo.slice(lo.lastIndexOf('Summary:'));
 console.log(`${out}  ${((Date.now() - t0) / 1000).toFixed(0)} s  I ${s.match(/I:\s+(-?[\d.]+)/)[1]} LUFS  TP ${s.match(/Peak:\s+(-?[\d.]+)/)[1]} dBTP  section: song bars ${D.song.startBar}-${D.song.startBar + D.bars - 1}`);

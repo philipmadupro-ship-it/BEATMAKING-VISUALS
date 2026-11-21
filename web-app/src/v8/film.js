@@ -13,7 +13,7 @@ import { createPlayer, TAB_OF } from './player.js';   // v14 player look
 import { DEFAULT_TAGS } from './tags.js';
 import { mergeDeep, createEvaluator, emptySheet } from '../cues/schema.js';
 import { buildRegistry, meterPath } from './registry.js';
-import { createIntro, coverScrim } from './intro.js';   // v11 intro
+import { INTRO_HIT, createIntro, coverScrim } from './intro.js';   // v11 intro
 
 const METER_KIND = { scope: 'logo', session: 'waveform', spectro: 'spectrogram', loud: 'loudness' };
 
@@ -21,7 +21,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const L = createCore(D), lab = createLab(L), M = createMeters(L), BR = createBrand(L, assets), INTRO = createIntro(L, assets && assets.intro);
   const { F, FPS, BEAT, BAR, T, U, steps, rgba, mix, text, fmt, tc, bbt, fidx, clamp, lerp, hs, hash, kickEnv, labelAt, SANS, MONO, SERIF, HAND, DISPLAY, UI } = L;
   const port = aspect === '916', W = port ? 1080 : 1920, H = port ? 1920 : 1080, NB = D.bars;
-  let RWB = 0, c = null, ev = createEvaluator(emptySheet()), b = 0, IB = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
+  let PRE = 0, RWB0 = 0, RWB = 0, c = null, ev = createEvaluator(emptySheet()), b = 0, IB = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
   const V = (path, def) => ev.value(path, b, def);
   // ---------------------------------------------------------------- tag variables (every on-screen word is editable)
   const titleCase = D.title.split(' ').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
@@ -120,6 +120,10 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // top 5 local maxima per frame above the frame median) as notes. Past = halftone dot trails (dot size = level) moving into a fixed playhead;
   // the sounding note = a solid ink bar with a soft halo; note onsets get a thin crosshair circle; a dotted guide one beat back; on the right,
   // three boxed mini-rolls show the NEXT bar of the 3 strongest voices (step lines + a cursor line). Pure function of time (peaks precomputed).
+  // v19 hero ride: the logo rises / falls with the melody (strongest MIDI-map note, row position averaged over 0.3 s), +-7 % of the cell
+  let RIDE = null;
+  function rideY(t) { const P = rollPeaks(); if (!RIDE) { RIDE = new Float32Array(P.NFr); let last = 0.5; for (let f = 0; f < P.NFr; f++) { const bi = P.bin[f * P.K]; if (bi >= 0) last = (bi - P.lo) / (P.hi - P.lo); RIDE[f] = last; } }
+    const f0 = Math.min(P.NFr - 1, fidx(t)), n = Math.round(0.3 * FPS); let s2 = 0, cnt = 0; for (let f = Math.max(0, f0 - n); f <= f0; f++) { s2 += RIDE[f]; cnt++; } return (0.5 - s2 / cnt) * 0.14 * V('hero.rideAmt', 1); }
   let PK = null;
   function rollPeaks() { if (PK) return PK; const NB2 = D.spectroBins || 128, SP = D.spectro, NFr = Math.floor(SP.length / NB2), lo = 31, hi = 84, K = 5;
     const bin = new Int16Array(NFr * K).fill(-1), lv = new Float32Array(NFr * K);
@@ -322,7 +326,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // hero: the U2C chain logo centred in its cell (thread in/out + exponential kick glow unchanged), the elephant STATIC under the U (a logo mark, no swing),
   // the caption block bottom right, registration crosses. L.heroRect (set here) = the cell.
   function playerHero(cr, t, k, Sx) {
-    const [x, y, w, h] = L.winRect, cx = x + w / 2 + V('hero.x', 0), cy = y + h * (V('hero.elephant', false) ? 0.40 : 0.5) + V('hero.y', 0), bb = BR.logoBBox(), lw = Math.min(w * (port ? 0.52 : 0.43), h * 0.62 * bb.w / bb.h) * V('hero.scale', 1) * V('logo.scale', 1), lh = lw * bb.h / bb.w;
+    const [x, y, w, h] = L.winRect, cx = x + w / 2 + V('hero.x', 0), cy = y + h * (V('hero.elephant', false) ? 0.40 : 0.5) + V('hero.y', 0) + (V('hero.ride', true) ? rideY(t) * h : 0), bb = BR.logoBBox(), lw = Math.min(w * (port ? 0.52 : 0.43), h * 0.62 * bb.w / bb.h) * V('hero.scale', 1) * V('logo.scale', 1), lh = lw * bb.h / bb.w;
     if (V('hero.cover', true)) coverBody(cr, t, k, Sx);   // v14.1: the darkened cover-0 behind the logo = the intro's match-cut target
     if (V('roll.on', true)) { const [rx, ry, rw, rh] = L.winRect; c.save(); c.beginPath(); c.rect(rx, ry, rw, rh * k); c.clip(); c.clip(L.rr(rx, ry, rw, rh, V('glass.radius', 22))); pianoRoll(rx, ry, rw, rh, t, Sx); c.restore(); }
     c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip();
@@ -461,6 +465,34 @@ export function createFilm({ D, assets, aspect = '916' }) {
       dialog(cx, port ? H * 0.5 : H * 0.5, wD, tag(`social.${k}.title`), tag(`social.${k}.body`), tag(`social.${k}.sub`), T(at), t, null);
     }
   }
+  // v19 MOUSE LAYER (screen space, drawn last): the cursor drives the film like a real computer. Waypoints in film time (pre-roll < 0):
+  // rest -> clicks PLAY on the stopped player (the audio starts on that click) -> clicks the chosen cover card (the push-in follows) -> clicks
+  // each panel's title bar right before the camera travels there -> closes each CTA alert with its x (the alert dies on the click) -> clicks
+  // the hero before the outro dolly -> glides back to rest, so the last frame = frame 0. Motion: minimum-jerk easing on a gently curved
+  // (quadratic) path, a 60 ms press before each click, a ring after it. Panel targets are world points re-projected with the current camera.
+  let MW = null;
+  function mouseWays() { if (MW && MW.ev === ev) return MW.w; const w = [], P = PRE, rest = { sx: W * 0.8, sy: H * (port ? 0.84 : 0.88) };
+    w.push({ t: -P, ...rest }); if (P > 0) w.push({ t: -0.06, play: true, click: true });
+    if (IB) { const g = INTRO.geom(W, H); w.push({ t: T(Math.max(1, IB - 2)) - 0.02, sx: g.cx + g.cw * 0.18, sy: g.cy + g.cw * 0.2, click: true }); }
+    for (const k of ev.keysIn('camera.shot', 0, 1e6)) { const r = k.v !== 'wide' && LY[k.v]; if (!r) continue; const d = k.dur ?? 1; w.push({ t: T(k.b - d) - 0.02, wx: r[0] + 92, wy: r[1] + (port ? 28 : 26), click: true }); }
+    if (V('social.on', LOOK === 'player')) for (const [kk, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) { const at = V(`social.${kk}.at`, def), len = V(`social.${kk}.len`, 8);
+      w.push({ t: T(at + len) - 0.02, sx: W / 2 - (port ? 410 : 380) + 26, sy: H * 0.5 - 84 + 21, click: true, cta: kk }); }
+    if (RWB0) w.push({ t: T(RWB0) - T(3) - 0.02, wx: (LY.stage || [W / 2, H / 2, 0, 0])[0] + (LY.stage ? LY.stage[2] * 0.5 : 0), wy: (LY.stage || [0, H / 2, 0, 0])[1] + (LY.stage ? LY.stage[3] * 0.55 : 0), click: true });
+    w.push({ t: D.duration, ...rest }); w.sort((a2, b2) => a2.t - b2.t); MW = { ev, w }; return w; }
+  const mj = (u) => u * u * u * (10 - 15 * u + 6 * u * u);
+  function mousePos(q, cam) { if (q.play) return INTRO_HIT.play || [W * 0.3, H * 0.8]; if (q.wx != null) { if (!cam) return [W / 2, H / 2]; return [(q.wx - cam.x) * cam.z + W / 2, (q.wy - cam.y) * cam.z + H / 2]; } return [q.sx, q.sy]; }
+  function mouse(tf, cam) {
+    if (!V('cursor.on', LOOK === 'player')) return; const w = mouseWays(); let i = w.findIndex((q) => q.t > tf); if (i < 0) i = w.length - 1; if (i === 0) i = 1;
+    const A = w[i - 1], B = w[i], pa = mousePos(A, cam), pb = mousePos(B, cam), gap = B.t - A.t, mv = Math.min(0.6, Math.max(0.12, gap - 0.12)), s0 = B.t - mv - 0.06, u = clamp((tf - s0) / mv), e = mj(u);
+    const dx = pb[0] - pa[0], dy = pb[1] - pa[1], bend = 0.12, mxp = pa[0] + dx / 2 - dy * bend, myp = pa[1] + dy / 2 + dx * bend;
+    const x = (1 - e) * (1 - e) * pa[0] + 2 * (1 - e) * e * mxp + e * e * pb[0], y = (1 - e) * (1 - e) * pa[1] + 2 * (1 - e) * e * myp + e * e * pb[1];
+    const sinceA = tf - A.t, toB = B.t - tf, press = (B.click && toB < 0.06 && toB >= 0) || (A.click && sinceA < 0.08) ? 0.84 : 1, s = (port ? 2.9 : 2.0) * press;
+    c.save(); c.setTransform(c.canvas.width / W, 0, 0, c.canvas.width / W, 0, 0);
+    if (A.click && sinceA >= 0 && sinceA < 0.3) { c.beginPath(); c.arc(x, y, 12 + 70 * sinceA / 0.3, 0, 2 * Math.PI); c.strokeStyle = rgba(S.grey ? S.ink : S.hot, 0.75 * (1 - sinceA / 0.3)); c.lineWidth = 2.5; c.stroke(); }
+    c.translate(x, y); c.rotate(-0.04); c.scale(s, s); c.shadowColor = 'rgba(0,0,0,0.35)'; c.shadowBlur = 6; c.shadowOffsetX = 2; c.shadowOffsetY = 3; c.beginPath();
+    [[0, 0], [0, 17], [4, 13], [7, 20], [9.5, 19], [6.5, 12], [12, 12]].forEach(([px2, py2], j) => (j ? c.lineTo(px2, py2) : c.moveTo(px2, py2))); c.closePath();
+    c.fillStyle = '#ffffff'; c.fill(); c.shadowColor = 'transparent'; c.lineWidth = 1.2; c.strokeStyle = '#000000'; c.stroke(); c.restore();
+  }
   function textCues(t) {
     for (const k of ev.clipsAt('text.cue', b)) {
       const s = L.sub(String(k.v ?? '')); if (!s) continue;
@@ -533,15 +565,17 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function render(ctx, t, opts = {}) {
     c = ctx; ev = opts.ev || ev; tagDoc = opts.tags || DEFAULT_TAGS; IB = INTRO.beats(ev);
     const fps = opts.fps || FPS, scale = ctx.canvas.width / W;
+    PRE = Math.max(0, opts.preroll || 0); const filmT = t - PRE; let paused = filmT < 0; t = Math.max(0, filmT);   // v19: click-to-play pre-roll (native passes opts.preroll); filmT < 0 = paused
     t = clamp(t, 0, D.duration - 1 / fps) + 0.5 / fps; b = t / BEAT;
     setState(V('look', opts.look || 'exe'), V('stage', opts.stage || 'nigredo')); pendulum();
     c.setTransform(scale, 0, 0, scale, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
     if (opts.test) { L.view.camZ = 1; L.view.base = scale; testMode(opts.test, t); c.setTransform(1, 0, 0, 1, 0, 0); return { look: LOOK, stage: S.name, test: opts.test }; }
     // v17.1 seamless loop (player): the final bar plays the intro BACKWARDS (cubic ease-out into t = 0), so the last frame flows into frame 0
     RWB = LOOK === 'player' && IB && V('outro.rewind', true) && D.duration > T(IB + 16) ? (D.duration - 2 * BAR) / BEAT : 0;   // v17.2: 2-bar rewind, sine in-out
-    if (RWB && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); t = Math.max(0.5 / fps, T(IB) * (1 - e) - 0.5 / fps); b = t / BEAT; }
+    RWB0 = RWB;
+    if (RWB && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); if (u > 0.985) paused = true; t = Math.max(0.5 / fps, T(IB) * (1 - e) - 0.5 / fps); b = t / BEAT; }
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
-      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect }); c.setTransform(scale, 0, 0, scale, 0, 0); social(t, true); textCues(t); textures(t); flash(t); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player' }); c.setTransform(scale, 0, 0, scale, 0, 0); social(t, true); textCues(t); textures(t); flash(t); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
     }
     const cam = camera(), z = cam.z; L.view.camZ = z; L.view.base = scale;
@@ -552,12 +586,11 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (LOOK === 'player') playerShell(t);
     for (const id of IDS) card(id, t, att === id);
     if (LOOK === 'player' && V('focus.bracket', true)) focusBracket(t);
-    if (LOOK === 'player' && V('cursor.on', true)) cursor(t);
     hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
     if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16));
     if (L.openFx) INTRO.streak(c, L.openFx.px, L.openFx.py, L.openFx.dl);   // v13 intro: directional streak copies on the opening dolly-out
-    result(t); hud(t, ev.shot(b)); social(t, false); textCues(t); textures(t);
+    result(t); hud(t, ev.shot(b)); social(t, false); textCues(t); textures(t); mouse(filmT, cam);
     flash(t);
     glitch(t, scale);
     c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
