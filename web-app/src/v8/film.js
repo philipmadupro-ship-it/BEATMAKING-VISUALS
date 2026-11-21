@@ -21,7 +21,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const L = createCore(D), lab = createLab(L), M = createMeters(L), BR = createBrand(L, assets), INTRO = createIntro(L, assets && assets.intro);
   const { F, FPS, BEAT, BAR, T, U, steps, rgba, mix, text, fmt, tc, bbt, fidx, clamp, lerp, hs, hash, kickEnv, labelAt, SANS, MONO, SERIF, HAND, DISPLAY, UI } = L;
   const port = aspect === '916', W = port ? 1080 : 1920, H = port ? 1920 : 1080, NB = D.bars;
-  let c = null, ev = createEvaluator(emptySheet()), b = 0, IB = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
+  let RWB = 0, c = null, ev = createEvaluator(emptySheet()), b = 0, IB = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
   const V = (path, def) => ev.value(path, b, def);
   // ---------------------------------------------------------------- tag variables (every on-screen word is editable)
   const titleCase = D.title.split(' ').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
@@ -76,7 +76,9 @@ export function createFilm({ D, assets, aspect = '916' }) {
     L.shotTo = s.to;   // meters can switch to their focus-shot version when the camera is on their window
     const cam = { x: lerp(A.x, Bf.x, u) + V('camera.x', 0), y: lerp(A.y, Bf.y, u) + V('camera.y', 0), z: lerp(A.z, Bf.z, u) * zm };
     // v13 (intro agent): the lab opens ON the cover (match cut from the intro push) and dollies out; L.openFx drives the streak copies + hides the HUD
-    const op = IB ? INTRO.openCam(b, ev, IB, cam, { W, H, look: LOOK, aspect }) : null; L.openFx = op; if (op) return { x: op.x, y: op.y, z: op.z };
+    let op = IB ? INTRO.openCam(b, ev, IB, cam, { W, H, look: LOOK, aspect }) : null;
+    // v17.1 loop: the beats before the rewind mirror the opening dolly (dolly IN onto the hero cover, same framing + streaks as the match cut)
+    if (!op && RWB) { const open = ev.value('intro.open', 0, 2), b0 = RWB - open; if (open > 0 && b >= b0 && b < RWB) op = INTRO.openCam(IB + open * (1 - (b - b0) / open) - 1e-6, ev, IB, cam, { W, H, look: LOOK, aspect }); } L.openFx = op; if (op) return { x: op.x, y: op.y, z: op.z };
     if (b >= IB) { const p = V('fx.punch', LOOK === 'player' ? 0.014 : 0); if (p > 0) cam.z *= 1 + p * punchSpring(T(b)); }   // v17: closed-form spring per kick
     return cam;
   }
@@ -453,6 +455,9 @@ export function createFilm({ D, assets, aspect = '916' }) {
     setState(V('look', opts.look || 'exe'), V('stage', opts.stage || 'nigredo')); pendulum();
     c.setTransform(scale, 0, 0, scale, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
     if (opts.test) { L.view.camZ = 1; L.view.base = scale; testMode(opts.test, t); c.setTransform(1, 0, 0, 1, 0, 0); return { look: LOOK, stage: S.name, test: opts.test }; }
+    // v17.1 seamless loop (player): the final bar plays the intro BACKWARDS (cubic ease-out into t = 0), so the last frame flows into frame 0
+    RWB = LOOK === 'player' && IB && V('outro.rewind', true) && D.duration > T(IB + 12) ? (D.duration - BAR) / BEAT : 0;
+    if (RWB && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / BAR), e = 1 - Math.pow(1 - u, 3); t = Math.max(0.5 / fps, T(IB) * (1 - e) - 0.5 / fps); b = t / BEAT; }
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
       L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect }); c.setTransform(scale, 0, 0, scale, 0, 0); textCues(t); textures(t); flash(t); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };

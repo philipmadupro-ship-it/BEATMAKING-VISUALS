@@ -5,7 +5,7 @@
 //
 // Options
 //   --beat <wav>        source beat (any rate; analysed once, cached as <beat>.grid.json)
-//   --look <name>       exe | lab | scope                                  (default exe)
+//   --look <name>       exe | lab | scope | player                                (default exe)
 //   --stage <name>      nigredo | albedo | citrinitas | rubedo            (default nigredo)
 //   --tags <json>       override any on-screen text (deep-merged over tags.default.json)
 //   --aspect <a>        9:16 | 16:9                                       (default 9:16)
@@ -13,6 +13,7 @@
 //   --start-bar <n>     force the section (song bar number); default = one bar before the first drop that fits
 //   --title <text>      on-screen title (default from the filename)
 //   --out <mp4>         output path (default out/v8/<look>-<stage>-<916|169>-<len>s.mp4)
+//   --mblur N [--shutter 0.5]  v17: N sub-frames per frame averaged over shutter x 1 frame (default 3, 180 deg; 1 = off)
 //   --stills <t,t,...>  render PNG frames at these seconds instead of a video (fast review)
 //   --filmstrip         also write a filmstrip PNG next to the video
 //   --test pendant      render the 4-bar pendant test (pendant alone) instead of the film
@@ -46,10 +47,10 @@ if (ENGINE === 'v9' && args.cues) {   // --cues: the sheet's look / stage become
 }
 const stage = String(args.stage || 'nigredo').toLowerCase();
 const look = String(args.look || 'exe').toLowerCase();
-if (!['exe', 'lab', 'scope'].includes(look)) throw new Error('look must be exe, lab or scope');
+if (!['exe', 'lab', 'scope', 'player'].includes(look)) throw new Error('look must be exe, lab, scope or player');
 const aspect = String(args.aspect || '9:16').replace(':', '').replace('x', '');
 const len = Number(args.len || 30);
-if (!['nigredo', 'albedo', 'citrinitas', 'rubedo'].includes(stage)) throw new Error('unknown stage ' + stage);
+if (!['nigredo', 'albedo', 'citrinitas', 'rubedo', 'white'].includes(stage)) throw new Error('unknown stage ' + stage);
 if (!['916', '169'].includes(aspect)) throw new Error('aspect must be 9:16 or 16:9');
 const base = path.basename(beat).replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
 const id = `${base}-${len}${args['start-bar'] ? '-b' + args['start-bar'] : ''}`;
@@ -76,7 +77,7 @@ const [W, H] = aspect === '169' ? [1920, 1080] : [1080, 1920];
 const merge = (a, b) => { if (b == null) return a; if (Array.isArray(b) || typeof b !== 'object') return b; const o = { ...a }; for (const k of Object.keys(b)) o[k] = merge(a ? a[k] : undefined, b[k]); return o; };
 let tags = JSON.parse(fs.readFileSync(path.join(ROOT, 'tags.default.json'), 'utf8'));
 if (args.tags) tags = merge(tags, JSON.parse(fs.readFileSync(path.resolve(String(args.tags)), 'utf8')));
-const today = new Date(fs.statSync(beat).mtimeMs).toUTCString().split(' ').slice(1, 4).join(' ').toUpperCase();
+const today = new Date().toUTCString().split(' ').slice(1, 4).join(' ').toUpperCase();
 if (tags.date === '{today}') tags.date = today;
 if (args.title) tags.title = String(args.title);
 const tagFile = `data/tags-${look}-${stage}-${aspect}-${id}.js`;
@@ -102,7 +103,7 @@ if (ENGINE === 'v9') {
   cuesTags.date = args.date ? String(args.date) : (tags.date === '{today}' || !tags.date ? today : tags.date);
   if (args.tags) Object.assign(cuesTags, JSON.parse(fs.readFileSync(path.resolve(String(args.tags)), 'utf8')));
   const cuesFile = `data/cues-${look}-${stage}-${aspect}-${id}${args.test ? '-test' : ''}.js`;
-  fs.writeFileSync(path.join(FILM, cuesFile), 'window.U2C_CUES=' + JSON.stringify({ sheet: serializeSheet(sheet), tags: cuesTags, waveDebug: !!args['wave-debug'] }) + ';\n');
+  fs.writeFileSync(path.join(FILM, cuesFile), 'window.U2C_CUES=' + JSON.stringify({ sheet: serializeSheet(sheet), tags: cuesTags, waveDebug: !!args['wave-debug'], mblur: args.stills ? 1 : Math.max(1, Math.round(+(args.mblur ?? 3))), shutter: +(args.shutter ?? 0.5) }) + ';\n');
   fs.writeFileSync(path.join(FILM, 'data', `cues-${look}-${stage}-${aspect}-${id}.json`), JSON.stringify(serializeSheet(sheet), null, 1));
   comp = `v9-${look}${args.test ? '-test-' + args.test : ''}-${stage}-${aspect}-${id}.html`;
   const DUR9 = args.test ? +(Math.min(D.duration, 4 * 4 * D.beat)).toFixed(6) : D.duration;
@@ -120,7 +121,7 @@ fs.writeFileSync(path.join(FILM, comp), tpl);
 // 3a. stills mode
 if (args.stills) {
   const puppeteer = (await import('puppeteer-core')).default;
-  const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.woff2': 'font/woff2' };
+  const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.woff2': 'font/woff2', '.otf': 'font/otf', '.css': 'text/css', '.ttf': 'font/ttf' };
   const srv = http.createServer((q, s) => { const p = path.join(FILM, decodeURIComponent(q.url.split('?')[0])); if (!p.startsWith(FILM) || !fs.existsSync(p)) { s.writeHead(404); return s.end(); } s.writeHead(200, { 'content-type': TYPES[path.extname(p)] || 'application/octet-stream' }); fs.createReadStream(p).pipe(s); });
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
   const br = await puppeteer.launch({ executablePath: '/opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell', args: ['--no-sandbox'] });

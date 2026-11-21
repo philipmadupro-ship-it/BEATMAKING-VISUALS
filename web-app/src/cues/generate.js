@@ -39,7 +39,7 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     const seq = [...rot, 'wide']; let bar = 3;
     for (; bar < NB - 3; bar += 2) cam.push(key(bar * 4, seq[i++ % seq.length], { transition: 'push', dur: 1, ease: 'spring' }));
     if (ids.includes('stage') && NB >= 8) { cam.push(key((NB - 2) * 4, 'stage', { transition: 'push', dur: 1, ease: 'spring' }));
-      sheet.tracks.push(track('camera.zoom', 'number', 'camera', [key((NB - 1) * 4, 1, { ease: 'emphasized' }), key(NB * 4 - 0.5, aspect === '916' ? 3.2 : 2.2, { ease: 'step' })])); }
+      }   // v17.1: the final bar is the rewind (film.js): dolly into the hero cover, cut onto the intro's pushed-in card, play the intro backwards to frame 0
   } else if (preset === 'default') {
     const rot = FOCUS_PLAN[look].map(([, id, n]) => [id, n]), used = [];
     let i = 0;
@@ -86,14 +86,16 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
   if (look === 'player') sheet.base['meter.session.style'] = 'blocks';
   // v11/v13 intro (2 bars at the clip start). START (v13): nothing is static: on beat 1 (t = 0) the cards fan out of one stack and the player
   // rises into place (intro.enter, linear 0 -> 1 over beats 0-2; the shapes are in intro.js: the fan lands on beat 2, the player on beat 3).
-  // The cover-flow starts on cover-4 and steps monotonically toward cover-0 (4 -> 3 -> 2 -> 1 -> 0), one card per beat, each eased snap
+  // (v13) The cover-flow started on cover-4 and stepped toward cover-0; v17.1 opens on cover-0 (below), one card per beat, each eased snap
   // (half a beat of travel) LANDING ON beats 4, 5, 6, 7 (index 3..6 from 0); the selection brackets step in at beat 7 (index 6) and the push
   // (ZOOM INTO THE PROJECT) runs from there to the downbeat of bar 3: exponential zoom, EASE-IN (cubic-bezier(.7,0,1,1)): the speed peaks
   // exactly at the cut, where the lab opens on the same cover card (match cut) and dollies out (intro.open, default 2 beats, speed peaks at
   // the cut too): one move through the cover, with streak copies on both sides.
   if (NB >= 8) {
-    const IL = 2, land = IL * 4 - 2, v0 = 4, idx = [key(0, v0, { ease: 'step' })];
-    for (let k = 1; k <= 4; k++) { idx.push(key(land - 4 + k - 0.5, v0 - (k - 1), { ease: 'easeInOut' })); idx.push(key(land - 4 + k, v0 - k, { ease: 'step' })); }
+    // v17.1: the cover-flow OPENS on the beat's cover (cover 0, so frame 0 = the loop's last frame), browses to the other covers and comes back:
+    // 0 -> 1 -> 2 -> 1 -> 0, one eased snap per beat, landing on beats 3, 4, 5, 6; the push still ends on cover 0 (the match cut)
+    const IL = 2, land = IL * 4 - 2, SEQ = [0, 1, 2, 1, 0], idx = [key(0, SEQ[0], { ease: 'step' })];
+    for (let k = 1; k <= 4; k++) { idx.push(key(land - 4 + k - 0.5, SEQ[k - 1], { ease: 'easeInOut' })); idx.push(key(land - 4 + k, SEQ[k], { ease: 'step' })); }
     sheet.tracks.push(track('intro.index', 'number', 'stage', idx));
     sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(0, 0, { ease: 'linear' }), key(2, 1, { ease: 'step' })]));
     sheet.tracks.push(track('intro.push', 'number', 'stage', [key(land, 0, { ty: 'bezier', ob: [0.7, 0], ease: 'easeInOut' }), key(IL * 4, 1, { ib: [0, 0], ease: 'step' })]));

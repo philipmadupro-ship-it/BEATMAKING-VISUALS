@@ -241,3 +241,6 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - v17 `spring` ease (closed-form critically damped step response, lands at u = 1) for the player camera travel.
 - `focus.bracket` (player): a stage-colour bracket travels between panels with the camera; leading edges on a faster spring (w 13) than trailing (w 7).
 - Player window labels/buttons appear only once the glass is mostly open (container before text).
+- v17.1 `outro.rewind` (player, default on): the beats before the last bar dolly into the hero (mirror of the opening dolly), then the last bar plays the intro backwards (cubic ease-out) into frame 0 = seamless loop.
+- Intro cover-flow opens on the beat's cover: index 0 -> 1 -> 2 -> 1 -> 0 (snaps land on beats 3-6), push ends on cover 0.
+- Native render: `--mblur N` (default 3 sub-frames) `--shutter 0.5` (180 deg) = motion blur; stills are unblurred.
