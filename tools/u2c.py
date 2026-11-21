@@ -36,6 +36,7 @@ def stills(a):
     for st in a.s.split(','):
         for asp in a.a.split(','):
             d = os.path.join(OUT, f'{a.l}-{st}-{tag(asp)}')
+            for old in glob.glob(os.path.join(d, 't-*.png')): os.remove(old)   # only this command's own stills
             sh(['node', 'render.mjs', '--look', a.l, '--stage', st, '--aspect', asp, '--len', str(a.len), '--title', a.title, '--stills', a.t, '--out', d], cwd=NAT, quiet=False, timeout=900)
             fs = sorted([f for f in glob.glob(d + '/t-*.png') if '-crop' not in f], key=lambda f: float(f.split('t-')[1][:-4]))
             ims = []
