@@ -19,8 +19,10 @@
   --fg:#ececec; --muted:#9a9a9a; --faint:#8a8a8a;
   --line:rgba(236,236,236,.08); --line-2:rgba(236,236,236,.17); --lane:rgba(255,255,255,.022);
   --accent:var(--st-acc); --on-accent:#0c0c0c; --tint:rgba(236,236,236,.07); --danger:#ff6b5a;
-  --sans:"Instrument Sans",ui-sans-serif,system-ui,sans-serif;
+  --sans:"Synkopy","Space Grotesk","Instrument Sans",ui-sans-serif,system-ui,sans-serif;
+  --display:"Akira Expanded","Unbounded","Instrument Sans",ui-sans-serif,system-ui,sans-serif;
   --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --glass:rgba(20,20,20,.72); --hi:rgba(255,255,255,.06);
   --radius:2px; --ease:cubic-bezier(.2,.7,.2,1);
   color-scheme:dark;
 }
@@ -97,6 +99,10 @@ body{background:var(--bg);color:var(--fg)}
 </section>
 
 <section id="studio" hidden>
+ <aside class="layers" id="layers" aria-label="Layers">
+  <div class="pane-h"><h2 class="ttl">Layers</h2><span class="hint" id="layerCount"></span></div>
+  <div class="layer-list" id="layerList"></div>
+ </aside>
  <div class="stage-col">
   <div class="stage-bar">
     <div class="inrow"><span class="lbl" id="metaLine">9:16 · 1080×1920 · 30 fps</span><span class="hint" id="measuring"></span></div>
@@ -159,12 +165,18 @@ body{background:var(--bg);color:var(--fg)}
   </div>
   <div class="pane" role="tabpanel" id="pane-export" aria-labelledby="tab-export" data-pane="export" hidden>
     <div class="group">
+      <div class="group-h"><span class="lbl" id="exLenLbl">Length</span><span class="hint" id="exLenInfo"></span></div>
+      <div class="seg full" id="exLen" role="group" aria-labelledby="exLenLbl"><button data-len="30" aria-pressed="false">30 s</button><button data-len="60" aria-pressed="false">1 min</button><button data-len="full" aria-pressed="false">Full beat</button></div>
+      <label class="row-sw" for="exSeam"><span>Seamless loop<small>the last bar rewinds into the intro (outro.rewind) and the audio crossfades into bar 1</small></span><span class="sw"><input type="checkbox" role="switch" id="exSeam"><i aria-hidden="true"></i></span></label>
+      <label class="row-sw" for="exBoth"><span>Render both formats<small>one 9:16 and one 16:9 file, same look and cue sheet</small></span><span class="sw"><input type="checkbox" role="switch" id="exBoth"><i aria-hidden="true"></i></span></label>
+    </div>
+    <div class="group">
       <dl class="kv" id="exKv"></dl>
       <div class="inrow"><span class="lbl w70">Frame rate</span><div class="seg" id="exFps"><button data-v="30" aria-pressed="true">30</button><button data-v="60" aria-pressed="false">60</button></div></div>
       <div class="inrow"><span class="lbl w70">Bitrate</span><div class="seg" id="exMbps"><button data-v="10">10</button><button data-v="12">12</button><button data-v="14">14 Mbps</button></div></div>
       <div class="inrow"><span class="lbl w70">Loudness</span><div class="seg" id="exLufs"><button data-v="-14">−14 LUFS</button><button data-v="-12">−12</button><button data-v="off">off</button></div></div>
-      <label class="tog"><input type="checkbox" id="exLoop"> Loop-safe audio (1-beat crossfade into bar 1)</label>
-      <label class="tog"><input type="checkbox" id="exDraft"> Draft (720p, fast)</label>
+      <label class="tog"><span class="sw"><input type="checkbox" role="switch" id="exLoop"><i aria-hidden="true"></i></span> Loop-safe audio (1-beat crossfade into bar 1)</label>
+      <label class="tog"><span class="sw"><input type="checkbox" role="switch" id="exDraft"><i aria-hidden="true"></i></span> Draft (720p, fast)</label>
       <div class="exfoot inrow"><button class="btn primary" id="exBtn">Export MP4</button><button class="btn" id="exCancel" hidden>Cancel</button><button class="btn small" id="cueSave">Cue sheet .json</button></div>
       <div class="prog"><i id="exProg"></i></div>
       <div class="hint mono" id="exRate" aria-live="polite"></div>
@@ -176,7 +188,7 @@ body{background:var(--bg);color:var(--fg)}
       <div class="inrow"><label class="btn small" for="coverFile">Upload cover</label><input type="file" id="coverFile" accept="image/*" hidden><span class="hint" id="coverInfo">the beat's cover (cover 0)</span></div>
     </div>
     <div class="group">
-      <div class="group-h"><span class="lbl">Voice tag</span><label class="tog"><input type="checkbox" id="vtOn"> tagged export</label></div>
+      <div class="group-h"><span class="lbl">Voice tag</span><label class="tog"><span class="sw"><input type="checkbox" role="switch" id="vtOn"><i aria-hidden="true"></i></span> tagged export</label></div>
       <div class="inrow"><label class="btn small" for="vtFile">Upload tag audio</label><input type="file" id="vtFile" accept="audio/*" hidden><span class="hint" id="vtInfo">none loaded</span></div>
       <div class="ctl"><label class="lbl" for="vtEvery">Repeat every</label><input type="range" id="vtEvery" min="10" max="40" step="1"><output for="vtEvery"></output></div>
     </div>

@@ -16,7 +16,9 @@ export function createExporter(app) {
   const status = (m) => { $('#exStatus').textContent = m; }, prog = (q) => { $('#exProg').style.width = (q * 100).toFixed(1) + '%'; };
   const urls = new Set(); const keep = (u) => { urls.add(u); return u; }, revoke = (u) => { if (urls.delete(u)) URL.revokeObjectURL(u); };
   const dims = (p) => { const { W, H } = ASPECTS[p.aspect], k = p.export.draft ? 2 / 3 : 1; return { W: Math.round(W * k / 2) * 2, H: Math.round(H * k / 2) * 2, mbps: p.export.draft ? Math.max(4, p.export.mbps * .5) : p.export.mbps }; };
-  async function info() { const p = P(), tr = app.store.session.track; if (!tr) return; const { W, H, mbps } = dims(p), len = p.outT - p.inT;
+  async function info() { const p = P(), tr = app.store.session.track; if (!tr) return;
+    { const sec = p.outT - p.inT, full = tr.bars.length - tr.song.startIdx, cur = String(p.clipLen) === 'full' || Math.round(sec / tr.barDur) >= full ? 'full' : String(p.clipLen);
+      $$('#exLen button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.len === cur)); $('#exLenInfo').textContent = `${sec.toFixed(1)} s · ${Math.round(sec / tr.barDur)} bars`; } const { W, H, mbps } = dims(p), len = p.outT - p.inT;
     const c = await canOffline(app.libs.mediabunny, W, H, mbps, p.export.fps), nk = app.cues.sheet.tracks.reduce((s, t) => s + t.keys.length, 0);
     $('#exKv').innerHTML = `<dt>Look</dt><dd>${LOOK_NAMES[p.look]} · ${(STAGES[p.stage].label || STAGES[p.stage].name)}</dd><dt>Cue sheet</dt><dd>${app.cues.sheet.tracks.length} tracks · ${nk} keys</dd><dt>Frame</dt><dd>${W}×${H} · ${p.export.fps} fps · ${mbps} Mbps${p.export.draft ? ' · draft' : ''}</dd>
       <dt>Section</dt><dd>${fmtTC(p.inT)} → ${fmtTC(p.outT)} (${len.toFixed(2)} s, ${Math.round(len / tr.barDur)} bars)</dd><dt>Encoder</dt><dd>${c ? `offline · ${c.container.toUpperCase()} · ${c.v === 'avc' ? 'H.264' : c.v.toUpperCase()} + ${c.a.toUpperCase()} 48 kHz` : 'real-time MediaRecorder'}</dd>`; }
@@ -51,7 +53,11 @@ export function createExporter(app) {
     finally { app.store.set({ session: { exporting: false } }); $('#exBtn').disabled = $('#batchBtn').disabled = false; $('#exCancel').hidden = true; prog(cancel ? 0 : 1); app.studio.markDirty(); }
   }
   const nameFor = (p) => `${slug(p.title)}_${p.look}_${p.stage}_${p.aspect === '916' ? '9x16' : '16x9'}_${Math.round(p.outT - p.inT)}s${p.export.voiceTag ? '_tagged' : ''}${p.export.draft ? '_draft' : ''}`;
-  $('#exBtn').addEventListener('click', () => { const p = app.store.snapshot(); run([{ project: p, name: nameFor(p) }]); });
+  /** The same cue sheet for the other aspect: window geometry is per aspect, so its x / y / w / h overrides are dropped. */
+  const sheetFor = (aspect) => { const s = JSON.parse(JSON.stringify(app.cues.sheet)), geo = /^win\.[^.]+\.(x|y|w|h)$/; s.meta.aspect = aspect; s.tracks = s.tracks.filter((t) => !geo.test(t.path)); s.base = Object.fromEntries(Object.entries(s.base || {}).filter(([k]) => !geo.test(k))); return s; };
+  $('#exBtn').addEventListener('click', () => { const p = app.store.snapshot(), jobs = [{ project: p, name: nameFor(p) }];
+    if (p.export.both) { const q = JSON.parse(JSON.stringify(p)); q.aspect = p.aspect === '916' ? '169' : '916'; jobs.push({ project: q, name: nameFor(q), sheet: sheetFor(q.aspect) }); jobs.sort((a, b) => (a.project.aspect === '916' ? 0 : 1) - (b.project.aspect === '916' ? 0 : 1)); }
+    run(jobs); });
   $('#exCancel').addEventListener('click', () => { cancel = true; });
   $('#cueSave').addEventListener('click', () => saveFile(new Blob([JSON.stringify(serializeSheet(app.cues.sheet), null, 1)], { type: 'application/json' }), slug(P().title) + '.cues.json'));
   // batch
