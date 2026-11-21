@@ -14,16 +14,18 @@ const tags = mergeDeep(mergeDeep(DEFAULT_TAGS, sheet.tags || {}), C.tags || {});
 const ctx = document.getElementById('stage').getContext('2d');
 const opts = { ev, tags, fps: D.fps, look: html.dataset.look, stage: html.dataset.stage, test };
 if (C.waveDebug) film.core.waveDebug = {};
-// v17 motion blur: N sub-frames spread over `shutter` of a frame (centred on the frame time), running average (sub-frame k drawn at alpha 1/(k+1))
-const MB = Math.max(1, C.mblur || 1), SH = C.shutter ?? 0.5; let off = null;
+// v17.2 adaptive motion blur: the frame itself first; only when the camera / intro is moving (vs the previous frame, if adjacent) are 2 more
+// sub-frames rendered at +-shutter/2 of a frame and averaged in (running mean). Static frames cost 1 render, moving ones 3.
+const MB = Math.max(1, C.mblur || 1), SH = C.shutter ?? 0.5; let off = null, prev = null, prevT = -1;
+const moving = (a, p) => { if (!p) return true; if (a.intro || p.intro) return !a.intro || !p.intro || Math.abs(a.index - p.index) > 0.002 || Math.abs(a.push - p.push) > 0.0005 || Math.abs(a.enter - p.enter) > 0.002;
+  if (!a.cam || !p.cam) return true; const W0 = ctx.canvas.width; return Math.abs(a.cam.z - p.cam.z) / a.cam.z * W0 + Math.abs(a.cam.x - p.cam.x) + Math.abs(a.cam.y - p.cam.y) > 2; };
 const render = (t) => {
-  if (MB <= 1) return film.render(ctx, t, opts);
+  const r = film.render(ctx, t, opts); if (MB <= 1) return r;
+  const adj = Math.abs(t - prevT - 1 / D.fps) < 1e-4, mv = !adj || moving(r, prev); prev = r; prevT = t; if (!mv) return r;
   const cv = ctx.canvas; if (!off || off.width !== cv.width || off.height !== cv.height) { off = document.createElement('canvas'); off.width = cv.width; off.height = cv.height; }
-  const octx = off.getContext('2d'); let r;
-  for (let k = 0; k < MB; k++) { const tk = t + (k / (MB - 1) - 0.5) * SH / D.fps;
-    if (k === 0) { r = film.render(ctx, tk, opts); continue; }
-    octx.setTransform(1, 0, 0, 1, 0, 0); octx.clearRect(0, 0, off.width, off.height); film.render(octx, tk, opts);
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1 / (k + 1); ctx.drawImage(off, 0, 0); ctx.restore(); }
+  const octx = off.getContext('2d'); let k = 1;
+  for (const d of [-0.5, 0.5]) { octx.setTransform(1, 0, 0, 1, 0, 0); octx.clearRect(0, 0, off.width, off.height); film.render(octx, t + d * SH / D.fps, opts); k++;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1 / k; ctx.drawImage(off, 0, 0); ctx.restore(); }
   return r;
 };
 window.__u2cBoot(render, {

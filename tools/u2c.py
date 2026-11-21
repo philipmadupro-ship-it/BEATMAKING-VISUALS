@@ -75,14 +75,17 @@ def crop(a):
     x, y, w, h = map(int, a.box.split(',')); p = a.png.replace('.png', f'-crop{x}_{y}.png'); Image.open(a.png).crop((x, y, x + w, y + h)).save(p); print(p)
 
 def render(a):
+    # v17.2: one render per format, the formats in PARALLEL (9:16 + 16:9 at the same time); adaptive motion blur in the native boot
     sync(); od = os.path.join(NAT, 'out', 'v14'); os.makedirs(od, exist_ok=True); os.makedirs(DELIVER, exist_ok=True)
     for st in a.s.split(','):
+        jobs = []
         for asp in a.a.split(','):
             f = os.path.join(od, f'{a.l}-{st}-{tag(asp)}.mp4')
-            r = sh(['node', 'render.mjs', '--look', a.l, '--stage', st, '--aspect', asp, '--len', str(a.len), '--title', a.title, '--intro', 'on', '--out', f], cwd=NAT)
-            ok = os.path.exists(f) and r.returncode == 0
+            jobs.append((f, subprocess.Popen(['node', 'render.mjs', '--look', a.l, '--stage', st, '--aspect', asp, '--len', str(a.len), '--title', a.title, '--intro', 'on', '--mblur', str(a.mblur), '--out', f], cwd=NAT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)))
+        for f, p in jobs:
+            p.wait(); ok = p.returncode == 0 and os.path.exists(f)
             if ok: shutil.copy(f, DELIVER)
-            print(('ok  ' if ok else 'FAIL') + ' ' + f)
+            print(('ok  ' if ok else 'FAIL') + ' ' + f + ('' if ok else ' ' + p.stderr.read().decode()[-400:]))
 
 def test(_=None):
     env = dict(os.environ, NOEXPORT='1', CDN_CACHE='/tmp/cdncache')
@@ -106,7 +109,7 @@ p = argparse.ArgumentParser(); sp = p.add_subparsers(dest='cmd', required=True)
 sp.add_parser('sync').set_defaults(fn=sync); sp.add_parser('test').set_defaults(fn=test)
 for name, fn in (('stills', stills), ('render', render)):
     q = sp.add_parser(name); q.set_defaults(fn=fn); q.add_argument('-l', default='player'); q.add_argument('-s', default='nigredo'); q.add_argument('-a', default='9:16,16:9')
-    q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3')
+    q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3'); q.add_argument('--mblur', type=int, default=3)
     if name == 'stills': q.add_argument('-t', default='12'); q.add_argument('--safe', type=int, default=1)
 q = sp.add_parser('beats'); q.set_defaults(fn=beats); q.add_argument('-l', default='player'); q.add_argument('-s', default='nigredo'); q.add_argument('-a', default='9:16')
 q.add_argument('--bars', default='0:4'); q.add_argument('--bpm', type=float, default=128); q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3'); q.add_argument('--safe', type=int, default=0)

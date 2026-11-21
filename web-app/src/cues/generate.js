@@ -37,8 +37,8 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     // 1 beat long, landing ON the bar; one wide breath per cycle; the last 2 bars push into the hero and the final bar zooms into its cover
     // (camera.zoom) so the video ends on the cover and loops into the cover-flow intro, which opens on the same cover
     const seq = [...rot, 'wide']; let bar = 3;
-    for (; bar < NB - 3; bar += 2) cam.push(key(bar * 4, seq[i++ % seq.length], { transition: 'push', dur: 1, ease: 'spring' }));
-    if (ids.includes('stage') && NB >= 8) { cam.push(key((NB - 2) * 4, 'stage', { transition: 'push', dur: 1, ease: 'spring' }));
+    for (; bar < NB - 4; bar += 2) cam.push(key(bar * 4, seq[i++ % seq.length], { transition: 'push', dur: 2, ease: 'spring' }));   // v17.2: 2-beat travels (smoother)
+    if (ids.includes('stage') && NB >= 8) { cam.push(key((NB - 3) * 4, 'stage', { transition: 'push', dur: 2, ease: 'spring' })); sheet.tracks.push(track('intro.open', 'number', 'stage', [key(0, 3, { ease: 'step' })]));
       }   // v17.1: the final bar is the rewind (film.js): dolly into the hero cover, cut onto the intro's pushed-in card, play the intro backwards to frame 0
   } else if (preset === 'default') {
     const rot = FOCUS_PLAN[look].map(([, id, n]) => [id, n]), used = [];
@@ -68,7 +68,7 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
   sheet.tracks.push(track('look', 'enum', 'look', [key(0, look)]));
   sheet.tracks.push(track('stage', 'enum', 'stage', [key(0, stage)]));
   // logo: cycle length (bars) + hero moments
-  sheet.tracks.push(track('logo.cycle', 'number', 'logo', [key(0, preset === 'calm' ? 4 : 2, { ease: 'step' })]));
+  sheet.tracks.push(track('logo.cycle', 'number', 'logo', [key(0, preset === 'calm' || look === 'player' ? 4 : 2, { ease: 'step' })]));   // v17.2 player: 4-bar cycle = each letter threads over 2 beats (smoother in/out)
   const hero = preset !== 'drop' ? [] : dropBars.filter((d) => d < NB - 2).map((d) => key(d * 4, true, { dur: 4 }));
   sheet.tracks.push(track('logo.hero', 'clip', 'logo', hero));
   // pendant amplitude per section (degrees), stepped at section changes
@@ -98,7 +98,7 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     for (let k = 1; k <= 4; k++) { idx.push(key(land - 4 + k - 0.5, SEQ[k - 1], { ease: 'easeInOut' })); idx.push(key(land - 4 + k, SEQ[k], { ease: 'step' })); }
     sheet.tracks.push(track('intro.index', 'number', 'stage', idx));
     sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(0, 0, { ease: 'linear' }), key(2, 1, { ease: 'step' })]));
-    sheet.tracks.push(track('intro.push', 'number', 'stage', [key(land, 0, { ty: 'bezier', ob: [0.7, 0], ease: 'easeInOut' }), key(IL * 4, 1, { ib: [0, 0], ease: 'step' })]));
+    sheet.tracks.push(track('intro.push', 'number', 'stage', [key(land, 0, { ty: 'bezier', ob: [look === 'player' ? 0.42 : 0.7, 0], ease: 'easeInOut' }), key(IL * 4, 1, { ib: [0, 0], ease: 'step' })]));
   }
   return sheet;
 }

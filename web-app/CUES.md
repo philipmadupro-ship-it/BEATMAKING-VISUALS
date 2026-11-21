@@ -244,3 +244,5 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - v17.1 `outro.rewind` (player, default on): the beats before the last bar dolly into the hero (mirror of the opening dolly), then the last bar plays the intro backwards (cubic ease-out) into frame 0 = seamless loop.
 - Intro cover-flow opens on the beat's cover: index 0 -> 1 -> 2 -> 1 -> 0 (snaps land on beats 3-6), push ends on cover 0.
 - Native render: `--mblur N` (default 3 sub-frames) `--shutter 0.5` (180 deg) = motion blur; stills are unblurred.
+- v17.2 pacing (player): intro push ease-in softened (bezier ob 0.42), intro.open 3 beats, panels build over 6 sixteenths with 16th-note rings, camera travels 2 beats, logo cycle 4 bars, rewind 2 bars (sine in-out).
+- Native: adaptive motion blur (2 extra sub-frames only when the camera/intro moves); u2c.py render runs 9:16 + 16:9 in parallel.

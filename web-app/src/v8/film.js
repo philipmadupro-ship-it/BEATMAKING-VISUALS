@@ -50,10 +50,11 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // the player panels open in rings by distance from the hero, one 32nd note (~59 ms at 128 BPM) apart, every start on the 32nd grid
   const ringOf = (id) => { const h = LAYOUT[LOOK][aspect].stage, r = LAYOUT[LOOK][aspect][id]; if (!h || !r) return 0; const d = Math.hypot(r[0] + r[2] / 2 - h[0] - h[2] / 2, r[1] + r[3] / 2 - h[1] - h[3] / 2); return Math.min(7, Math.round(d / (port ? 260 : 380))); };
   const winOpen = (id) => { if (IB && (id === 'now' || id === 'stage')) return 0;
-    if (IB && LOOK === 'player' && openBeat(LOOK, aspect, id) < 0) return V(`win.${id}.open`, IB + ringOf(id) * 0.125);   // v13: the cover card is already there at the cut (the intro push ends on it), it does not build in
+    if (IB && LOOK === 'player' && openBeat(LOOK, aspect, id) < 0) return V(`win.${id}.open`, IB + ringOf(id) * 0.25);   // v13: the cover card is already there at the cut (the intro push ends on it), it does not build in
     const d = openBeat(LOOK, aspect, id); return V(`win.${id}.open`, IB ? (d < 0 ? IB : d + IB) : d); };
   function openStep(id, t) {
-    const n0 = steps(t, winOpen(id), 6, U.t32), k = ev.lastKey(`win.${id}.visible`, t / BEAT);
+    const n0 = steps(t, winOpen(id), 6, LOOK === 'player' ? U.s16 : U.t32),   // v17.2 player: panels build over 6 sixteenths (smoother)
+      k = ev.lastKey(`win.${id}.visible`, t / BEAT);
     if (!k) return V(`win.${id}.visible`, true) ? n0 : 0;
     const was = k.prev ? !!k.prev.v : true, on = !!k.key.v;
     if (on) return was ? n0 : Math.min(n0 || 6, steps(t, k.key.b, 6, U.t32));
@@ -456,8 +457,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c.setTransform(scale, 0, 0, scale, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
     if (opts.test) { L.view.camZ = 1; L.view.base = scale; testMode(opts.test, t); c.setTransform(1, 0, 0, 1, 0, 0); return { look: LOOK, stage: S.name, test: opts.test }; }
     // v17.1 seamless loop (player): the final bar plays the intro BACKWARDS (cubic ease-out into t = 0), so the last frame flows into frame 0
-    RWB = LOOK === 'player' && IB && V('outro.rewind', true) && D.duration > T(IB + 12) ? (D.duration - BAR) / BEAT : 0;
-    if (RWB && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / BAR), e = 1 - Math.pow(1 - u, 3); t = Math.max(0.5 / fps, T(IB) * (1 - e) - 0.5 / fps); b = t / BEAT; }
+    RWB = LOOK === 'player' && IB && V('outro.rewind', true) && D.duration > T(IB + 16) ? (D.duration - 2 * BAR) / BEAT : 0;   // v17.2: 2-bar rewind, sine in-out
+    if (RWB && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); t = Math.max(0.5 / fps, T(IB) * (1 - e) - 0.5 / fps); b = t / BEAT; }
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
       L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect }); c.setTransform(scale, 0, 0, scale, 0, 0); textCues(t); textures(t); flash(t); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
