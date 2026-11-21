@@ -13,6 +13,7 @@ import argparse, json, os, re, subprocess, sys
 import numpy as np
 
 ap = argparse.ArgumentParser(); ap.add_argument("video"); ap.add_argument("--stage", default=None); ap.add_argument("--bpm", type=float, default=128.0); ap.add_argument("--fps", type=float, default=30)
+ap.add_argument("--zoom-window", default=None, help="t0,t1 seconds of a camera/zoom push (the v11 intro push-in: beats 6-8): frames there are exempt from the luma-ramp (fade) scan because a zoom into a bright image ramps luma without any fade")
 a = ap.parse_args()
 stage = a.stage or next((s for s in ("nigredo", "albedo", "citrinitas", "rubedo") if s in os.path.basename(a.video)), "nigredo")
 beat, fr = 60 / a.bpm, 1 / a.fps
@@ -39,11 +40,14 @@ Y = np.frombuffer(raw, np.uint8).reshape(-1, H, W).astype(np.float32)
 luma = Y.mean((1, 2))
 d = np.diff(luma)
 run, worst = 0, 0
+zw = [float(v) for v in a.zoom_window.split(",")] if a.zoom_window else None
+exempt = lambda i: zw is not None and zw[0] * a.fps - 1 <= i <= zw[1] * a.fps + 1
 for i in range(1, len(d)):
+    if exempt(i): run = 0; continue
     same = np.sign(d[i]) == np.sign(d[i - 1]) and 0.25 < abs(d[i]) < 6 and 0.25 < abs(d[i - 1]) < 6
     run = run + 1 if same else 0
     worst = max(worst, run + 1 if same else 0)
-rep.append(f"fades: longest monotonic luma ramp {worst} frames  -> {'PASS' if worst <= 2 else 'WARN'}")
+rep.append(f"fades: longest monotonic luma ramp {worst} frames{' (zoom window %.2f-%.2f s exempt)' % tuple(zw) if zw else ''}  -> {'PASS' if worst <= 2 else 'WARN'}")
 
 raw = subprocess.run(["ffmpeg", "-v", "error", "-i", a.video, "-vf", "fps=2", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"], capture_output=True).stdout
 w0, h0 = [int(v) for v in subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", a.video], capture_output=True, text=True).stdout.strip().split(",")]

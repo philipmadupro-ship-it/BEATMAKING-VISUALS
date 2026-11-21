@@ -1,0 +1,18 @@
+U2C Studio third-party notices (v11 shell)
+
+Fonts (assets/fonts/), SIL Open Font License 1.1, files from @fontsource:
+  Unbounded (stand-in for the display face), Space Grotesk (stand-in for the UI face), JetBrains Mono (numbers), Caveat (hand text cues).
+  Licence texts: assets/fonts/OFL-Unbounded.txt, assets/fonts/OFL-SpaceGrotesk.txt.
+The brand faces Akira Expanded and Synkopy are licensed to the project owner, are gitignored and are not distributed in this repository.
+
+No code from vstgui (BSD-3), ozone-mastering-suite or Grisey is used by the shell; other v11 modules append their credits here.
+
+U2C Studio third-party credits (v11 meters)
+
+- Gain-reduction meter (src/v8/meterlib.js grStatic / grCurve): the soft-knee static curve and the decoupled smooth peak
+  detector follow the published formulas of D. Giannoulis, M. Massberg, J. D. Reiss, "Digital Dynamic Range Compressor
+  Design - A Tutorial and Analysis", J. Audio Eng. Soc. 60(6), 2012. Re-implemented from the paper; no code copied.
+- Level meter idioms (ballistics, peak hold, clip lamps): studied in steinbergmedia/vstgui (BSD-3-Clause,
+  https://github.com/steinbergmedia/vstgui). No vstgui source is included.
+- Stereo imager: the Ozone Imager vectorscope is a visual reference only (iZotope); no third-party code or assets.
+- ozone-mastering-suite (MIT) was consulted for ideas; no code copied.

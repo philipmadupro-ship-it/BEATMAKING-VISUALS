@@ -1,0 +1,27 @@
+/* U2C type slots (v11). One stylesheet for U2C Studio (index.html) and the native renderer (film/v9/template.html,
+   copied by u2c-motion tools/sync_web.mjs). Canvas code names families through the tokens in src/v8/core.js FONT:
+     display = "Akira Expanded", fallback "Unbounded" 800   (titles, the end card, hero words)
+     ui      = "Synkopy",        fallback "Space Grotesk"   (window labels, credit, HUD words)
+     mono    = "JetBrains Mono"                             (every number: Hz, dB, LUFS, BPM, bar.beat)
+   SWAP: drop AkiraExpanded.otf (or .woff2) and Synkopy.otf (or .woff2) into this folder (the user calls Synkopy "Sknopy"). Nothing else changes: while a
+   file is missing the browser skips that face and the canvas falls through to the stand-in named after it.
+   The weight ranges make one file answer every weight the code asks for (Akira Expanded ships one face, Super Bold).
+   LICENSED: the brand files are gitignored (public repo); they ship only in private builds. */
+@font-face { font-family: "Akira Expanded"; font-weight: 100 900; font-style: normal; font-display: block;
+  src: url("AkiraExpanded.otf") format("opentype"), url("AkiraExpanded.woff2") format("woff2"); }
+@font-face { font-family: "Synkopy"; font-weight: 100 900; font-style: normal; font-display: block;
+  src: url("Synkopy.otf") format("opentype"), url("Synkopy.woff2") format("woff2"); }
+/* stand-ins (SIL OFL 1.1, see OFL-*.txt; files from @fontsource) */
+@font-face { font-family: "Unbounded"; font-weight: 600; font-display: block; src: url("unbounded-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Unbounded"; font-weight: 700 900; font-display: block; src: url("unbounded-latin-800-normal.woff2") format("woff2"); }
+@font-face { font-family: "Space Grotesk"; font-weight: 400; font-display: block; src: url("space-grotesk-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Space Grotesk"; font-weight: 500; font-display: block; src: url("space-grotesk-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Space Grotesk"; font-weight: 600; font-display: block; src: url("space-grotesk-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Space Grotesk"; font-weight: 700 900; font-display: block; src: url("space-grotesk-latin-700-normal.woff2") format("woff2"); }
+/* numbers (OFL, JetBrains) */
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; font-display: block; src: url("jetbrains-mono-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500 600; font-display: block; src: url("jetbrains-mono-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 700; font-display: block; src: url("jetbrains-mono-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 800 900; font-display: block; src: url("jetbrains-mono-latin-800-normal.woff2") format("woff2"); }
+/* text cues in "hand" style only */
+@font-face { font-family: "Caveat"; font-weight: 700; font-display: block; src: url("Caveat-700-latin.woff2") format("woff2"); }

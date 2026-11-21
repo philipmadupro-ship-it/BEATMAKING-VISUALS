@@ -1,0 +1,4 @@
+# Licensed brand fonts: never committed (the repo is public, see .gitignore), shipped only in the private artifact.
+# Paths relative to web-app/. Drop them next to fonts.css; nothing else changes (fonts.css @font-face slots pick them up).
+assets/fonts/AkiraExpanded.otf
+assets/fonts/Synkopy.otf

@@ -1,0 +1,622 @@
+// THE LABORATORY v8 composition (ported from u2c-motion film/v8/film.js) driven by a cue sheet.
+// The v6 lab-OS bench (live windows, specimen tags, handwritten notes, stamps) per LOOK (exe | lab | scope), a camera
+// that holds the whole bench wide and pushes in to one window on the grid, the logo chain threading IN / running OUT,
+// the elephant pendant swinging on its own chain, every window showing live data from the audio.
+// createFilm({D, assets, aspect}).render(ctx, t, {ev, fps}) draws clip time t (seconds from bar 1). Everything that can
+// change over the video is read through ev.value(path, beat, default): see v8/registry.js for the paths.
+import { createCore, stageOf, STAGE_COLOR_KEYS } from './core.js';
+import { createLab } from './lab.js';
+import { createMeters } from './meters.js';
+import { createBrand } from './brand.js';
+import { LAYOUT, CONTENT, openBeat, WINDOW_IDS, HUD_BAND, HERO, SIDEBAR, TOPBAR } from './layout.js';
+import { createPlayer, TAB_OF } from './player.js';   // v14 player look
+import { DEFAULT_TAGS } from './tags.js';
+import { mergeDeep, createEvaluator, emptySheet } from '../cues/schema.js';
+import { buildRegistry, meterPath } from './registry.js';
+import { INTRO_HIT, createIntro, coverScrim } from './intro.js';   // v11 intro
+
+const METER_KIND = { scope: 'logo', session: 'waveform', spectro: 'spectrogram', loud: 'loudness' };
+
+export function createFilm({ D, assets, aspect = '916' }) {
+  const L = createCore(D), lab = createLab(L), M = createMeters(L), BR = createBrand(L, assets), INTRO = createIntro(L, assets && assets.intro);
+  const { F, FPS, BEAT, BAR, T, U, steps, rgba, mix, text, fmt, tc, bbt, fidx, clamp, lerp, hs, hash, kickEnv, labelAt, SANS, MONO, SERIF, HAND, DISPLAY, UI } = L;
+  const port = aspect === '916', W = port ? 1080 : 1920, H = port ? 1920 : 1080, NB = D.bars;
+  let PRE = 0, RWB0 = 0, RWB = 0, c = null, ev = createEvaluator(emptySheet()), b = 0, IB = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
+  const V = (path, def) => ev.value(path, b, def);
+  // ---------------------------------------------------------------- tag variables (every on-screen word is editable)
+  const titleCase = D.title.split(' ').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+  const getTag = (path) => { const parts = path.split('.'); let v = tagDoc; for (const p of parts) v = v == null ? v : v[p];
+    if (Array.isArray(v)) return v.map((x, i) => V(`tag.${path}.${i}`, x)); return v == null ? undefined : V('tag.' + path, v); };
+  L.tagGet = getTag; const tag = L.tag; const PL = createPlayer(L, { tag, V });
+  L.meter = (kind, key, def) => V(`meter.${kind}.${key}`, def);
+  function setVars() {
+    L.tagVars({ title: D.title, Title: titleCase, titleWord: D.title.split(' ')[0], bpm: String(Math.round(D.bpm)), bpm2: D.bpm.toFixed(2), key: D.key,
+      keyShort: D.key.replace(' MIN', 'm').replace(' MAJ', ''), stage: S.name, stageN: String(S.n), look: LOOK.toUpperCase(), lufs: fmt(D.summary.I),
+      srcLufs: fmt(D.srcLufs != null ? D.srcLufs : -10.7), lra: D.summary.LRA.toFixed(1), tp: fmt(D.summary.TP), bars: String(NB) });
+    L.tagVars({ producer: tag('producer'), experiment: tag('experiment'), today: tag('date') }); L.tagVars({ date: tag('date') });
+  }
+  // v13 logo glow / cover pulse: ONE envelope from the analysed kicks: full strength on the kick's own frame (sharp attack, no ramp),
+  // then a smooth exponential decay (cue logo.decay, default 0.17 s), never a hard off (the tail is carried to 1.6 s).
+  const KICKS = L.kickHits.map(([tk, st]) => [Math.max(0.55, Math.min(1, st)), L.kickF(tk)]);   // on-grid kicks only (L.kickT timing), the same frame as kickEnv
+  function glowAt(f, tau = V('logo.decay', 0.17)) {
+    let m = 0; for (let i = KICKS.length - 1; i >= 0; i--) { const d = (f - KICKS[i][1]) / FPS; if (d < 0) continue; if (d > 1.6) break; m = Math.max(m, KICKS[i][0] * Math.exp(-d / tau)); } return m;
+  }
+  const WIN = (id) => tag('windows.' + (id === 'chains' ? 'logo' : id === 'session' ? 'wave' : id === 'stereo' ? 'gonio' : id)) || id;
+
+  // ---------------------------------------------------------------- windows: rect, open steps, content
+  const rectOf = (id) => { const r = LAYOUT[LOOK][aspect][id]; return [V(`win.${id}.x`, r[0]), V(`win.${id}.y`, r[1]), V(`win.${id}.w`, r[2]), V(`win.${id}.h`, r[3])]; };
+  // v11 intro: with an intro of IB beats the lab builds after it (default open beats shift by IB; -2 = open at the cut)
+  // v16.1 dashboard-load choreography (motion-design skill: lead with the hero, centre-out stagger, 50-100 ms steps, total < 500 ms): after the intro cut
+  // the player panels open in rings by distance from the hero, one 32nd note (~59 ms at 128 BPM) apart, every start on the 32nd grid
+  const ringOf = (id) => { const h = LAYOUT[LOOK][aspect].stage, r = LAYOUT[LOOK][aspect][id]; if (!h || !r) return 0; const d = Math.hypot(r[0] + r[2] / 2 - h[0] - h[2] / 2, r[1] + r[3] / 2 - h[1] - h[3] / 2); return Math.min(7, Math.round(d / (port ? 260 : 380))); };
+  const winOpen = (id) => { if (IB && (id === 'now' || id === 'stage')) return 0;
+    if (IB && LOOK === 'player' && openBeat(LOOK, aspect, id) < 0) return V(`win.${id}.open`, IB + ringOf(id) * 0.25);   // v13: the cover card is already there at the cut (the intro push ends on it), it does not build in
+    const d = openBeat(LOOK, aspect, id); return V(`win.${id}.open`, IB ? (d < 0 ? IB : d + IB) : d); };
+  function openStep(id, t) {
+    const n0 = steps(t, winOpen(id), 6, LOOK === 'player' ? U.s16 : U.t32),   // v17.2 player: panels build over 6 sixteenths (smoother)
+      k = ev.lastKey(`win.${id}.visible`, t / BEAT);
+    if (!k) return V(`win.${id}.visible`, true) ? n0 : 0;
+    const was = k.prev ? !!k.prev.v : true, on = !!k.key.v;
+    if (on) return was ? n0 : Math.min(n0 || 6, steps(t, k.key.b, 6, U.t32));
+    return was ? Math.max(0, 6 - steps(t, k.key.b, 6, U.t32)) : 0;
+  }
+  const contentOf = (id) => V(`win.${id}.content`, LOOK === 'player' && id === 'stage' ? 'hero' : CONTENT[id]);
+  // ---------------------------------------------------------------- camera: wide, or a push / cut to one window
+  function framing(id) {
+    if (!id || id === 'wide' || !LY[id]) return { x: W / 2, y: H / 2, z: 1 };
+    const [x, y, w, h] = LY[id], pad = 40, z = clamp(Math.min(W / (w + 2 * pad), H / (h + 2 * pad)), 1.15, 2.2), mx = 30;
+    return { x: clamp(x + w / 2, W / (2 * z) - mx, W - W / (2 * z) + mx), y: clamp(y + h / 2, H / (2 * z) - mx, H - H / (2 * z) + mx), z };
+  }
+  // v17 closed-form spring punch (v17 prompt, build 2): the sum of one critically damped impulse response per kick, x(tau) = (tau / tp) e^(1 - tau / tp),
+  // peak 1 at tau = tp (40 ms), settles with no overshoot; a pure function of time (L.kickHits = the on-grid kicks, at grid time, with strength)
+  const KH = L.kickHits || [];
+  function punchSpring(tt) { const tp = 0.04; let s = 0, lo = 0, hi = KH.length; while (lo < hi) { const m = (lo + hi) >> 1; if (KH[m][0] <= tt) lo = m + 1; else hi = m; }
+    for (let j = lo - 1; j >= 0; j--) { const tau = tt - KH[j][0]; if (tau > 0.6) break; s += (tau / tp) * Math.exp(1 - tau / tp); } return Math.min(1.3, s); }
+  function camera() {
+    const s = ev.shot(b), A = framing(s.from), Bf = framing(s.to), u = s.u, zm = V('camera.zoom', 1);
+    L.shotTo = s.to;   // meters can switch to their focus-shot version when the camera is on their window
+    const cam = { x: lerp(A.x, Bf.x, u) + V('camera.x', 0), y: lerp(A.y, Bf.y, u) + V('camera.y', 0), z: lerp(A.z, Bf.z, u) * zm };
+    // v13 (intro agent): the lab opens ON the cover (match cut from the intro push) and dollies out; L.openFx drives the streak copies + hides the HUD
+    let op = IB ? INTRO.openCam(b, ev, IB, cam, { W, H, look: LOOK, aspect }) : null;
+    // v17.1 loop: the beats before the rewind mirror the opening dolly (dolly IN onto the hero cover, same framing + streaks as the match cut)
+    if (!op && RWB) { const open = ev.value('intro.open', 0, 2), b0 = RWB - open; if (open > 0 && b >= b0 && b < RWB) op = INTRO.openCam(IB + open * (1 - (b - b0) / open) - 1e-6, ev, IB, cam, { W, H, look: LOOK, aspect }); } L.openFx = op; if (op) return { x: op.x, y: op.y, z: op.z };
+    if (b >= IB) { const p = V('fx.punch', LOOK === 'player' ? 0.014 : 0); if (p > 0) cam.z *= 1 + p * punchSpring(T(b)); }   // v17: closed-form spring per kick
+    return cam;
+  }
+  // ---------------------------------------------------------------- attention: the window this beat is about
+  const kickAt = new Set(D.onsets.kick.map((o) => Math.round(o[2] / BEAT * 4))), snrAt = new Set(D.onsets.snare.map((o) => Math.round(o[2] / BEAT * 4)));
+  function attention(t) {
+    const has = (id) => LY[id] && openStep(id, t) >= 6, fe = V('focus.featured', 'auto');
+    if (fe === 'none') return null; if (fe !== 'auto') return has(fe) ? fe : null;
+    const bb = Math.floor(t / BEAT), q = bb * 4;
+    let id = snrAt.has(q) ? 'spectrum' : kickAt.has(q) ? 'loud' : null;
+    if (bb % 4 === 0) id = has('chains') ? 'chains' : 'session';
+    if (bb % 8 === 6) id = has('elephant') ? 'elephant' : 'stereo';
+    if (!id || !has(id)) { const be = F.bands[fidx(bb * BEAT)], i = be.indexOf(Math.max(...be)); id = ['stereo', 'spectrum', 'spectrum', 'spectrum', 'spectro', 'spectro'][i]; }
+    if (!has(id)) id = has('session') ? 'session' : 'chains';
+    return id;
+  }
+  // v11: the handwritten notes, stamps, specimen tags and terminal chatter are gone (they said nothing). Only real
+  // readouts (Hz, dB, LUFS, BPM, key, bar.beat) and the title / credit stay on screen.
+
+  // ---------------------------------------------------------------- v11 window chrome: liquid glass (returns the content rect)
+  // Opening steps (n = 1..6 on 32nds): 1 = the top hairline, 2 = the whole hairline outline, 3+ = the glass; content
+  // grows over steps 4..6. No title bar, no window buttons: one hairline label in the UI voice, top left. The logo and
+  // the pendant windows carry no label (the art is the label). The exe and lab looks share the glass; lab keeps faint
+  // graph paper inside, scope adds a recessed CRT screen. API for content code: V11-SHELL-API.md.
+  const NO_LABEL = new Set(['logo', 'pendant', 'cover', 'hero', 'now']);
+  const PAD = 20, LABEL_H = port ? 46 : 40;
+  /** Content rect of window id for its rect r (also used by the camera framing and the API). */
+  function contentRect(id, r) {
+    const [x, y, w, h] = r, kind = contentOf(id), top = NO_LABEL.has(kind) ? PAD : LABEL_H;
+    if (LOOK === 'scope') { const sr = screenRect(id, r); return [sr[0] + 10, sr[1] + 10, sr[2] - 20, sr[3] - 20]; }
+    return [x + PAD, y + top, w - 2 * PAD, h - top - PAD];
+  }
+  const screenRect = (id, r) => { const [x, y, w, h] = r, top = NO_LABEL.has(contentOf(id)) ? 16 : LABEL_H - 4; return [x + 16, y + top, w - 32, h - top - 16]; };
+  // v15.2 macOS window chrome: three traffic lights top-left (close x / minimise - / zoom +), real colours (chrome.lightsColor) pre-inverted when the
+  // frame will be inverted (white stage XOR fx.invert) so they always read red / yellow / green
+  const invHex = (h) => '#' + (0xffffff ^ parseInt(h.slice(1), 16)).toString(16).padStart(6, '0');
+  // v18 MIDI map (reverse-engineered from the user's reference): the beat's melodic peaks (spectrogram bins ~1 semitone each, 110 Hz-1.8 kHz,
+  // top 5 local maxima per frame above the frame median) as notes. Past = halftone dot trails (dot size = level) moving into a fixed playhead;
+  // the sounding note = a solid ink bar with a soft halo; note onsets get a thin crosshair circle; a dotted guide one beat back; on the right,
+  // three boxed mini-rolls show the NEXT bar of the 3 strongest voices (step lines + a cursor line). Pure function of time (peaks precomputed).
+  // v19 hero ride: the logo rises / falls with the melody (strongest MIDI-map note, row position averaged over 0.3 s), +-7 % of the cell
+  let RIDE = null;
+  function rideY(t) { const P = rollPeaks(); if (!RIDE) { RIDE = new Float32Array(P.NFr); let last = 0.5; for (let f = 0; f < P.NFr; f++) { const bi = P.bin[f * P.K]; if (bi >= 0) last = (bi - P.lo) / (P.hi - P.lo); RIDE[f] = last; } }
+    const f0 = Math.min(P.NFr - 1, fidx(t)), n = Math.round(0.3 * FPS); let s2 = 0, cnt = 0; for (let f = Math.max(0, f0 - n); f <= f0; f++) { s2 += RIDE[f]; cnt++; } return (0.5 - s2 / cnt) * 0.14 * V('hero.rideAmt', 1); }
+  let PK = null;
+  function rollPeaks() { if (PK) return PK; const NB2 = D.spectroBins || 128, SP = D.spectro, NFr = Math.floor(SP.length / NB2), lo = 31, hi = 84, K = 5;
+    const bin = new Int16Array(NFr * K).fill(-1), lv = new Float32Array(NFr * K);
+    for (let f = 0; f < NFr; f++) { const o = f * NB2, row = []; for (let i = lo; i <= hi; i++) row.push(SP[o + i]); const med = row.slice().sort((a2, b2) => a2 - b2)[row.length >> 1], cand = [];
+      for (let i = lo + 1; i < hi; i++) { const v = SP[o + i]; if (v > SP[o + i - 1] && v >= SP[o + i + 1] && v > med + 16 && v > 70) cand.push([v, i]); }
+      cand.sort((a2, b2) => b2[0] - a2[0]); for (let j = 0; j < Math.min(K, cand.length); j++) { bin[f * K + j] = cand[j][1]; lv[f * K + j] = Math.min(1, (cand[j][0] - med) / 70); } }
+    return (PK = { bin, lv, K, lo, hi, NFr }); }
+  function pianoRoll(x, y, w, h, t, Sx) {
+    const P = rollPeaks(), fry = V('hero.fry', Sx.grey ? 'negative' : 'thermal'), ink = V('roll.color', fry === 'negative' ? '#0b0b0b' : Sx.grey ? Sx.ink : Sx.hot), f0 = Math.min(P.NFr - 1, fidx(t));
+    const span = V('roll.span', 4) * BEAT, px = x + w * V('roll.playhead', 0.56), pxPerS = (px - x) / span, row = (i) => y + h * 0.1 + h * 0.8 * (1 - (i - P.lo) / (P.hi - P.lo)), FPSr = FPS;
+    c.save(); c.strokeStyle = rgba(ink, 0.55); c.lineWidth = 1; c.beginPath(); c.moveTo(px + 0.5, y); c.lineTo(px + 0.5, y + h); c.stroke();
+    c.setLineDash([2, 4]); c.strokeStyle = rgba(ink, 0.35); c.beginPath(); c.moveTo(px - BEAT * pxPerS + 0.5, y); c.lineTo(px - BEAT * pxPerS + 0.5, y + h); c.stroke(); c.setLineDash([]);
+    for (let k2 = 1; k2 < 6; k2++) { const yy = y + h * k2 / 6; c.fillStyle = rgba(ink, 0.45); c.fillRect(px + 2, yy, 8, 1); }
+    // trails: one column of dots per frame; 3 rows of halftone when loud
+    const nBack = Math.min(f0, Math.round(span * FPSr));
+    for (let d = nBack; d >= 1; d--) { const f = f0 - d, xx = px - d / FPSr * pxPerS;
+      for (let j = 0; j < P.K; j++) { const bi = P.bin[f * P.K + j]; if (bi < 0) continue; const lvv = P.lv[f * P.K + j], yy = row(bi), r = 0.6 + 3.2 * lvv;
+        c.fillStyle = rgba(ink, 0.35 + 0.6 * lvv); c.beginPath(); c.arc(xx, yy, r, 0, 6.2832); c.fill();
+        if (lvv > 0.45) { c.beginPath(); c.arc(xx, yy - r * 2.1, r * 0.6, 0, 6.2832); c.arc(xx, yy + r * 2.1, r * 0.6, 0, 6.2832); c.fill(); }
+        const pb = f > 0 ? P.bin.subarray((f - 1) * P.K, f * P.K) : []; let isOn = true; for (const q of pb) if (q >= 0 && Math.abs(q - bi) <= 1) isOn = false;
+        if (isOn && lvv > 0.35 && d < nBack - 2) { c.strokeStyle = rgba(ink, 0.5); c.lineWidth = 1; c.beginPath(); c.arc(xx, yy, 10 + 8 * lvv, 0, 6.2832); c.stroke(); c.beginPath(); c.moveTo(xx, yy - 26); c.lineTo(xx, yy + 26); c.stroke(); } } }
+    // the sounding notes: solid bars into the playhead + soft ink halo
+    for (let j = 0; j < P.K; j++) { const bi = P.bin[f0 * P.K + j]; if (bi < 0) continue; const lvv = P.lv[f0 * P.K + j], yy = row(bi), bl = 18 + 46 * lvv, th = 2 + 7 * lvv;
+      const g = c.createRadialGradient(px, yy, 0, px, yy, 22 + 40 * lvv); g.addColorStop(0, rgba(ink, 0.35 * lvv)); g.addColorStop(1, rgba(ink, 0)); c.fillStyle = g; c.fillRect(px - 70, yy - 70, 140, 140);
+      c.fillStyle = rgba(ink, 0.95); c.fillRect(px - bl, yy - th / 2, bl, th); }
+    // mini-rolls: the next bar of the 3 strongest voices
+    if (V('roll.mini', true)) { const mx = x + w * 0.79, mw = w * 0.18, mh = (h - 40) / 3 - 8, nF = Math.round(BAR * FPSr);
+      for (let m = 0; m < 3; m++) { const my = y + 20 + m * (mh + 8); c.strokeStyle = rgba(ink, 0.35); c.lineWidth = 1; c.strokeRect(Math.round(mx) + 0.5, Math.round(my) + 0.5, Math.round(mw), Math.round(mh));
+        c.fillStyle = rgba(ink, 0.5); for (const [cx2, cy2] of [[mx - 6, my - 6], [mx + mw + 6, my - 6]]) { c.fillRect(cx2 - 3, cy2, 7, 1); c.fillRect(cx2, cy2 - 3, 1, 7); }
+        c.strokeStyle = rgba(ink, 0.8); c.lineWidth = 1.4; c.beginPath(); let started = false;
+        for (let d = 0; d < nF; d += 2) { const f = Math.min(P.NFr - 1, f0 + d), bi = P.bin[f * P.K + m]; const xx = mx + 4 + (mw - 8) * d / nF;
+          if (bi < 0) { started = false; continue; } const yy = my + 4 + (mh - 8) * (1 - (bi - P.lo) / (P.hi - P.lo)); if (!started) { c.moveTo(xx, yy); started = true; } else c.lineTo(xx, yy); }
+        c.stroke(); c.strokeStyle = rgba(ink, 0.45); c.beginPath(); c.moveTo(mx + mw * 0.5, my + 4); c.lineTo(mx + mw * 0.5, my + mh - 4); c.stroke(); } }
+    c.restore();
+  }
+  // v16 detection boxes (Y2K lab-scan): label tab (dark on scan green) + double frame + corner brackets + crosshair; re-acquire (hard step) each downbeat, flash on kicks
+  const DET = [[0.035, 0.12, 0.2, 0.52], [0.765, 0.08, 0.2, 0.44], [0.69, 0.6, 0.27, 0.32], [0.06, 0.7, 0.24, 0.24]];
+  function detect(x, y, w, h, t, Sx) {
+    const G = V('scan.color', Sx.grey ? '#0a0a0a' : Sx.hot), TXT = V('scan.text', Sx.grey ? '#f2f2f2' : '#0a0a0a'), labs = tag('player.detect') || [], bar = 0, I = 0, fz = port ? 17 : 15, th = fz + 8;   // v16.1: stage colours, static (no flash, no re-acquire)
+    c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
+    DET.forEach(([fx, fy, fw, fh], i) => { if (!labs[i]) return;
+      const jx = 0, jy = 0, bx = Math.round(x + fx * w + jx) + 0.5, by = Math.round(y + fy * h + jy + th) + 0.5, bw = Math.round(fw * w), bh = Math.round(fh * h - th);
+      c.strokeStyle = rgba(G, 0.9); c.lineWidth = 1.2 + 1.2 * I; c.strokeRect(bx, by, bw, bh); c.lineWidth = 1; c.strokeStyle = rgba(G, 0.45); c.strokeRect(bx + 3, by + 3, bw - 6, bh - 6);
+      const k = Math.min(14, bw * 0.18); c.strokeStyle = G; c.lineWidth = 2; c.beginPath();
+      for (const [cx2, cy2, sx, sy] of [[bx + 6, by + 6, 1, 1], [bx + bw - 6, by + 6, -1, 1], [bx + 6, by + bh - 6, 1, -1], [bx + bw - 6, by + bh - 6, -1, -1]]) { c.moveTo(cx2, cy2 + sy * k); c.lineTo(cx2, cy2); c.lineTo(cx2 + sx * k, cy2); } c.stroke();
+      const mx = bx + bw / 2, my = by + bh / 2; c.lineWidth = 1; c.strokeStyle = rgba(G, 0.7); c.beginPath(); c.moveTo(mx - 6, my); c.lineTo(mx + 6, my); c.moveTo(mx, my - 6); c.lineTo(mx, my + 6); c.stroke();
+      const lab = String(labs[i]).toUpperCase(), conf = `${78 + Math.floor(hs(bar * 31 + i) * 21)}%`; c.font = `600 ${fz}px ${UI}`; const tw2 = Math.min(bw + 60, c.measureText(lab).width * 1.12 + lab.length * 1.5 + 20);
+      c.fillStyle = rgba(G, 0.92 + 0.08 * I); c.fillRect(bx - 0.5, by - th, tw2, th); text(c, lab, bx + 7, by - th / 2, { size: fz, fam: UI, w: 600, col: TXT, maxW: tw2 - 10 });
+      if (V('scan.conf', false)) text(c, conf, bx + bw, by - th / 2, { size: fz - 2, w: 700, col: rgba(G, 0.95), align: 'right' });
+      if (I > 0.05) { c.fillStyle = rgba(G, 0.08 * I); c.fillRect(bx, by, bw, bh); } });
+    c.restore();
+  }
+  function lights(x, y, Sx, active) {
+    // v16: stage colours (Nigredo = black buttons with an ink hairline; colour stages = hot / sig2 / sig1); the white stage / negative invert them naturally
+    const col = V('chrome.lightsColor', true), r = port ? 8 : 7, gp = port ? 24 : 21, neg = false, P3 = Sx.grey ? ['#0a0a0a', '#0a0a0a', '#0a0a0a'] : [Sx.hot, Sx.sig2, Sx.sig1];
+    P3.forEach((h, i) => { const cx = x + i * gp, cc = col ? h : rgba(Sx.ink, 0.35);
+      c.beginPath(); c.arc(cx, y, r, 0, 2 * Math.PI); c.fillStyle = cc; c.globalAlpha = active || !col ? 1 : 0.85; c.fill(); c.globalAlpha = 1;
+      c.strokeStyle = Sx.grey ? rgba(Sx.ink, 0.55) : 'rgba(0,0,0,0.25)'; c.lineWidth = 0.8; c.stroke();
+      if (V('chrome.glyphs', true)) { const gcol = Sx.grey ? rgba(Sx.ink, 0.75) : 'rgba(0,0,0,0.55)', d = r * 0.45; c.strokeStyle = gcol; c.lineWidth = 1.3; c.beginPath();
+        if (i === 0) { c.moveTo(cx - d, y - d); c.lineTo(cx + d, y + d); c.moveTo(cx + d, y - d); c.lineTo(cx - d, y + d); } else { c.moveTo(cx - d * 1.2, y); c.lineTo(cx + d * 1.2, y); if (i === 2) { c.moveTo(cx, y - d * 1.2); c.lineTo(cx, y + d * 1.2); } }
+        c.stroke(); } });
+    return 3 * gp + 4;
+  }
+  function label(id, x, y, w, Sx, active) {
+    if (V('chrome.lights', LOOK === 'player') && contentOf(id) !== 'now') { const lw = lights(x + PAD + 8, y + (port ? 26 : 24), Sx, active); if (NO_LABEL.has(contentOf(id))) return; x += lw; }
+    if (NO_LABEL.has(contentOf(id))) return;
+    if (LOOK === 'player') { PL.icon(c, contentOf(id) === 'inserts' ? 'bars' : contentOf(id) === 'meta' ? 'meta' : 'bars', x + PAD + 10, y + (port ? 26 : 24), 22, rgba(Sx.ink, active ? 0.95 : 0.7), true); x += 30; }
+    text(c, String(WIN(id)).toUpperCase(), x + PAD + 2, y + (port ? 26 : 24), { size: 18, fam: UI, w: 500, ls: 2.4, col: rgba(Sx.ink, active ? 0.95 : 0.52), maxW: w - 2 * PAD });
+  }
+  function chrome(id, r, n, t, Sx, active) {
+    const [x, y, w, h] = r, rad = V('glass.radius', 22), lit = rgba(Sx.ink, 0.55);
+    if (n < 3) {   // hairline build: top edge, then the full outline
+      c.strokeStyle = lit; c.lineWidth = 1.2;
+      if (n === 1) { c.beginPath(); c.moveTo(x + rad, y); c.lineTo(x + w - rad, y); c.stroke(); } else c.stroke(L.rr(x, y, w, h, rad));
+      c.lineWidth = 1; return null;
+    }
+    // v12 depth (exe): the meter windows sit behind the hero: darker, calmer glass (lower edge light, softer shadow)
+    const back = LOOK === 'exe' || LOOK === 'player' ? V('glass.back', 1) : 0;
+    L.glass(c, x, y, w, h, Sx, { r: rad, tint: V('glass.tint', LOOK === 'scope' ? 0.5 : 0.36) + 0.2 * back, active: active && V('bracket.on', LOOK !== 'player'), edge: 1 - 0.4 * back, shadow: 1 - 0.25 * back });
+    // v14 player: double bezel, the glass is the tray and an inner core sits 6 px in (concentric radius, top-lit hairline) = machined hardware
+    if (LOOK === 'player' && V('glass.bezel', 1) > 0) { const bz = V('glass.bezel', 1), q = 6; c.save(); c.lineWidth = 1;
+      c.strokeStyle = rgba(S.ink, 0.07 * bz); c.stroke(L.rr(x + q + 0.5, y + q + 0.5, w - 2 * q - 1, h - 2 * q - 1, Math.max(4, rad - q)));
+      const g = c.createLinearGradient(0, y + q, 0, y + q + 40); g.addColorStop(0, rgba(S.ink, 0.10 * bz)); g.addColorStop(1, rgba(S.ink, 0));
+      c.strokeStyle = g; c.beginPath(); c.moveTo(x + q + rad, y + q + 1.5); c.lineTo(x + w - q - rad, y + q + 1.5); c.stroke(); c.restore(); }
+    if (LOOK === 'lab') { c.save(); c.clip(L.rr(x, y, w, h, rad)); lab.graphPaper(c, x, y, w, h, Sx, 10, 50, 0.45); c.restore(); }
+    if (LOOK === 'scope') { const sr = screenRect(id, r); c.fillStyle = rgba(Sx.bg, 0.62); c.fill(L.rr(sr[0], sr[1], sr[2], sr[3], 12)); c.strokeStyle = rgba(Sx.ink, 0.12); c.stroke(L.rr(sr[0] + 0.5, sr[1] + 0.5, sr[2] - 1, sr[3] - 1, 12)); }
+    if (n >= 5 || LOOK !== 'player') label(id, x, y, w, Sx, active);   // v17 (tip C): the label + buttons wait until the glass is mostly open
+    return contentRect(id, r);
+  }
+
+  // ---------------------------------------------------------------- window contents
+  function chainsBody(cr, t, k, Sx) {
+    const [x, y, w, h] = cr; c.save(); c.beginPath(); c.rect(x - 4, y - 4, w + 8, (h + 8) * k); c.clip();
+    const C = Math.max(4, Math.round(V('logo.cycle', 2) * 4)), hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false);
+    if (LOOK === 'scope') {   // CRT: graticule 10 x 8 div, the two live traces run behind the logo, triggered on the 16th
+      c.strokeStyle = rgba(Sx.ink, 0.1); for (let i = 0; i <= 10; i++) { const X = Math.round(x + w * i / 10) + 0.5; c.beginPath(); c.moveTo(X, y); c.lineTo(X, y + h - 40); c.stroke(); }
+      for (let j = 0; j <= 8; j++) { const Y = Math.round(y + (h - 40) * j / 8) + 0.5; c.beginPath(); c.moveTo(x, Y); c.lineTo(x + w, Y); c.stroke(); }
+      M.trace(c, Sx, [x, y, w, h - 40], t, { span: BEAT * V(meterPath('logo', 'span'), 0.25), amp: V(meterPath('logo', 'amp'), 0.2), lanes: [[0, 0.3, Sx.sig1], [1, 0.72, Sx.sig2]] });
+    }
+    const s = BR.logo(c, Sx, [x, y, w, h - (LOOK === 'scope' ? 40 : 34)], t, { cycle: C, mode: V('logo.mode', 'cycle'), hero, scale: V('logo.scale', 1),
+      glow: V('logo.glow', 1), kickI: glowAt(fidx(t)), pulse: glowAt(fidx(t)), bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
+    if (LOOK === 'scope') text(c, `${(BEAT * 1000 * V(meterPath('logo', 'span'), 0.25) / 10).toFixed(1)} ms/div`, x + w, y + h - 14, { size: 18, col: rgba(Sx.ink, 0.5), align: 'right', maxW: w * 0.4 });   // real timebase only (v11)
+    c.restore();
+  }
+  // pendant geometry inside a content rect: the hand (top of the chain) and the chain length (v9 chain wave)
+  function pendantGeom(cr) {
+    const [x, y, w, h] = cr, avail = h - 80, len = avail * clamp(V('pendant.chain', 0.3), 0, 0.6), size = Math.min(w * 0.8, (avail - len) / 0.95) * V('pendant.size', 1);
+    return { size, len, ax: x + w / 2 + size * (346 / 700 - 0.5) + V('pendant.x', 0), ay: y + 22 + V('pendant.y', 0) };
+  }
+  // drop bloom: inside a drop 0.35, plus an envelope from each drop phrase's downbeat that decays over 2 beats
+  function dropBloom(t) {
+    const bar = Math.floor(t / BAR); if (labelAt(bar) !== 'drop') return 0;
+    const sb = D.song.startBar + bar; let p0 = sb; for (const q of D.song.phrases) if (q.bar <= sb) p0 = q.bar;
+    return 0.35 + 0.65 * Math.exp(-Math.max(0, t - (p0 - D.song.startBar) * BAR) / (2 * BEAT));
+  }
+  function elephantBody(cr, t, k, Sx) {
+    const [x, y, w, h] = cr; c.save(); c.beginPath(); c.rect(x - 14, y - 14, w + 28, (h + 28) * k); c.clip();
+    const { size, len, ax, ay } = pendantGeom(cr), g = BR.drawChainFx(c, Sx, ax, ay, len, t);
+    const sw = BR.elephant(c, Sx, g.end[0], g.end[1], size, t, g.ang[g.ang.length - 1]);
+    if (LOOK === 'scope') { c.fillStyle = rgba(Sx.ink, 0.8); c.fillRect(ax - 22, ay - 20, 44, 10); c.fillRect(ax - 3, ay - 12, 6, 12); }
+    c.restore();
+  }
+
+  // ---------------------------------------------------------------- v12 hero (exe): logo + pendant as ONE object, front layer
+  // The pendant's chain hangs from the bottom of the U (LOGO_AT, logo px), so the chain sim's anchor follows the logo (its
+  // kick punch and the hero.* offsets); the beat pushes still start at that hand. The hero is drawn after every window into its
+  // own layer (same pixels + camera transform as the frame) and composited over them with a soft two-part shadow.
+  const HERO_HIDE = new Set(['loud', 'stereo']);   // a push to the levels / imager is a clear view of that window (hard cut, no fade)
+  // v13: the hero is the U2C logo alone, centred on its bounding box in the stage card (cx, cy = the card's centre).
+  function heroGeom(t) {
+    const H0 = HERO[aspect], k = V('hero.scale', 1), st = LY.stage || LAYOUT.exe[aspect].stage, bb = BR.logoBBox(), w = H0.logoW * V('logo.scale', 1) * k;
+    return { cx: st[0] + st[2] / 2 + V('hero.x', 0), cy: st[1] + st[3] / 2 + V('hero.y', 0), w, s: w / bb.w, bb };
+  }
+  // v12: the hero logo dwells fully threaded between an IN and an OUT (logo.hold bars, default 10 -> a 48-beat period, ~80 % complete);
+  // the break sits around beat 28-36, clear of the usual stills at 10 s and 18 s
+  const HOLD = (C) => ((LOOK === 'exe' || LOOK === 'player') && V('hero.on', true) ? Math.round(V('logo.hold', 10) * 4) : 0), HOLD_OFF = 16;
+  function heroArt(cx, t) {   // draws into ctx cx (world transform already set)
+    const g = heroGeom(t), hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4)), I = glowAt(fidx(t));
+    BR.logo(cx, S, [0, 0, 0, 0], t, { at: { cx: g.cx, cy: g.cy, w: g.w }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero,
+      glow: V('logo.glow', 1), kickI: I, pulse: I, bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
+  }
+  let HL = null;
+  const mkCanvas = (w, h) => { const q = document.createElement('canvas'); q.width = Math.max(1, Math.ceil(w)); q.height = Math.max(1, Math.ceil(h)); return q; };
+  function hero(t, cam, scale, sh) {
+    if (LOOK !== 'exe' || !V('hero.on', true) || (sh && (sh.from !== 'wide' || sh.to !== 'wide') && (HERO_HIDE.has(sh.from) || HERO_HIDE.has(sh.to)))) return;
+    const main = c, cv = main.canvas, z = cam.z;
+    if (!HL || HL.a.width !== cv.width || HL.a.height !== cv.height) HL = { a: mkCanvas(cv.width, cv.height), s: mkCanvas(cv.width / 4, cv.height / 4) };
+    const hx = HL.a.getContext('2d'); hx.setTransform(1, 0, 0, 1, 0, 0); hx.globalAlpha = 1; hx.globalCompositeOperation = 'source-over'; hx.clearRect(0, 0, cv.width, cv.height);
+    hx.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z)); hx.imageSmoothingEnabled = true;
+    c = hx; try { heroArt(hx, t); } finally { c = main; }
+    // shadow: the layer's silhouette, 1/4 resolution, blurred, dropped below the object (wide soft + tight contact)
+    const sx = HL.s.getContext('2d'), px = scale * z, light = L.isLight(S);
+    sx.setTransform(1, 0, 0, 1, 0, 0); sx.globalCompositeOperation = 'source-over'; sx.clearRect(0, 0, HL.s.width, HL.s.height); sx.drawImage(HL.a, 0, 0, HL.s.width, HL.s.height);
+    sx.globalCompositeOperation = 'source-in'; sx.fillStyle = light ? rgba(S.ink, 1) : '#000'; sx.fillRect(0, 0, HL.s.width, HL.s.height); sx.globalCompositeOperation = 'source-over';
+    // soft dark vignette under the hero (reads in front): a radial pool behind the logo + pendant, in the same world transform
+    { const g = heroGeom(t), cyv = g.cy, rx = g.w * 0.62, ry = rx * 0.8;
+      main.save(); main.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z)); main.translate(g.cx, cyv); main.scale(1, ry / rx);
+      const rg = main.createRadialGradient(0, 0, rx * 0.15, 0, 0, rx), va = V('hero.vignette', 0.7) * (light ? 0.35 : 1), vc = light ? '40,40,40' : '0,0,0';
+      rg.addColorStop(0, `rgba(${vc},${va})`); rg.addColorStop(0.55, `rgba(${vc},${va * 0.55})`); rg.addColorStop(1, `rgba(${vc},0)`);
+      main.fillStyle = rg; main.fillRect(-rx, -rx, 2 * rx, 2 * rx); main.restore(); }
+    main.save(); main.setTransform(1, 0, 0, 1, 0, 0); main.imageSmoothingEnabled = true; main.imageSmoothingQuality = 'high';
+    for (const [dx, dy, bl, a] of [[10, 34, 16, 0.5], [4, 12, 5, 0.34]]) { main.filter = `blur(${bl * px}px)`; main.globalAlpha = a * (light ? 0.6 : 1) * V('hero.shadow', 1); main.drawImage(HL.s, dx * px, dy * px, cv.width, cv.height); }
+    main.filter = 'none'; main.globalAlpha = 1; main.drawImage(HL.a, 0, 0); main.restore();
+  }
+  // ---------------------------------------------------------------- v13 stage: cover card + 16-step beat grid (under the hero logo)
+  // The cover (cover-0, the beat's own, greys in Nigredo) fills the card (object-fit cover, the same pixels the intro's match-cut ends on),
+  // kick pulse = scale 1 + 0.012 I and a small brightness lift (no fade). L.coverRect = the card rect, set every frame.
+  function stepGrid(x, y, w, h, t, Sx, I) {
+    const pad = port ? 22 : 18, H0 = port ? 30 : 24, gw = w - 2 * pad, gx = x + pad, gy = y + h - pad - H0, gap = 4, big = port ? 12 : 10;
+    const cw = (gw - 3 * big - 12 * gap) / 16, Q = BEAT / 4, q16 = Math.floor(t / Q + 1e-6), cur = ((q16 % 16) + 16) % 16, barq = q16 - cur, gl = V('stepgrid.glow', 1), light = L.isLight(Sx);
+    c.fillStyle = rgba(light ? Sx.card : Sx.bg, light ? 0.5 : 0.5); c.fill(L.rr(gx - 12, gy - 10, gw + 24, H0 + 34, 14));
+    for (let i = 0; i < 16; i++) {
+      const X = gx + i * (cw + gap) + Math.floor(i / 4) * (big - gap), qq = barq + i, isK = kickAt.has(qq), isS = snrAt.has(qq);
+      let age = t - qq * Q; if (age < -1e-6) age += BAR;   // seconds since this step last sounded
+      const lit = Math.exp(-Math.max(0, age) / 0.12), m = isK ? 1 : isS ? 0.82 : 0.42, ink = Sx.ink;
+      const base = isK ? 0.2 : isS ? 0.15 : 0.08, a = clamp(base + m * lit * gl, 0, 1);
+      if (isK && lit > 0.05) { c.fillStyle = rgba(ink, 0.18 * lit * gl); c.fill(L.rr(X - 3, gy - 3, cw + 6, H0 + 6, 7)); }
+      c.fillStyle = rgba(ink, a); c.fill(L.rr(X, gy, cw, H0, 5));
+      if (i === cur) { c.strokeStyle = rgba(Sx.hot, 0.95); c.lineWidth = 1.6; c.stroke(L.rr(X - 1, gy - 1, cw + 2, H0 + 2, 6)); c.lineWidth = 1; }
+      // markers under the step: filled dot = a kick lands here in this bar, ring = snare
+      if (isK || isS) { c.beginPath(); c.arc(X + cw / 2, gy + H0 + 12, 3, 0, 2 * Math.PI); if (isK) { c.fillStyle = rgba(ink, 0.8); c.fill(); } else { c.strokeStyle = rgba(ink, 0.7); c.stroke(); } }
+    }
+  }
+  function coverBody(cr, t, k, Sx) {
+    const fry = LOOK === 'player' ? V('hero.fry', Sx.grey ? 'negative' : 'thermal') : 'none', r = L.winRect, [x, y, w, h] = r, rad = V('glass.radius', 22), I = glowAt(fidx(t)) * V('cover.pulse', 1), cv = INTRO.coverFried ? INTRO.coverFried(Math.round(V('player.cover', 0)), Sx, fry) : null;
+    L.coverRect = r; L.coverRadius = rad;
+    c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip(); c.clip(L.rr(x, y, w, h, rad));
+    if (cv) { const z = L.openFx ? 1 : 1 + 0.012 * I, sc = Math.max(w, h) / cv.width * z; c.drawImage(cv, x + w / 2 - cv.width * sc / 2, y + h / 2 - cv.height * sc / 2, cv.width * sc, cv.height * sc); }   // (the scale pulse waits for the dolly to land: the match cut is an exact crop)
+    else { c.fillStyle = Sx.card; c.fillRect(x, y, w, h); }
+    const light = L.isLight(Sx);
+    coverScrim(c, Sx, x, y, w, h, { dim: V('cover.dim', fry === 'negative' ? 0.9 : fry !== 'none' ? 0.55 : 1), light });   // v13: darker, so the logo reads (the intro push darkens into this same scrim)
+    if (I > 0.02) { c.fillStyle = rgba(light ? Sx.bg : '#ffffff', 0.05 * I); c.fillRect(x, y, w, h); }   // kick lift, a brightness step that decays (no fade in)
+    if (V('stepgrid.on', false) && k >= 1) stepGrid(x, y, w, h, t, Sx, I);
+    c.restore();
+    c.strokeStyle = rgba(Sx.ink, 0.38); c.lineWidth = 1.2; c.stroke(L.rr(x + 0.6, y + 0.6, w - 1.2, h - 1.2, rad)); c.lineWidth = 1;
+  }
+  // v12: spectrum + spectrogram calls are wrapped here so the merge can switch them to SV.draw / SG.draw(ctx, rect, frame, opts)
+  const drawSpectrum = (cr, t, k, Sx) => M.spectrum(c, Sx, cr, t, k), drawSpectrogram = (cr, t, k, Sx) => M.spectro(c, Sx, cr, t, k);
+  // ---------------------------------------------------------------- v14 player: hero, now-playing, inserts, metadata
+  // hero: the U2C chain logo centred in its cell (thread in/out + exponential kick glow unchanged), the elephant STATIC under the U (a logo mark, no swing),
+  // the caption block bottom right, registration crosses. L.heroRect (set here) = the cell.
+  function playerHero(cr, t, k, Sx) {
+    const [x, y, w, h] = L.winRect, cx = x + w / 2 + V('hero.x', 0), cy = y + h * (V('hero.elephant', false) ? 0.40 : 0.5) + V('hero.y', 0) + (V('hero.ride', true) ? rideY(t) * h : 0), bb = BR.logoBBox(), lw = Math.min(w * (port ? 0.52 : 0.43), h * 0.62 * bb.w / bb.h) * V('hero.scale', 1) * V('logo.scale', 1), lh = lw * bb.h / bb.w;
+    if (V('hero.cover', true)) coverBody(cr, t, k, Sx);   // v14.1: the darkened cover-0 behind the logo = the intro's match-cut target
+    if (V('roll.on', true)) { const [rx, ry, rw, rh] = L.winRect; c.save(); c.beginPath(); c.rect(rx, ry, rw, rh * k); c.clip(); c.clip(L.rr(rx, ry, rw, rh, V('glass.radius', 22))); pianoRoll(rx, ry, rw, rh, t, Sx); c.restore(); }
+    c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip();
+    const hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4)), I = glowAt(fidx(t));
+    BR.logo(c, Sx, [0, 0, 0, 0], t, { at: { cx, cy, w: lw }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero, glow: V('logo.glow', 1), kickI: I, pulse: I, bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
+    const d = lw * V('pendant.size', 1) * 0.5; if (V('hero.elephant', false)) BR.elephantMark(c, Sx, cx - lw * (port ? 0.2 : 0.16) + V('pendant.x', 0), cy + lh / 2 + d * 0.52 + V('pendant.y', 0), d, d);
+    const ink = Sx.ink; PL.crosses(c, Sx, [[x + 30, cy], [x + w - 30, cy]], 20);
+    if (V('scan.on', true) && (V('scan.always', false) || ev.shot(b).to === 'stage' || ev.shot(b).from === 'stage')) detect(x, y, w, h, t, Sx);   // v19.1: boxes only when the camera is on the hero
+    if (V('hero.caption', false)) PL.heroCaption(c, Sx, port ? x + w - 24 : x + w - 24, y + h - 22 - 25 * 3, 'right', 205);
+    c.restore();
+  }
+  const nowCover = (r) => { const [x, y, w, h] = r, cp = w > 700 && h < 220; return cp ? [x + 20, y + 20, h - 40, h - 40] : [x + 20, y + 20, w - 40, Math.round((w - 40) * 0.5)]; };
+  function playerNow(cr, t, k, Sx) {
+    const r = L.winRect; c.save(); c.beginPath(); c.rect(r[0], r[1], r[2], r[3] * k); c.clip();
+    PL.now(c, Sx, r, t, { cover: INTRO.coverCanvas ? INTRO.coverCanvas(Math.round(V('player.cover', 0)), Sx) : null, dim: V('cover.dim', 1) });
+    c.restore();
+  }
+  function playerInserts(cr, t, k, Sx) {
+    const [x, y, w, h] = cr;
+    if (M.inserts) return M.inserts(c, Sx, cr, t, k);   // panels agent: 4 live tiles (spectrum, GR history, width/corr trace, rotating cube)
+    const g = 12, tw = (w - 3 * g) / 4; for (let i = 0; i < 4; i++) L.panel(c, x + i * (tw + g), y, tw, h, Sx, { r: 10 });   // placeholder: empty glass tiles until the module exists
+  }
+  const BODY = { hero: playerHero, now: playerNow, inserts: playerInserts, meta: (cr, t, k, Sx) => PL.meta(c, Sx, cr, t, { cover: INTRO.coverCanvas ? INTRO.coverCanvas(Math.round(V('player.cover', 0)), Sx) : null }),
+    cover: coverBody, logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),
+    eq: (cr, t, k, Sx) => M.eq(c, Sx, cr, t, k), spectrum: drawSpectrum, loudness: (cr, t, k, Sx) => (LOOK === 'player' ? M.levels(c, Sx, cr, t, k, { variant: 'player' }) : M.loud(c, Sx, cr, t, k)), stereo: (cr, t, k, Sx) => M.stereo(c, Sx, cr, t, k, LOOK === 'player' ? { variant: 'player' } : undefined),
+    spectrogram: drawSpectrogram, surface: (cr, t, k, Sx) => M.surface(c, Sx, cr, t, k),
+    levels: (cr, t, k, Sx) => M.levels(c, Sx, cr, t, k), ghost: (cr, t, k, Sx) => M.ghost(c, Sx, cr, t, k) };
+  // v14 player shell: sidebar (16:9) + top bar, in the world under the camera, drawn before the cards
+  function playerShell(t) {
+    const sb = SIDEBAR[aspect], tb = TOPBAR[aspect], s = ev.shot(b), tab = s.to === 'wide' ? 0 : (TAB_OF[s.to] ?? 0), I = glowAt(fidx(t));
+    if (sb) { L.glass(c, sb[0], sb[1], sb[2], sb[3], S, { r: V('glass.radius', 22), tint: 0.36 + 0.2, edge: 0.6, shadow: 0.75 });
+      PL.sidebar(c, S, sb, t, { pulse: I, logo: ([lx, ly], lw) => { const bb = BR.logoBBox(); BR.logo(c, S, [0, 0, 0, 0], t, { at: { cx: lx, cy: ly, w: lw }, cycle: 8, hero: true, glow: 0, kickI: 0, pulse: 0, bloom: 0, runner: false }); } }); }
+    PL.topbar(c, S, tb, t, { port, tab, tabs: port || V('player.tabs169', false) });
+  }
+  // v17 (tip B) focus bracket: a stage-colour frame that travels between panels with the camera. Each edge rides its own closed-form spring:
+  // the edges on the side of travel (leading) are faster (w 13) than the trailing ones (w 7), so the frame stretches ahead and settles
+  const spr = (p, w) => (p <= 0 ? 0 : p >= 1.6 ? 1 : 1 - (1 + w * p) * Math.exp(-w * p));
+  function focusBracket(t) {
+    const s = ev.shot(b); if (!s.key || (s.from === 'wide' && s.to === 'wide')) return;
+    const RA = s.from === 'wide' ? null : LY[s.from], RB = s.to === 'wide' ? null : LY[s.to]; if (!RA && !RB) return;
+    const d = Math.max(1e-6, s.key.dur ?? 1), p = s.key.transition === 'cut' ? 1 : (b - (s.key.b - d)) / d, A = RA || RB, Bq = RB || RA;
+    const a0 = [A[0], A[1], A[0] + A[2], A[1] + A[3]], b0 = [Bq[0], Bq[1], Bq[0] + Bq[2], Bq[1] + Bq[3]];
+    const right = b0[0] + b0[2] > a0[0] + a0[2], down = b0[1] + b0[3] > a0[1] + a0[3], lead = [!right, !down, right, down];
+    const e = a0.map((v, i) => v + (b0[i] - v) * spr(p, lead[i] ? 13 : 7)), al = RB ? 1 : 1 - Math.min(1, p * 1.5);
+    if (al <= 0.01) return; const pad = 6, col = S.grey ? S.ink : S.hot;
+    c.save(); c.globalAlpha = 0.85 * al; c.strokeStyle = col; c.lineWidth = 2; const k = 26;
+    const [x0, y0, x1, y1] = [e[0] - pad, e[1] - pad, e[2] + pad, e[3] + pad]; c.beginPath();
+    for (const [cx2, cy2, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) { c.moveTo(cx2, cy2 + sy * k); c.lineTo(cx2, cy2); c.lineTo(cx2 + sx * k, cy2); }
+    c.stroke(); c.restore();
+  }
+  // v18 Y2K cursor (the v17 prompt: "a cursor drives every change"): before each camera travel it glides (spring) to the target panel's title bar,
+  // clicks ON the beat the travel starts (press + ring), then rides along; world space, so it stays on the panel while the camera moves
+  let CUR = null;
+  function cursorPath() { if (CUR && CUR.ev === ev) return CUR.p; const p = [];
+    for (const k of ev.keysIn('camera.shot', 0, 1e6)) { const r = k.v !== 'wide' && LY[k.v]; if (!r) continue; const d = k.dur ?? 1; p.push({ b: k.b - d, x: r[0] + 92, y: r[1] + (port ? 28 : 26) }); }
+    CUR = { ev, p }; return p; }
+  function cursor(t) {
+    const P = cursorPath(); if (!P.length) return; const h = LY.stage, home = h ? { x: h[0] + h[2] * 0.62, y: h[1] + h[3] * 0.6 } : { x: W / 2, y: H / 2 };
+    let i = P.findIndex((q) => q.b > b); if (i < 0) i = P.length; const A = i > 0 ? P[i - 1] : { ...home, b: IB }, Bq = i < P.length ? P[i] : A;
+    const t0 = T(A.b) + 0.15, t1 = T(Bq.b) - 0.12, u = t1 > t0 ? clamp((t - t0) / (t1 - t0)) : 1, e = spr(u * 1.25, 7);
+    const x = A.x + (Bq.x - A.x) * e, y = A.y + (Bq.y - A.y) * e, dt = t - T(Bq.b) >= -0.12 && t - T(Bq.b) < 0.25 ? t - T(Bq.b) : t - T(A.b), press = dt >= -0.04 && dt < 0.1 ? 0.86 : 1;
+    const s = (port ? 2.1 : 1.6) * press; c.save(); c.translate(x, y);
+    if (dt >= 0 && dt < 0.25) { c.beginPath(); c.arc(0, 0, 10 + 60 * dt / 0.25, 0, 2 * Math.PI); c.strokeStyle = rgba(S.grey ? S.ink : S.hot, 0.7 * (1 - dt / 0.25)); c.lineWidth = 2; c.stroke(); }
+    c.scale(s, s); c.beginPath(); [[0, 0], [0, 17], [4, 13], [7, 20], [9.5, 19], [6.5, 12], [12, 12]].forEach(([px, py], j) => (j ? c.lineTo(px, py) : c.moveTo(px, py))); c.closePath();
+    c.fillStyle = '#ffffff'; c.fill(); c.lineWidth = 1.2; c.strokeStyle = '#000000'; c.stroke(); c.restore();
+  }
+  function card(id, t, active) {
+    const r = LY[id], n = openStep(id, t); if (n <= 0) return;
+    const acc = V(`win.${id}.accent`, null), Sx = acc && acc !== S.hot ? Object.assign({}, S, { hot: acc }) : S;
+    const cr = chrome(id, r, n, t, Sx, active); if (!cr) return;
+    const k = n >= 6 ? 1 : n === 5 ? 0.66 : n === 4 ? 0.33 : 0;
+    c.save(); c.clip(L.rr(r[0] + 1, r[1] + 1, r[2] - 2, r[3] - 2, V('glass.radius', 22)));
+    L.avoid = []; L.curWin = id; L.winRect = r; L.contentRect = cr;
+    if (k > 0) (BODY[contentOf(id)] || BODY.spectrum)(cr, t, k, Sx);
+    c.restore();
+  }
+  const resultAt = () => V('result.at', Math.max(0, (NB - (NB >= 8 ? 2 : 1)) * 4));
+  // ---------------------------------------------------------------- overlays: end card, HUD, text cues, textures
+  // v11 end card: one liquid-glass card over the blurred bench (the frame itself is its backdrop). Six steps on half
+  // beats: card, title (display voice), tempo + key (mono), credit (UI voice), a scrub bar with the real clip time
+  // (it echoes the intro player), the measured loudness. Hard reveals, no fades.
+  function result(t) {
+    const ra = resultAt(); if (!V('result.on', true) || t < T(ra)) return;
+    const n = steps(t, ra, 6, 0.5), R = (p) => tag('result.' + p), light = L.isLight(S);
+    c.fillStyle = rgba(S.bg, light ? 0.35 : 0.55); c.fillRect(0, 0, W, H);   // the bench steps back (one step, no ramp)
+    L.snap(c, 'frame', 4);
+    const cw = port ? 860 : 1040, ch = port ? 760 : 560, x = (W - cw) / 2, y = port ? (H - ch) / 2 - 40 : (H - ch) / 2, cx = W / 2;
+    L.glass(c, x, y, cw, ch, S, { r: 36, backdrop: 'frame', tint: light ? 0.5 : 0.3 });
+    const ink = S.ink, dim = rgba(S.ink, 0.55), inner = cw - 120;
+    if (n >= 2) text(c, R('title').toUpperCase(), cx, y + ch * 0.34, { size: port ? 84 : 92, fam: DISPLAY, w: 800, col: ink, align: 'center', base: 'alphabetic', maxW: inner, ls: -1 });
+    if (n >= 3) text(c, R('meta'), cx, y + ch * 0.34 + 62, { size: 26, w: 500, col: dim, align: 'center', ls: 3, maxW: inner });
+    if (n >= 4) text(c, R('producer'), cx, y + ch * 0.6, { size: 44, fam: UI, w: 500, col: ink, align: 'center', maxW: inner });
+    if (n >= 5) {   // scrub bar: real position in the clip
+      const bx = x + 60, bw = cw - 120, by = y + ch * 0.76, u = clamp(t / D.duration);
+      c.fillStyle = rgba(S.ink, 0.16); c.fill(L.rr(bx, by - 3, bw, 6, 3)); c.fillStyle = S.hot; c.fill(L.rr(bx, by - 3, Math.max(6, bw * u), 6, 3));
+      text(c, tc(t).slice(0, 5), bx, by + 34, { size: 20, col: dim }); text(c, tc(D.duration).slice(0, 5), bx + bw, by + 34, { size: 20, col: dim, align: 'right' });
+    }
+    if (n >= 6) text(c, R('measure'), cx, y + ch - 44, { size: 20, col: rgba(S.ink, 0.42), align: 'center', maxW: inner });
+  }
+  // v11 HUD: four quiet readouts in the margins (title, tempo + key, bar.beat, credit); no bars, no REC. It shows on
+  // the wide shot only: from the first frame of a push until the camera is wide again it is off (hard), so it never
+  // covers a pushed-in window.
+  function hud(t, s) {
+    if (!V('hud.on', true) || LOOK === 'player') return;
+    if (s && (s.to !== 'wide' || s.from !== 'wide') || L.openFx) return;
+    const hv = { tc: tc(t), bbt: bbt(t), songBar: String(D.song.startBar + Math.floor(t / BAR)) }, [, t1, b0] = HUD_BAND[aspect];
+    const m = port ? 52 : 52, top = t1 / 2 + 4, bot = (b0 + H) / 2 - 2, dim = rgba(S.ink, 0.55);
+    text(c, tag('hud.left', hv), m, top, { size: port ? 24 : 22, fam: DISPLAY, w: 800, col: S.ink, ls: 0.5, maxW: W * 0.55 });
+    text(c, tag('hud.right', hv), W - m, top, { size: 20, w: 500, col: dim, align: 'right', ls: 1.5 });
+    text(c, tag('hud.bottomLeft', hv), m, bot, { size: 20, w: 500, col: dim, ls: 1.5 });
+    text(c, tag('hud.bottomRight', hv), W - m, bot, { size: 20, fam: UI, w: 500, col: dim, align: 'right', ls: 0.5 });
+  }
+  // text cues: typed one character per 64th note from the key, hard cut at the end of the clip (no fades)
+  // v18 social layer (Y2K system dialogs, screen space, inside the TikTok safe zone): HOOK on frame 0 (readable with the sound off; a loading bar
+  // fills over the intro = anticipation), CTA 1 (comment keyword) and CTA 2 (link in bio) as pop-up alerts; spring pop-in (no fade), hard out.
+  // All text is tags (social.*), timing is cue paths (social.cta1.at / .len, social.cta2.at / .len in beats); social.on switches it all.
+  function dialog(cx, cy, wD, title, body, sub, t0, t, prog) {
+    const sc = 0.94 + 0.06 * spr(Math.max(0, t - t0) / 0.35, 9), h = sub ? 168 : 136, x = cx - wD / 2, y = cy - h / 2, col = S.grey ? '#0a0a0a' : S.hot;
+    c.save(); c.translate(cx, cy); c.scale(sc, sc); c.translate(-cx, -cy);
+    L.glass(c, x, y, wD, h, S, { r: 18, tint: 0.62, shadow: 1 });
+    c.fillStyle = rgba(S.ink, 0.08); c.fillRect(x + 1, y + 1, wD - 2, 40); c.fillStyle = rgba(S.ink, 0.18); c.fillRect(x, y + 41, wD, 1);
+    lights(x + 26, y + 21, S, true);
+    text(c, String(title).toUpperCase(), x + wD / 2, y + 21, { size: 18, fam: UI, w: 600, ls: 1.5, col: rgba(S.ink, 0.8), align: 'center', maxW: wD - 180 });
+    text(c, String(body).toUpperCase(), x + wD / 2, y + 82, { size: port ? 42 : 32, fam: DISPLAY, w: 800, col: S.ink, align: 'center', maxW: wD - 48 });
+    if (sub) text(c, String(sub).toUpperCase(), x + wD / 2, y + 126, { size: 20, fam: UI, w: 500, ls: 1.2, col: rgba(S.ink, 0.65), align: 'center', maxW: wD - 48 });
+    if (prog != null) { const bx = x + 24, by = y + h - 18, bw = wD - 48; c.fillStyle = rgba(S.ink, 0.12); c.fillRect(bx, by, bw, 6); const n = Math.floor(clamp(prog) * 24);
+      c.fillStyle = S.grey ? S.ink : col; for (let i = 0; i < n; i++) c.fillRect(bx + i * bw / 24 + 1, by, bw / 24 - 2, 6); }
+    c.restore();
+  }
+  function social(t, intro) {
+    if (!V('social.on', LOOK === 'player')) return;
+    const wD = port ? 820 : 760, cx = W / 2;
+    if (intro) { const p = clamp(t / T(IB)); const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hookTxt = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); dialog(cx, port ? 330 : 150, wD, tag('social.title'), hookTxt, null, -1, t, p); return; }   // v19.1: A/B hook variants
+    for (const [k, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) {
+      const at = V(`social.${k}.at`, def), len = V(`social.${k}.len`, 8); if (b < at || b >= at + len) continue;
+      dialog(cx, port ? H * 0.5 : H * 0.5, wD, tag(`social.${k}.title`), tag(`social.${k}.body`), tag(`social.${k}.sub`), T(at), t, null);
+    }
+  }
+  // v19 MOUSE LAYER (screen space, drawn last): the cursor drives the film like a real computer. Waypoints in film time (pre-roll < 0):
+  // rest -> clicks PLAY on the stopped player (the audio starts on that click) -> clicks the chosen cover card (the push-in follows) -> clicks
+  // each panel's title bar right before the camera travels there -> closes each CTA alert with its x (the alert dies on the click) -> clicks
+  // the hero before the outro dolly -> glides back to rest, so the last frame = frame 0. Motion: minimum-jerk easing on a gently curved
+  // (quadratic) path, a 60 ms press before each click, a ring after it. Panel targets are world points re-projected with the current camera.
+  let MW = null;
+  function mouseWays() { if (MW && MW.ev === ev) return MW.w; const w = [], P = PRE, rest = { sx: W * 0.8, sy: H * (port ? 0.84 : 0.88) };
+    w.push({ t: -P, ...rest }); if (P > 0) w.push({ t: -0.06, play: true, click: true });
+    if (IB) { const g = INTRO.geom(W, H); w.push({ t: T(Math.max(1, IB - 2)) - 0.02, sx: g.cx + g.cw * 0.18, sy: g.cy + g.cw * 0.2, click: true }); }
+    for (const k of ev.keysIn('camera.shot', 0, 1e6)) { const r = k.v !== 'wide' && LY[k.v]; if (!r) continue; const d = k.dur ?? 1; w.push({ t: T(k.b - d) - 0.02, wx: r[0] + 92, wy: r[1] + (port ? 28 : 26), click: true }); }
+    if (V('social.on', LOOK === 'player')) for (const [kk, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) { const at = V(`social.${kk}.at`, def), len = V(`social.${kk}.len`, 8);
+      w.push({ t: T(at + len) - 0.02, sx: W / 2 - (port ? 410 : 380) + 26, sy: H * 0.5 - 84 + 21, click: true, cta: kk }); }
+    if (RWB0) w.push({ t: T(RWB0) - T(3) - 0.02, wx: (LY.stage || [W / 2, H / 2, 0, 0])[0] + (LY.stage ? LY.stage[2] * 0.5 : 0), wy: (LY.stage || [0, H / 2, 0, 0])[1] + (LY.stage ? LY.stage[3] * 0.55 : 0), click: true });
+    w.push({ t: D.duration, ...rest }); w.sort((a2, b2) => a2.t - b2.t); MW = { ev, w }; return w; }
+  const mj = (u) => u * u * u * (10 - 15 * u + 6 * u * u);
+  function mousePos(q, cam) { if (q.play) return INTRO_HIT.play || [W * 0.3, H * 0.8]; if (q.wx != null) { if (!cam) return [W / 2, H / 2]; return [(q.wx - cam.x) * cam.z + W / 2, (q.wy - cam.y) * cam.z + H / 2]; } return [q.sx, q.sy]; }
+  function mouse(tf, cam) {
+    if (!V('cursor.on', LOOK === 'player')) return; const w = mouseWays(); let i = w.findIndex((q) => q.t > tf); if (i < 0) i = w.length - 1; if (i === 0) i = 1;
+    const A = w[i - 1], B = w[i], pa = mousePos(A, cam), pb = mousePos(B, cam), gap = B.t - A.t, mv = Math.min(0.6, Math.max(0.12, gap - 0.12)), s0 = B.t - mv - 0.06, u = clamp((tf - s0) / mv), e = mj(u);
+    const dx = pb[0] - pa[0], dy = pb[1] - pa[1], bend = 0.12, mxp = pa[0] + dx / 2 - dy * bend, myp = pa[1] + dy / 2 + dx * bend;
+    const x = (1 - e) * (1 - e) * pa[0] + 2 * (1 - e) * e * mxp + e * e * pb[0], y = (1 - e) * (1 - e) * pa[1] + 2 * (1 - e) * e * myp + e * e * pb[1];
+    const sinceA = tf - A.t, toB = B.t - tf, press = (B.click && toB < 0.06 && toB >= 0) || (A.click && sinceA < 0.08) ? 0.84 : 1, s = (port ? 2.9 : 2.0) * press;
+    c.save(); c.setTransform(c.canvas.width / W, 0, 0, c.canvas.width / W, 0, 0);
+    if (A.click && sinceA >= 0 && sinceA < 0.3) { c.beginPath(); c.arc(x, y, 12 + 70 * sinceA / 0.3, 0, 2 * Math.PI); c.strokeStyle = rgba(S.grey ? S.ink : S.hot, 0.75 * (1 - sinceA / 0.3)); c.lineWidth = 2.5; c.stroke(); }
+    c.translate(x, y); c.rotate(-0.04); c.scale(s, s); c.shadowColor = 'rgba(0,0,0,0.35)'; c.shadowBlur = 6; c.shadowOffsetX = 2; c.shadowOffsetY = 3; c.beginPath();
+    [[0, 0], [0, 17], [4, 13], [7, 20], [9.5, 19], [6.5, 12], [12, 12]].forEach(([px2, py2], j) => (j ? c.lineTo(px2, py2) : c.moveTo(px2, py2))); c.closePath();
+    c.fillStyle = '#ffffff'; c.fill(); c.shadowColor = 'transparent'; c.lineWidth = 1.2; c.strokeStyle = '#000000'; c.stroke(); c.restore();
+  }
+  function textCues(t) {
+    for (const k of ev.clipsAt('text.cue', b)) {
+      const s = L.sub(String(k.v ?? '')); if (!s) continue;
+      const n = Math.min(s.length, Math.floor((t - T(k.b)) / T(1 / 16) + 1e-6) + 1), str = s.slice(0, n), size = k.size || 56, x = (k.x ?? 0.5) * W, y = (k.y ?? 0.5) * H;
+      const colr = k.color === 'hot' ? S.hot : k.color === 'dim' ? S.dim : /^#/.test(k.color || '') ? k.color : S.ink, al = k.align || 'center', st = k.font || 'mono';
+      const fam = st === 'display' ? DISPLAY : st === 'sans' || st === 'ui' ? UI : MONO;
+      if (k.box !== false) { c.font = `700 ${size}px ${fam}`; const tw = Math.min(W - 40, c.measureText(s).width + size * 1.2), bx = al === 'left' ? x - size * 0.6 : al === 'right' ? x - tw + size * 0.6 : x - tw / 2;
+        L.glass(c, bx, y - size * 0.95, tw, size * 1.9, S, { r: size * 0.95, backdrop: 'ground', tint: 0.45, shadow: 0.6 }); }
+      if (st === 'hand') lab.hand(c, str, x, y + size * 0.3, size, colr, t, 40 + Math.floor(k.b), -0.02, al);
+      else if (st === 'stencil') lab.stencil(c, str.toUpperCase(), al === 'center' ? x : x, y, size, colr, al);
+      else text(c, st === 'display' ? str.toUpperCase() : str, x, y, { size, fam: st === 'serif' ? SERIF : fam, w: st === 'serif' ? 400 : st === 'display' ? 800 : st === 'mono' ? 700 : 500, style: st === 'serif' ? 'italic' : '', col: colr, align: al, maxW: W - 60 });
+    }
+  }
+  const grain = [];
+  for (let q = 0; q < 4; q++) { const g = document.createElement('canvas'); g.width = g.height = 256; const gx = g.getContext('2d'), im = gx.createImageData(256, 256); for (let i = 0; i < 65536; i++) { const v = hash(i * 1.37 + q * 9173.1) * 255; im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = v; im.data[i * 4 + 3] = 255; } gx.putImageData(im, 0, 0); grain.push(g); }
+  function textures(t) {
+    const f = fidx(t), g = grain[Math.floor(t / T(U.s16)) % 4], gr = V('fx.grain', S.grain), vg = V('fx.vignette', S.vignette), sc = V('fx.scan', 0);
+    if (gr > 0) { c.save(); c.globalCompositeOperation = 'overlay'; c.globalAlpha = gr * 0.8; const ox = (hash(f * 3.1) * 256) | 0, oy = (hash(f * 7.7) * 256) | 0;
+      for (let yy = -oy; yy < H; yy += 256) for (let xx = -ox; xx < W; xx += 256) c.drawImage(g, xx, yy); c.restore(); }
+    if (sc > 0) { c.fillStyle = `rgba(0,0,0,${0.45 * sc})`; for (let y = 0; y < H; y += 4) c.fillRect(0, y, W, 2); }
+    if (vg > 0) { const v = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.hypot(W, H) * 0.62);
+      v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, `rgba(0,0,0,${vg * 0.7})`); c.fillStyle = v; c.fillRect(0, 0, W, H); }
+  }
+  function ground() {
+    c.fillStyle = S.paper; c.fillRect(-W, -H, 3 * W, 3 * H);
+    // v11: two soft light pools in the ground (the ink colour, so Nigredo stays grey) give the glass something to blur
+    const pool = V('ground.pool', L.isLight(S) ? 0.5 : 1) * (L.isLight(S) ? 0.16 : 0.13);
+    if (pool > 0) for (const [px, py, pr] of [[0.2, 0.3, 0.75], [0.85, 0.72, 0.6]]) { const g = c.createRadialGradient(W * px, H * py, 0, W * px, H * py, Math.max(W, H) * pr);
+      g.addColorStop(0, rgba(S.ink, pool)); g.addColorStop(1, rgba(S.ink, 0)); c.fillStyle = g; c.fillRect(0, 0, W, H); }
+    const pat = V('ground.pattern', 'auto'), p = pat === 'auto' ? { lab: 'graph', exe: 'dots', scope: 'scan' }[LOOK] : pat, gA = V('ground.gridA', S.gridA);
+    if (p === 'graph') lab.graphPaper(c, 0, 0, W, H, Object.assign({}, S, { gridA: gA }), 20, 100, 1);
+    else if (p === 'dots') { c.fillStyle = rgba(S.ink, 0.13 * gA / (S.gridA || 0.07)); for (let y = 30; y < H; y += 40) for (let x = 20; x < W; x += 40) c.fillRect(x, y, 2, 2); }
+    else if (p === 'scan') { c.fillStyle = rgba(S.ink, 0.05 * gA / (S.gridA || 0.07)); for (let y = 0; y < H; y += 6) c.fillRect(0, y, W, 1); }
+  }
+  // opt-in glitch: on each beat inside a glitch clip, 3-4 thin horizontal slices shifted sideways for <= 80 ms
+  function glitch(t, scale) {
+    for (const k of ev.clipsAt('fx.glitch', b)) { const amt = clamp(+k.v || 0); if (amt <= 0) continue;
+      const bb = Math.floor(b), age = (b - bb) * BEAT; if (age > 0.08) continue; const e = (1 - age / 0.08) ** 2, cv = c.canvas, w = cv.width, h = cv.height, seed = bb * 7.31 + 3;
+      c.save(); c.setTransform(1, 0, 0, 1, 0, 0); const n = 3 + Math.floor(amt * 2.2);
+      for (let j = 0; j < n; j++) { const y = Math.floor(hash(seed + j * 1.7) * h * 0.92), hh = Math.max(1, Math.round((3 + 12 * hash(seed + j * 2.9)) * scale * (0.7 + amt))), dx = Math.round(hs(seed, j) * (8 + 34 * hash(seed + j * 4.3)) * scale * (0.4 + 1.6 * amt) * e);
+        if (dx) c.drawImage(cv, 0, y, w, hh, dx, y, w, hh); }
+      c.restore(); }
+  }
+  // ---------------------------------------------------------------- per-frame state
+  function setState(look, stage) {
+    LOOK = LAYOUT[look] ? look : 'exe';
+    const over = {}; for (const k of STAGE_COLOR_KEYS) { const v = V('stage.' + k, null); if (v) over[k] = v; }
+    S = stageOf(stage, over); LY = {}; IDS = Object.keys(LAYOUT[LOOK][aspect]); for (const id of IDS) LY[id] = rectOf(id);
+    L.look = LOOK; L.coverRect = LY.stage || null; L.coverRadius = V('glass.radius', 22);   // the match-cut target is known on intro frames too (not only after the lab drew)
+    setVars(); L.pendantMark = LOOK === 'exe' ? (ctx, Sx, cx, cy, d) => BR.elephantMark(ctx, Sx, cx, cy, d, d) : null;
+  }
+  function pendulum() {
+    BR.pendulum((k) => { const st = ev.value('stage', k, 'nigredo'); return ev.value('pendant.amp', k, stageOf(st).swingDeg.calm); }, V('pendant.period', 2), V('pendant.react', 0.32),
+      { links: V('pendant.links', 10), wave: V('pendant.wave', 0.75), damp: V('pendant.damp', 0.35) });
+  }
+  // test modes (native --test pendant | waveform, and the motion / waveform tests): one element alone, no camera or textures
+  const testRect = () => (port ? [90, 240, 900, 1480] : [560, 90, 800, 900]);
+  const waveRect = () => (port ? [24, 420, 1032, 1000] : [24, 160, 1872, 760]);
+  function testMode(kind, t) {
+    c.fillStyle = S.bg; c.fillRect(0, 0, W, H); ground();
+    if (kind === 'waveform') { const r = waveRect(); c.fillStyle = S.card; c.fillRect(r[0] - 8, r[1] - 8, r[2] + 16, r[3] + 16); M.session(c, S, r, t, 1); text(c, `WAVEFORM TEST · ${bbt(t)}`, 40, 120, { size: 28, w: 700, col: S.ink }); return; }
+    elephantBody(testRect(), t, 1, S);
+    const bb = Math.floor(t / BEAT + 1e-6); text(c, `PENDANT · CHAIN WAVE · beat ${bb + 1} · ${bbt(t)}`, 40, port ? 120 : 50, { size: 28, w: 700, col: S.ink });
+  }
+  // v14 stage `white` (NIGREDO INVERSE): the finished frame inverted, the same op as the flash (grey in = grey out, so R=G=B holds)
+  function invertAll() { const neg = ev.clipsAt('fx.invert', b).some((q) => q.v !== false && q.v !== 0); if (!S.inverse === !neg) return;   // v15: stage inverse XOR the fx.invert clip
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'difference'; c.fillStyle = '#ffffff'; c.fillRect(0, 0, c.canvas.width, c.canvas.height); c.restore(); }
+  function flash(t) { const f = fidx(t); if (ev.keysIn('fx.flash', 0, NB * 4 + 1).some((k) => fidx(T(k.b) + 0.5 / FPS) === f)) { c.globalCompositeOperation = 'difference'; c.fillStyle = S.grey ? '#ffffff' : S.ink; c.fillRect(0, 0, W, H); c.globalCompositeOperation = 'source-over'; } }
+  /** Draw clip time t into ctx (a canvas of width W*scale). opts: {ev, fps (sample at the frame centre), look, stage}. */
+  function render(ctx, t, opts = {}) {
+    c = ctx; ev = opts.ev || ev; tagDoc = opts.tags || DEFAULT_TAGS; IB = INTRO.beats(ev);
+    const fps = opts.fps || FPS, scale = ctx.canvas.width / W;
+    L.view.minPx = LOOK === 'player' && port ? 25 : 0;   // v19.1: phone legibility floor (player 9:16)
+    PRE = Math.max(0, opts.preroll || 0); const filmT = t - PRE; let paused = filmT < 0; t = Math.max(0, filmT);   // v19: click-to-play pre-roll (native passes opts.preroll); filmT < 0 = paused
+    t = clamp(t, 0, D.duration - 1 / fps) + 0.5 / fps; b = t / BEAT;
+    setState(V('look', opts.look || 'exe'), V('stage', opts.stage || 'nigredo')); pendulum();
+    c.setTransform(scale, 0, 0, scale, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
+    if (opts.test) { L.view.camZ = 1; L.view.base = scale; testMode(opts.test, t); c.setTransform(1, 0, 0, 1, 0, 0); return { look: LOOK, stage: S.name, test: opts.test }; }
+    // v17.1 seamless loop (player): the final bar plays the intro BACKWARDS (cubic ease-out into t = 0), so the last frame flows into frame 0
+    RWB = LOOK === 'player' && IB && V('outro.rewind', true) && D.duration > T(IB + 16) ? (D.duration - 2 * BAR) / BEAT : 0;   // v17.2: 2-bar rewind, sine in-out
+    RWB0 = RWB;
+    if (RWB && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); if (u > 0.985) paused = true; t = Math.max(0.5 / fps, T(IB) * (1 - e) - 0.5 / fps); b = t / BEAT; }
+    if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player' }); c.setTransform(scale, 0, 0, scale, 0, 0); social(t, true); textCues(t); textures(t); flash(t); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+      return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
+    }
+    const cam = camera(), z = cam.z; L.view.camZ = z; L.view.base = scale;
+    c.fillStyle = S.bg; c.fillRect(0, 0, W, H);
+    c.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z));
+    ground(); L.snap(c, 'ground', LOOK === 'exe' || LOOK === 'player' ? 3 + 4 * V('glass.back', 1) : 3);   // v12: exe glass blurs the ground more (depth)
+    const att = attention(t);
+    if (LOOK === 'player') playerShell(t);
+    for (const id of IDS) card(id, t, att === id);
+    if (LOOK === 'player' && V('focus.bracket', true)) focusBracket(t);
+    hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
+    c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
+    if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16));
+    if (L.openFx) INTRO.streak(c, L.openFx.px, L.openFx.py, L.openFx.dl);   // v13 intro: directional streak copies on the opening dolly-out
+    result(t); hud(t, ev.shot(b)); social(t, false); textCues(t); textures(t); mouse(filmT, cam);
+    flash(t);
+    glitch(t, scale);
+    c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+    return { look: LOOK, stage: S.name, cam, attention: att };
+  }
+  /** Every scheduled visual event of the current cue sheet (beats + labels), for the sync test and the timeline. */
+  function schedule(evx, opts = {}) {
+    ev = evx; IB = INTRO.beats(ev); const out = [], add = (bb, what) => { if (bb >= 0 && bb <= NB * 4) out.push({ b: bb, t: T(bb), what }); };
+    b = 0; setState(V('look', opts.look || 'exe'), V('stage', opts.stage || 'nigredo'));
+    for (const t of ev.tracksOf('camera.shot')) for (const k of t.keys) { if (k.transition !== 'cut') add(k.b - (k.dur ?? 1), `camera push → ${k.v} (start)`); add(k.b, `camera ${k.transition === 'cut' ? 'cut' : 'push'} → ${k.v} (land)`); }
+    for (const [bb, w] of INTRO.events(ev)) add(bb, w);   // v11 intro
+    for (const id of IDS) { const o = winOpen(id); if (o >= 0) for (let q = 0; q < 6; q++) add(o + q * U.t32, `open ${id} step ${q + 1}`); }
+    const ra = resultAt(); for (let q = 0; q < 6; q++) add(ra + q * 0.5, `result line ${q + 1}`);
+    for (const [bb, w] of BR.logoEvents(0, NB * 4, Math.max(4, Math.round(V('logo.cycle', 2) * 4)), HOLD(), HOLD_OFF)) add(bb, w);
+    if (LOOK === 'exe') for (let q = 0; q < NB * 16; q++) add(q / 4, 'step grid step (16th)');
+    if (V('logo.runner', true)) for (let q = 0; q < NB * 16; q++) add(q / 4, 'logo runner step (16th)');
+    for (const k of ev.keysIn('fx.flash', 0, NB * 4)) add(k.b, '1-frame invert');
+    for (const k of ev.keysIn('text.cue', 0, NB * 4)) add(k.b, `text cue "${String(k.v).slice(0, 24)}"`);
+    for (const t of ev.sheet.tracks) if (!['camera.shot', 'text.cue', 'fx.flash'].includes(t.path)) for (const k of t.keys) add(k.b, `${t.path} key`);
+    return out.sort((x, y) => x.b - y.b);
+  }
+  /** Window rects of a look (with the sheet's overrides at beat bb), for hit testing and camera framing in the UI. */
+  function rects(evx, bb, look) { ev = evx; IB = INTRO.beats(ev); b = bb; setState(look || V('look', 'exe'), V('stage', 'nigredo')); return { ...LY }; }
+  // motion trace in the pendant test geometry (testRect): hand, every joint, every link angle, the body angle
+  const trace = (t, evx) => { if (evx) ev = evx; b = 0; pendulum(); const g = pendantGeom(testRect()); return BR.tracePts(g.ax, g.ay, g.size, t + 0.5 / FPS, g.len); };
+  return { W, H, D, render, schedule, rects, trace, testRect, waveRect, registry: (o = {}) => buildRegistry({ aspect, bars: NB, ...o }), core: L, brand: BR, WINDOW_IDS };
+}
+export { mergeDeep };

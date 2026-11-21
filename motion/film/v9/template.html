@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" data-look="{{LOOK}}" data-test="{{TEST}}" data-stage="{{STAGE}}" data-aspect="{{ASPECT}}" data-resolution="{{RES}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width={{W}}, height={{H}}" />
+    <title>U2C LAB beat preview v9</title>
+    <style>
+      @font-face { font-family: "Instrument Sans"; font-weight: 600; src: url("assets/fonts/instrument-sans-latin-600-normal.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url("assets/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 500; src: url("assets/fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 700; src: url("assets/fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 800; src: url("assets/fonts/jetbrains-mono-latin-800-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Instrument Serif"; font-style: italic; font-weight: 400; src: url("assets/fonts/instrument-serif-latin-400-italic.woff2") format("woff2"); }
+      @font-face { font-family: "Caveat"; font-weight: 700; src: url("assets/fonts/Caveat-700-latin.woff2") format("woff2"); }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: {{W}}px; height: {{H}}px; overflow: hidden; background: #030303; }
+      #stage { position: absolute; left: 0; top: 0; width: {{W}}px; height: {{H}}px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="{{DUR}}" data-width="{{W}}" data-height="{{H}}" data-fps="30">
+      <canvas id="stage" class="clip" data-start="0" data-duration="{{DUR}}" data-track-index="0" width="{{W}}" height="{{H}}"></canvas>
+    </div>
+    <script src="lib/gsap.min.js"></script>
+    <script src="{{DATA}}"></script>
+    <script src="{{CUES}}"></script>
+    <script>
+      // v9: the composition is the web app's own code (v9/src, synced by tools/sync_web.mjs) driven by a cue sheet.
+      // This classic script registers the timeline + the build promise synchronously; v9/boot.mjs fills in the renderer.
+      (function () {
+        var R = null, pending = 0, done;
+        var ready = new Promise(function (r) { done = r; });
+        window.__hf = window.__hf || {}; window.__hf.buildReady = window.__hf.buildReady || {}; window.__hf.buildReady.u2c9 = ready;
+        window.addEventListener('hf-seek', function (e) { if (R) R(e.detail.time); else pending = e.detail.time; });
+        var tl = gsap.timeline({ paused: true }); tl.to({}, { duration: {{DUR}} });
+        window.__timelines = window.__timelines || {}; window.__timelines.main = tl;
+        window.U2C6 = { ready: ready, renderAt: function (t) { if (R) R(t); else pending = t; } };
+        window.__u2cBoot = function (render, api) { R = render; Object.assign(window.U2C6, api); window.U2C6.renderAt = render; render(pending); done(); };
+      })();
+    </script>
+    <script type="module" src="v9/boot.mjs"></script>
+  </body>
+</html>

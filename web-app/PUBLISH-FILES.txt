@@ -1,0 +1,90 @@
+# Every file the published page needs (relative to web-app/, the page is index.html).
+# Generated from the module graph of src/main.js (static imports, dynamic imports, the analysis worker) + the
+# assets it fetches. External: Google Fonts (stylesheet) and jsDelivr (gsap@3.15.0, wavesurfer.js@7.12.12,
+# mediabunny@1.62.1, exact versions, all optional with fallbacks). The downloads capability is used through
+# window.claude.use('downloads') with a plain <a download> fallback (src/export/save.js).
+# v11: assets/fonts/fonts.css + the OFL stand-in fonts and the studio UI font; assets/covers/cover-0..4.jpg (the intro carousel).
+# The licensed brand fonts (AkiraExpanded.otf, Synkopy.otf) are NOT here: they are gitignored and listed in PUBLISH-PRIVATE.txt.
+# v12: + src/v8/spectrumview.js, src/v8/spectrogramview.js (spectrum analyser and Edison-style spectrogram; the EQ window is gone); covers unchanged.
+# v13: + merged compose/levels/syncintro (no new files): stage cover card + static elephant mark (imager), L.kickHits, intro match cut (coverScrim). Step grid is code-only and off by default.
+src/analysis/analysis.worker.js
+src/analysis/bandenv.js
+src/analysis/clipdata.js
+src/analysis/dsp.js
+src/analysis/index.js
+src/analysis/meterstreams.js
+src/analysis/msspec.js
+src/analysis/stereo.js
+src/analysis/structure.js
+src/analysis/truepeak.js
+src/cues/generate.js
+src/cues/markers.js
+src/cues/ops.js
+src/cues/schema.js
+src/cues/snap.js
+src/cues/store.js
+src/engine/clip.js
+src/engine/clock.js
+src/engine/render.js
+src/export/audio.js
+src/export/captions.js
+src/export/offline.js
+src/export/recorder.js
+src/export/save.js
+src/lib/cdn.js
+src/main.js
+src/state.js
+src/styles.css
+src/ui/cuetimeline.js
+src/ui/exporter.js
+src/ui/grid.js
+src/ui/inspector.js
+src/ui/motion.js
+src/ui/panels.js
+src/ui/studio.js
+src/ui/timeline.js
+src/util/draw.js
+src/v8/assets.js
+src/v8/brand.js
+src/v8/chainsim.js
+src/v8/core.js
+src/v8/data.js
+src/v8/eqview.js
+src/v8/film.js
+src/v8/imagerview.js
+src/v8/intro.js
+src/v8/lab.js
+src/v8/layout.js
+src/v8/levelview.js
+src/v8/links.js
+src/v8/meterlib.js
+src/v8/meters.js
+src/v8/registry.js
+src/v8/spectrogramview.js
+src/v8/spectrumview.js
+src/v8/tags.js
+src/v8/waveview.js
+assets/covers/cover-0.jpg
+assets/covers/cover-1.jpg
+assets/covers/cover-2.jpg
+assets/covers/cover-3.jpg
+assets/covers/cover-4.jpg
+assets/elephant-rig.json
+assets/elephant.png
+assets/fonts/Caveat-700-latin.woff2
+assets/fonts/OFL-SpaceGrotesk.txt
+assets/fonts/OFL-Unbounded.txt
+assets/fonts/fonts.css
+assets/fonts/jetbrains-mono-latin-400-normal.woff2
+assets/fonts/jetbrains-mono-latin-500-normal.woff2
+assets/fonts/jetbrains-mono-latin-700-normal.woff2
+assets/fonts/jetbrains-mono-latin-800-normal.woff2
+assets/fonts/space-grotesk-latin-400-normal.woff2
+assets/fonts/space-grotesk-latin-500-normal.woff2
+assets/fonts/space-grotesk-latin-600-normal.woff2
+assets/fonts/space-grotesk-latin-700-normal.woff2
+assets/fonts/unbounded-latin-600-normal.woff2
+assets/fonts/unbounded-latin-800-normal.woff2
+assets/u2c-links-edge.png
+assets/u2c-links.png
+index.html
