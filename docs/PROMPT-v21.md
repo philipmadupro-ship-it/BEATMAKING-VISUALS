@@ -54,20 +54,23 @@ No rewinding through the intro, no scrubbing backwards.
 **Banned:** glitch transitions, fades, bouncy overshoot on glass, particle bursts, decorative text, the elephant, mono fonts, anything under the TikTok UI, anything that looks like a template, motion that does not mean something.
 </direction>
 
+<skills>` section (paste into PROMPT-v21.md)
+```
 <skills>
-Use the installed skills where they fit, without conflicts (the skills agent keeps `research/SKILLS-PLAN.md` up to date):
-- **u2c-beat-preview-motion, u2c-beat-timing, u2c-camera-cuts, u2c-meters, u2c-waveform, u2c-logo-chain, u2c-cue-sheet, u2c-render-qa, u2c-stage-palettes:** the house rules. These win any conflict.
-- **hyperframes, hyperframes-cli:** the native render contract (render.mjs).
-- **hyperframes-registry:** look before hand-building a named effect (terminal type, scanlines).
-- **media-use:** click sounds and audio mixing.
-- **video-use / reverse-any-video:** frame-by-frame review against references.
-- **LottieFiles motion-design skill:** easing and choreography.
-- **motiondivision ai-kit, remotion-dev skills:** spring and sequencing patterns, ideas only.
-- **tweakpane:** the web app's live controls.
-- **ffmpeg-skill:** encoding and QA.
-- **design skills** (design-critique, ux-copy, accessibility-review): the web app.
+House rules win every conflict. Load a skill only for the job named; do not use a skill that is not listed.
 
-Licence: AGPL/GPL code is for ideas only, never copied.
+Always (the house rules): u2c-beat-preview-motion (style; ignore its mono-font, elephant, hard-cut and invert-flash lines), u2c-beat-timing (every event on the 32nd grid, in schedule()), u2c-camera-cuts (pushes only, landing on a key), u2c-cue-sheet (new cue paths: seed, intro, dialog; keep web and native in sync), u2c-waveform + u2c-meters (Edison blocks come from the real audio and get a numpy test), u2c-stage-palettes (Nigredo R=G=B), u2c-logo-chain, u2c-render-qa (render, stills, parity, director notes). u2c-chain-pendant: maths only, the elephant is not drawn.
+
+Render and review: hyperframes + hyperframes-cli (render contract, `check --json`, `snapshot --review` phone sheet, `audio --json`; never `normalize-audio`, clipdata.py masters). media-use: bundled SFX only (click, click-soft, key-press, pop, error trimmed); kept local, never committed. ffmpeg-skill: measure and look only (`check.py --platform tiktok`, `look.py --safe tiktok --tiles`, `loudness.py`); never its fade, crossfade or loop-crossfade options.
+
+Patterns to copy (ideas, written fresh): hyperframes-registry typewriter / caret-swap / terminal-simulator (typing), dart-cursor / agent-cursor (click squash, no ring), cursor-zoom-follow (camera follows the click). Never `add` glitch, RGB split, CRT or chromatic items; never a monospace font.
+LottieFiles motion-design: tables only (duration by element, distance scaling, stagger budget < 500 ms, 100-200 ms stillness after a settle, choreography, quality checklist). Ignore its opacity entrances and overshoot archetypes. Glass = 0 % overshoot.
+Easing tokens: arrivals/dialogs critically damped closed form (w 16 to 18 rad/s, under 0.4 s); camera glide MD3 Emphasized decelerate (0.05,0.7,0.1,1); on screen MD3 Standard (0.2,0,0,1); exits MD3 Emphasized accelerate (0.3,0,0.8,0.15). Remotion and motiondivision: read for spring maths only, no dependency.
+
+Web editor: tweakpane (live property grid, monitors; override its mono font), design:design-critique, design:accessibility-review, design:ux-copy.
+
+Do not use: video-use, style-sampling, reverse-any-video (unless I give a reference clip), higgsfield-*, scenario-labs, three.quarks, react-postprocessing, react-three-rapier, three.js (unless a 3D meter returns), vstgui, ozone-mastering-suite (untrusted: never run it), generic taste/UI skills.
+Licences: AGPL/GPL = ideas only. MIT/BSD may be used with notice. Pixabay SFX, Akira, Synkopy: never in the public repo.
 </skills>
 
 <structure>
@@ -104,6 +107,8 @@ Licence: AGPL/GPL code is for ideas only, never copied.
 - **Short renders:** never let a short render overwrite the full one (`-15s` suffix).
 - **Syncing mid-render:** never run `stills` while a render batch runs (sync swaps the renderer's files mid-batch).
 - **Overlapping windows:** a focused window outside the safe band lifts into it, and its slot copy fades so it never shows twice.
+- **Untrusted repo:** `ozone-mastering-suite` (bookmarked) is not code: a PowerShell download lure. Never run or link it.
+- **Comments:** never insert a `//` comment mid-line. It silently comments out the rest of the line, node --check misses it, and the browser fails later with "Unexpected token 'export'". Check modules with `node --input-type=module --check < file`.
 - **Shell:** `%` breaks printf; rm with a shell variable is refused.
 </gotchas>
 
