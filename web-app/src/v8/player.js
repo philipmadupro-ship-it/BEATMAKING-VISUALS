@@ -168,14 +168,14 @@ export function createPlayer(L, { tag, V }) {
       const hy = y + 14; if (!wide) text(c, String(tag('player.meta.subject') || 'SUBJECT').toUpperCase() + ' · ' + valOf.NAME, x, hy, { size: wide ? 18 : 18, fam: DISPLAY, w: 800, col: ink, maxW: w * 0.68 });
       if (!wide && w > 560) text(c, 'FILE ' + String(1 + Math.floor(hash(D.title.length * 7.1) * 89)).padStart(2, '0'), x + w, hy, { size: 14, fam: UI, w: 600, col: rgba(ink, 0.6), align: 'right', ls: 1.4 });
       if (!wide) { c.fillStyle = rgba(ink, 0.55); c.fillRect(x, hy + 14, w, 1.2); }
-      const top = wide ? y + 6 : hy + 24, sigW = wide ? Math.round(w * 0.34) : w, sigH = wide ? y + h - top - 4 : Math.max(56, Math.round(h * 0.3));
-      const sx = x, sy = wide ? top : y + h - sigH - 2, rx = wide ? x + sigW + 16 : x, rw = wide ? w - sigW - 16 : w, ry = top, rh = wide ? y + h - top - 4 : sy - top - 8;
+      const top = wide ? y + 6 : hy + 24, sigW = wide ? Math.round(w * 0.34) : w, sigH = wide ? y + h - top - 4 : Math.max(64, Math.round(h * 0.3));
+      const sx = x, sy = wide ? top : y + h - sigH - 2, rx = wide ? x + sigW + 16 : x, rw = wide ? w - sigW - 16 : w, ry = top, rh = wide ? y + h - top - 4 : sy - top - 12;   // 8-pt rhythm: 12 px gap above the signal box
       // rows
       const cols = wide ? 3 : 1, per = Math.ceil(rows.length / cols), rH = rh / per, cw = (rw - (cols - 1) * 16) / cols;
       rows.forEach(([k, v], i) => { const col2 = Math.floor(i / per), r = i % per, xx = rx + col2 * (cw + 16), yy = ry + r * rH + rH / 2;
-        text(c, k, xx + 2, yy, { size: Math.round(fz * 0.72), fam: UI, w: 500, col: rgba(ink, 0.55), ls: 1.6, maxW: cw * 0.36 });   // big / small contrast: small dim keys, big values
-        text(c, v, xx + cw - 2, yy, { size: Math.round(fz * 1.2), fam: DISPLAY, w: 800, col: ink, align: 'right', maxW: cw * 0.62 });
-        c.fillStyle = rgba(ink, 0.32); c.fillRect(xx, Math.round(ry + (r + 1) * rH) - 0.5, cw, 1); });
+        if (!glow) text(c, k, xx + 2, yy, { size: wide ? Math.round(fz * 0.72) : 14, fam: UI, w: 500, col: rgba(ink, 0.62), ls: 1.6, maxW: cw * 0.36 });   // keys: 14 px, crisp (no glow), >= 3:1   // big / small contrast: small dim keys, big values
+        text(c, v, xx + cw - 2, yy, { size: wide ? Math.round(fz * 1.2) : 18, fam: DISPLAY, w: 800, col: ink, align: 'right', maxW: cw * 0.62 });
+        if (!glow) { c.fillStyle = rgba(ink, 0.18); c.fillRect(xx, Math.round(ry + (r + 1) * rH) - 0.5, cw, 1); } });   // subtle dividers
       // signal box: grid + the low band as a smooth wave + a number grid of real band levels
       c.strokeStyle = rgba(ink, 0.5); c.lineWidth = 1; c.strokeRect(Math.round(sx) + 0.5, Math.round(sy) + 0.5, Math.round(sigW) - 1, Math.round(sigH) - 1);
       const gh = sigH * (wide ? 0.96 : 0.6); c.fillStyle = rgba(ink, 0.14); for (let q = 1; q < 8; q++) c.fillRect(Math.round(sx + sigW * q / 8), sy + 2, 1, gh); for (let q = 1; q < 4; q++) c.fillRect(sx + 2, Math.round(sy + gh * q / 4), sigW - 4, 1);
@@ -184,7 +184,7 @@ export function createPlayer(L, { tag, V }) {
       c.strokeStyle = ink; c.lineWidth = 1.6; c.stroke();
       if (FB && !wide) { const b6 = FB[Math.min(FB.length - 1, f)], ny = sy + gh + 6, nh = sigH - gh - 8, nr = 1, nc = 4;
         for (let q = 0; q < nr * nc; q++) { const bi = [0, 2, 3, 5][q % nc], back = Math.floor(q / nc) * 8, v = FB[Math.max(0, f - back)][bi], db = (20 * Math.log10(Math.max(1e-4, v))).toFixed(1);
-          text(c, db, sx + 6 + (sigW - 12) * (q % nc + 0.5) / nc, ny + nh * (Math.floor(q / nc) + 0.5) / nr, { size: 11, fam: DISPLAY, w: 700, col: rgba(ink, 0.75), align: 'center', maxW: (sigW - 12) / nc - 2 }); } void b6; }
+          text(c, db, sx + 6 + (sigW - 12) * (q % nc + 0.5) / nc, ny + nh * (Math.floor(q / nc) + 0.5) / nr, { size: 12, fam: DISPLAY, w: 700, col: rgba(ink, 0.75), align: 'center', maxW: (sigW - 12) / nc - 2 }); } void b6; }
       c.restore();
     };
     draw(true); draw(false);
