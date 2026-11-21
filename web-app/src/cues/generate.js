@@ -70,8 +70,8 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
   const flash = [];   // v14: the 1-frame invert reads as a glitch on a phone: OFF by default in every look (still keyframeable: fx.flash)
   sheet.tracks.push(track('fx.flash', 'event', 'fx', flash));
   sheet.tracks.push(track('fx.glitch', 'clip', 'fx', []));
-  // v15 scroll-stop: the first drop bar plays as the white negative (whole frame inverted for 1 bar, hard in / hard out); player look only
-  sheet.tracks.push(track('fx.invert', 'clip', 'fx', look === 'player' && dropBars.length && dropBars[0] < NB - 1 ? [key(dropBars[0] * 4, true, { dur: 4 })] : []));
+  // v15 scroll-stop: the first drop phrase bar after the lab opens (intro + >= 2 bars, on a 4-bar phrase) plays as the white negative (whole frame inverted for 1 bar, hard in / hard out); player look only
+  sheet.tracks.push(track('fx.invert', 'clip', 'fx', look === 'player' ? (() => { const ib = NB >= 8 ? 2 : 0; for (let k2 = ib + 2; k2 < NB - 1; k2++) if ((k2 - ib) % 4 === 0 && lab(k2) === 'drop') return [key(k2 * 4, true, { dur: 4 })]; return []; })() : []));
   if (look === 'player') sheet.base['meter.session.style'] = 'blocks';
   // v11/v13 intro (2 bars at the clip start). START (v13): nothing is static: on beat 1 (t = 0) the cards fan out of one stack and the player
   // rises into place (intro.enter, linear 0 -> 1 over beats 0-2; the shapes are in intro.js: the fan lands on beat 2, the player on beat 3).
