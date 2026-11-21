@@ -246,3 +246,6 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - Native render: `--mblur N` (default 3 sub-frames) `--shutter 0.5` (180 deg) = motion blur; stills are unblurred.
 - v17.2 pacing (player): intro push ease-in softened (bezier ob 0.42), intro.open 3 beats, panels build over 6 sixteenths with 16th-note rings, camera travels 2 beats, logo cycle 4 bars, rewind 2 bars (sine in-out).
 - Native: adaptive motion blur (2 extra sub-frames only when the camera/intro moves); u2c.py render runs 9:16 + 16:9 in parallel.
+- v18 `social.on` (player): HOOK dialog on frame 0 with a loading bar over the intro, CTA 1 at `social.cta1.at` (beat 32) and CTA 2 at `social.cta2.at` (beats from the end), Y2K system dialogs; texts in tags `social.*`.
+- v18 `cursor.on`: Y2K arrow cursor glides to each camera target and clicks on the beat the travel starts.
+- v18 `roll.on` / `roll.mini` / `roll.span` / `roll.playhead` / `roll.color`: MIDI map on the hero (melodic peaks as dot trails, ink bars at the playhead, onset circles, next-bar mini-rolls).

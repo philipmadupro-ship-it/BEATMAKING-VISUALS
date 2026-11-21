@@ -22,6 +22,12 @@ export const DEFAULT_TAGS = {
   "inserts": "inserts",
   "meta": "metadata"
  },
+ "social": {
+  "title": "EXPERIMENT_{titleWord}.EXE",
+  "hook": "THIS BEAT FAILED THE LAB TEST",
+  "cta1": { "title": "U2C ALERT", "body": "COMMENT \"LAB\"", "sub": "FOR THE FREE DOWNLOAD" },
+  "cta2": { "title": "U2C SYSTEM", "body": "FULL BEAT: LINK IN BIO", "sub": "{bpm} BPM \u00b7 {key} \u00b7 PROD. {producer}" }
+ },
  "player": {
   "nav": ["PLAYER", "LIBRARY", "ANALYSIS", "TOOLS", "PROJECTS", "ARCHIVE"],
   "vol": "",

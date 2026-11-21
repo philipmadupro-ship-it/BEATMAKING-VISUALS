@@ -116,6 +116,45 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // v15.2 macOS window chrome: three traffic lights top-left (close x / minimise - / zoom +), real colours (chrome.lightsColor) pre-inverted when the
   // frame will be inverted (white stage XOR fx.invert) so they always read red / yellow / green
   const invHex = (h) => '#' + (0xffffff ^ parseInt(h.slice(1), 16)).toString(16).padStart(6, '0');
+  // v18 MIDI map (reverse-engineered from the user's reference): the beat's melodic peaks (spectrogram bins ~1 semitone each, 110 Hz-1.8 kHz,
+  // top 5 local maxima per frame above the frame median) as notes. Past = halftone dot trails (dot size = level) moving into a fixed playhead;
+  // the sounding note = a solid ink bar with a soft halo; note onsets get a thin crosshair circle; a dotted guide one beat back; on the right,
+  // three boxed mini-rolls show the NEXT bar of the 3 strongest voices (step lines + a cursor line). Pure function of time (peaks precomputed).
+  let PK = null;
+  function rollPeaks() { if (PK) return PK; const NB2 = D.spectroBins || 128, SP = D.spectro, NFr = Math.floor(SP.length / NB2), lo = 31, hi = 84, K = 5;
+    const bin = new Int16Array(NFr * K).fill(-1), lv = new Float32Array(NFr * K);
+    for (let f = 0; f < NFr; f++) { const o = f * NB2, row = []; for (let i = lo; i <= hi; i++) row.push(SP[o + i]); const med = row.slice().sort((a2, b2) => a2 - b2)[row.length >> 1], cand = [];
+      for (let i = lo + 1; i < hi; i++) { const v = SP[o + i]; if (v > SP[o + i - 1] && v >= SP[o + i + 1] && v > med + 16 && v > 70) cand.push([v, i]); }
+      cand.sort((a2, b2) => b2[0] - a2[0]); for (let j = 0; j < Math.min(K, cand.length); j++) { bin[f * K + j] = cand[j][1]; lv[f * K + j] = Math.min(1, (cand[j][0] - med) / 70); } }
+    return (PK = { bin, lv, K, lo, hi, NFr }); }
+  function pianoRoll(x, y, w, h, t, Sx) {
+    const P = rollPeaks(), fry = V('hero.fry', Sx.grey ? 'negative' : 'thermal'), ink = V('roll.color', fry === 'negative' ? '#0b0b0b' : Sx.grey ? Sx.ink : Sx.hot), f0 = Math.min(P.NFr - 1, fidx(t));
+    const span = V('roll.span', 4) * BEAT, px = x + w * V('roll.playhead', 0.56), pxPerS = (px - x) / span, row = (i) => y + h * 0.1 + h * 0.8 * (1 - (i - P.lo) / (P.hi - P.lo)), FPSr = FPS;
+    c.save(); c.strokeStyle = rgba(ink, 0.55); c.lineWidth = 1; c.beginPath(); c.moveTo(px + 0.5, y); c.lineTo(px + 0.5, y + h); c.stroke();
+    c.setLineDash([2, 4]); c.strokeStyle = rgba(ink, 0.35); c.beginPath(); c.moveTo(px - BEAT * pxPerS + 0.5, y); c.lineTo(px - BEAT * pxPerS + 0.5, y + h); c.stroke(); c.setLineDash([]);
+    for (let k2 = 1; k2 < 6; k2++) { const yy = y + h * k2 / 6; c.fillStyle = rgba(ink, 0.45); c.fillRect(px + 2, yy, 8, 1); }
+    // trails: one column of dots per frame; 3 rows of halftone when loud
+    const nBack = Math.min(f0, Math.round(span * FPSr));
+    for (let d = nBack; d >= 1; d--) { const f = f0 - d, xx = px - d / FPSr * pxPerS;
+      for (let j = 0; j < P.K; j++) { const bi = P.bin[f * P.K + j]; if (bi < 0) continue; const lvv = P.lv[f * P.K + j], yy = row(bi), r = 0.6 + 3.2 * lvv;
+        c.fillStyle = rgba(ink, 0.35 + 0.6 * lvv); c.beginPath(); c.arc(xx, yy, r, 0, 6.2832); c.fill();
+        if (lvv > 0.45) { c.beginPath(); c.arc(xx, yy - r * 2.1, r * 0.6, 0, 6.2832); c.arc(xx, yy + r * 2.1, r * 0.6, 0, 6.2832); c.fill(); }
+        const pb = f > 0 ? P.bin.subarray((f - 1) * P.K, f * P.K) : []; let isOn = true; for (const q of pb) if (q >= 0 && Math.abs(q - bi) <= 1) isOn = false;
+        if (isOn && lvv > 0.35 && d < nBack - 2) { c.strokeStyle = rgba(ink, 0.5); c.lineWidth = 1; c.beginPath(); c.arc(xx, yy, 10 + 8 * lvv, 0, 6.2832); c.stroke(); c.beginPath(); c.moveTo(xx, yy - 26); c.lineTo(xx, yy + 26); c.stroke(); } } }
+    // the sounding notes: solid bars into the playhead + soft ink halo
+    for (let j = 0; j < P.K; j++) { const bi = P.bin[f0 * P.K + j]; if (bi < 0) continue; const lvv = P.lv[f0 * P.K + j], yy = row(bi), bl = 18 + 46 * lvv, th = 2 + 7 * lvv;
+      const g = c.createRadialGradient(px, yy, 0, px, yy, 22 + 40 * lvv); g.addColorStop(0, rgba(ink, 0.35 * lvv)); g.addColorStop(1, rgba(ink, 0)); c.fillStyle = g; c.fillRect(px - 70, yy - 70, 140, 140);
+      c.fillStyle = rgba(ink, 0.95); c.fillRect(px - bl, yy - th / 2, bl, th); }
+    // mini-rolls: the next bar of the 3 strongest voices
+    if (V('roll.mini', true)) { const mx = x + w * 0.79, mw = w * 0.18, mh = (h - 40) / 3 - 8, nF = Math.round(BAR * FPSr);
+      for (let m = 0; m < 3; m++) { const my = y + 20 + m * (mh + 8); c.strokeStyle = rgba(ink, 0.35); c.lineWidth = 1; c.strokeRect(Math.round(mx) + 0.5, Math.round(my) + 0.5, Math.round(mw), Math.round(mh));
+        c.fillStyle = rgba(ink, 0.5); for (const [cx2, cy2] of [[mx - 6, my - 6], [mx + mw + 6, my - 6]]) { c.fillRect(cx2 - 3, cy2, 7, 1); c.fillRect(cx2, cy2 - 3, 1, 7); }
+        c.strokeStyle = rgba(ink, 0.8); c.lineWidth = 1.4; c.beginPath(); let started = false;
+        for (let d = 0; d < nF; d += 2) { const f = Math.min(P.NFr - 1, f0 + d), bi = P.bin[f * P.K + m]; const xx = mx + 4 + (mw - 8) * d / nF;
+          if (bi < 0) { started = false; continue; } const yy = my + 4 + (mh - 8) * (1 - (bi - P.lo) / (P.hi - P.lo)); if (!started) { c.moveTo(xx, yy); started = true; } else c.lineTo(xx, yy); }
+        c.stroke(); c.strokeStyle = rgba(ink, 0.45); c.beginPath(); c.moveTo(mx + mw * 0.5, my + 4); c.lineTo(mx + mw * 0.5, my + mh - 4); c.stroke(); } }
+    c.restore();
+  }
   // v16 detection boxes (Y2K lab-scan): label tab (dark on scan green) + double frame + corner brackets + crosshair; re-acquire (hard step) each downbeat, flash on kicks
   const DET = [[0.035, 0.12, 0.2, 0.52], [0.765, 0.08, 0.2, 0.44], [0.69, 0.6, 0.27, 0.32], [0.06, 0.7, 0.24, 0.24]];
   function detect(x, y, w, h, t, Sx) {
@@ -285,6 +324,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function playerHero(cr, t, k, Sx) {
     const [x, y, w, h] = L.winRect, cx = x + w / 2 + V('hero.x', 0), cy = y + h * (V('hero.elephant', false) ? 0.40 : 0.5) + V('hero.y', 0), bb = BR.logoBBox(), lw = Math.min(w * (port ? 0.52 : 0.43), h * 0.62 * bb.w / bb.h) * V('hero.scale', 1) * V('logo.scale', 1), lh = lw * bb.h / bb.w;
     if (V('hero.cover', true)) coverBody(cr, t, k, Sx);   // v14.1: the darkened cover-0 behind the logo = the intro's match-cut target
+    if (V('roll.on', true)) { const [rx, ry, rw, rh] = L.winRect; c.save(); c.beginPath(); c.rect(rx, ry, rw, rh * k); c.clip(); c.clip(L.rr(rx, ry, rw, rh, V('glass.radius', 22))); pianoRoll(rx, ry, rw, rh, t, Sx); c.restore(); }
     c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip();
     const hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4)), I = glowAt(fidx(t));
     BR.logo(c, Sx, [0, 0, 0, 0], t, { at: { cx, cy, w: lw }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero, glow: V('logo.glow', 1), kickI: I, pulse: I, bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
@@ -333,6 +373,22 @@ export function createFilm({ D, assets, aspect = '916' }) {
     for (const [cx2, cy2, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) { c.moveTo(cx2, cy2 + sy * k); c.lineTo(cx2, cy2); c.lineTo(cx2 + sx * k, cy2); }
     c.stroke(); c.restore();
   }
+  // v18 Y2K cursor (the v17 prompt: "a cursor drives every change"): before each camera travel it glides (spring) to the target panel's title bar,
+  // clicks ON the beat the travel starts (press + ring), then rides along; world space, so it stays on the panel while the camera moves
+  let CUR = null;
+  function cursorPath() { if (CUR && CUR.ev === ev) return CUR.p; const p = [];
+    for (const k of ev.keysIn('camera.shot', 0, 1e6)) { const r = k.v !== 'wide' && LY[k.v]; if (!r) continue; const d = k.dur ?? 1; p.push({ b: k.b - d, x: r[0] + 92, y: r[1] + (port ? 28 : 26) }); }
+    CUR = { ev, p }; return p; }
+  function cursor(t) {
+    const P = cursorPath(); if (!P.length) return; const h = LY.stage, home = h ? { x: h[0] + h[2] * 0.62, y: h[1] + h[3] * 0.6 } : { x: W / 2, y: H / 2 };
+    let i = P.findIndex((q) => q.b > b); if (i < 0) i = P.length; const A = i > 0 ? P[i - 1] : { ...home, b: IB }, Bq = i < P.length ? P[i] : A;
+    const t0 = T(A.b) + 0.15, t1 = T(Bq.b) - 0.12, u = t1 > t0 ? clamp((t - t0) / (t1 - t0)) : 1, e = spr(u * 1.25, 7);
+    const x = A.x + (Bq.x - A.x) * e, y = A.y + (Bq.y - A.y) * e, dt = t - T(Bq.b) >= -0.12 && t - T(Bq.b) < 0.25 ? t - T(Bq.b) : t - T(A.b), press = dt >= -0.04 && dt < 0.1 ? 0.86 : 1;
+    const s = (port ? 2.1 : 1.6) * press; c.save(); c.translate(x, y);
+    if (dt >= 0 && dt < 0.25) { c.beginPath(); c.arc(0, 0, 10 + 60 * dt / 0.25, 0, 2 * Math.PI); c.strokeStyle = rgba(S.grey ? S.ink : S.hot, 0.7 * (1 - dt / 0.25)); c.lineWidth = 2; c.stroke(); }
+    c.scale(s, s); c.beginPath(); [[0, 0], [0, 17], [4, 13], [7, 20], [9.5, 19], [6.5, 12], [12, 12]].forEach(([px, py], j) => (j ? c.lineTo(px, py) : c.moveTo(px, py))); c.closePath();
+    c.fillStyle = '#ffffff'; c.fill(); c.lineWidth = 1.2; c.strokeStyle = '#000000'; c.stroke(); c.restore();
+  }
   function card(id, t, active) {
     const r = LY[id], n = openStep(id, t); if (n <= 0) return;
     const acc = V(`win.${id}.accent`, null), Sx = acc && acc !== S.hot ? Object.assign({}, S, { hot: acc }) : S;
@@ -380,6 +436,31 @@ export function createFilm({ D, assets, aspect = '916' }) {
     text(c, tag('hud.bottomRight', hv), W - m, bot, { size: 20, fam: UI, w: 500, col: dim, align: 'right', ls: 0.5 });
   }
   // text cues: typed one character per 64th note from the key, hard cut at the end of the clip (no fades)
+  // v18 social layer (Y2K system dialogs, screen space, inside the TikTok safe zone): HOOK on frame 0 (readable with the sound off; a loading bar
+  // fills over the intro = anticipation), CTA 1 (comment keyword) and CTA 2 (link in bio) as pop-up alerts; spring pop-in (no fade), hard out.
+  // All text is tags (social.*), timing is cue paths (social.cta1.at / .len, social.cta2.at / .len in beats); social.on switches it all.
+  function dialog(cx, cy, wD, title, body, sub, t0, t, prog) {
+    const sc = 0.94 + 0.06 * spr(Math.max(0, t - t0) / 0.35, 9), h = sub ? 168 : 136, x = cx - wD / 2, y = cy - h / 2, col = S.grey ? '#0a0a0a' : S.hot;
+    c.save(); c.translate(cx, cy); c.scale(sc, sc); c.translate(-cx, -cy);
+    L.glass(c, x, y, wD, h, S, { r: 18, tint: 0.62, shadow: 1 });
+    c.fillStyle = rgba(S.ink, 0.08); c.fillRect(x + 1, y + 1, wD - 2, 40); c.fillStyle = rgba(S.ink, 0.18); c.fillRect(x, y + 41, wD, 1);
+    lights(x + 26, y + 21, S, true);
+    text(c, String(title).toUpperCase(), x + wD / 2, y + 21, { size: 18, fam: UI, w: 600, ls: 1.5, col: rgba(S.ink, 0.8), align: 'center', maxW: wD - 180 });
+    text(c, String(body).toUpperCase(), x + wD / 2, y + 82, { size: port ? 34 : 30, fam: DISPLAY, w: 800, col: S.ink, align: 'center', maxW: wD - 48 });
+    if (sub) text(c, String(sub).toUpperCase(), x + wD / 2, y + 126, { size: 20, fam: UI, w: 500, ls: 1.2, col: rgba(S.ink, 0.65), align: 'center', maxW: wD - 48 });
+    if (prog != null) { const bx = x + 24, by = y + h - 18, bw = wD - 48; c.fillStyle = rgba(S.ink, 0.12); c.fillRect(bx, by, bw, 6); const n = Math.floor(clamp(prog) * 24);
+      c.fillStyle = S.grey ? S.ink : col; for (let i = 0; i < n; i++) c.fillRect(bx + i * bw / 24 + 1, by, bw / 24 - 2, 6); }
+    c.restore();
+  }
+  function social(t, intro) {
+    if (!V('social.on', LOOK === 'player')) return;
+    const wD = port ? 820 : 760, cx = W / 2;
+    if (intro) { const p = clamp(t / T(IB)); dialog(cx, port ? 330 : 150, wD, tag('social.title'), tag('social.hook'), null, -1, t, p); return; }
+    for (const [k, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) {
+      const at = V(`social.${k}.at`, def), len = V(`social.${k}.len`, 8); if (b < at || b >= at + len) continue;
+      dialog(cx, port ? H * 0.5 : H * 0.5, wD, tag(`social.${k}.title`), tag(`social.${k}.body`), tag(`social.${k}.sub`), T(at), t, null);
+    }
+  }
   function textCues(t) {
     for (const k of ev.clipsAt('text.cue', b)) {
       const s = L.sub(String(k.v ?? '')); if (!s) continue;
@@ -460,7 +541,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     RWB = LOOK === 'player' && IB && V('outro.rewind', true) && D.duration > T(IB + 16) ? (D.duration - 2 * BAR) / BEAT : 0;   // v17.2: 2-bar rewind, sine in-out
     if (RWB && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); t = Math.max(0.5 / fps, T(IB) * (1 - e) - 0.5 / fps); b = t / BEAT; }
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
-      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect }); c.setTransform(scale, 0, 0, scale, 0, 0); textCues(t); textures(t); flash(t); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect }); c.setTransform(scale, 0, 0, scale, 0, 0); social(t, true); textCues(t); textures(t); flash(t); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
     }
     const cam = camera(), z = cam.z; L.view.camZ = z; L.view.base = scale;
@@ -471,11 +552,12 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (LOOK === 'player') playerShell(t);
     for (const id of IDS) card(id, t, att === id);
     if (LOOK === 'player' && V('focus.bracket', true)) focusBracket(t);
+    if (LOOK === 'player' && V('cursor.on', true)) cursor(t);
     hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
     if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16));
     if (L.openFx) INTRO.streak(c, L.openFx.px, L.openFx.py, L.openFx.dl);   // v13 intro: directional streak copies on the opening dolly-out
-    result(t); hud(t, ev.shot(b)); textCues(t); textures(t);
+    result(t); hud(t, ev.shot(b)); social(t, false); textCues(t); textures(t);
     flash(t);
     glitch(t, scale);
     c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
