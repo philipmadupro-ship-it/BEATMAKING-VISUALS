@@ -46,7 +46,11 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // ---------------------------------------------------------------- windows: rect, open steps, content
   const rectOf = (id) => { const r = LAYOUT[LOOK][aspect][id]; return [V(`win.${id}.x`, r[0]), V(`win.${id}.y`, r[1]), V(`win.${id}.w`, r[2]), V(`win.${id}.h`, r[3])]; };
   // v11 intro: with an intro of IB beats the lab builds after it (default open beats shift by IB; -2 = open at the cut)
-  const winOpen = (id) => { if (IB && (id === 'now' || id === 'stage')) return 0;   // v13: the cover card is already there at the cut (the intro push ends on it), it does not build in
+  // v16.1 dashboard-load choreography (motion-design skill: lead with the hero, centre-out stagger, 50-100 ms steps, total < 500 ms): after the intro cut
+  // the player panels open in rings by distance from the hero, one 32nd note (~59 ms at 128 BPM) apart, every start on the 32nd grid
+  const ringOf = (id) => { const h = LAYOUT[LOOK][aspect].stage, r = LAYOUT[LOOK][aspect][id]; if (!h || !r) return 0; const d = Math.hypot(r[0] + r[2] / 2 - h[0] - h[2] / 2, r[1] + r[3] / 2 - h[1] - h[3] / 2); return Math.min(7, Math.round(d / (port ? 260 : 380))); };
+  const winOpen = (id) => { if (IB && (id === 'now' || id === 'stage')) return 0;
+    if (IB && LOOK === 'player' && openBeat(LOOK, aspect, id) < 0) return V(`win.${id}.open`, IB + ringOf(id) * 0.125);   // v13: the cover card is already there at the cut (the intro push ends on it), it does not build in
     const d = openBeat(LOOK, aspect, id); return V(`win.${id}.open`, IB ? (d < 0 ? IB : d + IB) : d); };
   function openStep(id, t) {
     const n0 = steps(t, winOpen(id), 6, U.t32), k = ev.lastKey(`win.${id}.visible`, t / BEAT);
@@ -107,17 +111,17 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // v16 detection boxes (Y2K lab-scan): label tab (dark on scan green) + double frame + corner brackets + crosshair; re-acquire (hard step) each downbeat, flash on kicks
   const DET = [[0.035, 0.12, 0.2, 0.52], [0.765, 0.08, 0.2, 0.44], [0.69, 0.6, 0.27, 0.32], [0.06, 0.7, 0.24, 0.24]];
   function detect(x, y, w, h, t, Sx) {
-    const G = V('scan.color', '#39ff6a'), labs = tag('player.detect') || [], bar = Math.floor(b / 4), I = glowAt(fidx(t)), fz = port ? 17 : 15, th = fz + 8;
+    const G = V('scan.color', Sx.grey ? '#0a0a0a' : Sx.hot), TXT = V('scan.text', Sx.grey ? '#f2f2f2' : '#0a0a0a'), labs = tag('player.detect') || [], bar = 0, I = 0, fz = port ? 17 : 15, th = fz + 8;   // v16.1: stage colours, static (no flash, no re-acquire)
     c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
     DET.forEach(([fx, fy, fw, fh], i) => { if (!labs[i]) return;
-      const jx = (hs(bar * 7 + i) - 0.5) * 0.03 * w, jy = (hs(bar * 13 + i) - 0.5) * 0.04 * h, bx = Math.round(x + fx * w + jx) + 0.5, by = Math.round(y + fy * h + jy + th) + 0.5, bw = Math.round(fw * w), bh = Math.round(fh * h - th);
+      const jx = 0, jy = 0, bx = Math.round(x + fx * w + jx) + 0.5, by = Math.round(y + fy * h + jy + th) + 0.5, bw = Math.round(fw * w), bh = Math.round(fh * h - th);
       c.strokeStyle = rgba(G, 0.9); c.lineWidth = 1.2 + 1.2 * I; c.strokeRect(bx, by, bw, bh); c.lineWidth = 1; c.strokeStyle = rgba(G, 0.45); c.strokeRect(bx + 3, by + 3, bw - 6, bh - 6);
       const k = Math.min(14, bw * 0.18); c.strokeStyle = G; c.lineWidth = 2; c.beginPath();
       for (const [cx2, cy2, sx, sy] of [[bx + 6, by + 6, 1, 1], [bx + bw - 6, by + 6, -1, 1], [bx + 6, by + bh - 6, 1, -1], [bx + bw - 6, by + bh - 6, -1, -1]]) { c.moveTo(cx2, cy2 + sy * k); c.lineTo(cx2, cy2); c.lineTo(cx2 + sx * k, cy2); } c.stroke();
       const mx = bx + bw / 2, my = by + bh / 2; c.lineWidth = 1; c.strokeStyle = rgba(G, 0.7); c.beginPath(); c.moveTo(mx - 6, my); c.lineTo(mx + 6, my); c.moveTo(mx, my - 6); c.lineTo(mx, my + 6); c.stroke();
       const lab = String(labs[i]).toUpperCase(), conf = `${78 + Math.floor(hs(bar * 31 + i) * 21)}%`; c.font = `600 ${fz}px ${UI}`; const tw2 = Math.min(bw + 60, c.measureText(lab).width * 1.12 + lab.length * 1.5 + 20);
-      c.fillStyle = rgba(G, 0.92 + 0.08 * I); c.fillRect(bx - 0.5, by - th, tw2, th); text(c, lab, bx + 7, by - th / 2, { size: fz, fam: UI, w: 600, col: '#06140a', maxW: tw2 - 10 });
-      text(c, conf, bx + bw, by - th / 2, { size: fz - 2, w: 700, col: rgba(G, 0.95), align: 'right' });
+      c.fillStyle = rgba(G, 0.92 + 0.08 * I); c.fillRect(bx - 0.5, by - th, tw2, th); text(c, lab, bx + 7, by - th / 2, { size: fz, fam: UI, w: 600, col: TXT, maxW: tw2 - 10 });
+      if (V('scan.conf', false)) text(c, conf, bx + bw, by - th / 2, { size: fz - 2, w: 700, col: rgba(G, 0.95), align: 'right' });
       if (I > 0.05) { c.fillStyle = rgba(G, 0.08 * I); c.fillRect(bx, by, bw, bh); } });
     c.restore();
   }

@@ -32,7 +32,8 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
   if (preset === 'default' && look === 'player' && aspect === '916') {
     // v15.2 TikTok rhythm: in on a panel for 1 bar, back to wide for 1 bar, every 2 bars from bar 3; snappy half-beat moves
     const rot = ['spectrum', 'session', 'stereo', 'loud', 'stage'].filter((id) => ids.includes(id)); let i = 0;
-    for (let bar = 3; bar + 1 < NB - 1; bar += 2) push(bar, rot[i++ % rot.length], 1, 'easeOut', 0.5);
+    // v16.1 (motion-design skill): push in = MD3 Emphasized (decelerate, 1 beat ~ 470 ms = 'page transition'), back to wide = MD3 Standard; both land ON the beat
+    for (let bar = 3; bar + 1 < NB - 1; bar += 2) { cam.push(key(bar * 4, rot[i++ % rot.length], { transition: 'push', dur: 1, ease: 'emphasized' })); cam.push(key((bar + 1) * 4, 'wide', { transition: 'push', dur: 1, ease: 'standard' })); }
   } else if (preset === 'default') {
     const rot = FOCUS_PLAN[look].map(([, id, n]) => [id, n]), used = [];
     let i = 0;

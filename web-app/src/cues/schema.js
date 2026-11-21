@@ -12,7 +12,11 @@ export const SNAPS = { bar: 4, beat: 1, '1/8': 0.5, '1/16': 0.25, off: 0 };
  *  duration (text cues, glitch, logo hero); event is instantaneous (1-frame flash). */
 export const KINDS = ['number', 'color', 'enum', 'bool', 'text', 'shot', 'clip', 'event'];
 export const EASE_IDS = ['step', 'linear', 'easeInOut', 'expoOut', 'backOut'];
+// v16.1 cubic-bezier easings (LottieFiles motion-design skill, timing tables: MD3 Emphasized for entrances, MD3 Standard on-screen; 0 % overshoot = glass)
+function bez(x1, y1, x2, y2) { const B = (t, a, b2) => 3 * a * t * (1 - t) * (1 - t) + 3 * b2 * t * t * (1 - t) + t * t * t;
+  return (x) => { if (x <= 0) return 0; if (x >= 1) return 1; let lo = 0, hi = 1, t = x; for (let i = 0; i < 28; i++) { t = (lo + hi) / 2; if (B(t, x1, x2) < x) lo = t; else hi = t; } return B(t, y1, y2); }; }
 export const EASES = {
+  emphasized: bez(0.05, 0.7, 0.1, 1), standard: bez(0.2, 0, 0, 1),
   step: () => 0,
   linear: (x) => x,
   easeInOut: (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2),         // power2.inOut

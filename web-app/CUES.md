@@ -232,3 +232,6 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - `hero.fry` (player: none|negative|thermal|night; Nigredo default negative, colour stages thermal): deep-fried cover.
 - `scan.on` / `scan.color` (#39ff6a): detection boxes on the hero (tag `player.detect`), re-acquire each downbeat, flash on kicks.
 - Traffic lights now in stage colours (Nigredo black).
+- Detection boxes v16.1: stage colours (`scan.color` black in Nigredo / hot in colour stages, `scan.text`), static, no % (`scan.conf` off).
+- Player intro cut: panels open centre-out from the hero, one 32nd note per ring (motion-design skill: dashboard-load choreography).
+- Eases `emphasized` (MD3 0.05,0.7,0.1,1) and `standard` (0.2,0,0,1) for camera keys; the 9:16 pushes use them.
