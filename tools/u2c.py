@@ -99,7 +99,7 @@ def review(a):
     import numpy as np
     from PIL import Image
     pre, spb = a.pre, 60.0 / a.bpm; dur = float(sh(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', a.video]).stdout or 0)
-    marks = [('frame 0', 0.0), ('click play', pre + 0.02), ('card click', pre + 6 * spb - 0.1), ('push', pre + 7.5 * spb), ('cut', pre + 8 * spb + 0.05), ('build', pre + 9 * spb),
+    marks = [('frame 0', 0.0), ('click play', pre + 0.02), ('browse', 0.45), ('choose', max(0.0, pre - 0.55)), ('push', pre + 2 * spb), ('cut', pre + 4 * spb + 0.05), ('build', pre + 5 * spb),
              ('first move', pre + 12 * spb - 0.5), ('negative', pre + 24.5 * spb), ('CTA 1', pre + 33 * spb), ('CTA 2', pre + 45 * spb), ('rewind', dur - 3.6), ('last', dur - 1 / 30)]
     ims = []
     for name, t in marks:
