@@ -172,6 +172,10 @@ body{background:var(--bg);color:var(--fg)}
       <dl class="kv" id="loudKv"></dl>
     </div>
     <div class="group">
+      <div class="group-h"><span class="lbl">Cover</span></div>
+      <div class="inrow"><label class="btn small" for="coverFile">Upload cover</label><input type="file" id="coverFile" accept="image/*" hidden><span class="hint" id="coverInfo">the beat's cover (cover 0)</span></div>
+    </div>
+    <div class="group">
       <div class="group-h"><span class="lbl">Voice tag</span><label class="tog"><input type="checkbox" id="vtOn"> tagged export</label></div>
       <div class="inrow"><label class="btn small" for="vtFile">Upload tag audio</label><input type="file" id="vtFile" accept="audio/*" hidden><span class="hint" id="vtInfo">none loaded</span></div>
       <div class="ctl"><label class="lbl" for="vtEvery">Repeat every</label><input type="range" id="vtEvery" min="10" max="40" step="1"><output for="vtEvery"></output></div>

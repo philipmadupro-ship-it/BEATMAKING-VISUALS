@@ -10,7 +10,7 @@ import * as ML from './meterlib.js';
 import { glowAt, grFor } from './levelview.js';
 import { traceData, toneCols } from './spectrumview.js';
 
-export const LABELS = ['SPEC', 'GR', 'WIDTH', '3D'];
+export const LABELS = ['FILTER', 'LIMITER', 'WIDTH', '3D'];
 export const CUBE_EASE = 0.45;   // fraction of a beat the step takes (the last 45 % before the beat)
 
 /** Cube turn in steps (1 step = 90 degrees) at time t: it holds, then eases (in-out cubic) over the last `ease` of each beat so that at every beat
@@ -45,8 +45,10 @@ export function draw(ctx, rect, frame, opts) {
     const tx = x + i * (tw + gap), r = Math.max(8, Math.min(16, h * 0.16));
     if (L.panel) L.panel(ctx, tx, y, tw, h, S, { r }); else { ctx.fillStyle = ink(0.06); ctx.fillRect(tx, y, tw, h); ctx.strokeStyle = ink(0.25); ctx.strokeRect(tx + 0.5, y + 0.5, tw - 1, h - 1); }
     // label (Synkopy, top-left); the art sits in the rest of the tile
-    const fz = Math.round(Math.max(11, Math.min(17, h * 0.1))), narrow = tw < 170, lh = Math.round((narrow ? 2.3 : 1.2) * fz + 6), ax = tx + 6, ay = y + lh + 4, aw = tw - 12, ah = h - lh - 10;
-    text(ctx, LABELS[i], tx + 10, y + 8 + fz * 0.5, { size: fz, col: ink(0.7), w: 500, maxW: tw * 0.5 });
+    const fz = Math.round(Math.max(11, Math.min(17, h * 0.1))), narrow = tw < 280, lh = Math.round((narrow ? 2.8 : 1.2) * fz + 6), ax = tx + 6, ay = y + lh + 4, aw = tw - 12, ah = h - lh - 10;
+    const nm = String((opts.labels && opts.labels[i]) || LABELS[i]).toUpperCase(), ly = y + 8 + fz * 0.5;
+    ctx.beginPath(); ctx.arc(tx + 12, ly, 3.2, 0, 6.2832); ctx.fillStyle = rgba(S.hot, 0.55 + 0.45 * g); ctx.fill();   // power LED (on), brighter on the kick
+    text(ctx, nm, tx + 22, ly, { size: fz, col: ink(0.8), w: 500, maxW: narrow ? tw - 30 : tw * 0.5 });
     if (ah < 10 || aw < 10) continue;
     ctx.save(); ctx.beginPath(); ctx.rect(tx + 2, y + 2, tw - 4, h - 4); ctx.clip();
     let rd = null;
@@ -55,7 +57,7 @@ export function draw(ctx, rect, frame, opts) {
     else if (i === 2) rd = width(ctx, S, F, D, f, FPS, ax, ay, aw, ah, g, rgba, ink, clamp);
     else cube(ctx, S, D, t, f, ax, ay, aw, ah, g, rgba, ink, L.BEAT);
     ctx.restore();
-    if (rd) text(ctx, rd, narrow ? tx + 10 : tx + tw - 10, y + 8 + fz * (narrow ? 1.7 : 0.5), { size: fz, col: ink(0.95), w: 800, align: narrow ? 'left' : 'right', fam: '"Akira Expanded", "Unbounded", sans-serif', maxW: tw * 0.48 });   // live value (Akira)
+    if (rd) text(ctx, rd, narrow ? tx + 22 : tx + tw - 10, y + 8 + fz * (narrow ? 2.05 : 0.5), { size: fz, col: ink(0.95), w: 800, align: narrow ? 'left' : 'right', fam: '"Akira Expanded", "Unbounded", sans-serif', maxW: tw * 0.48 });   // live value (Akira)
   }
   ctx.restore();
 }
@@ -69,7 +71,12 @@ function spec(ctx, S, D, f, x, y, w, h, tone, g, rgba, ink) {
   ctx.beginPath(); P.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.save(); if (g > 0.02) { ctx.shadowColor = rgba(tone[2], 1); ctx.shadowBlur = 4 + 10 * g; }
   ctx.strokeStyle = rgba(tone[2], 0.95); ctx.lineWidth = 1.3; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
   ctx.fillStyle = ink(0.12); ctx.fillRect(x, Math.round(y + h) - 0.5, w, 1);
-  let mx = -120; for (let b = 0; b < nb; b++) mx = Math.max(mx, T.disp[f * nb + b]); return `${Math.round(mx)} DB`;
+  // the insert's filter: high-pass 30 Hz + low-pass 18 kHz (12 dB/oct shoulders) drawn over the live spectrum, two node handles
+  const fx = (hz) => x + w * Math.log(hz / 20) / Math.log(1000), cyc = y + h * 0.16, roll = (hz) => Math.min(1, Math.max(0, Math.log2(30 / hz)) * 0.45 + Math.max(0, Math.log2(hz / 18000)) * 0.45);
+  ctx.beginPath(); for (let j = 0; j <= 60; j++) { const hz = 20 * Math.pow(1000, j / 60), yy = cyc + (y + h - cyc) * roll(hz); j ? ctx.lineTo(x + w * j / 60, yy) : ctx.moveTo(x, yy); }
+  ctx.strokeStyle = ink(0.9); ctx.lineWidth = 1.4; ctx.stroke();
+  for (const hz of [30, 18000]) { ctx.beginPath(); ctx.arc(fx(hz), cyc, 3.4, 0, 6.2832); ctx.fillStyle = S.ink; ctx.fill(); }
+  return '30–18K';
 }
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 

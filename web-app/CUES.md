@@ -218,3 +218,8 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - `glass.bezel` (player look, 0..2, default 1): the double-bezel inner core hairline + top light inside every card.
 - `meter.session.spikes` / `meter.session.kickflash` (bool, default false): the bright transient columns and the played-side kick flash on the waveform (off: they flickered while scrolling).
 - `hero.cover` (player, bool, default true): the darkened cover-0 behind the hero logo; the intro match-cut lands on it at width-fit zoom.
+- `hero.elephant` (player, bool, default false): the elephant mark under the logo (removed in v14.2).
+- `player.cover` (player, 0..4, default 0): which cover the hero / now playing use; the studio's **Upload cover** replaces cover 0 for the session.
+- `player.tabs169` (player, bool, default false): the top tabs on 16:9. 9:16 shows the tabs from tag `player.tabs` (default: PLAYER only).
+- Tags `player.inserts` (slot names), `player.meta.labels`, `player.meta.tags`, `player.nav`, `player.sub`, `player.now.*`: every player text is editable in Tags.
+- Player waveform default `meter.session.span` = 1 bar (more detail).

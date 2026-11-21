@@ -95,12 +95,13 @@ export function createLevelView(L, M8, H) {
     const gr = grFor(D, {}), grNow = ML.grAt(gr, t, FPS, D.lv.rate); let gd = gr._depth; if (gd == null) { gd = 0; for (let i = 0; i < gr.length; i++) if (-gr[i] > gd) gd = -gr[i]; gr._depth = gd; }
     const grRange = Math.max(2, Math.ceil(gd * 1.15 + 0.2));
     const sW = L.floorSize(ctx, 11), sN = L.floorSize(ctx, 16), nH = sN * NUM, pad = 4, gap = 6;
-    const boxH = Math.round(sW + nH + 16), boxY = y + h - boxH, hdr = Math.round(sW + 8), top = y + hdr, bot = boxY - 12, bh = bot - top;
-    const scaleW = Math.round(L.floorSize(ctx, 12) * NUM * 3.1 + 6), grW = w >= 250 ? 14 : 0, grGap = grW ? 10 : 0, bg = 8;
-    const bw = Math.floor((w - scaleW - pad - grW - grGap - bg - 2) / 2), bx = x + scaleW + pad, grX = bx + 2 * bw + bg + grGap;
+    const side = w > 1.1 * h, mW = side ? Math.round(w * 0.5) : w;   // v14.2: wide cell = smaller L/R bars + a 2x2 stat grid
+    const boxH = Math.round(sW + nH + 16), boxY = y + h - boxH, hdr = Math.round(sW + 8), top = y + hdr, bot = side ? y + h - 8 : boxY - 12, bh = bot - top;
+    const scaleW = Math.round(L.floorSize(ctx, 12) * NUM * 3.1 + 6), grW = mW >= 170 ? 12 : 0, grGap = grW ? 10 : 0, bg = 8;
+    const bw = Math.floor((mW - scaleW - pad - grW - grGap - bg - 2) / 2), bx = x + scaleW + pad, grX = bx + 2 * bw + bg + grGap;
     const col = (db) => (db > 0 ? Z[3] : db > -6 ? Z[2] : db > -18 ? Z[1] : Z[0]), SEG = 1.5;
     [0, 1].forEach((ch) => lbl(ctx, S, ch ? 'R' : 'L', bx + ch * (bw + bg) + bw / 2, y + hdr / 2, { size: 12, align: 'center', a: 0.85, w: 600 }));
-    if (grW) lbl(ctx, S, 'GR', x + w, y + hdr / 2, { size: 11, align: 'right', a: 0.55 });
+    if (grW) lbl(ctx, S, 'GR', x + mW, y + hdr / 2, { size: 11, align: 'right', a: 0.55 });
     { const fs = L.floorSize(ctx, 12), used = []; for (const d of PL_TICKS) { const yy = Math.round(top + bh * (1 - pos(d))) + 0.5; ctx.fillStyle = rgba(S.ink, 0.4); ctx.fillRect(bx - 5, yy - 0.5, 3, 1);
       if (used.some((u) => Math.abs(u - yy) < fs * NUM + 4)) continue; used.push(yy); text(ctx, d === 0 ? '0' : '−' + Math.abs(d), x + scaleW - 4, yy, { size: 12, align: 'right', col: rgba(S.ink, d === 0 ? 0.95 : 0.6), w: d === 0 ? 700 : 400 }); } }
     [vL, vR].forEach((v, ch) => {
@@ -118,6 +119,12 @@ export function createLevelView(L, M8, H) {
       ctx.save(); if (g > 0.01) { ctx.shadowColor = rgba(S.hot, 1); ctx.shadowBlur = 4 + 14 * g; } ctx.fillStyle = S.ink; ctx.fillRect(grX - 2, top + gh - 1.5, grW + 4, 3); ctx.restore(); }
     const st = playerStats(D.lv, tt, 1.5), lufs = F.S[tf], cw = (w - 3 * gap) / 4, ls = (v) => (!Number.isFinite(v) || v < -69 ? '−∞' : (v < 0 ? '−' : '') + Math.abs(v).toFixed(1));
     const cells = [['PEAK', ls(st.peak), st.peak >= -0.1 ? S.hot : S.ink], ['RMS', ls(st.rms), S.ink], ['LUFS', ls(lufs), S.ink], ['DR', Number.isFinite(st.dr) ? st.dr.toFixed(1) : '—', S.ink]];
+    if (side) { const gx = x + mW + 12, gw = w - mW - 12, gy = top, gh = h - hdr - 2, cw2 = (gw - gap) / 2, ch2 = (gh - gap) / 2, fN = Math.min(30, Math.max(16, ch2 * 0.3));
+      cells.forEach(([nm, val, c], i) => { const cx = gx + (i % 2) * (cw2 + gap), cy = gy + Math.floor(i / 2) * (ch2 + gap), rr = L.rr(cx, cy, cw2, ch2, 10);
+        ctx.fillStyle = rgba(S.ink, 0.05 + (i === 0 ? 0.06 * g : 0)); ctx.fill(rr); ctx.strokeStyle = rgba(S.ink, 0.22); ctx.lineWidth = 1; ctx.stroke(rr);
+        lbl(ctx, S, nm, cx + 10, cy + 8 + sW * 0.5, { size: 11, a: 0.6, maxW: cw2 - 16 });
+        text(ctx, val, cx + cw2 / 2, cy + ch2 * 0.6, { size: fN, w: 800, align: 'center', col: c, maxW: cw2 - 12 }); });
+      if (!opt.noReveal) ctx.restore(); return; }
     cells.forEach(([nm, val, c], i) => { const cx = x + i * (cw + gap), rr = L.rr ? L.rr(cx, boxY, cw, boxH, 8) : null;
       if (rr) { ctx.fillStyle = rgba(S.ink, 0.05 + (i === 0 ? 0.05 * g : 0)); ctx.fill(rr); ctx.strokeStyle = rgba(S.ink, 0.24); ctx.lineWidth = 1; ctx.stroke(rr); } else { ctx.strokeStyle = rgba(S.ink, 0.24); ctx.strokeRect(cx + 0.5, boxY + 0.5, cw - 1, boxH - 1); }
       lbl(ctx, S, nm, cx + cw / 2, boxY + 6 + sW * 0.5, { size: 11, align: 'center', a: 0.6, maxW: cw - 8 });

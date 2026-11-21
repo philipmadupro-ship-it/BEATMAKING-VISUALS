@@ -53,8 +53,8 @@ export function createPlayer(L, { tag, V }) {
       icon(c, navIcon[i % navIcon.length], x + P + 14, cy, 22, act ? ink : dim);
       text(c, String(n).toUpperCase(), x + P + 36, cy, { size: 22, fam: UI, w: act ? 600 : 500, ls: 1.2, col: act ? ink : dim, maxW: w - P - 50 });
     });
-    yy += nav.length * rowH + 10; c.fillStyle = rgba(ink, 0.18); c.fillRect(x + P, yy, w - 2 * P, 1);
-    text(c, String(tag('player.vol')).toUpperCase(), x + P, yy + 34, { size: 22, fam: UI, w: 500, ls: 2, col: dim });
+    yy += nav.length * rowH + 10; if (String(tag('player.vol') || '') || tracks.length) { c.fillStyle = rgba(ink, 0.18); c.fillRect(x + P, yy, w - 2 * P, 1); }
+    if (String(tag('player.vol') || '')) text(c, String(tag('player.vol')).toUpperCase(), x + P, yy + 34, { size: 22, fam: UI, w: 500, ls: 2, col: dim });
     tracks.forEach((n, i) => {
       const cy = yy + 80 + i * 40, act = i === 0, r = act ? 4 + 2.4 * o.pulse : 3;
       c.beginPath(); c.arc(x + P + 6, cy, r, 0, TAU); c.fillStyle = act ? rgba(ink, 0.95) : rgba(ink, 0.35); c.fill();
@@ -80,7 +80,8 @@ export function createPlayer(L, { tag, V }) {
     c.strokeStyle = rgba(ink, 0.75); c.lineWidth = 1.4; c.stroke(rr(px, py, pw, ph, ph / 2)); c.fillStyle = rgba(ink, 0.05); c.fill(rr(px, py, pw, ph, ph / 2));
     text(c, pill, px + pw / 2, py + ph / 2 + 1, { size: 22, fam: DISPLAY, w: 800, col: ink, align: 'center', maxW: pw - 22 });
     text(c, String(info).toUpperCase(), px - 24, py + ph / 2 + 1, { size: 22, fam: UI, w: 500, ls: 1.4, col: dim, align: 'right', maxW: o.port ? 300 : 360 });
-    // tabs
+    // tabs (16:9: off by default, player.tabs169)
+    if (!o.tabs) return;
     const ty = o.port ? y + h - 20 : y + 29, gap = o.port ? 40 : 32, widths = tabs.map((s) => { c.font = `500 22px ${UI}`; c.letterSpacing = '1.2px'; const m = c.measureText(String(s).toUpperCase()).width; c.letterSpacing = '0px'; return m; });
     const totalW = widths.reduce((a, b) => a + b, 0) + gap * (tabs.length - 1) + 56;
     let tx = o.port ? x + (w - totalW) / 2 + 28 : x + 500;
@@ -152,23 +153,17 @@ export function createPlayer(L, { tag, V }) {
 
   // ---------------------------------------------------------------- metadata
   function meta(c, S, cr, t, o) {
-    const [x, y, w, h] = cr, ink = S.ink, dim = rgba(ink, 0.5), wide = w > 700, slim = wide && h < 260, fi = D.fileInfo || {}, sr = fi.sr || (D.wave3 && D.wave3.sr) || 48000;
-    const fmt = fi.bits ? `WAV ${fi.bits}-BIT · ${+(sr / 1000).toFixed(1)} kHz` : `WAV · ${+(sr / 1000).toFixed(1)} kHz`;
+    // v14.2: the five rows only. Keys in Synkopy (UI), values in Akira (DISPLAY); the rows spread over the card height.
+    const [x, y, w, h] = cr, ink = S.ink, dim = rgba(ink, 0.5), fi = D.fileInfo || {}, sr = fi.sr || (D.wave3 && D.wave3.sr) || 48000;
+    const fmt = fi.bits ? `WAV ${fi.bits}-BIT · ${+(sr / 1000).toFixed(1)} KHZ` : `WAV · ${+(sr / 1000).toFixed(1)} KHZ`;
     const size = fi.bytes ? `${(fi.bytes / 1048576).toFixed(1)} MB` : '—';
     const lab = tag('player.meta.labels') || ['FORMAT', 'DURATION', 'SIZE', 'DATE', 'TAGS'];
     const vals = [fmt, mmss(D.song.duration || D.duration), size, String(tag('date')).toUpperCase(), String(tag('player.meta.tags')).toUpperCase()];
-    const rowH = wide ? 31 : 36, rw = slim ? w * 0.46 : wide ? w * 0.52 : w;
-    lab.forEach((l, i) => { const yy = y + 14 + i * rowH; text(c, String(l).toUpperCase(), x, yy, { size: 22, fam: UI, w: 500, col: dim, ls: 1.2 }); text(c, vals[i], x + rw, yy, { size: 22, fam: UI, w: 500, col: ink, align: 'right', maxW: rw - 124 });
-      c.fillStyle = rgba(ink, 0.1); c.fillRect(x, yy + rowH / 2 - 1, rw, 1); });
-    // image tile: a crop of cover-0 + barcode + mark
-    const tile = slim ? h - 6 : wide ? Math.min(h - 8, w * 0.4) : 92, tx = wide ? x + w - tile : x, ty = wide ? y + 2 : y + 14 + 5 * rowH + 2;
-    c.save(); c.clip(rr(tx, ty, tile, tile, 10)); if (o.cover) { const sc = Math.max(tile, tile) / o.cover.width * 3.2; c.drawImage(o.cover, tx + tile / 2 - o.cover.width * sc * 0.62, ty + tile / 2 - o.cover.height * sc * 0.5, o.cover.width * sc, o.cover.height * sc); } else { c.fillStyle = S.card; c.fillRect(tx, ty, tile, tile); }
-    c.fillStyle = rgba(S.bg, 0.25); c.fillRect(tx, ty, tile, tile); c.restore(); c.strokeStyle = rgba(ink, 0.3); c.lineWidth = 1; c.stroke(rr(tx + 0.5, ty + 0.5, tile - 1, tile - 1, 10));
-    const bw = wide ? rw : w - tile - 150, bx = wide ? x : x + tile + 18, by = wide ? y + h - 52 : ty + 8;
-    if (slim) { const bx2 = x + rw + 36, bw2 = tx - 36 - bx2; barcode(c, S, bx2, y + 6, bw2, h - 64, tag('title'), rgba(ink, 0.8)); text(c, String(tag('player.mark')), bx2, y + h - 18, { size: 22, fam: DISPLAY, w: 800, col: ink }); text(c, String(tag('player.vol')).toUpperCase(), bx2 + bw2, y + h - 18, { size: 22, fam: UI, w: 500, col: dim, align: 'right' }); icon(c, 'target', tx + tile - 14, y + h - 18, 22, dim); return; }
-    if (wide) { barcode(c, S, x, y + h - 56, rw, 44, tag('title'), rgba(ink, 0.8)); text(c, `${String(tag('player.mark'))}`, x, y + h - 14, { size: 22, fam: DISPLAY, w: 800, col: ink }); text(c, String(tag('player.vol')).toUpperCase(), x + rw, y + h - 14, { size: 22, fam: UI, w: 500, col: dim, align: 'right' }); }
-    else { barcode(c, S, bx, ty + 4, bw, tile - 8, tag('title'), rgba(ink, 0.8)); text(c, String(tag('player.mark')), x + w, ty + tile / 2 - 12, { size: 22, fam: DISPLAY, w: 800, col: ink, align: 'right' }); text(c, String(tag('player.vol')).toUpperCase(), x + w, ty + tile / 2 + 18, { size: 22, fam: UI, w: 500, col: dim, align: 'right' }); icon(c, 'target', x + w - 8, ty + tile - 6, 22, dim); }
-    if (wide) icon(c, 'target', tx + tile - 12, y + h - 20, 22, dim);
+    const n = lab.length, rowH = Math.min(64, Math.max(30, h / n)), y0 = y + Math.max(0, (h - rowH * n) / 2) + rowH / 2, fs = rowH > 48 ? 22 : 20;
+    lab.forEach((l, i) => { const yy = y0 + i * rowH;
+      text(c, String(l).toUpperCase(), x, yy, { size: fs, fam: UI, w: 500, col: dim, ls: 1.2, maxW: w * 0.4 });
+      text(c, vals[i] == null ? '' : vals[i], x + w, yy, { size: fs, fam: DISPLAY, w: 800, col: ink, align: 'right', maxW: w * 0.6 });
+      if (i < n - 1) { c.fillStyle = rgba(ink, 0.1); c.fillRect(x, yy + rowH / 2, w, 1); } });
   }
 
   // ---------------------------------------------------------------- hero extras: caption block + registration crosses

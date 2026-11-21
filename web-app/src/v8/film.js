@@ -219,7 +219,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     }
   }
   function coverBody(cr, t, k, Sx) {
-    const r = L.winRect, [x, y, w, h] = r, rad = V('glass.radius', 22), I = glowAt(fidx(t)) * V('cover.pulse', 1), cv = INTRO.coverCanvas ? INTRO.coverCanvas(0, Sx) : null;
+    const r = L.winRect, [x, y, w, h] = r, rad = V('glass.radius', 22), I = glowAt(fidx(t)) * V('cover.pulse', 1), cv = INTRO.coverCanvas ? INTRO.coverCanvas(Math.round(V('player.cover', 0)), Sx) : null;
     L.coverRect = r; L.coverRadius = rad;
     c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip(); c.clip(L.rr(x, y, w, h, rad));
     if (cv) { const z = L.openFx ? 1 : 1 + 0.012 * I, sc = Math.max(w, h) / cv.width * z; c.drawImage(cv, x + w / 2 - cv.width * sc / 2, y + h / 2 - cv.height * sc / 2, cv.width * sc, cv.height * sc); }   // (the scale pulse waits for the dolly to land: the match cut is an exact crop)
@@ -237,12 +237,12 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // hero: the U2C chain logo centred in its cell (thread in/out + exponential kick glow unchanged), the elephant STATIC under the U (a logo mark, no swing),
   // the caption block bottom right, registration crosses. L.heroRect (set here) = the cell.
   function playerHero(cr, t, k, Sx) {
-    const [x, y, w, h] = L.winRect, cx = x + w / 2 + V('hero.x', 0), cy = y + h * 0.40 + V('hero.y', 0), bb = BR.logoBBox(), lw = Math.min(w * (port ? 0.52 : 0.43), h * 0.62 * bb.w / bb.h) * V('hero.scale', 1) * V('logo.scale', 1), lh = lw * bb.h / bb.w;
+    const [x, y, w, h] = L.winRect, cx = x + w / 2 + V('hero.x', 0), cy = y + h * (V('hero.elephant', false) ? 0.40 : 0.5) + V('hero.y', 0), bb = BR.logoBBox(), lw = Math.min(w * (port ? 0.52 : 0.43), h * 0.62 * bb.w / bb.h) * V('hero.scale', 1) * V('logo.scale', 1), lh = lw * bb.h / bb.w;
     if (V('hero.cover', true)) coverBody(cr, t, k, Sx);   // v14.1: the darkened cover-0 behind the logo = the intro's match-cut target
     c.save(); c.beginPath(); c.rect(x, y, w, h * k); c.clip();
     const hero = ev.clipsAt('logo.hero', b).some((q) => q.v !== false), C = Math.max(4, Math.round(V('logo.cycle', 2) * 4)), I = glowAt(fidx(t));
     BR.logo(c, Sx, [0, 0, 0, 0], t, { at: { cx, cy, w: lw }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero, glow: V('logo.glow', 1), kickI: I, pulse: I, bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
-    const d = lw * V('pendant.size', 1) * 0.5; BR.elephantMark(c, Sx, cx - lw * (port ? 0.2 : 0.16) + V('pendant.x', 0), cy + lh / 2 + d * 0.52 + V('pendant.y', 0), d, d);
+    const d = lw * V('pendant.size', 1) * 0.5; if (V('hero.elephant', false)) BR.elephantMark(c, Sx, cx - lw * (port ? 0.2 : 0.16) + V('pendant.x', 0), cy + lh / 2 + d * 0.52 + V('pendant.y', 0), d, d);
     const ink = Sx.ink; PL.crosses(c, Sx, [[x + 30, cy], [x + w - 30, cy]], 20);
     if (V('hero.caption', false)) PL.heroCaption(c, Sx, port ? x + w - 24 : x + w - 24, y + h - 22 - 25 * 3, 'right', 205);
     c.restore();
@@ -250,7 +250,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const nowCover = (r) => { const [x, y, w, h] = r, cp = w > 700 && h < 220; return cp ? [x + 20, y + 20, h - 40, h - 40] : [x + 20, y + 20, w - 40, Math.round((w - 40) * 0.5)]; };
   function playerNow(cr, t, k, Sx) {
     const r = L.winRect; c.save(); c.beginPath(); c.rect(r[0], r[1], r[2], r[3] * k); c.clip();
-    PL.now(c, Sx, r, t, { cover: INTRO.coverCanvas ? INTRO.coverCanvas(0, Sx) : null, dim: V('cover.dim', 1) });
+    PL.now(c, Sx, r, t, { cover: INTRO.coverCanvas ? INTRO.coverCanvas(Math.round(V('player.cover', 0)), Sx) : null, dim: V('cover.dim', 1) });
     c.restore();
   }
   function playerInserts(cr, t, k, Sx) {
@@ -258,7 +258,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (M.inserts) return M.inserts(c, Sx, cr, t, k);   // panels agent: 4 live tiles (spectrum, GR history, width/corr trace, rotating cube)
     const g = 12, tw = (w - 3 * g) / 4; for (let i = 0; i < 4; i++) L.panel(c, x + i * (tw + g), y, tw, h, Sx, { r: 10 });   // placeholder: empty glass tiles until the module exists
   }
-  const BODY = { hero: playerHero, now: playerNow, inserts: playerInserts, meta: (cr, t, k, Sx) => PL.meta(c, Sx, cr, t, { cover: INTRO.coverCanvas ? INTRO.coverCanvas(0, Sx) : null }),
+  const BODY = { hero: playerHero, now: playerNow, inserts: playerInserts, meta: (cr, t, k, Sx) => PL.meta(c, Sx, cr, t, { cover: INTRO.coverCanvas ? INTRO.coverCanvas(Math.round(V('player.cover', 0)), Sx) : null }),
     cover: coverBody, logo: chainsBody, pendant: elephantBody, waveform: (cr, t, k, Sx) => M.session(c, Sx, cr, t, k), clock: (cr, t, k, Sx) => M.clock(c, Sx, cr, t, k), bands: (cr, t, k, Sx) => M.bands(c, Sx, cr, t, k),
     eq: (cr, t, k, Sx) => M.eq(c, Sx, cr, t, k), spectrum: drawSpectrum, loudness: (cr, t, k, Sx) => (LOOK === 'player' ? M.levels(c, Sx, cr, t, k, { variant: 'player' }) : M.loud(c, Sx, cr, t, k)), stereo: (cr, t, k, Sx) => M.stereo(c, Sx, cr, t, k, LOOK === 'player' ? { variant: 'player' } : undefined),
     spectrogram: drawSpectrogram, surface: (cr, t, k, Sx) => M.surface(c, Sx, cr, t, k),
@@ -268,7 +268,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const sb = SIDEBAR[aspect], tb = TOPBAR[aspect], s = ev.shot(b), tab = s.to === 'wide' ? 0 : (TAB_OF[s.to] ?? 0), I = glowAt(fidx(t));
     if (sb) { L.glass(c, sb[0], sb[1], sb[2], sb[3], S, { r: V('glass.radius', 22), tint: 0.36 + 0.2, edge: 0.6, shadow: 0.75 });
       PL.sidebar(c, S, sb, t, { pulse: I, logo: ([lx, ly], lw) => { const bb = BR.logoBBox(); BR.logo(c, S, [0, 0, 0, 0], t, { at: { cx: lx, cy: ly, w: lw }, cycle: 8, hero: true, glow: 0, kickI: 0, pulse: 0, bloom: 0, runner: false }); } }); }
-    PL.topbar(c, S, tb, t, { port, tab });
+    PL.topbar(c, S, tb, t, { port, tab, tabs: port || V('player.tabs169', false) });
   }
   function card(id, t, active) {
     const r = LY[id], n = openStep(id, t); if (n <= 0) return;

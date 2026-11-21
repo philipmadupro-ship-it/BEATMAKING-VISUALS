@@ -44,6 +44,9 @@ async function boot() {
   await Promise.race([loadFonts(), new Promise((r) => setTimeout(r, 3000))]).catch(() => {});
   const clock = createClock(), motion = createMotion(libs.gsap), cues = createCueStore();
   const app = { store, clock, libs, assets, cues, motion, hook, actions: {} };
+  // v14.2: Upload cover = the beat's own cover (replaces cover 0 everywhere: intro carousel, hero, now playing). Session only, never uploaded.
+  document.getElementById('coverFile')?.addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; try { const im = new Image(); im.src = URL.createObjectURL(f); await im.decode();
+    const cv = assets.intro && assets.intro.covers; if (cv) { cv[0] = im; cv.v = (cv.v || 0) + 1; } document.getElementById('coverInfo').textContent = f.name; } catch { document.getElementById('coverInfo').textContent = 'could not read that image'; } });
   app.clip = createClipManager(app); app.renderFrame = createRenderer(app);
   const A = app.actions; window.u2c = app;
   // the property registry of the look at the playhead (cached per look / stage / aspect / bars / tags)

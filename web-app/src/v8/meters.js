@@ -225,7 +225,7 @@ export function createMeters(L) {
   { const IV = createImagerView(L, M8, { lbl, reveal, cr, hatch, tickF }); M8.imager = IV.imager; }
   M8.stereo = M8.imager;
   // v14 player: four live insert tiles (SPEC / GR / WIDTH / 3D cube)
-  M8.inserts = (ctx, S, r, t, k) => { reveal(ctx, r[0], r[1], r[2], r[3], k); drawInserts(ctx, r, t * L.FPS, { L, S }); ctx.restore(); };
+  M8.inserts = (ctx, S, r, t, k) => { reveal(ctx, r[0], r[1], r[2], r[3], k); drawInserts(ctx, r, t * L.FPS, { L, S, labels: L.tagGet ? L.tagGet('player.inserts') : null }); ctx.restore(); };
 
   // ---------------------------------------------------------------- SCOPE: L/R traces, sample-accurate (wave2), triggered on the beat
     const W2 = L.W2;

@@ -25,6 +25,7 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
   const S = stageOf(stage), sheet = emptySheet({ bars, look, aspect, preset, ...meta }), NB = bars, lab = (k) => labels[k] || 'groove';
   const ids = Object.keys(LAYOUT[look][aspect]), dropBars = []; for (let k = 0; k < NB; k++) if (lab(k) === 'drop' && (k === 0 || lab(k - 1) !== 'drop')) dropBars.push(k);
   sheet.base.look = look; sheet.base.stage = stage;
+  if (look === 'player') sheet.base['meter.session.span'] = 1;   // v14.2: the player waveform shows one bar = twice the detail
   // camera
   const cam = [];
   const push = (bar, id, hold, ease = 'easeInOut', dur = 1) => { cam.push(key(bar * 4, id, { transition: 'push', dur, ease })); cam.push(key((bar + hold) * 4, 'wide', { transition: 'push', dur, ease })); };

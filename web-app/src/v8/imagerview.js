@@ -9,6 +9,7 @@ import * as ML from './meterlib.js';
 import { hexRgb } from './core.js';
 
 const IMG = { NIGREDO: ['#8a8a8a', '#ffffff', '#c8c8c8', '#c8c8c8'], ALBEDO: ['#6e4433', '#1a1917', '#3a2a22', '#a8432e'], CITRINITAS: ['#6e4433', '#f0d79a', '#d79a35', '#e0475f'], RUBEDO: ['#5a1020', '#ff9be0', '#a35cf0', '#e0475f'] };
+import { glowAt } from './levelview.js';
 export const imgCols = (S) => { const p = IMG[S.name] || [S.sig1, S.ink, S.ink, S.hot]; return { lo: p[0], hi: p[1], mid: p[2], neg: S.grey ? '#c8c8c8' : S.hot === p[3] ? p[3] : S.hot }; };
 
 export function createImagerView(L, M8, H) {
@@ -103,6 +104,7 @@ export function createImagerView(L, M8, H) {
     // ---- grid: dB rings, angle spokes (M 0°, L / R ±45°, S ±90°), rim ticks
     ctx.lineWidth = 1; const arc = (rho) => { ctx.beginPath(); ctx.arc(cx, cy, R * rho, Math.PI, 2 * Math.PI); ctx.stroke(); };
     ctx.strokeStyle = ink(0.13); for (const dB of [-10, -20, -30]) arc(1 + dB / range);
+    { const gk = glowAt(D, t, FPS); if (gk > 0.02) { ctx.save(); ctx.shadowColor = rgba(S.hot, 1); ctx.shadowBlur = 6 + 18 * gk; ctx.strokeStyle = rgba(S.grey ? S.ink : S.hot, 0.25 + 0.6 * gk); ctx.lineWidth = 1 + 2.2 * gk; arc(1 + 0.025 * gk); ctx.restore(); } }   // v14.2: the rim kicks on the beat
     ctx.strokeStyle = ink(0.4); arc(1);
     const spoke = (deg, a) => { const th = deg * Math.PI / 180; ctx.strokeStyle = ink(a); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(th) * R, cy - Math.cos(th) * R); ctx.stroke(); };
     spoke(-67.5, 0.07); spoke(-22.5, 0.07); spoke(22.5, 0.07); spoke(67.5, 0.07); spoke(-45, 0.26); spoke(45, 0.26); spoke(0, 0.26);
