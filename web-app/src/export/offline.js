@@ -19,7 +19,7 @@ export async function canOffline(mb, W, H, mbps, fps = 30) {
 }
 const tick = () => new Promise(r => setTimeout(r, 0));
 /** render(t) must draw the frame for time t and return the canvas holding it (2D or WebGL with preserveDrawingBuffer). */
-export async function exportOffline({ mb, codecs, W, H, fps, mbps, inT, outT, audio, render, onProgress, isCancelled }) {
+export async function exportOffline({ mb, codecs, W, H, fps, mbps, inT, outT, audio, render, beforeFrame, onProgress, isCancelled }) {
   const output = new mb.Output({ format: codecs.container === 'mp4' ? new mb.Mp4OutputFormat({ fastStart: 'in-memory' }) : new mb.WebMOutputFormat(), target: new mb.BufferTarget() });
   const vsrc = new mb.EncodedVideoPacketSource(codecs.v); output.addVideoTrack(vsrc, { frameRate: fps });
   const asrc = new mb.AudioBufferSource({ codec: codecs.a, bitrate: codecs.a === 'aac' ? 256e3 : 192e3 }); output.addAudioTrack(asrc);
@@ -37,6 +37,7 @@ export async function exportOffline({ mb, codecs, W, H, fps, mbps, inT, outT, au
   for (let i = 0; i < frames; i++) {
     if (failure) throw failure;
     if (isCancelled()) { try { enc.close(); } catch (_) {} await output.cancel(); return null; }
+    if (beforeFrame) await beforeFrame(inT + i / fps);   // v19: e.g. seek the video layer to this frame and await `seeked`
     const r0 = performance.now(); const canvas = render(inT + i / fps); tRender += performance.now() - r0;
     const vf = new VideoFrame(canvas, { timestamp: i * dur, duration: dur, alpha: 'discard' });
     enc.encode(vf, { keyFrame: i % gop === 0 }); vf.close();
