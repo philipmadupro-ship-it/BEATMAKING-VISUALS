@@ -75,14 +75,18 @@ export function createWaveView(L, M, H) {
     for (const played of [false, true]) {
       ctx.save(); ctx.beginPath(); if (played) ctx.rect(x, g.top0, PXl - x, g.laneH); else ctx.rect(PXl, g.top0, x + g.w - PXl, g.laneH); ctx.clip();
       const k = played ? 0.82 + 0.18 * (1 - fl) : 0.5;
-      if (L.meter('session', 'style', 'smooth') === 'blocks') {   // v15 "cut box": columns grouped into boxes (~5 px, 1.5 px gaps), heights stepped to 1/14 of the half lane
-        const nb = Math.max(1, Math.round(5 / cwp)), bwp = nb * cwp, gp = Math.min(1.5, bwp * 0.3), hh = g.laneH / 2 - 2, stp = hh / 14, q = (v) => Math.max(stp, Math.ceil(v * sc / stp) * stp);
-        for (let i0 = 0; i0 < nc; i0 += nb) { let a = 0, bm = 0, r = 0, hi2 = 0, any = false;
-          for (let i = i0; i < Math.min(nc, i0 + nb); i++) { if (!has[i]) continue; any = true; a = Math.max(a, e2[i]); bm = Math.max(bm, -n2[i]); r = Math.max(r, rb[i]); hi2 = Math.max(hi2, hb[i]); }
-          if (!any) continue; const bx = x + i0 * cwp, w2 = bwp - gp, up = Math.min(hh, q(a)), dn = Math.min(hh, q(bm)), rr2 = Math.min(hh, q(r)), core = Math.min(rr2, q(r * clamp(0.06 + hi2 * 1.3, 0, 0.5)));
-          ctx.globalAlpha = 0.5 * k; ctx.fillStyle = bc[0]; ctx.fillRect(bx, cy - up, w2, up + dn);
-          ctx.globalAlpha = 0.95 * k; ctx.fillStyle = bc[1]; ctx.fillRect(bx, cy - rr2, w2, 2 * rr2);
-          ctx.globalAlpha = 0.95 * k; ctx.fillStyle = bc[2]; ctx.fillRect(bx, cy - core, w2, 2 * core); }
+      if (L.meter('session', 'style', 'smooth') === 'blocks') {   // v15.1 3-band boxes (Rekordbox "3Band" idea): LOW 20-150 Hz (kick, 808) at the back,
+        // MID 150 Hz-2 kHz (snare, vocals, body) over it, HIGH 2-20 kHz (hats, air) in front; each box height = that band's own level (D.be, 1 ms, real audio),
+        // stepped to 1/14 of the half lane, ~5 px boxes with crisp gaps. Colours: meter.session.low / mid / high (stage defaults; greys in Nigredo).
+        const nb = Math.max(1, Math.round(5 / cwp)), bwp = nb * cwp, gp = Math.min(1.5, bwp * 0.3), hh = g.laneH / 2 - 2, stp = hh / 14, q = (v) => Math.ceil(clamp(v) * hh / stp) * stp;
+        const BE = D.be, GR = [[0, 1], [2, 3], [4, 5]];
+        if (BE && !BE._gmx) { BE._gmx = GR.map(([a2, b2]) => { const v = []; for (let m = 0; m < BE.n; m += 7) { let e = 0; for (let jj = a2; jj <= b2; jj++) e += Math.pow(10, (BE.q[m * BE.nb + jj] / 2 - 120) / 10); v.push(e); } v.sort((p1, p2) => p1 - p2); return Math.sqrt(v[Math.floor(v.length * 0.995)] || 1e-9); }); }
+        const lvl = (ta, tb, gi) => { if (!BE) return 0; const [a2, b2] = GR[gi]; let mxv = 0; for (let m = Math.max(0, Math.floor(ta * 1000)); m <= Math.min(BE.n - 1, Math.ceil(tb * 1000)); m++) { let e = 0; for (let jj = a2; jj <= b2; jj++) e += Math.pow(10, (BE.q[m * BE.nb + jj] / 2 - 120) / 10); if (e > mxv) mxv = e; } return Math.pow(Math.sqrt(mxv) / BE._gmx[gi], 0.8); };
+        const C3 = [L.meter('session', 'low', bc[0]), L.meter('session', 'mid', bc[1]), L.meter('session', 'high', bc[2])], A3 = [0.9, 0.92, 1];
+        for (let i0 = 0; i0 < nc; i0 += nb) { let a = 0, any = false; for (let i = i0; i < Math.min(nc, i0 + nb); i++) { if (!has[i]) continue; any = true; a = Math.max(a, e2[i], -n2[i]); }
+          if (!any) continue; const bx = x + i0 * cwp, w2 = bwp - gp, ta = t0 + i0 * dt, tb = ta + nb * dt, env = Math.min(hh, Math.max(stp, Math.ceil(a * sc / stp) * stp));
+          for (let gi = 0; gi < 3; gi++) { const hgt = BE ? Math.min(env, Math.max(gi === 2 ? stp * 0.5 : stp, q(lvl(ta, tb, gi)) * (gi === 0 ? 1 : gi === 1 ? 0.8 : 0.62))) : env * [1, 0.6, 0.3][gi];
+            ctx.globalAlpha = A3[gi] * k; ctx.fillStyle = C3[gi]; ctx.fillRect(bx, cy - hgt, w2, 2 * hgt); } }
         ctx.restore(); continue;
       }
       ctx.fillStyle = bc[0]; ctx.globalAlpha = 0.62 * k; if (path((i) => cy - e2[i] * sc, (i) => cy - n2[i] * sc)) ctx.fill();

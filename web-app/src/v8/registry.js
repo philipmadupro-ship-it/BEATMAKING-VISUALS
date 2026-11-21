@@ -29,7 +29,7 @@ export const METER_PROPS = {
   ghost: [['history', 'History line length', 4, 1, 16, 0.5, 's']],
   stereo: [['mode', 'Vectorscope mode', 'sample', ['sample', 'level', 'lissajous']], ['range', 'Radius range (log)', 40, 12, 80, 1, 'dB'], ['persist', 'Persistence (sample / Lissajous)', 0.42, 0.03, 1.5, 0.01, 's'],
     ['smoothing', 'Polar level release', 12, 1, 60, 0.5, 'dB/s'], ['hold', 'Polar level outline hold', 0.5, 0, 4, 0.05, 's'], ['gain', 'Scope gain', 1, 0.25, 4, 0.05, '×']],
-  waveform: [['span', 'Detail window', 2, 1, 8, 1, 'bars'], ['style', 'Draw style (blocks = stepped boxes, player default)', 'smooth', ['smooth', 'blocks']], ['spikes', 'Bright transient columns (off: they flicker while scrolling)', false], ['kickflash', 'Played side flashes on each kick', false], ['look', 'Columns (envelope = 12 ms peak hold, exact = every column; the accuracy test renders exact)', 'envelope', ['envelope', 'exact']]],
+  waveform: [['span', 'Detail window', 2, 1, 8, 1, 'bars'], ['style', 'Draw style (blocks = 3-band boxes, player default)', 'smooth', ['smooth', 'blocks']], ['spikes', 'Bright transient columns (off: they flicker while scrolling)', false], ['kickflash', 'Played side flashes on each kick', false], ['look', 'Columns (envelope = 12 ms peak hold, exact = every column; the accuracy test renders exact)', 'envelope', ['envelope', 'exact']]],
   logo: [['span', 'Scope timebase (scope look)', 0.25, 0.0625, 2, 0.0625, 'beats'], ['amp', 'Scope trace gain', 0.2, 0.05, 0.6, 0.01, '']],
   surface: [['rows', 'History rows', 34, 8, 60, 1, '']],
 };
@@ -78,6 +78,8 @@ export function buildRegistry({ look = 'exe', aspect = '916', stage = 'nigredo',
       bool(`win.${id}.visible`, 'Visible (key = open / close)', true), num(`win.${id}.open`, 'Opens at', openBeat(look, aspect, id), -2, bars * 4, 0.125, 'beats'),
       en(`win.${id}.content`, 'Shows', c, CONTENT_KINDS), col(`win.${id}.accent`, 'Accent', S.hot)]); }
   const kinds = [...new Set(['eq', ...ids.flatMap((id) => (CONTENT[id] === 'bands' ? ['levels'] : CONTENT[id] === 'loudness' ? ['loudness', 'levels', 'ghost'] : [CONTENT[id]]))])];
+  { const g = S.grey, wc = g ? ['#7d7d7d', '#b9b9b9', '#ffffff'] : [S.sig1, S.sig2 === S.sig1 ? S.ink : S.sig2, S.waveHi === S.sig1 ? S.ink : S.waveHi];   // v15.1 waveform 3-band colours
+    el('wavecols', 'Waveform band colours (blocks style)', 'Meters', [col('meter.session.low', 'Low 20-150 Hz (kick, 808)', wc[0]), col('meter.session.mid', 'Mid 150 Hz-2 kHz (snare, vocals)', wc[1]), col('meter.session.high', 'High 2-20 kHz (hats, air)', wc[2])]); }
   for (const k of kinds) if (METER_PROPS[k]) el('meter.' + k, `Meter · ${k}`, 'Meters', METER_PROPS[k].map(([key, label, def, min, max, step, unit]) => (Array.isArray(min) ? en(meterPath(k, key), label, def, min) : typeof def === 'boolean' ? bool(meterPath(k, key), label, def) : num(meterPath(k, key), label, def, min, max, step, unit))));
   const eqEl = E.find((e) => e.id === 'meter.eq'); if (eqEl && !ids.some((id) => CONTENT[id] === 'eq')) eqEl.hidden = true;   // v12: no EQ window; keys stay registered for old sheets
   const flat = flattenTags(mergeDeep(DEFAULT_TAGS, tags)), groups = {};

@@ -226,3 +226,4 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - `fx.invert` (clip): the whole frame inverted while the clip runs (player: the first drop bar).
 - `fx.punch` (0..0.06, player default 0.014): camera zoom per kick.
 - `meter.session.style` (smooth|blocks, player default blocks): the cut-box waveform.
+- `meter.session.low|mid|high` (colours): the waveform's 3 band boxes (LOW 20-150 Hz kick/808, MID 150 Hz-2 kHz snare/vocals, HIGH 2-20 kHz hats). Defaults follow the stage (greys in Nigredo).
