@@ -334,7 +334,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     BR.logo(c, Sx, [0, 0, 0, 0], t, { at: { cx, cy, w: lw }, cycle: C, dwell: HOLD(C), off: HOLD_OFF, mode: V('logo.mode', 'cycle'), hero, glow: V('logo.glow', 1), kickI: I, pulse: I, bloom: V('logo.bloom', 1) * dropBloom(t), runner: V('logo.runner', true) });
     const d = lw * V('pendant.size', 1) * 0.5; if (V('hero.elephant', false)) BR.elephantMark(c, Sx, cx - lw * (port ? 0.2 : 0.16) + V('pendant.x', 0), cy + lh / 2 + d * 0.52 + V('pendant.y', 0), d, d);
     const ink = Sx.ink; PL.crosses(c, Sx, [[x + 30, cy], [x + w - 30, cy]], 20);
-    if (V('scan.on', true)) detect(x, y, w, h, t, Sx);
+    if (V('scan.on', true) && (V('scan.always', false) || ev.shot(b).to === 'stage' || ev.shot(b).from === 'stage')) detect(x, y, w, h, t, Sx);   // v19.1: boxes only when the camera is on the hero
     if (V('hero.caption', false)) PL.heroCaption(c, Sx, port ? x + w - 24 : x + w - 24, y + h - 22 - 25 * 3, 'right', 205);
     c.restore();
   }
@@ -450,7 +450,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c.fillStyle = rgba(S.ink, 0.08); c.fillRect(x + 1, y + 1, wD - 2, 40); c.fillStyle = rgba(S.ink, 0.18); c.fillRect(x, y + 41, wD, 1);
     lights(x + 26, y + 21, S, true);
     text(c, String(title).toUpperCase(), x + wD / 2, y + 21, { size: 18, fam: UI, w: 600, ls: 1.5, col: rgba(S.ink, 0.8), align: 'center', maxW: wD - 180 });
-    text(c, String(body).toUpperCase(), x + wD / 2, y + 82, { size: port ? 34 : 30, fam: DISPLAY, w: 800, col: S.ink, align: 'center', maxW: wD - 48 });
+    text(c, String(body).toUpperCase(), x + wD / 2, y + 82, { size: port ? 42 : 32, fam: DISPLAY, w: 800, col: S.ink, align: 'center', maxW: wD - 48 });
     if (sub) text(c, String(sub).toUpperCase(), x + wD / 2, y + 126, { size: 20, fam: UI, w: 500, ls: 1.2, col: rgba(S.ink, 0.65), align: 'center', maxW: wD - 48 });
     if (prog != null) { const bx = x + 24, by = y + h - 18, bw = wD - 48; c.fillStyle = rgba(S.ink, 0.12); c.fillRect(bx, by, bw, 6); const n = Math.floor(clamp(prog) * 24);
       c.fillStyle = S.grey ? S.ink : col; for (let i = 0; i < n; i++) c.fillRect(bx + i * bw / 24 + 1, by, bw / 24 - 2, 6); }
@@ -565,6 +565,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function render(ctx, t, opts = {}) {
     c = ctx; ev = opts.ev || ev; tagDoc = opts.tags || DEFAULT_TAGS; IB = INTRO.beats(ev);
     const fps = opts.fps || FPS, scale = ctx.canvas.width / W;
+    L.view.minPx = LOOK === 'player' && port ? 25 : 0;   // v19.1: phone legibility floor (player 9:16)
     PRE = Math.max(0, opts.preroll || 0); const filmT = t - PRE; let paused = filmT < 0; t = Math.max(0, filmT);   // v19: click-to-play pre-roll (native passes opts.preroll); filmT < 0 = paused
     t = clamp(t, 0, D.duration - 1 / fps) + 0.5 / fps; b = t / BEAT;
     setState(V('look', opts.look || 'exe'), V('stage', opts.stage || 'nigredo')); pendulum();

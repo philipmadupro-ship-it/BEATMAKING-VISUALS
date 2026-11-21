@@ -102,7 +102,7 @@ export function createCore(D) {
   const font = (ctx, px, fam = MONO, w = 400, style = '') => { ctx.font = `${style} ${w} ${px}px ${fam}`; };
   // legibility floor: no type smaller than MIN_PX on screen at the overview (camera zoom 1) on a 1080-wide frame
   const view = { camZ: 1, base: 1 };
-  const floorSize = (ctx, size) => { const m = ctx.getTransform(), sc = Math.hypot(m.a, m.b) / (view.camZ * view.base) || 1; return Math.max(size, MIN_PX / sc); };
+  const floorSize = (ctx, size) => { const m = ctx.getTransform(), sc = Math.hypot(m.a, m.b) / (view.camZ * view.base) || 1; return Math.max(size, (view.minPx || MIN_PX) / sc); };
   // v11.1 one text helper for the whole film. Default ("mix"): numbers (6, -18.4, 128, 09.1.1, 1.2k) in Akira Expanded sized NUM_SCALE x down, words and units in
   // Synkopy, "@" in the fallback face (Synkopy draws it as "e"). An explicit o.fam draws one face (title, labels), still routing "@" to the fallback.
   const UNIT = '(?:\\s?(?:kHz|Hz|dBTP|dBFS|dB|LUFS|LU|ms|BPM|%|k|Q|s)(?![A-Za-z]))?';   // short units ride with the number in Akira (Synkopy breaks them at small sizes)

@@ -23,6 +23,9 @@ export const DEFAULT_TAGS = {
   "meta": "metadata"
  },
  "social": {
+  "caption": "{title} \u00b7 {bpm} BPM \u00b7 {key}. this beat failed the lab test. comment LAB for the file \ud83e\uddea",
+  "hashtags": "#typebeat #producer #beatmaker #flstudio #y2k #prod{producer}",
+  "hooks": ["THIS BEAT FAILED THE LAB TEST", "DO NOT PRESS PLAY", "EXPERIMENT #003: THE DROP"],
   "title": "EXPERIMENT_{titleWord}.EXE",
   "hook": "THIS BEAT FAILED THE LAB TEST",
   "cta1": { "title": "U2C ALERT", "body": "COMMENT \"LAB\"", "sub": "FOR THE FREE DOWNLOAD" },

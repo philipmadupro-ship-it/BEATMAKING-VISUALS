@@ -36,8 +36,11 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     // v17 never-cut (v17 prompt): the camera TRAVELS panel to panel (no return to wide between them), one move every 2 bars, MD3 Emphasized,
     // 1 beat long, landing ON the bar; one wide breath per cycle; the last 2 bars push into the hero and the final bar zooms into its cover
     // (camera.zoom) so the video ends on the cover and loops into the cover-flow intro, which opens on the same cover
-    const seq = [...rot, 'wide']; let bar = 3;
-    for (; bar < NB - 4; bar += 2) cam.push(key(bar * 4, seq[i++ % seq.length], { transition: 'push', dur: 2, ease: 'spring' }));   // v17.2: 2-beat travels (smoother)
+    // v19.1: wide breaths in the cycle; the two CTA alerts land on the first two wide breaths (over the whole desktop, never over a zoomed panel)
+    const seq = ['spectrum', 'session', 'wide', 'stereo', 'wide', 'loud', 'stage', 'wide'].filter((id) => id === 'wide' || ids.includes(id)), wides = []; let bar = 3;
+    for (; bar < NB - 4; bar += 2) { const id = seq[i++ % seq.length]; if (id === 'wide') wides.push(bar); cam.push(key(bar * 4, id, { transition: 'push', dur: 2, ease: 'spring' })); }
+    if (wides[0] != null) { sheet.base['social.cta1.at'] = wides[0] * 4 + 1; sheet.base['social.cta1.len'] = 4; }
+    if (wides[1] != null) { sheet.base['social.cta2.at'] = wides[1] * 4 + 1; sheet.base['social.cta2.len'] = 4; }
     if (ids.includes('stage') && NB >= 8) { cam.push(key((NB - 3) * 4, 'stage', { transition: 'push', dur: 2, ease: 'spring' })); sheet.tracks.push(track('intro.open', 'number', 'stage', [key(0, 3, { ease: 'step' })]));
       }   // v17.1: the final bar is the rewind (film.js): dolly into the hero cover, cut onto the intro's pushed-in card, play the intro backwards to frame 0
   } else if (preset === 'default') {
@@ -97,7 +100,7 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     const IL = 2, land = IL * 4 - 2, SEQ = [0, 1, 2, 1, 0], idx = [key(0, SEQ[0], { ease: 'step' })];
     for (let k = 1; k <= 4; k++) { idx.push(key(land - 4 + k - 0.5, SEQ[k - 1], { ease: 'easeInOut' })); idx.push(key(land - 4 + k, SEQ[k], { ease: 'step' })); }
     sheet.tracks.push(track('intro.index', 'number', 'stage', idx));
-    sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(0, 0, { ease: 'linear' }), key(2, 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(0, look === 'player' ? 0.4 : 0, { ease: 'linear' }), key(2, 1, { ease: 'step' })]));   // v19.1 player: frame 0 (the thumbnail) already 40 % fanned
     sheet.tracks.push(track('intro.push', 'number', 'stage', [key(land, 0, { ty: 'bezier', ob: [look === 'player' ? 0.42 : 0.7, 0], ease: 'easeInOut' }), key(IL * 4, 1, { ib: [0, 0], ease: 'step' })]));
   }
   return sheet;

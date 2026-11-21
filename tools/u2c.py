@@ -94,6 +94,27 @@ def test(_=None):
         for ln in (r.stdout + r.stderr).splitlines():
             if ln.startswith('FAIL') or 'passed' in ln: print(t, ln)
 
+def review(a):
+    # v19: one strip of the key moments (frame 0, the play click, push, cut, first move, negative, CTAs, rewind, last frame) + the loop seam check
+    import numpy as np
+    from PIL import Image
+    pre, spb = a.pre, 60.0 / a.bpm; dur = float(sh(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', a.video]).stdout or 0)
+    marks = [('frame 0', 0.0), ('click play', pre + 0.02), ('card click', pre + 6 * spb - 0.1), ('push', pre + 7.5 * spb), ('cut', pre + 8 * spb + 0.05), ('build', pre + 9 * spb),
+             ('first move', pre + 12 * spb - 0.5), ('negative', pre + 24.5 * spb), ('CTA 1', pre + 33 * spb), ('CTA 2', pre + 45 * spb), ('rewind', dur - 3.6), ('last', dur - 1 / 30)]
+    ims = []
+    for name, t in marks:
+        if os.path.exists('/tmp/u2c_r.png'): os.remove('/tmp/u2c_r.png')
+        sh(['ffmpeg', '-v', 'error', '-y'] + (['-sseof', '-0.04'] if name == 'last' else ['-ss', f'{max(0, t):.3f}']) + ['-i', a.video, '-frames:v', '1', '/tmp/u2c_r.png'])
+        im = Image.open('/tmp/u2c_r.png').convert('RGB'); k = 240 / max(im.size); ims.append(im.resize((int(im.width * k), int(im.height * k))))
+    sheet = Image.new('RGB', (sum(i.width for i in ims), max(i.height for i in ims))); x = 0
+    for i in ims: sheet.paste(i, (x, 0)); x += i.width
+    os.makedirs(OUT, exist_ok=True); p = os.path.join(OUT, 'review-' + os.path.basename(a.video).replace('.mp4', '.jpg')); sheet.save(p, quality=80)
+    raw = sh(['ffmpeg', '-v', 'error', '-i', a.video, '-vf', 'scale=108:192,format=gray', '-f', 'rawvideo', '-']).stdout
+    v = np.frombuffer(raw, np.uint8).reshape(-1, 192, 108).astype(np.float32)
+    seam = float(np.abs(v[-1] - v[0]).mean()); step = float(np.median(np.abs(np.diff(v, axis=0)).mean(axis=(1, 2))))
+    print(p); print(f'loop seam |last - first| = {seam:.2f}  (median frame-to-frame change {step:.2f}) -> {"SEAMLESS" if seam <= max(1.5, 2 * step) else "VISIBLE JUMP"}')
+    print('moments: ' + ', '.join(f'{n} {t:.2f}s' for n, t in marks))
+
 def bright(a):
     import numpy as np
     raw = sh(['ffmpeg', '-v', 'error', '-i', a.video, '-vf', 'scale=36:64,format=gray', '-f', 'rawvideo', '-']).stdout
@@ -115,6 +136,7 @@ q = sp.add_parser('beats'); q.set_defaults(fn=beats); q.add_argument('-l', defau
 q.add_argument('--bars', default='0:4'); q.add_argument('--bpm', type=float, default=128); q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3'); q.add_argument('--safe', type=int, default=0)
 q = sp.add_parser('strip'); q.set_defaults(fn=strip); q.add_argument('video'); q.add_argument('-t', default='3.3:4.3:0.15')
 q = sp.add_parser('crop'); q.set_defaults(fn=crop); q.add_argument('png'); q.add_argument('box')
+q = sp.add_parser('review'); q.set_defaults(fn=review); q.add_argument('video'); q.add_argument('--pre', type=float, default=0.7); q.add_argument('--bpm', type=float, default=128)
 q = sp.add_parser('bright'); q.set_defaults(fn=bright); q.add_argument('video')
 q = sp.add_parser('stage'); q.set_defaults(fn=stage); q.add_argument('files', nargs='+')
 a = p.parse_args(); a.fn(a)
