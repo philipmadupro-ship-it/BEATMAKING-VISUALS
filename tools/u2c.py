@@ -80,7 +80,7 @@ def render(a):
     for st in a.s.split(','):
         jobs = []
         for asp in a.a.split(','):
-            f = os.path.join(od, f'{a.l}-{st}-{tag(asp)}.mp4')
+            f = os.path.join(od, f'{a.l}-{st}-{tag(asp)}' + ('' if a.len == 30 else f'-{a.len}s') + '.mp4')  # short cuts never overwrite the full render
             jobs.append((f, subprocess.Popen(['node', 'render.mjs', '--look', a.l, '--stage', st, '--aspect', asp, '--len', str(a.len), '--title', a.title, '--intro', 'on', '--mblur', str(a.mblur)] + (['--hook', str(a.hook)] if a.hook is not None else []) + ['--out', f], cwd=NAT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)))
         for f, p in jobs:
             p.wait(); ok = p.returncode == 0 and os.path.exists(f)
