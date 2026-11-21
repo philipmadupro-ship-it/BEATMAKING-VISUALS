@@ -17,6 +17,8 @@ function bez(x1, y1, x2, y2) { const B = (t, a, b2) => 3 * a * t * (1 - t) * (1 
   return (x) => { if (x <= 0) return 0; if (x >= 1) return 1; let lo = 0, hi = 1, t = x; for (let i = 0; i < 28; i++) { t = (lo + hi) / 2; if (B(t, x1, x2) < x) lo = t; else hi = t; } return B(t, y1, y2); }; }
 export const EASES = {
   emphasized: bez(0.05, 0.7, 0.1, 1), standard: bez(0.2, 0, 0, 1),
+  // v17 closed-form critically damped spring step response, x = 1 - (1 + w u) e^(-w u), normalised to land exactly at u = 1 (no overshoot: glass)
+  spring: (x) => { if (x <= 0) return 0; if (x >= 1) return 1; const w = 9, f = (u) => 1 - (1 + w * u) * Math.exp(-w * u); return f(x) / f(1); },
   step: () => 0,
   linear: (x) => x,
   easeInOut: (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2),         // power2.inOut

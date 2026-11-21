@@ -164,7 +164,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
       c.strokeStyle = g; c.beginPath(); c.moveTo(x + q + rad, y + q + 1.5); c.lineTo(x + w - q - rad, y + q + 1.5); c.stroke(); c.restore(); }
     if (LOOK === 'lab') { c.save(); c.clip(L.rr(x, y, w, h, rad)); lab.graphPaper(c, x, y, w, h, Sx, 10, 50, 0.45); c.restore(); }
     if (LOOK === 'scope') { const sr = screenRect(id, r); c.fillStyle = rgba(Sx.bg, 0.62); c.fill(L.rr(sr[0], sr[1], sr[2], sr[3], 12)); c.strokeStyle = rgba(Sx.ink, 0.12); c.stroke(L.rr(sr[0] + 0.5, sr[1] + 0.5, sr[2] - 1, sr[3] - 1, 12)); }
-    label(id, x, y, w, Sx, active);
+    if (n >= 5 || LOOK !== 'player') label(id, x, y, w, Sx, active);   // v17 (tip C): the label + buttons wait until the glass is mostly open
     return contentRect(id, r);
   }
 
@@ -314,6 +314,22 @@ export function createFilm({ D, assets, aspect = '916' }) {
       PL.sidebar(c, S, sb, t, { pulse: I, logo: ([lx, ly], lw) => { const bb = BR.logoBBox(); BR.logo(c, S, [0, 0, 0, 0], t, { at: { cx: lx, cy: ly, w: lw }, cycle: 8, hero: true, glow: 0, kickI: 0, pulse: 0, bloom: 0, runner: false }); } }); }
     PL.topbar(c, S, tb, t, { port, tab, tabs: port || V('player.tabs169', false) });
   }
+  // v17 (tip B) focus bracket: a stage-colour frame that travels between panels with the camera. Each edge rides its own closed-form spring:
+  // the edges on the side of travel (leading) are faster (w 13) than the trailing ones (w 7), so the frame stretches ahead and settles
+  const spr = (p, w) => (p <= 0 ? 0 : p >= 1.6 ? 1 : 1 - (1 + w * p) * Math.exp(-w * p));
+  function focusBracket(t) {
+    const s = ev.shot(b); if (!s.key || (s.from === 'wide' && s.to === 'wide')) return;
+    const RA = s.from === 'wide' ? null : LY[s.from], RB = s.to === 'wide' ? null : LY[s.to]; if (!RA && !RB) return;
+    const d = Math.max(1e-6, s.key.dur ?? 1), p = s.key.transition === 'cut' ? 1 : (b - (s.key.b - d)) / d, A = RA || RB, Bq = RB || RA;
+    const a0 = [A[0], A[1], A[0] + A[2], A[1] + A[3]], b0 = [Bq[0], Bq[1], Bq[0] + Bq[2], Bq[1] + Bq[3]];
+    const right = b0[0] + b0[2] > a0[0] + a0[2], down = b0[1] + b0[3] > a0[1] + a0[3], lead = [!right, !down, right, down];
+    const e = a0.map((v, i) => v + (b0[i] - v) * spr(p, lead[i] ? 13 : 7)), al = RB ? 1 : 1 - Math.min(1, p * 1.5);
+    if (al <= 0.01) return; const pad = 6, col = S.grey ? S.ink : S.hot;
+    c.save(); c.globalAlpha = 0.85 * al; c.strokeStyle = col; c.lineWidth = 2; const k = 26;
+    const [x0, y0, x1, y1] = [e[0] - pad, e[1] - pad, e[2] + pad, e[3] + pad]; c.beginPath();
+    for (const [cx2, cy2, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) { c.moveTo(cx2, cy2 + sy * k); c.lineTo(cx2, cy2); c.lineTo(cx2 + sx * k, cy2); }
+    c.stroke(); c.restore();
+  }
   function card(id, t, active) {
     const r = LY[id], n = openStep(id, t); if (n <= 0) return;
     const acc = V(`win.${id}.accent`, null), Sx = acc && acc !== S.hot ? Object.assign({}, S, { hot: acc }) : S;
@@ -448,6 +464,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const att = attention(t);
     if (LOOK === 'player') playerShell(t);
     for (const id of IDS) card(id, t, att === id);
+    if (LOOK === 'player' && V('focus.bracket', true)) focusBracket(t);
     hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
     if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16));

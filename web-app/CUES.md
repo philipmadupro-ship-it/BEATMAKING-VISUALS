@@ -238,3 +238,6 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - v17 player camera: never-cut travel panel to panel every 2 bars (MD3 emphasized, 1 beat, lands on the bar), one wide breath per cycle; last 2 bars push into the hero and `camera.zoom` dives into it on the final bar (loop into the intro).
 - v17 `fx.punch` uses a closed-form critically damped spring per on-grid kick (peak at 40 ms, no overshoot).
 - Player: `result.on` off (no end card).
+- v17 `spring` ease (closed-form critically damped step response, lands at u = 1) for the player camera travel.
+- `focus.bracket` (player): a stage-colour bracket travels between panels with the camera; leading edges on a faster spring (w 13) than trailing (w 7).
+- Player window labels/buttons appear only once the glass is mostly open (container before text).

@@ -37,8 +37,8 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     // 1 beat long, landing ON the bar; one wide breath per cycle; the last 2 bars push into the hero and the final bar zooms into its cover
     // (camera.zoom) so the video ends on the cover and loops into the cover-flow intro, which opens on the same cover
     const seq = [...rot, 'wide']; let bar = 3;
-    for (; bar < NB - 3; bar += 2) cam.push(key(bar * 4, seq[i++ % seq.length], { transition: 'push', dur: 1, ease: i % seq.length === 0 ? 'standard' : 'emphasized' }));
-    if (ids.includes('stage') && NB >= 8) { cam.push(key((NB - 2) * 4, 'stage', { transition: 'push', dur: 1, ease: 'emphasized' }));
+    for (; bar < NB - 3; bar += 2) cam.push(key(bar * 4, seq[i++ % seq.length], { transition: 'push', dur: 1, ease: 'spring' }));
+    if (ids.includes('stage') && NB >= 8) { cam.push(key((NB - 2) * 4, 'stage', { transition: 'push', dur: 1, ease: 'spring' }));
       sheet.tracks.push(track('camera.zoom', 'number', 'camera', [key((NB - 1) * 4, 1, { ease: 'emphasized' }), key(NB * 4 - 0.5, aspect === '916' ? 3.2 : 2.2, { ease: 'step' })])); }
   } else if (preset === 'default') {
     const rot = FOCUS_PLAN[look].map(([, id, n]) => [id, n]), used = [];
