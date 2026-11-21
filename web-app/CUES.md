@@ -223,3 +223,6 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - `player.tabs169` (player, bool, default false): the top tabs on 16:9. 9:16 shows the tabs from tag `player.tabs` (default: PLAYER only).
 - Tags `player.inserts` (slot names), `player.meta.labels`, `player.meta.tags`, `player.nav`, `player.sub`, `player.now.*`: every player text is editable in Tags.
 - Player waveform default `meter.session.span` = 1 bar (more detail).
+- `fx.invert` (clip): the whole frame inverted while the clip runs (player: the first drop bar).
+- `fx.punch` (0..0.06, player default 0.014): camera zoom per kick.
+- `meter.session.style` (smooth|blocks, player default blocks): the cut-box waveform.

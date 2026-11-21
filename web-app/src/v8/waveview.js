@@ -75,6 +75,16 @@ export function createWaveView(L, M, H) {
     for (const played of [false, true]) {
       ctx.save(); ctx.beginPath(); if (played) ctx.rect(x, g.top0, PXl - x, g.laneH); else ctx.rect(PXl, g.top0, x + g.w - PXl, g.laneH); ctx.clip();
       const k = played ? 0.82 + 0.18 * (1 - fl) : 0.5;
+      if (L.meter('session', 'style', 'smooth') === 'blocks') {   // v15 "cut box": columns grouped into boxes (~5 px, 1.5 px gaps), heights stepped to 1/14 of the half lane
+        const nb = Math.max(1, Math.round(5 / cwp)), bwp = nb * cwp, gp = Math.min(1.5, bwp * 0.3), hh = g.laneH / 2 - 2, stp = hh / 14, q = (v) => Math.max(stp, Math.ceil(v * sc / stp) * stp);
+        for (let i0 = 0; i0 < nc; i0 += nb) { let a = 0, bm = 0, r = 0, hi2 = 0, any = false;
+          for (let i = i0; i < Math.min(nc, i0 + nb); i++) { if (!has[i]) continue; any = true; a = Math.max(a, e2[i]); bm = Math.max(bm, -n2[i]); r = Math.max(r, rb[i]); hi2 = Math.max(hi2, hb[i]); }
+          if (!any) continue; const bx = x + i0 * cwp, w2 = bwp - gp, up = Math.min(hh, q(a)), dn = Math.min(hh, q(bm)), rr2 = Math.min(hh, q(r)), core = Math.min(rr2, q(r * clamp(0.06 + hi2 * 1.3, 0, 0.5)));
+          ctx.globalAlpha = 0.5 * k; ctx.fillStyle = bc[0]; ctx.fillRect(bx, cy - up, w2, up + dn);
+          ctx.globalAlpha = 0.95 * k; ctx.fillStyle = bc[1]; ctx.fillRect(bx, cy - rr2, w2, 2 * rr2);
+          ctx.globalAlpha = 0.95 * k; ctx.fillStyle = bc[2]; ctx.fillRect(bx, cy - core, w2, 2 * core); }
+        ctx.restore(); continue;
+      }
       ctx.fillStyle = bc[0]; ctx.globalAlpha = 0.62 * k; if (path((i) => cy - e2[i] * sc, (i) => cy - n2[i] * sc)) ctx.fill();
       ctx.strokeStyle = bc[1]; ctx.globalAlpha = 0.9 * k; ctx.lineWidth = 1 / dpx; ctx.beginPath(); let f = true; for (let i = 0; i < nc; i++) { if (!has[i]) continue; const yy = cy - e2[i] * sc; if (f) { ctx.moveTo(Xc(i), yy); f = false; } else ctx.lineTo(Xc(i), yy); } ctx.stroke();
       ctx.beginPath(); f = true; for (let i = 0; i < nc; i++) { if (!has[i]) continue; const yy = cy - n2[i] * sc; if (f) { ctx.moveTo(Xc(i), yy); f = false; } else ctx.lineTo(Xc(i), yy); } ctx.stroke();

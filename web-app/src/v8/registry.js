@@ -29,7 +29,7 @@ export const METER_PROPS = {
   ghost: [['history', 'History line length', 4, 1, 16, 0.5, 's']],
   stereo: [['mode', 'Vectorscope mode', 'sample', ['sample', 'level', 'lissajous']], ['range', 'Radius range (log)', 40, 12, 80, 1, 'dB'], ['persist', 'Persistence (sample / Lissajous)', 0.42, 0.03, 1.5, 0.01, 's'],
     ['smoothing', 'Polar level release', 12, 1, 60, 0.5, 'dB/s'], ['hold', 'Polar level outline hold', 0.5, 0, 4, 0.05, 's'], ['gain', 'Scope gain', 1, 0.25, 4, 0.05, '×']],
-  waveform: [['span', 'Detail window', 2, 1, 8, 1, 'bars'], ['spikes', 'Bright transient columns (off: they flicker while scrolling)', false], ['kickflash', 'Played side flashes on each kick', false], ['look', 'Columns (envelope = 12 ms peak hold, exact = every column; the accuracy test renders exact)', 'envelope', ['envelope', 'exact']]],
+  waveform: [['span', 'Detail window', 2, 1, 8, 1, 'bars'], ['style', 'Draw style (blocks = stepped boxes, player default)', 'smooth', ['smooth', 'blocks']], ['spikes', 'Bright transient columns (off: they flicker while scrolling)', false], ['kickflash', 'Played side flashes on each kick', false], ['look', 'Columns (envelope = 12 ms peak hold, exact = every column; the accuracy test renders exact)', 'envelope', ['envelope', 'exact']]],
   logo: [['span', 'Scope timebase (scope look)', 0.25, 0.0625, 2, 0.0625, 'beats'], ['amp', 'Scope trace gain', 0.2, 0.05, 0.6, 0.01, '']],
   surface: [['rows', 'History rows', 34, 8, 60, 1, '']],
 };
@@ -66,7 +66,7 @@ export function buildRegistry({ look = 'exe', aspect = '916', stage = 'nigredo',
     num('cover.pulse', 'Cover kick pulse (scale + brightness)', 1, 0, 3, 0.05, '×'), num('cover.dim', 'Cover darkening (card scrim)', 1, 0, 2, 0.05, '×'), bool('stepgrid.on', '16-step beat grid (off by default)', false), num('stepgrid.glow', 'Step grid brightness', 1, 0, 2, 0.05, '×'),
     num('logo.decay', 'Logo glow kick decay (time constant)', 0.17, 0.05, 0.6, 0.01, 's'), num('glass.back', 'Meter windows pushed back (dim + blur)', 1, 0, 1.5, 0.05, '')]);
   el('text', 'Text cues', 'Text', [{ path: 'text.cue', label: 'Text cue', kind: 'clip', default: '' }]);
-  el('fx', 'FX', 'Finish', [{ path: 'fx.glitch', label: 'Glitch (opt-in)', kind: 'clip', default: 0, min: 0, max: 1, step: 0.01 }, { path: 'fx.flash', label: '1-frame invert', kind: 'event', default: false },
+  el('fx', 'FX', 'Finish', [{ path: 'fx.glitch', label: 'Glitch (opt-in)', kind: 'clip', default: 0, min: 0, max: 1, step: 0.01 }, { path: 'fx.invert', label: 'Negative (whole frame inverted while the clip runs)', kind: 'clip', default: false }, { path: 'fx.punch', label: 'Kick punch-in (camera zoom per kick)', kind: 'number', default: 0.014, min: 0, max: 0.06, step: 0.001 }, { path: 'fx.flash', label: '1-frame invert', kind: 'event', default: false },
     num('fx.grain', 'Grain', S.grain, 0, 0.5, 0.01), num('fx.vignette', 'Vignette', S.vignette, 0, 1, 0.01), num('fx.scan', 'Scanlines', 0, 0, 1, 0.01), num('fx.halation', 'Halation (dark stages)', 0.16, 0, 0.6, 0.01)]);
   el('ground', 'Grid / background', 'Finish', [en('ground.pattern', 'Pattern', 'auto', ['auto', 'graph', 'dots', 'scan', 'none']), num('ground.gridA', 'Grid strength', S.gridA, 0, 0.4, 0.005), num('ground.pool', 'Light pools', 1, 0, 2, 0.05)]);
   el('stagecol', 'Stage colours', 'Finish', STAGE_COLOR_KEYS.map((k) => col('stage.' + k, k, S[k])));

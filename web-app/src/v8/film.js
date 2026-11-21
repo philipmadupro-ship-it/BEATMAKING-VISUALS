@@ -67,7 +67,9 @@ export function createFilm({ D, assets, aspect = '916' }) {
     L.shotTo = s.to;   // meters can switch to their focus-shot version when the camera is on their window
     const cam = { x: lerp(A.x, Bf.x, u) + V('camera.x', 0), y: lerp(A.y, Bf.y, u) + V('camera.y', 0), z: lerp(A.z, Bf.z, u) * zm };
     // v13 (intro agent): the lab opens ON the cover (match cut from the intro push) and dollies out; L.openFx drives the streak copies + hides the HUD
-    const op = IB ? INTRO.openCam(b, ev, IB, cam, { W, H, look: LOOK, aspect }) : null; L.openFx = op; return op ? { x: op.x, y: op.y, z: op.z } : cam;
+    const op = IB ? INTRO.openCam(b, ev, IB, cam, { W, H, look: LOOK, aspect }) : null; L.openFx = op; if (op) return { x: op.x, y: op.y, z: op.z };
+    if (b >= IB) { const p = V('fx.punch', LOOK === 'player' ? 0.014 : 0); if (p > 0) cam.z *= 1 + p * glowAt(fidx(T(b))); }   // v15: the frame punches in on every kick (exponential, frame-exact)
+    return cam;
   }
   // ---------------------------------------------------------------- attention: the window this beat is about
   const kickAt = new Set(D.onsets.kick.map((o) => Math.round(o[2] / BEAT * 4))), snrAt = new Set(D.onsets.snare.map((o) => Math.round(o[2] / BEAT * 4)));
@@ -382,7 +384,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const bb = Math.floor(t / BEAT + 1e-6); text(c, `PENDANT · CHAIN WAVE · beat ${bb + 1} · ${bbt(t)}`, 40, port ? 120 : 50, { size: 28, w: 700, col: S.ink });
   }
   // v14 stage `white` (NIGREDO INVERSE): the finished frame inverted, the same op as the flash (grey in = grey out, so R=G=B holds)
-  function invertAll() { if (!S.inverse) return; c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'difference'; c.fillStyle = '#ffffff'; c.fillRect(0, 0, c.canvas.width, c.canvas.height); c.restore(); }
+  function invertAll() { const neg = ev.clipsAt('fx.invert', b).some((q) => q.v !== false && q.v !== 0); if (!S.inverse === !neg) return;   // v15: stage inverse XOR the fx.invert clip
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'difference'; c.fillStyle = '#ffffff'; c.fillRect(0, 0, c.canvas.width, c.canvas.height); c.restore(); }
   function flash(t) { const f = fidx(t); if (ev.keysIn('fx.flash', 0, NB * 4 + 1).some((k) => fidx(T(k.b) + 0.5 / FPS) === f)) { c.globalCompositeOperation = 'difference'; c.fillStyle = S.grey ? '#ffffff' : S.ink; c.fillRect(0, 0, W, H); c.globalCompositeOperation = 'source-over'; } }
   /** Draw clip time t into ctx (a canvas of width W*scale). opts: {ev, fps (sample at the frame centre), look, stage}. */
   function render(ctx, t, opts = {}) {
