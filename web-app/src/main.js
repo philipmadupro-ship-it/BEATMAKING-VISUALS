@@ -25,6 +25,7 @@ import { makeSurface } from './engine/render.js';
 import { createVoiceLab } from './ui/voicelab.js';
 import { createTips } from './ui/tips.js';
 import { createPip } from './ui/pip.js';
+import { createHistory } from './ui/history.js';
 import { createShotList } from './ui/shotlist.js';
 import { createAddLayer, createWorkspaces, createCoverPresets } from './ui/addlayer.js';
 import { createReview } from './ui/review.js';
@@ -82,7 +83,7 @@ async function boot() {
   // v22: edit in the timeline (inline values, text clips, context menu), task controls + coach, the status strip
   app.tlEdit = createTimelineEdit(app); app.quick = createQuick(app); app.statusBar = createStatusBar(app);
   // v23: + Layer menu (grouped, described), workspaces (Edit / Motion / Audio / Export), Adobe-style rich tooltips
-  app.addLayer = createAddLayer(app); app.workspaces = createWorkspaces(app); app.tips = createTips(document); app.pip = createPip(app);
+  app.addLayer = createAddLayer(app); app.workspaces = createWorkspaces(app); app.tips = createTips(document); app.pip = createPip(app); app.history = createHistory(app);
   store.subscribe(() => { const tr = store.session.track, el = document.getElementById('mediaAud'); if (el) el.textContent = tr ? `${tr.meta.name} · ${Math.round(tr.bpm)} BPM · ${tr.key || ''}` : ''; });
   motion.press(document.body);
   let userClip = false;
@@ -129,11 +130,11 @@ async function boot() {
   }
   // v24 (audit W1): the first draw of an intro / hero / ground frame builds big caches (editorial sheet, Akira columns, fried + halftone covers):
   // 3-9 s once. Draw the key moments into a tiny offscreen surface while the browser is idle, so scrubbing there later is instant.
-  let warmKey = '', lastInput = 0; for (const ev2 of ['pointerdown', 'keydown', 'wheel']) window.addEventListener(ev2, () => { lastInput = performance.now(); }, { capture: true, passive: true });   // the warm-up only runs when the user is idle
+  let warmKey = '', lastInput = performance.now(), lastClock = -1; for (const ev2 of ['pointerdown', 'keydown', 'wheel']) window.addEventListener(ev2, () => { lastInput = performance.now(); }, { capture: true, passive: true });   // the warm-up only runs when the user is idle
   function warmCaches() { const p = store.project, tr = store.session.track, e = app.clip.current(); if (!tr || !e || !e.ready || p.look !== 'player') return;
     const k = [p.aspect, p.stage, p.inT, cues.version].join('|'); if (k === warmKey) return; warmKey = k;
     const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 300)), s = makeSurface(54, 96), ts = [p.inT - PRE_S + 0.3, p.inT - 1.2, p.inT + 2.5, p.inT + (p.outT - p.inT) * 0.6]; let i = 0;
-    const step = () => { if (i >= ts.length || store.session.exporting) return; if (performance.now() - lastInput < 1500 || clock.playing) { setTimeout(() => idle(step), 600); return; } try { app.renderFrame(ts[i++], s, p, tr, { entry: e, preroll: PRE_S, fps: 30, info: {} }); } catch (_) {} idle(step); };
+    const step = () => { if (i >= ts.length || store.session.exporting) return; const ct = clock.time(); if (ct !== lastClock) { lastClock = ct; lastInput = performance.now(); } if (performance.now() - lastInput < 1500 || clock.playing) { setTimeout(() => idle(step), 600); return; } try { app.renderFrame(ts[i++], s, p, tr, { entry: e, preroll: PRE_S, fps: 30, info: {} }); } catch (_) {} idle(step); };
     idle(step); }
   A.syncCues = syncCues;
   A.setBpm = (bpm) => { if (store.session.track && bpm >= 40 && bpm <= 250) A.regrid(bpm); };

@@ -66,3 +66,14 @@ intro, ElevenLabs inside the web app, full-beat YouTube versions, stills before 
 ### Phase 4 — when the user says go
 - **V8:** colour stages, stills first.
 - **T5:** store integration, once push access to uche-beatstore-g-a is granted.
+
+## 3. Progress
+- **Phase 1:** done (commit de5d18b).
+- **Phase 2:** done.
+  - **W5:** drag a camera move's start edge to set its length (one undo step, keeps the landing). S at the playhead already cuts the camera lane.
+  - **W6:** History panel (left rail → History); click any step to jump there.
+  - **W7:** each workspace remembers its panel widths and dock height.
+  - **V6:** Media → Lab sounds (stove, lab ambience, glass clink) replace the synth twins in the web export, at the native render's levels.
+  - Tests: smoke 44/44 (+ move length / History), editor 42/42.
+  - Also: the warm-up now treats seeks / playback as activity, so it never stalls a scrub.
+- **Next:** Phase 3 (chunked parallel native renders; film build off the UI thread).

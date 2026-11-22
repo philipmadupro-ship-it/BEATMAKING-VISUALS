@@ -41,11 +41,18 @@ export const WORKSPACES = { edit: ['Edit', 'layers', 'inspect', 'Timeline + insp
 export function createWorkspaces(app) {
   const box = $('#wsSeg'); if (!box) return null;
   box.innerHTML = Object.entries(WORKSPACES).map(([k, [n, , , d]]) => `<button data-ws="${k}" aria-pressed="false" data-tip="${esc(n)} workspace|${esc(d)}|">${esc(n)}</button>`).join('');
-  function set(k) { const w = WORKSPACES[k]; if (!w) return; const r = document.querySelector(`#railTabs [data-pane="${w[1]}"]`), t = document.querySelector(`.tabs [data-tab="${w[2]}"]`); if (r) r.click(); if (t) t.click();
+  // v24 (audit W7): each workspace remembers its own panel widths and dock height (saved when you leave it, restored when you come back)
+  let cur = null; try { cur = localStorage.getItem('u2c.ws.name'); } catch (_) {}
+  const LS = 'u2c.ws.sizes.v1', load = () => { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch (_) { return {}; } }, store = (o) => { try { localStorage.setItem(LS, JSON.stringify(o)); } catch (_) {} };
+  const dockH = () => { const d = document.getElementById('studio'); return d ? d.style.getPropertyValue('--dock-h') : ''; };
+  function remember() { if (!cur || !app.workspace) return; const all = load(), w = app.workspace.state; all[cur] = { left: w.left, right: w.right, dock: dockH() }; store(all); }
+  function restore(k) { const z = load()[k]; if (!z || !app.workspace) return; app.workspace.setWidth('left', z.left || 0); app.workspace.setWidth('right', z.right || 0); if (z.dock) document.getElementById('studio').style.setProperty('--dock-h', z.dock); }
+  function set(k) { const w = WORKSPACES[k]; if (!w) return; if (cur && cur !== k) remember(); restore(k); cur = k; const r = document.querySelector(`#railTabs [data-pane="${w[1]}"]`), t = document.querySelector(`.tabs [data-tab="${w[2]}"]`); if (r) r.click(); if (t) t.click();
     if (app.workspace && app.workspace.state.noLeft) app.workspace.toggle('left', true); if (app.workspace && app.workspace.state.noRight) app.workspace.toggle('right', true);
     box.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.ws === k))); try { localStorage.setItem('u2c.ws.name', k); } catch (_) {} }
   box.addEventListener('click', (e) => { const b = e.target.closest('[data-ws]'); if (b) set(b.dataset.ws); });
-  return { set };
+  window.addEventListener('beforeunload', remember);
+  return { set, remember };
 }
 
 // ---- COVER PRESETS: the cover treatment in one click (hero.fry + hero.halftone base values); "every tile" puts it on the sphere too (cover.all)

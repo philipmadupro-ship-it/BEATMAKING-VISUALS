@@ -651,3 +651,11 @@ body:has(#studio[hidden]) #wsSeg{display:none}
 /* v24 (audit W3): every visible button is at least 24 x 24 px (WCAG 2.5.8) */
 .btn.tiny{min-height:24px;min-width:24px}
 .chip{min-height:24px}
+/* v24 History panel (Premiere: Window > History) */
+.rail:not([data-pane="history"]) .history{display:none}
+.hist-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;overflow:auto}
+.hist-list button{all:unset;cursor:pointer;display:grid;grid-template-columns:22px minmax(0,1fr);gap:6px;width:100%;box-sizing:border-box;padding:5px 6px;border-radius:6px;font:500 12px var(--sans);color:var(--fg)}
+.hist-list button:hover{background:var(--tint)}.hist-list button:focus-visible{outline:2px solid var(--accent)}
+.hist-list .now button{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 22%,transparent),color-mix(in srgb,var(--accent) 10%,transparent));box-shadow:inset 2px 0 0 var(--accent)}
+.hist-list .fut button{color:var(--muted);font-style:italic}
+.hist-list i{font:400 10px var(--mono);color:var(--muted);font-style:normal}

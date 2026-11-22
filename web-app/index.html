@@ -116,7 +116,7 @@ body{background:var(--bg);color:var(--fg)}
 <section id="studio" hidden>
  <aside class="layers" id="layers" aria-label="Layers">
   <div class="rail" data-pane="layers">
-  <div class="pane-h rail-tabs" id="railTabs" role="tablist"><button role="tab" data-pane="layers" aria-selected="true">Layers</button><button role="tab" data-pane="media" aria-selected="false">Media</button><button role="tab" data-pane="markers" aria-selected="false">Markers</button><span class="hint" id="layerCount"></span></div>
+  <div class="pane-h rail-tabs" id="railTabs" role="tablist"><button role="tab" data-pane="layers" aria-selected="true">Layers</button><button role="tab" data-pane="media" aria-selected="false">Media</button><button role="tab" data-pane="markers" aria-selected="false">Markers</button><button role="tab" data-pane="history" aria-selected="false">History</button><span class="hint" id="layerCount"></span></div>
   <div class="layer-list" id="layerList"></div>
   <div class="media" id="pane-media" aria-label="Media bin">
     <div class="group-h"><span class="lbl">Covers</span><span class="inrow"><button class="btn small" id="mediaAdd">Add images</button><button class="btn small" id="mediaReset">Reset</button></span></div>
@@ -129,6 +129,8 @@ body{background:var(--bg);color:var(--fg)}
     <div class="group-h"><span class="lbl">Intro voice</span></div>
     <div class="inrow"><label class="btn small" for="voiceFile">Load voice take</label><input type="file" id="voiceFile" accept="audio/*" hidden><button class="btn small" id="voiceClear" hidden>Remove</button><button class="btn small" id="voicePrompt" title="Copy an ElevenLabs prompt built from the voice lines (Text → voice.lines)">Copy ElevenLabs prompt</button><span class="hint" id="mediaVoice">one take with pauses between the phrases (e.g. ElevenLabs): split at the pauses, placed on the intro</span></div>
     <div class="voicelab" id="voiceLab" aria-label="Voice lab (ElevenLabs)"></div>
+    <div class="group-h"><span class="lbl">Lab sounds</span><span class="hint">your recordings replace the built-in synth in the web export</span></div>
+    <div class="inrow sfx-row"><label class="btn small" for="sfxFile-stove">Stove</label><input type="file" id="sfxFile-stove" accept="audio/*" hidden><span class="hint" id="sfxInfo-stove"></span><button class="ib sm" id="sfxClear-stove" aria-label="Use the built-in stove" hidden>×</button></div><div class="inrow sfx-row"><label class="btn small" for="sfxFile-labamb">Lab ambience</label><input type="file" id="sfxFile-labamb" accept="audio/*" hidden><span class="hint" id="sfxInfo-labamb"></span><button class="ib sm" id="sfxClear-labamb" aria-label="Use the built-in lab ambience" hidden>×</button></div><div class="inrow sfx-row"><label class="btn small" for="sfxFile-clink">Glass clink</label><input type="file" id="sfxFile-clink" accept="audio/*" hidden><span class="hint" id="sfxInfo-clink"></span><button class="ib sm" id="sfxClear-clink" aria-label="Use the built-in glass clink" hidden>×</button></div>
     <div class="group-h"><span class="lbl">Audio</span></div>
     <div class="inrow"><label class="btn small" for="file">Replace beat</label><span class="hint" id="mediaAud"></span></div>
     <p class="hint">Drop images, a video or a beat anywhere on this panel. Everything stays in this browser.</p>
@@ -137,6 +139,10 @@ body{background:var(--bg);color:var(--fg)}
     <div class="group-h"><span class="hint" id="markerCount"></span><span class="inrow"><button class="ib sm" id="markerPrev" aria-label="Previous marker" data-tip="Previous marker|Jump the playhead to the previous marker.|Shift+[">‹</button><button class="ib sm" id="markerNext" aria-label="Next marker" data-tip="Next marker|Jump the playhead to the next marker.|Shift+]">›</button><button class="btn small" id="markerChapters" data-tip="YouTube chapters|Copies chapter lines (0:00 Intro …) from your Chapter markers, or the sections when there are none.|">Chapters</button></span><button class="btn small" id="markerAdd" title="Add a marker at the playhead (M)">+ Marker</button></div>
     <input class="inp small" id="markerFilter" placeholder="filter markers" aria-label="Filter markers">
     <ul class="mk-list" id="markerItems"></ul>
+  </div>
+  <div class="history" id="pane-history" aria-label="History">
+    <div class="group-h"><span class="hint" id="histCount"></span><span class="inrow"><button class="ib sm" id="histUndo" aria-label="Undo" data-tip="Undo|Step back one change.|Ctrl+Z">↶</button><button class="ib sm" id="histRedo" aria-label="Redo" data-tip="Redo|Step forward one change.|Shift+Ctrl+Z">↷</button></span></div>
+    <ol class="hist-list" id="histItems"></ol>
   </div>
   </div>
   <div class="col-grip" id="gripL" role="separator" aria-orientation="vertical" aria-label="Resize the left panel" tabindex="0"></div>

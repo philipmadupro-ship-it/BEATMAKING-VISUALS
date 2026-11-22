@@ -182,6 +182,19 @@ ok('laptop: all lanes fit the dock (compact rows, folded groups)', fit0.fit, `${
       swapOk = after.va === before.vb && after.vb === before.va && Math.abs(after.ba - before.ba) < 1e-6 && Math.abs(after.bb - before.bb) < 1e-6; info = `${before.va}/${before.vb} -> ${after.va}/${after.vb} · times ${after.ba},${after.bb}`;
       await page.focus('#cueCv'); await page.keyboard.press('ControlOrMeta+z'); await page.waitForTimeout(100); } else info = 'keys not on screen'; }
   ok('timeline: Alt-drag a camera shot onto another swaps the windows, times stay', swapOk, info); }
+// v24 drag a push shot's start edge = its move length (dur); the History panel lists the step and jumping back restores it
+{ const k0 = await tlEv(() => { const t = window.u2c.cues.sheet.tracks.find((q) => q.path === 'camera.shot'), k = t.keys.find((q) => q.b > 4 && q.transition !== 'cut' && (q.dur ?? 1) >= 1); return k ? { id: k.id, b: k.b, dur: k.dur ?? 1 } : null; });
+  let lenOk = false, histOk = false, info2 = 'no push shot';
+  if (k0) { const o = await cvR(), kp = await tlEv((id) => window.u2c.cuetl.keyPoint(id), k0.id), ppb = await tlEv(() => window.u2c.cuetl.state.ppb), xs = o.x + kp.x - k0.dur * ppb;
+    await page.mouse.move(xs, o.y + kp.y); await page.mouse.down(); await page.mouse.move(xs - ppb, o.y + kp.y, { steps: 5 }); await page.mouse.up(); await page.waitForTimeout(150);
+    const k1 = await tlEv((id) => { const k = window.u2c.cues.sheet.tracks.find((q) => q.path === 'camera.shot').keys.find((q) => q.id === id); return { b: k.b, dur: k.dur }; }, k0.id);
+    lenOk = Math.abs(k1.b - k0.b) < 1e-6 && Math.abs(k1.dur - (k0.dur + 1)) < 0.26;
+    const h = await ev(() => window.u2c.cues.history()); await page.click('#railTabs [data-pane="history"]'); const n = await ev(() => document.querySelectorAll('#histItems li').length);
+    await page.click('#histItems li:nth-last-child(2) button'); await page.waitForTimeout(100);
+    const k2 = await tlEv((id) => (window.u2c.cues.sheet.tracks.find((q) => q.path === 'camera.shot').keys.find((q) => q.id === id) || {}).dur ?? 1, k0.id);
+    histOk = /move length/.test(h.past[h.past.length - 1] || '') && n >= 2 && Math.abs(k2 - k0.dur) < 1e-6; await ev(() => window.u2c.cues.redo()); await ev(() => window.u2c.cues.undo());
+    info2 = `dur ${k0.dur} -> ${k1.dur} (land ${k1.b}) · history "${h.past[h.past.length - 1]}" ${n} rows · jump back dur ${k2}`; await page.click('#railTabs [data-pane="layers"]'); }
+  ok('timeline: drag a camera move start edge = move length; History lists it and jumps back', lenOk && histOk, info2); }
 // 1. previous / next key: click the Pendant lane header, ] from bar 1 lands on its next key, [ comes back
 await seekB(0.5); await clickHead('pendant.amp', 'label'); await page.focus('#cueCv'); await seekB(0.5);
 const P0 = await pend(); await page.keyboard.press(']'); const n1 = await tlEv(() => ({ ph: window.u2c.cuetl.state.playhead, sel: window.u2c.cuetl.selected().map(([r, k]) => r.path + '@' + k.b) }));

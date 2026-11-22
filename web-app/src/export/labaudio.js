@@ -67,3 +67,13 @@ export function stove(buf, t, { gainDb = -6, seed = 5 } = {}) {
     lp += (nz - lp) * 0.12; lp2 += (lp - lp2) * 0.25; const wx = x - 0.36, env = wx < 0 ? 0 : Math.min(1, wx / 0.12) * (0.25 + 0.75 * Math.exp(-wx / 0.35)) * Math.max(0, Math.min(1, (2.6 - x) / 0.5));
     v += lp2 * env * 1.6; const o = i0 + i; if (o >= 0 && o < buf.length) for (const d of chans) d[o] += v * g; }
 }
+
+// v24 (audit V6) a recorded SFX (AudioBuffer) placed at t, peak-normalised to -6 dBFS then gainDb (the same rule as tools/sfx.py 'sample');
+// loop = repeat it to `dur` seconds with 0.6 s fades in / out (ambience beds)
+export function sample(buf, src, t, { gainDb = 0, loop = false, dur = 0 } = {}) {
+  const sr = buf.sampleRate, k = src.sampleRate / sr, chs = [...Array(src.numberOfChannels)].map((_, c) => src.getChannelData(c)); let pk = 1e-9;
+  for (const d of chs) for (let i = 0; i < d.length; i += 4) pk = Math.max(pk, Math.abs(d[i]));
+  const g = 0.5 / pk * Math.pow(10, gainDb / 20), n = loop ? Math.round(dur * sr) : Math.round(src.length / k), i0 = Math.round(t * sr), fade = Math.round(0.6 * sr), out = [...Array(buf.numberOfChannels)].map((_, c) => buf.getChannelData(c));
+  for (let i = 0; i < n; i++) { const o = i0 + i; if (o < 0) continue; if (o >= buf.length) break; const x = (i * k) % src.length, x0 = Math.floor(x), f = x - x0, e = loop ? Math.min(1, i / fade, (n - i) / fade) : 1;
+    out.forEach((d, c) => { const s = chs[Math.min(c, chs.length - 1)]; d[o] += ((s[x0] || 0) * (1 - f) + (s[x0 + 1] || 0) * f) * g * e; }); }
+}

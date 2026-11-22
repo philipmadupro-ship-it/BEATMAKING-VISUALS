@@ -281,6 +281,7 @@ export function createCueTimeline(app, cv) {
       if (row.kind === 'clip') { const x1 = xOf(k.b + (k.dur ?? 1)); if (x >= x1 - 6 && x <= x1 + 3) return { zone: 'key', row, key: k, part: 'end', ri }; if (x1 - x0 > 16 && x >= x0 - 3 && x <= x0 + 5) return { zone: 'key', row, key: k, part: 'start', ri }; if (x >= x0 - 3 && x < x1) return { zone: 'key', row, key: k, part: 'body', ri }; continue; }
       const ky = row.kind === 'number' ? vy(k.v) : mid;
       if (Math.abs(x - x0) <= 7 && Math.abs(y - ky) <= Math.max(7, Math.min(9, h / 2))) return { zone: 'key', row, key: k, part: 'body', ri };
+      if (row.kind === 'shot' && k.transition !== 'cut' && Math.abs(x - xOf(k.b - (k.dur ?? 1))) <= 4 && x0 - xOf(k.b - (k.dur ?? 1)) > 10) return { zone: 'key', row, key: k, part: 'moveLen', ri };   // v24: drag the start edge = the move length
       if (row.kind === 'shot' && k.transition !== 'cut' && x >= xOf(k.b - (k.dur ?? 1)) && x < x0) return { zone: 'key', row, key: k, part: 'body', ri };
     }
     if (row.kind !== 'number' && row.kind !== 'event' && row.kind !== 'clip') { const b = bOf(x); let k = null; for (const q of K) if (q.b <= b) k = q; if (k && x - xOf(k.b) > 7) return { zone: 'key', row, key: k, part: 'seg', ri }; }
@@ -349,14 +350,14 @@ export function createCueTimeline(app, cv) {
       const id = h.key.id; st.focusRow = h.ri; st.selMarker = null;
       if (e.shiftKey || e.metaKey || e.ctrlKey) { if (st.sel.has(id)) st.sel.delete(id); else st.sel.add(id); } else if (!st.sel.has(id)) st.sel = new Set([id]);
       const orig = new Map(); for (const sid of st.sel) { const f = findKey(sid); if (f) orig.set(sid, { b: f[1].b, dur: f[1].dur, v: f[1].v }); }
-      drag = { kind: h.part === 'end' ? 'resize' : h.part === 'start' ? 'resizeL' : 'move', x0: x, y0: y, key: h.key, row: h.row, orig, moved: false, alt: e.altKey };
+      drag = { kind: h.part === 'end' ? 'resize' : h.part === 'start' ? 'resizeL' : h.part === 'moveLen' ? 'moveLen' : 'move', x0: x, y0: y, key: h.key, row: h.row, orig, moved: false, alt: e.altKey };
       app.inspector && app.inspector.show(); dirty = true; return; }
     if (h.zone === 'lane') { st.focusRow = Math.max(0, h.ri); st.selMarker = null; drag = { kind: 'marquee', x0: x, y0: y, box: [x, y, x, y], moved: false, add: e.shiftKey, ri: h.ri }; dirty = true; }
   });
   cv.addEventListener('pointermove', (e) => {
     const [x, y] = pos(e);
     if (!drag) { const h = hit(x, y), hov = h.zone === 'head' ? h.ri : -1; if (hov !== st.hover) { st.hover = hov; dirty = true; }
-      cv.style.cursor = h.zone === 'ruler' ? 'text' : h.zone === 'mark' || h.zone === 'markhead' || h.zone === 'mini' ? 'pointer' : h.zone === 'handle' ? 'move' : h.zone === 'key' ? (h.part === 'end' || h.part === 'start' ? 'ew-resize' : 'grab') : h.zone === 'head' ? (h.part === 'resize' ? 'ns-resize' : h.part === 'label' ? 'default' : 'pointer') : 'default'; return; }
+      cv.style.cursor = h.zone === 'ruler' ? 'text' : h.zone === 'mark' || h.zone === 'markhead' || h.zone === 'mini' ? 'pointer' : h.zone === 'handle' ? 'move' : h.zone === 'key' ? (h.part === 'end' || h.part === 'start' || h.part === 'moveLen' ? 'ew-resize' : 'grab') : h.zone === 'head' ? (h.part === 'resize' ? 'ns-resize' : h.part === 'label' ? 'default' : 'pointer') : 'default'; return; }
     const grid = snapGrid();
     if (drag.kind === 'scrub') { const b = bOf(x); if (TL().magnet !== false && !e.altKey && e.shiftKey) { const s = buildSnap().closest(b, SNAP_PX / st.ppb); seekBeat(s ? s.b : b, s ? 0 : grid); } else seekBeat(b, e.shiftKey ? grid : 0); return; }
     if (drag.kind === 'laneH') { const nh = Math.max(MIN_H, Math.min(MAX_H, Math.round(drag.h0 + y - drag.y0))); viewTouch(() => { ensureTrack(drag.row).h = nh; }); return; }
@@ -376,6 +377,7 @@ export function createCueTimeline(app, cv) {
     if (!drag.moved) { drag.moved = true; cues.begin(); snap = buildSnap(new Set(st.sel)); }
     const db = (x - drag.x0) / st.ppb;
     cues.preview(() => {
+      if (drag.kind === 'moveLen') { const o = drag.orig.get(drag.key.id), st0 = snapTo(drag.key.b - (o.dur ?? 1) + db, { alt: e.altKey }); drag.key.dur = Math.max(0.25, Math.min(16, Math.round((drag.key.b - st0) * 960) / 960)); const f = findKey(drag.key.id); if (f && f[0].track) f[0].track.auto = false; return; }
       if (drag.kind === 'resize') { const o = drag.orig.get(drag.key.id), end = snapTo(drag.key.b + (o.dur ?? 1) + db, { alt: e.altKey }); drag.key.dur = Math.max(grid || 1 / 16, end - drag.key.b); return; }
       // v22: the clip's start edge (trim in): the end stays put
       if (drag.kind === 'resizeL') { const o = drag.orig.get(drag.key.id), endB = o.b + (o.dur ?? 1), nb = Math.max(0, Math.min(endB - (grid || 1 / 16), snapTo(o.b + db, { alt: e.altKey }))); drag.key.b = tick(nb); drag.key.dur = endB - drag.key.b; if (drag.row.track) drag.row.track.auto = false; return; }
@@ -395,7 +397,7 @@ export function createCueTimeline(app, cv) {
     if (d.kind === 'move' && d.moved && d.alt && d.row && d.row.path === 'camera.shot' && d.key && d.orig.size === 1) { const f = findKey(d.key.id), tr = f && f[0].track, drop = d.key.b, o = d.orig.get(d.key.id);
       const tgt = tr ? tr.keys.filter((k) => k !== d.key).reduce((best, k) => (Math.abs(k.b - drop) < (best ? Math.abs(best.b - drop) : 2.01) ? k : best), null) : null;
       d.key.b = o.b; if (tgt) { const v = tgt.v; tgt.v = d.key.v; d.key.v = v; tr.auto = false; } sortAll(); if (tgt) cues.commit('swap shots'); else cues.cancel(); dirty = true; return; }
-    if ((d.kind === 'move' || d.kind === 'resize' || d.kind === 'resizeL') && d.moved) { sortAll(); cues.commit(d.kind === 'move' ? 'move keys' : 'resize clip'); }
+    if ((d.kind === 'move' || d.kind === 'resize' || d.kind === 'resizeL' || d.kind === 'moveLen') && d.moved) { sortAll(); cues.commit(d.kind === 'move' ? 'move keys' : d.kind === 'moveLen' ? 'camera move length' : 'resize clip'); }
     if (d.kind === 'handle') { cues.commit('bezier handle'); app.inspector && app.inspector.show(); }
     if (d.kind === 'loopA' || d.kind === 'loopB') { if (st.loop.b - st.loop.a < 1e-6) st.loop = null; app.actions.loopChanged && app.actions.loopChanged(); }
     dirty = true;

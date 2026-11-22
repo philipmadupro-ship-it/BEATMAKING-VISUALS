@@ -79,6 +79,16 @@ export function createMedia(app) {
     const words = L4.map((q) => sub(String(q).replace(/N\u00ba \{n\}|\{n\}/g, 'number ' + numWord(nn))).toLowerCase().replace(/\b(\w)/g, (m) => m.toUpperCase()).replace(/Uche2crazy/gi, 'Oo-chay Two Crazy').replace(/\b0?1\b/, 'one'));
     const prompt = `[${(tg.voice && tg.voice.style) || 'calm, clinical lab announcement'}] ` + words.filter(Boolean).map((w, i) => (i ? '[pause] ' : '') + w + (i ? '.' : '...')).join(' ');
     try { await navigator.clipboard.writeText(prompt); if (vInfo) vInfo.textContent = 'prompt copied: ' + prompt; } catch { if (vInfo) vInfo.textContent = prompt; } });
+  // v24 (audit V6) LAB SOUNDS: your own recordings (e.g. the ElevenLabs stove, lab ambience, glass clink) for the web export, in place of the
+  // synthesised twins; kept in this browser (IndexedDB keys sfx:<id>), never uploaded. The native render uses the same files from U2C_SFX_DIR.
+  const SFX_IDS = ['stove', 'labamb', 'clink'], sfx = {};
+  const showSfx = () => { for (const id of SFX_IDS) { const el = document.getElementById('sfxInfo-' + id); if (el) el.textContent = sfx[id] ? sfx[id].name : 'built-in (synth)'; const x = document.getElementById('sfxClear-' + id); if (x) x.hidden = !sfx[id]; } };
+  async function setSfx(id, blob, name, persist = true) { sfx[id] = { blob, name }; if (persist) await dbDo('readwrite', (st) => st.put({ blob, name }, 'sfx:' + id)); showSfx(); }
+  async function clearSfx(id) { delete sfx[id]; await dbDo('readwrite', (st) => st.delete('sfx:' + id)); showSfx(); }
+  for (const id of SFX_IDS) { document.getElementById('sfxFile-' + id)?.addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) await setSfx(id, f, f.name); });
+    document.getElementById('sfxClear-' + id)?.addEventListener('click', () => clearSfx(id));
+    dbDo('readonly', (st) => st.get('sfx:' + id)).then((r) => { if (r && r.blob) setSfx(id, r.blob, r.name, false); }); }
+  showSfx();
   dbDo('readonly', (st) => st.get('voice')).then((r) => { if (r && r.blob) setVoice(r.blob, r.name, false); });
-  return { setVoice, clearVoice, get voice() { return voice; }, setCover, resetCover, swap, addFiles, blobs, restore, list: () => meta.map((m, i) => ({ slot: i, name: m ? m.name : 'built-in', user: !!m, w: m ? m.w : covers[i] ? covers[i].width : 0 })), ready, get covers() { return covers; } };
+  return { setVoice, clearVoice, get voice() { return voice; }, setSfx, clearSfx, get sfx() { return sfx; }, setCover, resetCover, swap, addFiles, blobs, restore, list: () => meta.map((m, i) => ({ slot: i, name: m ? m.name : 'built-in', user: !!m, w: m ? m.w : covers[i] ? covers[i].width : 0 })), ready, get covers() { return covers; } };
 }
