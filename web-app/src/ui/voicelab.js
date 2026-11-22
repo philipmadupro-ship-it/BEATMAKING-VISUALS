@@ -42,7 +42,8 @@ export function createVoiceLab(app) {
   function fillVoices() { const sel = root.querySelector('#vlVoice'), cur = V().voice_id || ''; if (!voices.length) return;
     const own = voices.filter((q) => !q.is_library_voice), lib = voices.filter((q) => q.is_library_voice);
     sel.innerHTML = (own.length ? `<optgroup label="Your voices">${own.map((q) => `<option value="${esc(q.voice_id)}">${esc(q.name)}</option>`).join('')}</optgroup>` : '') + (lib.length ? `<optgroup label="Library">${lib.map((q) => `<option value="${esc(q.voice_id)}">${esc(q.name)}</option>`).join('')}</optgroup>` : '');
-    sel.value = voices.some((q) => q.voice_id === cur) ? cur : (own[0] || voices[0]).voice_id; }
+    const byName = String(V().voice_name || '').trim().toLowerCase(), named = byName && voices.find((q) => String(q.name).trim().toLowerCase() === byName);   // v23: the preferred voice by name (default AI 1 girl)
+    sel.value = voices.some((q) => q.voice_id === cur) ? cur : (named || own[0] || voices[0]).voice_id; }
   function renderTakes() { const ul = root.querySelector('.vl-takes'); ul.innerHTML = takes.map((tk, i) => `<li><button class="btn tiny" data-use="${i}">${tk.blob ? 'Use' : 'Open'}</button> <span>${esc(tk.name)}</span>${tk.blob ? '' : ' <span class="hint">save it, then Load voice take</span>'}</li>`).join(''); }
   const setTag = (path, v, why) => app.cues.edit((s) => setTagIn(s, path, v), why);
   root.addEventListener('change', (e) => { const el = e.target;

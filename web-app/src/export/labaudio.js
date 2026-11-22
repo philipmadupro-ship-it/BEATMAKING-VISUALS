@@ -24,15 +24,19 @@ export function keyTaps(buf, events, { gainDb = -10, seed = 7 } = {}) {
   }
 }
 
-export function placeVoice(buf, take, ats, { gainDb = 0 } = {}) {
+// v23 one octave down with the timing kept (overlapping Hann grains read at half speed; formants shift with it: a little scary)
+function octaveDown(src) { const N = 2048, hop = 512, out = new Float32Array(src.length); const win = new Float32Array(N); for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / N);
+  for (let g = 0; g < src.length; g += hop) for (let i = 0; i < N && g + i < out.length; i++) { const x = g + i * 0.5, x0 = Math.floor(x), a = src[x0] || 0, b2 = src[x0 + 1] || 0; out[g + i] += (a + (b2 - a) * (x - x0)) * win[i] * 0.5; }
+  return out; }
+export function placeVoice(buf, take, ats, { gainDb = 0, subDb = null } = {}) {
   const sr = take.sampleRate, src = take.getChannelData(0), win = Math.round(0.01 * sr), thr = Math.pow(10, -35 / 20), minGap = 0.2, segs = [];
   let inSpeech = false, s0 = 0, quiet = 0;
   for (let i = 0; i < src.length; i += win) { let pk = 0; for (let j = i; j < Math.min(src.length, i + win); j++) pk = Math.max(pk, Math.abs(src[j]));
     if (pk >= thr) { if (!inSpeech) { inSpeech = true; s0 = i; } quiet = 0; } else if (inSpeech) { quiet += win / sr; if (quiet >= minGap) { segs.push([s0, i - Math.round(quiet * sr) + win]); inSpeech = false; } } }
   if (inSpeech) segs.push([s0, src.length]);
-  const g = Math.pow(10, gainDb / 20), out = [...Array(buf.numberOfChannels)].map((_, c) => buf.getChannelData(c)), tk = [...Array(take.numberOfChannels)].map((_, c) => take.getChannelData(c)), k = sr / buf.sampleRate;
+  const g = Math.pow(10, gainDb / 20), out = [...Array(buf.numberOfChannels)].map((_, c) => buf.getChannelData(c)), tk = [...Array(take.numberOfChannels)].map((_, c) => take.getChannelData(c)), k = sr / buf.sampleRate, gs = subDb == null ? 0 : Math.pow(10, subDb / 20), sub = gs ? tk.map((ch) => octaveDown(ch)) : null;
   segs.slice(0, ats.length).forEach(([a, b], si) => { const o0 = Math.round(ats[si] * buf.sampleRate), n = Math.round((b - a) / k);
-    out.forEach((d, c) => { const s = tk[Math.min(c, tk.length - 1)]; for (let i = 0; i < n && o0 + i < d.length; i++) { const x = a + i * k, x0 = Math.floor(x); d[o0 + i] += (s[x0] + (s[x0 + 1] - s[x0]) * (x - x0) || 0) * g; } }); });
+    out.forEach((d, c) => { const s = tk[Math.min(c, tk.length - 1)]; for (let i = 0; i < n && o0 + i < d.length; i++) { const x = a + i * k, x0 = Math.floor(x); d[o0 + i] += (s[x0] + (s[x0 + 1] - s[x0]) * (x - x0) || 0) * g; if (sub) { const u = sub[Math.min(c, sub.length - 1)], j = x0 - Math.round(0.012 * sr); d[o0 + i] += (u[j] || 0) * gs * g; } } }); });
   return segs.length;
 }
 
@@ -49,4 +53,14 @@ export function room(buf, dur, { gainDb = -10, seed = 11 } = {}) {
     if (ticks.has(i)) tk = i; const tv = tk >= 0 && i - tk < 0.006 * sr ? (R() * 2 - 1) * Math.exp(-(i - tk) / (0.0008 * sr)) * 0.06 : 0;
     const v = (0.05 * Math.sin(2 * Math.PI * 50 * x) + 0.025 * Math.sin(2 * Math.PI * 100 * x) + 0.01 * Math.sin(2 * Math.PI * 150 * x) + lp * 0.35 * 3 + tv) * Math.max(0, e) * g;
     for (const d of chans) d[i] += v; }
+}
+
+// v23 gas-stove ignition (the web twin of the ElevenLabs sample): three piezo clicks, then the flame catches (a filtered noise whoosh) and settles to a hiss
+export function stove(buf, t, { gainDb = -6, seed = 5 } = {}) {
+  const sr = buf.sampleRate, R = rng(seed), g = Math.pow(10, gainDb / 20), n = Math.round(2.6 * sr), chans = [...Array(buf.numberOfChannels)].map((_, c) => buf.getChannelData(c)), i0 = Math.round(t * sr); let lp = 0, lp2 = 0;
+  const clicks = [0, 0.075, 0.14].map((q) => Math.round((q + 0.2) * sr));
+  for (let i = 0; i < n; i++) { const x = i / sr, nz = R() * 2 - 1; let v = 0;
+    for (const c0 of clicks) if (i >= c0 && i < c0 + 0.004 * sr) v += nz * Math.exp(-(i - c0) / (0.0006 * sr)) * 0.9;
+    lp += (nz - lp) * 0.12; lp2 += (lp - lp2) * 0.25; const wx = x - 0.36, env = wx < 0 ? 0 : Math.min(1, wx / 0.12) * (0.25 + 0.75 * Math.exp(-wx / 0.35)) * Math.max(0, Math.min(1, (2.6 - x) / 0.5));
+    v += lp2 * env * 1.6; const o = i0 + i; if (o >= 0 && o < buf.length) for (const d of chans) d[o] += v * g; }
 }

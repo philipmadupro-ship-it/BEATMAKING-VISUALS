@@ -85,7 +85,8 @@ if (tags.date === '{today}') tags.date = today;
 if (args.title) tags.title = String(args.title);
 const tagFile = `data/tags-${look}-${stage}-${aspect}-${id}.js`;
 fs.writeFileSync(path.join(FILM, tagFile), 'window.U2C_TAGS=' + JSON.stringify(tags) + ';\n');
-let comp, CLICKS = [], SFX = [], STOPE = false;   // v23 STOPE: full beat plays to the end and stops (outro.end)
+let comp, CLICKS = [], SFX = [], STOPE = false, TAGS_AUDIO = {};
+const cueTagsForAudio = () => TAGS_AUDIO;   // v23 STOPE: full beat plays to the end and stops (outro.end)
 if (ENGINE === 'v9') {
   const sync = spawnSync('node', [path.join(ROOT, 'tools', 'sync_web.mjs'), '--check'], { encoding: 'utf8' });
   if (sync.status !== 0) console.warn('[v9] ' + sync.stdout.trim().split('\n').pop());
@@ -104,7 +105,7 @@ if (ENGINE === 'v9') {
     sheet.tracks.push(...gen.tracks.filter((tr) => tr.path.startsWith('intro.')));
   }
   // v19 click times (composition seconds) = the mouse layer's clicks (same rules as film.js mouseWays): play, card, camera travels, CTA closes, hero
-  { const oe = sheet.base['outro.end'] ?? 'auto'; STOPE = oe === 'stop' || (oe === 'auto' && D.bars > 32); }
+  { const oe = sheet.base['outro.end'] ?? 'auto'; STOPE = oe === 'stop' || (oe === 'auto' && D.bars > 32); TAGS_AUDIO = sheet.tags || {}; }
   if (look === 'player' && !args.test) { const BT = D.beat, ilT = sheet.tracks.find((tr) => tr.path === 'intro.length'), IBb = sheet.base['intro.on'] === false ? 0 : 4 * (ilT ? ilT.keys[0].v : 2), T2 = (bb) => bb * BT, w = [];
     if (PRE > 0) w.push(-0.06); if (IBb && PRE > 0 && sheet.base['intro.style'] === 'sphere') { const kb = (p, i, d) => { const tr = sheet.tracks.find((q) => q.path === p); return tr && tr.keys[i] ? tr.keys[i].b : d; }; w.push(T2(kb('intro.pitch', 1, -10.5)) - 0.02, T2(kb('intro.pitch', 2, -7)), T2(kb('intro.pick', 1, -6.1)) - 0.02); }   // v23: from the sheet's own keys   // v22 sphere: press, release after the drag, pick
     else if (IBb && PRE > 0) w.push(...(sheet.base['intro.browse'] === 0 ? [] : [T2(-3) - 0.02, T2(-2) - 0.02]), T2(-1.25) - 0.02);   // v21: no browse clicks on a direct pick else if (IBb) w.push(T2(Math.max(1, IBb - 2)) - 0.02);   // v19.3 browse x2 + choose, then play
@@ -133,7 +134,8 @@ if (ENGINE === 'v9') {
     // move, a relay clunk when each pop-up opens and on its x, data chatter on each terminal line, a quiet Geiger bed under the whole video
     const SD = process.env.U2C_SFX_DIR || '/home/user/research/sfx', has = (n) => fs.existsSync(path.join(SD, n + '.mp3')), smp = (t, n, db, extra = {}) => { if (has(n) && t >= 0) keep.push({ t, kind: 'sample', file: path.join(SD, n + '.mp3'), db, ...extra }); };
     // v22.7 (user: calmer, organic busy lab): lab ambience bed under the intro, glass clinks and little dings, no CRT / centrifuge / bloops
-    if (P > 0) { smp(0, 'labamb', -7, { loop: true, dur: P + 0.4 }); for (const [tc, db] of [[0.7, -14], [2.9, -12], [5.2, -13], [6.9, -15]]) smp(tc, 'clink', db); smp(0.25, 'ding', -15); if (sheet.base['intro.style'] === 'sphere') { smp(P + T2(SPK) + 0.03, 'ding', -11); smp(P + T2(STY), 'clink', -10); } }   // v23: sparser, quieter (a room you could stand in)
+    if (P > 0 && (tg('sfx.stove') ?? true) !== false) smp(0.05, 'stove', -3);   // v23 the stove lights the lab
+    if (P > 0) { smp(0.6, 'labamb', -7, { loop: true, dur: P - 0.2 }); for (const [tc, db] of [[1.1, -14], [2.9, -12], [5.2, -13], [6.9, -15]]) smp(tc, 'clink', db); smp(0.25, 'ding', -15); if (sheet.base['intro.style'] === 'sphere') { smp(P + T2(SPK) + 0.03, 'ding', -11); smp(P + T2(STY), 'clink', -10); } }   // v23: sparser, quieter (a room you could stand in)
     for (const tr of sheet.tracks) if (tr.path === 'camera.shot') for (const k of tr.keys) if (k.v !== 'wide') smp(P + T2(k.b - (k.dur ?? 1)), 'scan', -2);
     for (const kk of ['cta1', 'cta2']) { const at = sheet.base[`social.${kk}.at`], ln = sheet.base[`social.${kk}.len`] ?? 8; if (at != null) { smp(P + T2(at), 'relay', -6); smp(P + T2(at + ln) - 0.02, 'relay', -9); } }
     for (const tr of sheet.tracks) if (tr.path === 'term.line') for (const k of tr.keys) smp(P + T2(k.b), 'data', -4);
@@ -201,6 +203,10 @@ const audioIn = path.join(FILM, 'data', id + '.wav'), dly = PRE > 0 ? `adelay=${
 const useVoice = look === 'player' && PRE >= 3 && !args.test && !/^(off|0|false|no)$/i.test(String(args.voice ?? 'on')) && fs.existsSync(path.join(ROOT, 'tools', 'voice.py'));
 const useSfx = SFX.length > 0; if (useSfx) { fs.writeFileSync(path.join(FILM, 'renders', AUX + 'sfx.json'), JSON.stringify(SFX)); run('python3', [path.join(ROOT, 'tools', 'sfx.py'), '--events', path.join(FILM, 'renders', AUX + 'sfx.json'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', AUX + 'sfx.wav'), '--gain-db', String(args['sfx-db'] ?? -14)], { quiet: true }); }
 if (useVoice) run('python3', [path.join(ROOT, 'tools', 'voice.py'), '--title', String(D.title || args.title || 'U2C'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', AUX + 'voice.wav'), ...((args['voice-source'] || process.env.U2C_VOICE_SOURCE) ? ['--source', path.resolve(String(args['voice-source'] || process.env.U2C_VOICE_SOURCE)), '--ats', String(args['voice-ats'] || '1.4,3.9,7.3'), '--gain-db', '0'] : [])], { quiet: true });   // v22.2: a recorded take (ElevenLabs) when given
+// v23 (user's sound design): the voice doubled one octave DOWN (-12 semitones, rubberband, formants shifted with it: a little scary), mixed
+// under the dry voice (tag voice.sub dB, default -8; 'off' = none); and a gas-stove ignition (clicks, then the flame) on frame 0 (sfx.stove)
+if (useVoice) { let subDb = String(args['voice-sub-db'] ?? (cueTagsForAudio().voice || {}).sub ?? '-8'); if (!/^(off|none|false)$/i.test(subDb)) { const vIn = path.join(FILM, 'renders', AUX + 'voice.wav'), vOut = path.join(FILM, 'renders', AUX + 'voice-sub.wav');
+  run('ffmpeg', ['-v', 'error', '-y', '-i', vIn, '-filter_complex', `[0:a]asplit=2[a][b];[b]rubberband=pitch=0.5,adelay=12:all=1,volume=${+subDb}dB,lowpass=f=6000[s];[a][s]amix=inputs=2:normalize=0[o]`, '-map', '[o]', vOut], { quiet: true }); fs.renameSync(vOut, vIn); } }
 { const ins = ['-i', tmp, '-i', audioIn], parts = [`[1:a]${dly}aresample=48000[b]`], lab = ['[b]']; let n = 2;
   if (useClicks) { ins.push('-i', path.join(FILM, 'renders', AUX + 'clicks.wav')); parts.push(`[${n}:a]aresample=48000[k]`); lab.push('[k]'); n++; }
   if (useSfx) { ins.push('-i', path.join(FILM, 'renders', AUX + 'sfx.wav')); parts.push(`[${n}:a]aresample=48000[s]`); lab.push('[s]'); n++; }

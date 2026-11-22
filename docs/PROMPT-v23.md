@@ -142,3 +142,16 @@ Direct like a senior motion designer: every move has a reason, and the frames re
 <start>
 Show the moment list on the beat grid (bar.beat → what → window → cursor/voice), with the seed's choices, then the stills. Only then render.
 </start>
+
+<sound-design v23.1>
+- **Intro voice:** "AI 1 girl" (the user's ElevenLabs voice; the alternative is RUSSIAN SPY 2), with the same three lines.
+- **The voice is doubled one octave down** (-12 semitones, formants shifted, so a little scary), 8 dB under the dry voice, 12 ms late.
+  - Tag `voice.sub` (dB, or `off`).
+  - Native: ffmpeg rubberband.
+  - Web: Hann-grain octave-down.
+- **A gas-stove ignition on frame 0:** three piezo clicks, then the flame catches. The lab ambience comes in under the flame.
+  - Tag `sfx.stove`.
+  - Native: the ElevenLabs sample `stove.mp3` in U2C_SFX_DIR.
+  - Web: a synth twin.
+- **Gotcha:** the voice IDs are the user's account data. Keep them out of the public repo; the Voice lab picks the voice by name (`voice.voice_name`).
+</sound-design>
