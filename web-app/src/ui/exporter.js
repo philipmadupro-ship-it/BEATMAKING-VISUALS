@@ -10,6 +10,7 @@ import { saveFile } from '../export/save.js';
 import { generateSheet } from '../cues/generate.js';
 import { serializeSheet } from '../cues/schema.js';
 import { slug, fmtTC } from '../util/draw.js';
+import { keyTaps, placeVoice } from '../export/labaudio.js';
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 export function createExporter(app) {
   let cancel = false; const P = () => app.store.project;
@@ -45,6 +46,9 @@ export function createExporter(app) {
       for (let ch = 0; ch < src.numberOfChannels; ch++) { const d = outB.getChannelData(ch); d.set(src.getChannelData(ch), off0);
         for (const tc of times) for (const [dt, snd] of [[0, press], [0.055, rel]]) { const i0 = Math.round((tc + dt) * sr); for (let i = 0; i < snd.length && i0 + i < n; i++) if (i0 + i >= 0) d[i0 + i] += snd[i] * g; } }
       audioOut = outB;
+      // v22.4 lab audio (parity with the native render): keyboard taps on the film's typing moments + the intro voice take from the Media bin
+      if (ex.keys !== false && film && film.typeEvents) keyTaps(outB, film.typeEvents(), { gainDb: ex.keysDb ?? -10 });
+      const vt = app.media && app.media.voice; if (PRE > 0 && vt && ex.voice !== false) { try { const take = await app.clock.ctx.decodeAudioData(await vt.blob.arrayBuffer()); placeVoice(outB, take, ex.voiceAts || [0.45, 2.15, 4.3, 5.55]); } catch (err) { console.warn('[u2c] voice take could not be decoded', err); } }
     }
     const vl = app.videoLayer && app.videoLayer.loaded ? app.videoLayer : null, codecs = await canOffline(app.libs.mediabunny, W, H, mbps, ex.fps); let res;
     if (codecs) { try { res = await exportOffline({ mb: app.libs.mediabunny, codecs, W, H, fps: ex.fps, mbps, inT: project.inT - PRE, outT: project.outT, audio: audioOut, render, beforeFrame: vl ? (t) => vl.seek(t, project) : undefined, isCancelled: () => cancel,

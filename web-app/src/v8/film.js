@@ -539,6 +539,18 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const mj = (u) => u * u * u * (10 - 15 * u + 6 * u * u);
   // v19.4: click times in COMPOSITION seconds (film time + pre-roll), for the export's UI click sounds; call after one render()
   const clickTimes = () => mouseWays().filter((q) => q.click).map((q) => q.t + PRE).filter((x) => x >= 0);
+  // v22.4: the typing moments in COMPOSITION seconds (for the web export's keyboard taps; render.mjs builds the same list for the native render):
+  // [{t, n (characters), dt (seconds per character)}]. Call after one render().
+  function typeEvents() {
+    const E = [], rate = T(1 / 24), len = (q) => String(q ?? '').length, P = PRE, add = (t, n, dt) => { if (n > 0 && t >= 0) E.push({ t, n, dt }); };
+    if (LOOK !== 'player' || !V('social.on', true)) return E;
+    const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hk = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); if (P > 0) add(1.0, len(tag('social.title')) + len(hk), rate);
+    if (ev.value('intro.style', -4, 'flow') === 'sphere' && P > 0) { const n = len(tag('intro.title') || D.title) + len(tag('intro.credit') || 'prod. @uche2crazy'); add(P + T(-4.4), n, T(1) / Math.max(1, n)); }
+    for (const [k, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) { const at = V(`social.${k}.at`, def); add(P + T(at) + 0.15, len(tag(`social.${k}.title`)) + len(tag(`social.${k}.body`)) + len(tag(`social.${k}.sub`)), rate); }
+    const term = tag('social.terminal') || []; for (const k of ev.keysIn('term.line', 0, 1e6)) add(P + T(k.b), len(typeof k.v === 'number' ? term[k.v] : L.sub(String(k.v ?? ''))), T(1 / 16));
+    const w2 = outroWin(); if (w2) add(P + T(w2[0]) + 0.15, len(tag('social.outro.title')) + len(tag('social.outro.body')) + len(tag('social.outro.sub')), rate);
+    return E;
+  }
   function mousePos(q, cam) { if (q.play) return INTRO_HIT.play || [W * 0.3, H * 0.8]; if (q.wx != null) { if (!cam) return [W / 2, H / 2]; return [(q.wx - cam.x) * cam.z + W / 2, (q.wy - cam.y) * cam.z + H / 2]; } return [q.sx, q.sy]; }
   function mouse(tf, cam) {
     if (!V('cursor.on', LOOK === 'player')) return; const w = mouseWays(); let i = w.findIndex((q) => q.t > tf); if (i < 0) i = w.length - 1; if (i === 0) i = 1;
@@ -786,6 +798,6 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function rects(evx, bb, look) { ev = evx; IB = INTRO.beats(ev); b = bb; setState(look || V('look', 'exe'), V('stage', 'nigredo')); return { ...LY }; }
   // motion trace in the pendant test geometry (testRect): hand, every joint, every link angle, the body angle
   const trace = (t, evx) => { if (evx) ev = evx; b = 0; pendulum(); const g = pendantGeom(testRect()); return BR.tracePts(g.ax, g.ay, g.size, t + 0.5 / FPS, g.len); };
-  return { W, H, D, render, clickTimes, schedule, rects, trace, testRect, waveRect, registry: (o = {}) => buildRegistry({ aspect, bars: NB, ...o }), core: L, brand: BR, WINDOW_IDS };
+  return { W, H, D, render, clickTimes, typeEvents, schedule, rects, trace, testRect, waveRect, registry: (o = {}) => buildRegistry({ aspect, bars: NB, ...o }), core: L, brand: BR, WINDOW_IDS };
 }
 export { mergeDeep };

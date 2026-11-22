@@ -1,0 +1,37 @@
+// v22.4 lab audio for the web export (parity with the native render's tools/sfx.py + tools/voice.py):
+//   keyTaps(buffer, events, opts)  mechanical keyboard taps for the film's typing moments (film.typeEvents()): switch click + plate thock + spring
+//                                  release, human pace (~15 taps/s across each typed span), an enter press after each message. Seeded: deterministic.
+//   placeVoice(buffer, take, ats)  a recorded voice take (AudioBuffer) split at its pauses (>= 0.2 s under -35 dBFS), phrase i placed at ats[i] seconds.
+// Both add into an AudioBuffer in place.
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+function tap(sr, R, heavy) {
+  const m = Math.round(0.09 * sr), o = new Float32Array(m), vel = (0.7 + 0.3 * R()) * (heavy ? 1.25 : 1), fb = (heavy ? 150 : 190) + (R() * 65 - 20), r0 = Math.round((0.045 + 0.015 * R()) * sr);
+  let prev = 0, lp = 0;
+  for (let i = 0; i < m; i++) { const x = i / sr, n = R() * 2 - 1, hp = n - prev; prev = n; lp += (n - lp) * 0.12;
+    o[i] = vel * (hp * Math.exp(-x / 0.0011) * 0.55 + Math.sin(2 * Math.PI * fb * x) * Math.exp(-x / (heavy ? 0.022 : 0.014)) * 0.7 + lp * Math.exp(-x / 0.008) * 0.35);
+    if (i >= r0 && i < r0 + 0.012 * sr) o[i] += hp * Math.exp(-(i - r0) / (0.0009 * sr)) * 0.25 * vel; }
+  return o;
+}
+
+export function keyTaps(buf, events, { gainDb = -10, seed = 7 } = {}) {
+  const sr = buf.sampleRate, R = rng(seed), g = Math.pow(10, gainDb / 20) * 0.55, chans = [...Array(buf.numberOfChannels)].map((_, c) => buf.getChannelData(c));
+  const put = (t, s) => { const i0 = Math.round(t * sr); for (const d of chans) for (let i = 0; i < s.length && i0 + i < d.length; i++) if (i0 + i >= 0) d[i0 + i] += s[i] * g; };
+  for (const e of events) {
+    let n = e.n, dt = e.dt; if (dt < 0.05) { const tot = n * dt; n = Math.max(1, Math.round(tot / 0.065)); dt = tot / n; }
+    let tt = e.t; for (let i = 0; i < n; i++) { put(tt, tap(sr, R, R() < 0.08)); tt += dt * (0.7 + 0.6 * R()) * (R() < 0.12 ? 1.6 : 1); }
+    put(e.t + e.n * e.dt * 1.05 + 0.08, tap(sr, R, true));   // enter
+  }
+}
+
+export function placeVoice(buf, take, ats, { gainDb = 0 } = {}) {
+  const sr = take.sampleRate, src = take.getChannelData(0), win = Math.round(0.01 * sr), thr = Math.pow(10, -35 / 20), minGap = 0.2, segs = [];
+  let inSpeech = false, s0 = 0, quiet = 0;
+  for (let i = 0; i < src.length; i += win) { let pk = 0; for (let j = i; j < Math.min(src.length, i + win); j++) pk = Math.max(pk, Math.abs(src[j]));
+    if (pk >= thr) { if (!inSpeech) { inSpeech = true; s0 = i; } quiet = 0; } else if (inSpeech) { quiet += win / sr; if (quiet >= minGap) { segs.push([s0, i - Math.round(quiet * sr) + win]); inSpeech = false; } } }
+  if (inSpeech) segs.push([s0, src.length]);
+  const g = Math.pow(10, gainDb / 20), out = [...Array(buf.numberOfChannels)].map((_, c) => buf.getChannelData(c)), tk = [...Array(take.numberOfChannels)].map((_, c) => take.getChannelData(c)), k = sr / buf.sampleRate;
+  segs.slice(0, ats.length).forEach(([a, b], si) => { const o0 = Math.round(ats[si] * buf.sampleRate), n = Math.round((b - a) / k);
+    out.forEach((d, c) => { const s = tk[Math.min(c, tk.length - 1)]; for (let i = 0; i < n && o0 + i < d.length; i++) { const x = a + i * k, x0 = Math.floor(x); d[o0 + i] += (s[x0] + (s[x0 + 1] - s[x0]) * (x - x0) || 0) * g; } }); });
+  return segs.length;
+}

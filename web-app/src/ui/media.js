@@ -66,5 +66,13 @@ export function createMedia(app) {
   /** v21 projects: the user covers as blobs ({slot, blob, name}) and restoring a project's set (other slots reset). */
   async function blobs() { const out = []; for (let i = 0; i < covers.length; i++) if (meta[i]) { const r = await dbDo('readonly', (st) => st.get(i)); if (r && r.blob) out.push({ slot: i, blob: r.blob, name: r.name || meta[i].name }); } return out; }
   async function restore(list = []) { const by = new Map(list.map((c) => [c.slot, c])); for (let i = 0; i < covers.length; i++) { const c = by.get(i); if (c && c.blob) { try { await setCover(i, c.blob, c.name || 'cover'); } catch { await resetCover(i); } } else if (meta[i]) await resetCover(i); } }
-  return { setCover, resetCover, swap, addFiles, blobs, restore, list: () => meta.map((m, i) => ({ slot: i, name: m ? m.name : 'built-in', user: !!m, w: m ? m.w : covers[i] ? covers[i].width : 0 })), ready, get covers() { return covers; } };
+  // v22.4 intro voice take (IndexedDB key 'voice'): the exporter splits it at its pauses and places the phrases on the intro (export.voiceAts)
+  let voice = null; const vInfo = document.getElementById('mediaVoice'), vClear = document.getElementById('voiceClear');
+  const showVoice = () => { if (vInfo) vInfo.textContent = voice ? `${voice.name} · placed on the intro at export` : 'one take with pauses between the phrases (e.g. ElevenLabs): split at the pauses, placed on the intro'; if (vClear) vClear.hidden = !voice; };
+  async function setVoice(blob, name = 'voice', persist = true) { voice = { blob, name }; if (persist) await dbDo('readwrite', (st) => st.put({ blob, name }, 'voice')); showVoice(); }
+  async function clearVoice() { voice = null; await dbDo('readwrite', (st) => st.delete('voice')); showVoice(); }
+  document.getElementById('voiceFile')?.addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) await setVoice(f, f.name); });
+  vClear?.addEventListener('click', clearVoice);
+  dbDo('readonly', (st) => st.get('voice')).then((r) => { if (r && r.blob) setVoice(r.blob, r.name, false); });
+  return { setVoice, clearVoice, get voice() { return voice; }, setCover, resetCover, swap, addFiles, blobs, restore, list: () => meta.map((m, i) => ({ slot: i, name: m ? m.name : 'built-in', user: !!m, w: m ? m.w : covers[i] ? covers[i].width : 0 })), ready, get covers() { return covers; } };
 }
