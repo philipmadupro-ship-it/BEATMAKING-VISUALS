@@ -190,17 +190,18 @@ const env = { ...process.env, HYPERFRAMES_NO_TELEMETRY: '1', DO_NOT_TRACK: '1', 
 const q = args.quality ? ['--quality', String(args.quality)] : ['--video-bitrate', '12M', '--max-bitrate', '14M'];
 const t0 = Date.now();
 run('npx', ['hyperframes', 'render', '.', '-c', comp, '-o', tmp, ...q, '--fps', '30', '--quiet'], { cwd: FILM, env, quiet: true });
+const AUX = String(comp || 'u2c').replace(/\.html$/, '') + '-';   // v22.6: per-render temp audio (9:16 and 16:9 render in parallel)
 const useClicks = CLICKS.length && !/^(off|0|false|no)$/i.test(String(args.clicks ?? 'on'));
-if (useClicks) run('python3', [path.join(ROOT, 'tools', 'clicks.py'), '--out', path.join(FILM, 'renders', 'clicks.wav'), '--dur', String(D.duration + PRE), '--times', CLICKS.join(','), '--gain-db', String(args['click-db'] ?? -16)], { quiet: true });
+if (useClicks) run('python3', [path.join(ROOT, 'tools', 'clicks.py'), '--out', path.join(FILM, 'renders', AUX + 'clicks.wav'), '--dur', String(D.duration + PRE), '--times', CLICKS.join(','), '--gain-db', String(args['click-db'] ?? -16)], { quiet: true });
 const audioIn = path.join(FILM, 'data', id + '.wav'), dly = PRE > 0 ? `adelay=${Math.round(PRE * 1000)}:all=1,` : '';
 // v22.1 lab voice (offline Piper, tools/voice.py): "<title>. Experimentation." while the hook rises, "Initiating playback." just before the play click
 const useVoice = look === 'player' && PRE >= 3 && !args.test && !/^(off|0|false|no)$/i.test(String(args.voice ?? 'on')) && fs.existsSync(path.join(ROOT, 'tools', 'voice.py'));
-const useSfx = SFX.length > 0; if (useSfx) { fs.writeFileSync(path.join(FILM, 'renders', 'sfx.json'), JSON.stringify(SFX)); run('python3', [path.join(ROOT, 'tools', 'sfx.py'), '--events', path.join(FILM, 'renders', 'sfx.json'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', 'sfx.wav'), '--gain-db', String(args['sfx-db'] ?? -14)], { quiet: true }); }
-if (useVoice) run('python3', [path.join(ROOT, 'tools', 'voice.py'), '--title', String(D.title || args.title || 'U2C'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', 'voice.wav'), ...((args['voice-source'] || process.env.U2C_VOICE_SOURCE) ? ['--source', path.resolve(String(args['voice-source'] || process.env.U2C_VOICE_SOURCE)), '--ats', String(args['voice-ats'] || '0.45,2.15,4.3,5.55'), '--gain-db', '0'] : [])], { quiet: true });   // v22.2: a recorded take (ElevenLabs) when given
+const useSfx = SFX.length > 0; if (useSfx) { fs.writeFileSync(path.join(FILM, 'renders', AUX + 'sfx.json'), JSON.stringify(SFX)); run('python3', [path.join(ROOT, 'tools', 'sfx.py'), '--events', path.join(FILM, 'renders', AUX + 'sfx.json'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', AUX + 'sfx.wav'), '--gain-db', String(args['sfx-db'] ?? -14)], { quiet: true }); }
+if (useVoice) run('python3', [path.join(ROOT, 'tools', 'voice.py'), '--title', String(D.title || args.title || 'U2C'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', AUX + 'voice.wav'), ...((args['voice-source'] || process.env.U2C_VOICE_SOURCE) ? ['--source', path.resolve(String(args['voice-source'] || process.env.U2C_VOICE_SOURCE)), '--ats', String(args['voice-ats'] || '0.45,2.15,4.3,5.55'), '--gain-db', '0'] : [])], { quiet: true });   // v22.2: a recorded take (ElevenLabs) when given
 { const ins = ['-i', tmp, '-i', audioIn], parts = [`[1:a]${dly}aresample=48000[b]`], lab = ['[b]']; let n = 2;
-  if (useClicks) { ins.push('-i', path.join(FILM, 'renders', 'clicks.wav')); parts.push(`[${n}:a]aresample=48000[k]`); lab.push('[k]'); n++; }
-  if (useSfx) { ins.push('-i', path.join(FILM, 'renders', 'sfx.wav')); parts.push(`[${n}:a]aresample=48000[s]`); lab.push('[s]'); n++; }
-  if (useVoice) { ins.push('-i', path.join(FILM, 'renders', 'voice.wav')); parts.push(`[${n}:a]aresample=48000[v]`); lab.push('[v]'); n++; }
+  if (useClicks) { ins.push('-i', path.join(FILM, 'renders', AUX + 'clicks.wav')); parts.push(`[${n}:a]aresample=48000[k]`); lab.push('[k]'); n++; }
+  if (useSfx) { ins.push('-i', path.join(FILM, 'renders', AUX + 'sfx.wav')); parts.push(`[${n}:a]aresample=48000[s]`); lab.push('[s]'); n++; }
+  if (useVoice) { ins.push('-i', path.join(FILM, 'renders', AUX + 'voice.wav')); parts.push(`[${n}:a]aresample=48000[v]`); lab.push('[v]'); n++; }
   const fc = parts.join(';') + `;${lab.join('')}amix=inputs=${lab.length}:normalize=0:duration=first[a]`;
   run('ffmpeg', ['-v', 'error', '-y', ...ins, '-filter_complex', fc, '-map', '0:v:0', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-movflags', '+faststart', '-shortest', out], { quiet: true }); }
 const lo = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', out, '-af', 'ebur128=peak=true', '-f', 'null', '-'], { encoding: 'utf8' }).stderr;
