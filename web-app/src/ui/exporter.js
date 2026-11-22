@@ -29,7 +29,7 @@ export function createExporter(app) {
     status(`Preparing audio for ${label}…`);
     const au = await prepareAudio(buf, project, { loopSafe: ex.loopSafe, xf: Math.min(tr.spb, (project.outT - project.inT) / 4), loudness: ex.loudness, voiceTag: ex.voiceTag ? app.store.session.voiceTag : null, voiceEvery: ex.voiceEvery });
     $('#loudKv').innerHTML = `<dt>Measured in</dt><dd>${au.stats.inLufs.toFixed(1)} LUFS</dd><dt>Gain</dt><dd>${au.stats.gainDb >= 0 ? '+' : ''}${au.stats.gainDb.toFixed(1)} dB</dd><dt>Out</dt><dd>${au.stats.outLufs.toFixed(1)} LUFS · peak ${au.stats.peakDb.toFixed(1)} dBTP (4× oversampled)</dd>`;
-    const PRE = ex.preroll !== false && project.look === 'player' ? 1.9 : 0;   // v19.4 click-to-play pre-roll (as the native --preroll)
+    const PRE = ex.preroll !== false && project.look === 'player' ? 4.0 : 0;   // v22 4 s (sphere intro); v19.4 click-to-play pre-roll (as the native --preroll)
     const work = makeSurface(W, H), renderOne = (t, surf, info) => app.renderFrame(t, surf, project, tr, { entry, sheet, fps: ex.fps, info, preroll: PRE }), blur = ex.mblur !== false, SH = ex.shutter ?? 0.5;
     // Motion blur: the shared engine/render.js createBlur (the preview's Blur button runs the same code)
     const blurF = createBlur(), render = (t) => (blur ? blurF(renderOne, t, work, ex.fps, SH) : renderOne(t, work, {}) || work.canvas);

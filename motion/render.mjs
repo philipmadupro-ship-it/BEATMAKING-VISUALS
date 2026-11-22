@@ -52,7 +52,7 @@ if (!['exe', 'lab', 'scope', 'player'].includes(look)) throw new Error('look mus
 const aspect = String(args.aspect || '9:16').replace(':', '').replace('x', '');
 const len = Number(args.len || 30);
 // v19 --preroll <s> (player look default 0.7): silent pause on the stopped player before the cursor clicks play; the audio starts on the click
-const PRE = args.test ? 0 : Math.max(0, +(args.preroll ?? ((args.look || 'exe') === 'player' ? 1.9 : 0)));
+const PRE = args.test ? 0 : Math.max(0, +(args.preroll ?? ((args.look || 'exe') === 'player' ? 4.0 : 0)));   // v22: 4 s pre-roll (orbit-sphere intro: spin, drag, pick, play)
 if (!['nigredo', 'albedo', 'citrinitas', 'rubedo', 'white'].includes(stage)) throw new Error('unknown stage ' + stage);
 if (!['916', '169'].includes(aspect)) throw new Error('aspect must be 9:16 or 16:9');
 const base = path.basename(beat).replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
@@ -105,7 +105,8 @@ if (ENGINE === 'v9') {
   }
   // v19 click times (composition seconds) = the mouse layer's clicks (same rules as film.js mouseWays): play, card, camera travels, CTA closes, hero
   if (look === 'player' && !args.test) { const BT = D.beat, ilT = sheet.tracks.find((tr) => tr.path === 'intro.length'), IBb = sheet.base['intro.on'] === false ? 0 : 4 * (ilT ? ilT.keys[0].v : 2), T2 = (bb) => bb * BT, w = [];
-    if (PRE > 0) w.push(-0.06); if (IBb && PRE > 0) w.push(...(sheet.base['intro.browse'] === 0 ? [] : [T2(-3) - 0.02, T2(-2) - 0.02]), T2(-1.25) - 0.02);   // v21: no browse clicks on a direct pick else if (IBb) w.push(T2(Math.max(1, IBb - 2)) - 0.02);   // v19.3 browse x2 + choose, then play
+    if (PRE > 0) w.push(-0.06); if (IBb && PRE > 0 && sheet.base['intro.style'] === 'sphere') w.push(T2(-6) - 0.02, T2(-4), T2(-3.5) - 0.02);   // v22 sphere: press, release after the drag, pick
+    else if (IBb && PRE > 0) w.push(...(sheet.base['intro.browse'] === 0 ? [] : [T2(-3) - 0.02, T2(-2) - 0.02]), T2(-1.25) - 0.02);   // v21: no browse clicks on a direct pick else if (IBb) w.push(T2(Math.max(1, IBb - 2)) - 0.02);   // v19.3 browse x2 + choose, then play
     for (const tr of sheet.tracks) if (tr.path === 'camera.shot') for (const k of tr.keys) if (k.v !== 'wide') w.push(T2(k.b - (k.dur ?? 1)) - 0.02);
     for (const kk of ['cta1', 'cta2']) { const at = sheet.base[`social.${kk}.at`], ln = sheet.base[`social.${kk}.len`]; if (at != null) w.push(T2(at + (ln ?? 8)) - 0.02); }
     if (IBb && D.duration > T2(IBb + 16)) w.push((sheet.base['outro.mode'] ?? 'dialog') === 'dialog' ? D.duration - T2(9) - 0.02 : D.duration - 2 * 4 * BT - T2(3) - 0.02);   // v21: the x of JOIN / CREATE PROJECT (E-9 beats)

@@ -29,7 +29,7 @@ export function createReview(app) {
   }
   const diff = (a, b) => { const A = a.ctx.getImageData(0, 0, a.w, a.h).data, B = b.ctx.getImageData(0, 0, b.w, b.h).data; let s = 0; for (let i = 0; i < A.length; i += 4) s += Math.abs(A[i] - B[i]) + Math.abs(A[i + 1] - B[i + 1]) + Math.abs(A[i + 2] - B[i + 2]); return s / (A.length / 4) / 3; };
   async function frames() {
-    const p = P(), tr = app.store.session.track; if (!tr) return; const ex = p.export, PRE = ex.preroll !== false && p.look === 'player' ? 1.9 : 0, port = p.aspect === '916';
+    const p = P(), tr = app.store.session.track; if (!tr) return; const ex = p.export, PRE = ex.preroll !== false && p.look === 'player' ? 4.0 : 0, port = p.aspect === '916';
     const W = port ? 216 : 320, H = port ? 384 : 180, entry = await app.clip.ensure(p.inT, p.outT), list = moments(p, tr, PRE), root = $('#revFrames'); root.innerHTML = '';
     const one = (t, s, info) => app.renderFrame(t, s, p, tr, { entry, fps: ex.fps, info, preroll: PRE });
     for (const m of list) {

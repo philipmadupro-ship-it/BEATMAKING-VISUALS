@@ -45,7 +45,7 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     // v21 seeded order (user: "random, the tapped window aleatoire; concentrate on the hero card sometimes"): groups of [panel, panel, wide, panel, wide] (two wide breaths per 16 bars for the two CTAs); the panels are a
     // seeded shuffle where the hero (stage) comes twice per cycle and the rack once, never the same window twice in a row; the first panel is seeded too
     const RND = rng(seed), others = ['spectrum', 'session', 'stereo', 'loud', ...(aspect === '169' ? ['meta'] : [])].filter((id) => ids.includes(id)), wides = []; let bar = 3, last = 'stage';
-    const cyc = () => { const o = shuffle(RND, others.slice()), A = shuffle(RND, [...(ids.includes('stage') ? ['stage'] : []), ...(ids.includes('inserts') ? ['inserts'] : []), o[0]].filter(Boolean)), B = shuffle(RND, [o[1], ids.includes('stage') ? 'stage' : o[2]].filter(Boolean)); return [...A, ...B]; };   // the first 3 visits = hero + rack + one other
+    const cyc = () => { const o = shuffle(RND, others.slice()), A = shuffle(RND, ['stage', 'inserts', 'session'].filter((q) => ids.includes(q))), B = shuffle(RND, o.filter((q) => q !== 'session').slice(0, 2)); return [...A, ...B]; };   // v22 (user): the first 3 visits = waveform + hero + rack, once each, seeded order
     let pool = cyc(), pi = 0, slot = 0; const seq = { next() { { const sl = slot++ % 5; if (sl === 2 || sl === 4) return 'wide'; } if (pi >= pool.length) { pool = cyc(); pi = 0; } let id = pool[pi++]; if (id === last && pi < pool.length) { [pool[pi - 1], pool[pi]] = [pool[pi], pool[pi - 1]]; id = pool[pi - 1]; } last = id; return id; } };
     for (; bar < NB - 4; bar += 2) { const id = seq.next(); if (id === 'wide') wides.push(bar); cam.push(key(bar * 4, id, { transition: 'push', dur: aspect === '169' ? 3 : 2, ease: 'spring' })); }   // v19.1: YouTube 16:9 moves are calmer (3 beats)
     if (wides[0] != null) { sheet.base['social.cta1.at'] = wides[0] * 4 + 1; sheet.base['social.cta1.len'] = 4; }
@@ -116,8 +116,16 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     // v21 seeded browse (user: "sometimes left, sometimes right, sometimes it clicks directly"): +1 = the cards step in from the left (2 -> 1 -> 0, the cursor
     // clicks the left card), -1 = from the right (-2 -> -1 -> 0, clicks the right card), 0 = the beat cover is already centred and the cursor picks it directly
     const BR = rng(seed ^ 0x9e3779b9)(), browse = BR < 0.4 ? 1 : BR < 0.8 ? -1 : 0, s0 = 2 * browse; sheet.base['intro.browse'] = browse;
-    sheet.tracks.push(track('intro.index', 'number', 'stage', browse ? [key(-4.5, s0, { ease: 'step' }), key(-3, s0, { ease: 'easeInOut' }), key(-2.625, browse, { ease: 'step' }), key(-2, browse, { ease: 'easeInOut' }), key(-1.625, 0, { ease: 'step' })] : [key(-4.5, 0, { ease: 'step' })]));
-    sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(-4.5, 0.45, { ease: 'step' }), key(-4, 0.45, { ease: 'linear' }), key(-3.25, 1, { ease: 'step' })]));
+    // v22 ORBIT SPHERE intro (user): frame 0 = the covers on a slowly spinning sphere (seeded spin direction) -> the cursor drags it up
+    // (beats -6 .. -4: pitch to the beat cover's ring, yaw to its longitude) -> clicks the beat cover (-3.5) -> it flies onto the card (-3.5 .. -2)
+    // -> the selection brackets (-1.25) -> the cursor clicks play. Old flow (cards) = intro.style 'flow'.
+    const SPIN = rng(seed ^ 0x51ed)() < 0.5 ? -1 : 1; sheet.base['intro.style'] = 'sphere'; sheet.base['intro.browse'] = 0;
+    sheet.tracks.push(track('intro.yaw', 'number', 'stage', [key(-8.5, SPIN * 1.1, { ease: 'linear' }), key(-6, SPIN * 0.45, { ease: 'standard' }), key(-4, 0, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.pitch', 'number', 'stage', [key(-8.5, 0, { ease: 'step' }), key(-6, 0, { ease: 'easeInOut' }), key(-4, -37 * Math.PI / 180, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.pick', 'number', 'stage', [key(-8.5, 0, { ease: 'step' }), key(-3.5, 0, { ease: 'emphasized' }), key(-2, 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.index', 'number', 'stage', [key(-8.5, 0, { ease: 'step' })]));   // v21 browse kept for intro.style 'flow' (see intro.browse)
+    void browse; void s0;
+    sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(-8.5, 1, { ease: 'step' })]));   // v22: the sphere needs no fan-out
     sheet.tracks.push(track('intro.select', 'enum', 'stage', [key(-1.25, true, { ease: 'step' })]));
     sheet.tracks.push(track('intro.push', 'number', 'stage', [key(0, 0, { ty: 'bezier', ob: [0.42, 0], ease: 'easeInOut' }), key(4, 1, { ib: [0, 0], ease: 'step' })]));
   } else if (NB >= 8) {

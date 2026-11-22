@@ -223,8 +223,13 @@ export function createIntro(L, A = {}) {
     if (push < 0.02) {
       tx(c, `${Math.round(D.bpm)} BPM  ${D.key}`, g.pl[0] + 8, g.top, 20, INTRO_DISPLAY, 'rgba(255,255,255,0.62)', 'left', 0, 1); tx(c, L.bbt(t), W - g.pl[0] - 8, g.top, 20, INTRO_DISPLAY, 'rgba(255,255,255,0.62)', 'right', 0, 1);
     }
+    // ---- v22 ORBIT SPHERE (user ref "Orbit Sphere"): the covers tiled on a 3D sphere; intro.yaw / intro.pitch turn it (the cursor drags it up),
+    // intro.pick 0..1 flies the picked tile (the beat cover) out of the sphere onto the card's cover square; at pick 1 the normal card takes over
+    const SPH = V('intro.style', 'flow') === 'sphere', pick = SPH ? clamp(V('intro.pick', 1)) : 1;
+    if (SPH) sphere(c, g, S, V('intro.yaw', 0), V('intro.pitch', 0), pick, kick, coverCy);
     // ---- cover-flow
     const items = []; for (let i = 0; i < COVER_N; i++) items.push([i, ((((i - pos + 2.5) % 5) + 5) % 5) - 2.5]); items.sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]));
+    if (SPH) { items.length = 0; if (pick >= 1) items.push([0, 0]); }   // sphere mode: only the chosen card, once it has landed
     const d3 = g.cw * 1.6;
     const mtx = c.getTransform(), dev = Math.hypot(mtx.a, mtx.b);   // device px per logical px: strips are ~3 device px wide (cheap in small previews)
     for (const [i, od0] of items) {
@@ -281,6 +286,30 @@ export function createIntro(L, A = {}) {
     // v13: directional motion blur on the zoom: the scale change over the last frame time (the same exponential zoom at t - 0.9 frame)
     const pPrev = clamp(ev.value('intro.push', (t - 0.9 / D.fps) / BEAT, 0)), dl = Math.log(zmax) * (push - pPrev);
     if (dl > 0) streak(c, pvx, pvy, dl);
+  }
+  // v22 sphere geometry: 6 latitude rings, ~14 tiles on the equator; tile k shows cover (k % 5) except the target (ring 1, lon 0 = the beat cover).
+  // Rotation: yaw about the vertical axis, then pitch about the horizontal one; perspective F = 3 R; only the front hemisphere draws, edge tiles darker.
+  const SPH_RINGS = [-62, -37, -12, 12, 37, 62].map((d) => d * Math.PI / 180), SPH_TILES = [];
+  SPH_RINGS.forEach((lat, ri) => { const n = Math.max(5, Math.round(14 * Math.cos(lat))); for (let j = 0; j < n; j++) SPH_TILES.push({ lat, lon: j * 2 * Math.PI / n, w: Math.cos(lat) * 2 * Math.PI / n * 0.84, h: 0.4 * 0.84, cov: ri === 1 && j === 0 ? 0 : (1 + (SPH_TILES.length % 4)) }); });
+  /** Beat-cover target: (lat of ring 1, lon 0); the generator aims the drag so yaw 0 / pitch = SPH_TARGET_LAT puts it front and centre. */
+  function sphere(c, g, S, yaw, pitch, pick, kick, coverCy) {
+    const R = Math.min(g.cw * 0.95, 420), cx = g.cx, cy = g.cy - R * 0.05, F = 3, sc = 1 - 0.34 * ss(pick), cyS = cy - 40 * ss(pick), cY = Math.cos(yaw), sY = Math.sin(yaw), cP = Math.cos(pitch), sP = Math.sin(pitch);
+    const rot = (x, y, z) => { const x1 = x * cY + z * sY, z1 = -x * sY + z * cY, y2 = y * cP - z1 * sP, z2 = y * sP + z1 * cP; return [x1, y2, z2]; };
+    const list = [];
+    for (const T0 of SPH_TILES) { const cl = Math.cos(T0.lat), p = rot(cl * Math.sin(T0.lon), Math.sin(T0.lat), cl * Math.cos(T0.lon)); if (p[2] < 0.08) continue;
+      const e = rot(Math.cos(T0.lon), 0, -Math.sin(T0.lon)), nN = rot(-Math.sin(T0.lat) * Math.sin(T0.lon), Math.cos(T0.lat), -Math.sin(T0.lat) * Math.cos(T0.lon));
+      const k = F / (F - p[2]), s2 = R * sc * k, X = cx + p[0] * s2, Y = cyS - p[1] * s2;
+      list.push({ T0, z: p[2], m: [e[0] * s2 * T0.w, -e[1] * s2 * T0.w, -nN[0] * s2 * T0.h, nN[1] * s2 * T0.h, X, Y] }); }
+    list.sort((a2, b2) => a2.z - b2.z);
+    const tgtM = [g.cw, 0, 0, g.cw, g.cx, coverCy];   // the card's cover square
+    for (const it of list) { const isT = it.T0.cov === 0 && it.T0.lat === SPH_RINGS[1]; let m = it.m;
+      if (isT && pick > 0) continue;   // flying: drawn last, on top
+      c.save(); c.transform(...m); c.drawImage(coverCanvas(it.T0.cov, S), -0.5, -0.5, 1, 1);
+      const shade = (1 - it.z) * 0.75 + (isT && pick > 0 ? -1 : 0.25 * ss(pick)); if (shade > 0.01) { c.fillStyle = `rgba(0,0,0,${Math.min(0.92, shade)})`; c.fillRect(-0.5, -0.5, 1, 1); }
+      c.lineWidth = 1.5 / Math.max(1, Math.hypot(m[0], m[1])); c.strokeStyle = 'rgba(255,255,255,0.22)'; c.strokeRect(-0.5, -0.5, 1, 1); c.restore(); }
+    // the picked tile is drawn last (on top) while it flies
+    if (pick > 0 && pick < 1) { const it = list.find((q) => q.T0.cov === 0 && q.T0.lat === SPH_RINGS[1]); if (it) { const u = ss(pick), m = it.m.map((v, q) => lerp(v, tgtM[q], u)); c.save(); c.transform(...m); c.drawImage(coverCanvas(0, S), -0.5, -0.5, 1, 1); c.restore(); } }
+    void kick;
   }
   // selection brackets: an explicit intro.select key, else they step in where the push starts (first intro.push key)
   function selectKey(ev, b) {
@@ -341,5 +370,5 @@ export function createIntro(L, A = {}) {
     }
     g.putImageData(d, 0, 0); CACHE.set(key, cv); return cv;
   }
-  return { draw, beats, events, geom, cardTex, coverCanvas, coverFried, openCam, streak, coverTarget: (look, aspect) => coverTarget(L, look, aspect) };
+  return { SPH_TARGET_LAT: -37 * Math.PI / 180, draw, beats, events, geom, cardTex, coverCanvas, coverFried, openCam, streak, coverTarget: (look, aspect) => coverTarget(L, look, aspect) };
 }

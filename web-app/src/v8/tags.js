@@ -31,7 +31,7 @@ export const DEFAULT_TAGS = {
   "hook": "THIS BEAT FAILED THE LAB TEST",
   "cta1": { "title": "U2C ALERT", "body": "COMMENT \"LAB\"", "sub": "FOR THE FREE DOWNLOAD" },
   "cta2": { "title": "U2C SYSTEM", "body": "FULL BEAT: LINK IN BIO", "sub": "{bpm} BPM \u00b7 {key} \u00b7 PROD. {producer}" },
-  "outro": { "title": "U2C LAB", "body": "JOIN / CREATE PROJECT", "sub": "SAVE {title} TO YOUR LAB" },
+  "outro": { "title": "U2C LAB", "body": "CLOSE PROJECT?", "sub": "{title} \u00b7 SAVED TO THE LAB" },
   "terminal": ["LOADING {titleWord}.WAV", "ANALYSING\u2026 {bpm} BPM \u00b7 {key}", "LAB TEST: FAILED", "EXPORT COMPLETE"]
  },
  "player": {

@@ -515,7 +515,9 @@ export function createFilm({ D, assets, aspect = '916' }) {
   let MW = null;
   function mouseWays() { if (MW && MW.ev === ev) return MW.w; const w = [], P = PRE, rest = { sx: W * 0.8, sy: H * (port ? 0.84 : 0.88) };
     w.push({ t: -P, ...rest }); if (P > 0) w.push({ t: -0.06, play: true, click: true });
-    if (IB && LOOK === 'player' && P > 0) { const g = INTRO.geom(W, H); const br = Math.round(ev.value('intro.browse', -4, 1)); if (br) for (const bb of [-3, -2]) w.push({ t: T(bb) - 0.02, sx: g.cx - br * g.xs1 * 0.95, sy: g.cy + g.cw * 0.1, click: true }); w.push({ t: T(-1.25) - 0.02, sx: g.cx + g.cw * 0.12, sy: g.cy + g.cw * 0.25, click: true }); }   // v19.3: browse x2, choose; v21: browse side follows the seed (+1 left card, -1 right card, 0 direct)
+    if (IB && LOOK === 'player' && P > 0 && ev.value('intro.style', -4, 'flow') === 'sphere') { const g = INTRO.geom(W, H), R = Math.min(g.cw * 0.95, 420), cy0 = g.cy - R * 0.05;   // v22 sphere: press low on the sphere, drag up (held), click the beat cover
+      w.push({ t: T(-6) - 0.02, sx: g.cx + g.cw * 0.06, sy: cy0 + R * 0.5, click: true }); w.push({ t: T(-4), sx: g.cx + g.cw * 0.04, sy: cy0 + R * 0.04, drag: true, click: true }); w.push({ t: T(-3.5) - 0.02, sx: g.cx + g.cw * 0.03, sy: cy0 - R * 0.02, click: true }); }
+    else if (IB && LOOK === 'player' && P > 0) { const g = INTRO.geom(W, H); const br = Math.round(ev.value('intro.browse', -4, 1)); if (br) for (const bb of [-3, -2]) w.push({ t: T(bb) - 0.02, sx: g.cx - br * g.xs1 * 0.95, sy: g.cy + g.cw * 0.1, click: true }); w.push({ t: T(-1.25) - 0.02, sx: g.cx + g.cw * 0.12, sy: g.cy + g.cw * 0.25, click: true }); }   // v19.3: browse x2, choose; v21: browse side follows the seed (+1 left card, -1 right card, 0 direct)
     else if (IB) { const g = INTRO.geom(W, H); w.push({ t: T(Math.max(1, IB - 2)) - 0.02, sx: g.cx + g.cw * 0.18, sy: g.cy + g.cw * 0.2, click: true }); }
     for (const k of ev.keysIn('camera.shot', 0, 1e6)) { const r = k.v !== 'wide' && LY[k.v]; if (!r) continue; const d = k.dur ?? 1; w.push({ t: T(k.b - d) - 0.02, wx: r[0] + 92, wy: r[1] + (port ? 28 : 26), click: true }); }
     if (V('social.on', LOOK === 'player')) for (const [kk, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) { const at = V(`social.${kk}.at`, def), len = V(`social.${kk}.len`, 8);
@@ -529,10 +531,10 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function mousePos(q, cam) { if (q.play) return INTRO_HIT.play || [W * 0.3, H * 0.8]; if (q.wx != null) { if (!cam) return [W / 2, H / 2]; return [(q.wx - cam.x) * cam.z + W / 2, (q.wy - cam.y) * cam.z + H / 2]; } return [q.sx, q.sy]; }
   function mouse(tf, cam) {
     if (!V('cursor.on', LOOK === 'player')) return; const w = mouseWays(); let i = w.findIndex((q) => q.t > tf); if (i < 0) i = w.length - 1; if (i === 0) i = 1;
-    const A = w[i - 1], B = w[i], pa = mousePos(A, cam), pb = mousePos(B, cam), gap = B.t - A.t, mv = Math.min(0.6, Math.max(0.12, gap - 0.12)), s0 = B.t - mv - 0.06, u = clamp((tf - s0) / mv), e = mj(u);
+    const A = w[i - 1], B = w[i], pa = mousePos(A, cam), pb = mousePos(B, cam), gap = B.t - A.t, mv = B.drag ? gap : Math.min(0.6, Math.max(0.12, gap - 0.12)), s0 = B.drag ? A.t : B.t - mv - 0.06, u = clamp((tf - s0) / mv), e = B.drag ? u * u * (3 - 2 * u) : mj(u);   // v22: a drag moves for the whole segment, with the button held
     const dx = pb[0] - pa[0], dy = pb[1] - pa[1], bend = 0.12, mxp = pa[0] + dx / 2 - dy * bend, myp = pa[1] + dy / 2 + dx * bend;
     const x = (1 - e) * (1 - e) * pa[0] + 2 * (1 - e) * e * mxp + e * e * pb[0], y = (1 - e) * (1 - e) * pa[1] + 2 * (1 - e) * e * myp + e * e * pb[1];
-    const sinceA = tf - A.t, toB = B.t - tf, press = (B.click && toB < 0.06 && toB >= 0) || (A.click && sinceA < 0.08) ? 0.84 : 1, s = (port ? 2.9 : 2.0) * press;
+    const sinceA = tf - A.t, toB = B.t - tf, press = (B.drag && tf >= A.t) || (B.click && toB < 0.06 && toB >= 0) || (A.click && sinceA < 0.08) ? 0.84 : 1, s = (port ? 2.9 : 2.0) * press;
     c.save(); c.setTransform(c.canvas.width / W, 0, 0, c.canvas.width / W, 0, 0);
     if (A.click && sinceA >= 0 && sinceA < 0.3) { c.beginPath(); c.arc(x, y, 12 + 70 * sinceA / 0.3, 0, 2 * Math.PI); c.strokeStyle = rgba(S.grey ? S.ink : S.hot, 0.75 * (1 - sinceA / 0.3)); c.lineWidth = 2.5; c.stroke(); }
     c.translate(x, y); c.rotate(-0.04); c.scale(s, s); c.shadowColor = 'rgba(0,0,0,0.35)'; c.shadowBlur = 6; c.shadowOffsetX = 2; c.shadowOffsetY = 3; c.beginPath();
@@ -541,7 +543,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   // v21 outro dialog (screen space, on the hero shot): JOIN / CREATE PROJECT pops (spring) 5 beats before the cut back, the cursor closes it with x 2 beats later
   const outroWin = () => (OUTD && RWB ? [RWB - 5, RWB - 3] : null);
-  function outroDialog(t) { const w2 = outroWin(); if (!w2 || b < w2[0] || b >= w2[1]) return; dialog(W / 2, H * 0.5, port ? 900 : 760, tag('social.outro.title') || 'U2C LAB', tag('social.outro.body') || 'JOIN / CREATE PROJECT', tag('social.outro.sub') || '', T(w2[0]), t, null); }
+  function outroDialog(t) { const w2 = outroWin(); if (!w2 || b < w2[0] || b >= w2[1] + 0.5) return; const uo = clamp((b - w2[1]) / 0.5), ox = b >= w2[1] ? 1 - uo * uo * (3 - 2 * uo) : 1; if (ox <= 0.01) return; c.save(); c.translate(W / 2, H * 0.5); c.scale(ox, ox); c.translate(-W / 2, -H * 0.5); dialog(W / 2, H * 0.5, port ? 900 : 760, tag('social.outro.title') || 'U2C LAB', tag('social.outro.body') || 'JOIN / CREATE PROJECT', tag('social.outro.sub') || '', T(w2[0]), t, null); c.restore(); }   // v22: CLOSE PROJECT?; after the x click it shrinks away (half a beat) as the dolly starts
   // v21 TERMINAL WORDS (user: "words that come in and out, like on a computer"): term.line clips type in one character per 64th note, hold, then delete backwards
   // (one character per 128th) before the clip ends; a small system toast, bottom-left inside the safe zone; text is a tag string with {vars}
   function terminal(t) {
@@ -665,6 +667,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
       const o = (t - RWB * BEAT) / BEAT, tI = -PRE + 0.5 / fps, bI = tI / BEAT, sm = (u) => { u = clamp(u); return u * u * u * (u * (6 * u - 15) + 10); };
       const idx0 = ev.value('intro.index', bI, 0), ent0 = ev.value('intro.enter', bI, 1), u1 = clamp(o / 3), u2 = sm((o - 3) / 2);
       const OV = { 'intro.push': Math.pow(1 - u1, 3), 'intro.index': lerp(0, idx0, u2), 'intro.enter': lerp(1, ent0, u2), 'intro.select': false };
+      if (ev.value('intro.style', bI, 'flow') === 'sphere') { const uP = sm((o - 3) / 1.25), uR = sm((o - 3.5) / 1.5);   // v22: the card flies back into the sphere, the sphere turns back to frame 0
+        OV['intro.pick'] = lerp(1, ev.value('intro.pick', bI, 0), uP); OV['intro.pitch'] = lerp(ev.value('intro.pitch', 0, 0), ev.value('intro.pitch', bI, 0), uR); OV['intro.yaw'] = lerp(ev.value('intro.yaw', 0, 0), ev.value('intro.yaw', bI, 0), uR); }
       b = bI; const Vo = (pth, d) => (pth in OV ? OV[pth] : V(pth, d));
       L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, tI, { S, V: Vo, ev, tag, W, H, look: LOOK, aspect, paused: true, playerIn: !!PRE });
       c.setTransform(scale, 0, 0, scale, 0, 0);
