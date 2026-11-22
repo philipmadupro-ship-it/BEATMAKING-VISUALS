@@ -75,8 +75,9 @@ export function createMedia(app) {
   vClear?.addEventListener('click', clearVoice);
   // v22.5: her words are the tags voice.lines (editable in Text / Review / Metadata); this builds the ElevenLabs prompt from them, so a new take matches the captions
   document.getElementById('voicePrompt')?.addEventListener('click', async () => { const tg = app.cues.tags(''), L4 = (tg.voice && tg.voice.lines) || [], sub = (q) => String(q).replace(/\{title\}/g, String(tg.title || '').replace(/\{title\}/g, app.store.project.title || ''));
-    const words = L4.map((q) => sub(q).toLowerCase().replace(/\b(\w)/g, (m) => m.toUpperCase()).replace(/Uche2crazy/gi, 'Oo-chay Two Crazy').replace(/\b0?1\b/, 'one'));
-    const prompt = `[${(tg.voice && tg.voice.style) || 'calm, clinical lab announcement'}] ${words[0] || ''}... ${words[1] || ''}. [pause] ${words[2] || ''}. [long pause] ${words[3] || ''}.`;
+    const nn = String((tg.voice && tg.voice.number) || '01'), numWord = (x) => { const n = parseInt(x, 10); const W1 = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']; return Number.isFinite(n) && n <= 12 ? W1[n] : String(x); };
+    const words = L4.map((q) => sub(String(q).replace(/N\u00ba \{n\}|\{n\}/g, 'number ' + numWord(nn))).toLowerCase().replace(/\b(\w)/g, (m) => m.toUpperCase()).replace(/Uche2crazy/gi, 'Oo-chay Two Crazy').replace(/\b0?1\b/, 'one'));
+    const prompt = `[${(tg.voice && tg.voice.style) || 'calm, clinical lab announcement'}] ` + words.filter(Boolean).map((w, i) => (i ? '[pause] ' : '') + w + (i ? '.' : '...')).join(' ');
     try { await navigator.clipboard.writeText(prompt); if (vInfo) vInfo.textContent = 'prompt copied: ' + prompt; } catch { if (vInfo) vInfo.textContent = prompt; } });
   dbDo('readonly', (st) => st.get('voice')).then((r) => { if (r && r.blob) setVoice(r.blob, r.name, false); });
   return { setVoice, clearVoice, get voice() { return voice; }, setCover, resetCover, swap, addFiles, blobs, restore, list: () => meta.map((m, i) => ({ slot: i, name: m ? m.name : 'built-in', user: !!m, w: m ? m.w : covers[i] ? covers[i].width : 0 })), ready, get covers() { return covers; } };

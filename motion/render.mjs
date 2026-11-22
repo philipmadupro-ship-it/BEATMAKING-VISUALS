@@ -117,7 +117,7 @@ if (ENGINE === 'v9') {
     const BT = D.beat, T2 = (bb) => bb * BT, P = PRE, rate = BT / 24, get = (o, p) => p.split('.').reduce((q, k) => (q == null ? q : q[k]), o), tg = (p) => get(sheet.tags || {}, p) ?? get(DEFAULT_TAGS, p);
     const sub = (x) => String(x ?? '').replace(/\{[a-zA-Z]+\}/g, (m) => (m === '{title}' || m === '{titleWord}' ? String(D.title || '') : m === '{bpm}' ? String(Math.round(60 / BT)) : 'XXXX')), len = (x) => sub(x).length, E = [];
     E.push({ t: 0, kind: 'swell' }, { t: 0.25, kind: 'bleep' }, { t: 1.0, kind: 'type', n: len(tg('social.title')) + len(tg('social.hook')), dt: BT / 12 });   // v22.5 hook at half speed
-    { const L4 = tg('voice.lines') || [], at = String(tg('voice.ats') || '0.45,2.15,4.3,5.55').split(',').map(Number), du = String(tg('voice.durs') || '1.6,1.6,1.2,1.45').split(',').map(Number);
+    { const L4 = tg('voice.lines') || [], at = String(tg('voice.ats') || '0.7,3.0,5.0').split(',').map(Number), du = String(tg('voice.durs') || '2.0,1.6,1.3').split(',').map(Number);
       if (P > 0) L4.forEach((q, i) => { const n = len(q) + 2; E.push({ t: at[i], kind: 'type', n, dt: (du[i] ?? 1.4) * 0.85 / Math.max(1, n - 2) }); }); }   // v22.5 the keys follow her lines
     if (sheet.base['intro.style'] === 'sphere') { const tl = String(D.title || '').length + 16; E.push({ t: P + T2(-10.5), kind: 'whir', dur: T2(3.5) }, { t: P + T2(-6.1) + 0.03, kind: 'lock' }, { t: P + T2(-4.4), kind: 'type', n: tl, dt: T2(1) / tl }); }
     if (P > 0) E.push({ t: P - 0.02, kind: 'boot' });
@@ -130,13 +130,14 @@ if (ENGINE === 'v9') {
     // v22.6 recorded lab SFX (ElevenLabs library in U2C_SFX_DIR): CRT power-on at the start, centrifuge on the sphere drag, a scanner sweep on every camera
     // move, a relay clunk when each pop-up opens and on its x, data chatter on each terminal line, a quiet Geiger bed under the whole video
     const SD = process.env.U2C_SFX_DIR || '/home/user/research/sfx', has = (n) => fs.existsSync(path.join(SD, n + '.mp3')), smp = (t, n, db, extra = {}) => { if (has(n) && t >= 0) keep.push({ t, kind: 'sample', file: path.join(SD, n + '.mp3'), db, ...extra }); };
-    if (P > 0) smp(0, 'crt', -4); if (sheet.base['intro.style'] === 'sphere') smp(P + T2(-10.5), 'centrifuge', 0);
+    // v22.7 (user: calmer, organic busy lab): lab ambience bed under the intro, glass clinks and little dings, no CRT / centrifuge / bloops
+    if (P > 0) { smp(0, 'labamb', -6, { loop: true, dur: P + 0.3 }); for (const tc of [0.9, 2.6, 4.4, 6.1]) smp(tc, 'clink', -10); smp(0.3, 'ding', -12); if (sheet.base['intro.style'] === 'sphere') { smp(P + T2(-6.1) + 0.03, 'ding', -10); smp(P + T2(-4.4), 'clink', -8); } }
     for (const tr of sheet.tracks) if (tr.path === 'camera.shot') for (const k of tr.keys) if (k.v !== 'wide') smp(P + T2(k.b - (k.dur ?? 1)), 'scan', -2);
     for (const kk of ['cta1', 'cta2']) { const at = sheet.base[`social.${kk}.at`], ln = sheet.base[`social.${kk}.len`] ?? 8; if (at != null) { smp(P + T2(at), 'relay', -6); smp(P + T2(at + ln) - 0.02, 'relay', -9); } }
     for (const tr of sheet.tracks) if (tr.path === 'term.line') for (const k of tr.keys) smp(P + T2(k.b), 'data', -4);
     if (IB2 && (sheet.base['outro.mode'] ?? 'dialog') === 'dialog' && D.duration > T2(IB2 + 16)) { const w0 = D.duration / BT - 6 - 5.5; smp(P + T2(w0), 'relay', -6); smp(P + T2(w0 + 2.5) - 0.02, 'relay', -9); }
     smp(0, 'geiger', -14, { loop: true, dur: D.duration + P });
-    keep.push({ t: 0, kind: 'room', dur: P + 0.4 }, { t: 0.25, kind: 'bloop' }); if (sheet.base['intro.style'] === 'sphere') keep.push({ t: P + T2(-6.1) + 0.03, kind: 'bloop' });   // v22.5 room tone + two serious bloops (hook window, the pick)
+   // v22.5 room tone + two serious bloops (hook window, the pick)
     SFX = keep.filter((e) => e.t >= 0 && e.t < D.duration + P); }
   const cuesTags = {}; if (args.title) cuesTags.title = String(args.title);
   cuesTags.date = args.date ? String(args.date) : (tags.date === '{today}' || !tags.date ? today : tags.date);
@@ -197,7 +198,7 @@ const audioIn = path.join(FILM, 'data', id + '.wav'), dly = PRE > 0 ? `adelay=${
 // v22.1 lab voice (offline Piper, tools/voice.py): "<title>. Experimentation." while the hook rises, "Initiating playback." just before the play click
 const useVoice = look === 'player' && PRE >= 3 && !args.test && !/^(off|0|false|no)$/i.test(String(args.voice ?? 'on')) && fs.existsSync(path.join(ROOT, 'tools', 'voice.py'));
 const useSfx = SFX.length > 0; if (useSfx) { fs.writeFileSync(path.join(FILM, 'renders', AUX + 'sfx.json'), JSON.stringify(SFX)); run('python3', [path.join(ROOT, 'tools', 'sfx.py'), '--events', path.join(FILM, 'renders', AUX + 'sfx.json'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', AUX + 'sfx.wav'), '--gain-db', String(args['sfx-db'] ?? -14)], { quiet: true }); }
-if (useVoice) run('python3', [path.join(ROOT, 'tools', 'voice.py'), '--title', String(D.title || args.title || 'U2C'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', AUX + 'voice.wav'), ...((args['voice-source'] || process.env.U2C_VOICE_SOURCE) ? ['--source', path.resolve(String(args['voice-source'] || process.env.U2C_VOICE_SOURCE)), '--ats', String(args['voice-ats'] || '0.45,2.15,4.3,5.55'), '--gain-db', '0'] : [])], { quiet: true });   // v22.2: a recorded take (ElevenLabs) when given
+if (useVoice) run('python3', [path.join(ROOT, 'tools', 'voice.py'), '--title', String(D.title || args.title || 'U2C'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', AUX + 'voice.wav'), ...((args['voice-source'] || process.env.U2C_VOICE_SOURCE) ? ['--source', path.resolve(String(args['voice-source'] || process.env.U2C_VOICE_SOURCE)), '--ats', String(args['voice-ats'] || '0.7,3.0,5.0'), '--gain-db', '0'] : [])], { quiet: true });   // v22.2: a recorded take (ElevenLabs) when given
 { const ins = ['-i', tmp, '-i', audioIn], parts = [`[1:a]${dly}aresample=48000[b]`], lab = ['[b]']; let n = 2;
   if (useClicks) { ins.push('-i', path.join(FILM, 'renders', AUX + 'clicks.wav')); parts.push(`[${n}:a]aresample=48000[k]`); lab.push('[k]'); n++; }
   if (useSfx) { ins.push('-i', path.join(FILM, 'renders', AUX + 'sfx.wav')); parts.push(`[${n}:a]aresample=48000[s]`); lab.push('[s]'); n++; }
