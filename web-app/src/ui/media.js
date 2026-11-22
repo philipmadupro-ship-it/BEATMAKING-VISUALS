@@ -63,5 +63,8 @@ export function createMedia(app) {
   for (const b of document.querySelectorAll('#railTabs button')) b.addEventListener('click', () => { for (const o of document.querySelectorAll('#railTabs button')) o.setAttribute('aria-selected', o === b); $('#layerList').parentElement.dataset.pane = b.dataset.pane; });
   const ready = (async () => { const rows = await dbDo('readonly', (st) => st.getAllKeys()); if (rows) for (const k of rows) { const r = await dbDo('readonly', (st) => st.get(k)); if (r && r.blob && k < covers.length) { try { await setCover(k, r.blob, r.name, false); } catch {} } } render(); })();
   render();
-  return { setCover, resetCover, swap, addFiles, list: () => meta.map((m, i) => ({ slot: i, name: m ? m.name : 'built-in', user: !!m, w: m ? m.w : covers[i] ? covers[i].width : 0 })), ready, get covers() { return covers; } };
+  /** v21 projects: the user covers as blobs ({slot, blob, name}) and restoring a project's set (other slots reset). */
+  async function blobs() { const out = []; for (let i = 0; i < covers.length; i++) if (meta[i]) { const r = await dbDo('readonly', (st) => st.get(i)); if (r && r.blob) out.push({ slot: i, blob: r.blob, name: r.name || meta[i].name }); } return out; }
+  async function restore(list = []) { const by = new Map(list.map((c) => [c.slot, c])); for (let i = 0; i < covers.length; i++) { const c = by.get(i); if (c && c.blob) { try { await setCover(i, c.blob, c.name || 'cover'); } catch { await resetCover(i); } } else if (meta[i]) await resetCover(i); } }
+  return { setCover, resetCover, swap, addFiles, blobs, restore, list: () => meta.map((m, i) => ({ slot: i, name: m ? m.name : 'built-in', user: !!m, w: m ? m.w : covers[i] ? covers[i].width : 0 })), ready, get covers() { return covers; } };
 }

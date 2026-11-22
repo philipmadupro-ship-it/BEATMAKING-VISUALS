@@ -24,6 +24,15 @@ import { createMedia } from './ui/media.js';
 import { createReview } from './ui/review.js';
 import { createExporter } from './ui/exporter.js';
 import { slug } from './util/draw.js';
+import { parseSheet } from './cues/schema.js';
+import { createToast } from './util/toast.js';
+import { createWorkspace } from './ui/workspace.js';
+import { createMonitor } from './ui/monitor.js';
+import { createMarkerList } from './ui/markerlist.js';
+import { createMetadata } from './ui/metadata.js';
+import { createQueue } from './ui/queue.js';
+import { createProjects } from './ui/projects.js';
+import { createPalette } from './ui/palette.js';
 
 const $ = (s) => document.querySelector(s);
 const status = (html) => { $('#status').innerHTML = html; };
@@ -57,6 +66,10 @@ async function boot() {
   app.cuetl = createCueTimeline(app, $('#cueCv')); app.inspector = createInspector(app, $('#insp'));
   app.panels = createPanels(app); app.exporter = createExporter(app);
   app.media = createMedia(app); app.review = createReview(app);   // v20: media bin (covers / video / audio) + review before export
+  // v21 editor: toasts, workspace (resizable / collapsible panels), program monitor, marker list, metadata, export queue,
+  // projects, command palette + shortcut overlay
+  app.toast = createToast(); app.workspace = createWorkspace(app); app.monitor = createMonitor(app); app.markerList = createMarkerList(app);
+  app.meta = createMetadata(app); app.queue = createQueue(app); app.projects = createProjects(app); app.palette = createPalette(app);
   store.subscribe(() => { const tr = store.session.track, el = document.getElementById('mediaAud'); if (el) el.textContent = tr ? `${tr.meta.name} · ${Math.round(tr.bpm)} BPM · ${tr.key || ''}` : ''; });
   motion.press(document.body);
   let userClip = false;
@@ -134,10 +147,14 @@ async function boot() {
   async function loadFile(file) {
     try { const buf = await decodeFile(file, clock.ctx); const fm = metaFromFilename(file.name);
       let bits = null; try { const h = new DataView(await file.slice(0, 64).arrayBuffer()); if (h.getUint32(0) === 0x52494646 && h.getUint32(8) === 0x57415645) bits = h.getUint16(34, true); } catch (_) {}   // v14 metadata card: real wav header
-      fm.fileInfo = { sr: buf.sampleRate, bits, bytes: file.size, ch: buf.numberOfChannels }; await load(buf, fm); }
-    catch (e) { console.warn(e); status('That file could not be decoded. Try an mp3, wav, flac or m4a export.'); }
+      fm.fileInfo = { sr: buf.sampleRate, bits, bytes: file.size, ch: buf.numberOfChannels }; store.session.file = file; await load(buf, fm); return true; }
+    catch (e) { console.warn(e); status('That file could not be decoded. Try an mp3, wav, flac or m4a export.'); return false; }
   }
-  async function loadDemo() { status('Building the demo beat…'); const buf = await synthDemo(); await load(buf, { name: 'demo beat (synthesised)', title: 'Night Shift', bpm: null }); status($('#status').innerHTML + ' · <b>demo</b>: drop your own beat to replace it'); }
+  async function loadDemo() { store.session.file = null; status('Building the demo beat…'); const buf = await synthDemo(); await load(buf, { name: 'demo beat (synthesised)', title: 'Night Shift', bpm: null }); status($('#status').innerHTML + ' · <b>demo</b>: drop your own beat to replace it'); }
+  // v21: projects reopen their audio (a File / Blob) and adopt their saved cue sheet (no regeneration over it)
+  A.loadFile = loadFile; A.loadDemo = loadDemo;
+  A.adoptSheet = (doc, label = 'open project') => { needGen = false; cues.replace(parseSheet(doc), label, true); const look = cues.ev().value('look', 0, store.project.look), stage = cues.ev().value('stage', 0, store.project.stage);
+    store.set({ project: { look, stage } }); accent(); app.panels.sync(); app.cuetl.markDirty(); app.inspector.show(); app.exporter.info(); };
   $('#file').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) loadFile(f); e.target.value = ''; });
   $('#demoBtn').addEventListener('click', loadDemo);
   const drop = $('#drop');

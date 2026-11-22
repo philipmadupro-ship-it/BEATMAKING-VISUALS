@@ -49,6 +49,9 @@ body{background:var(--bg);color:var(--fg)}
 <header class="top">
   <div class="brand"><i class="mark" aria-hidden="true"></i><b>U2C</b><span>/ studio</span></div>
   <div class="proj"><input id="projTitle" aria-label="Beat title" value="Night Shift"><span class="saved" id="savedTxt">saved locally</span></div>
+  <button class="btn small" id="projBtn" aria-haspopup="dialog" title="Projects (Shift+Cmd/Ctrl+S)">Projects</button>
+  <button class="btn small kbtn" id="palBtn" aria-haspopup="dialog" aria-label="Command palette" title="Command palette (Cmd/Ctrl+K)"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="6" cy="6" r="4.2"/><path d="M9.2 9.2L13 13"/></svg><kbd id="palKbd">Ctrl K</kbd></button>
+  <button class="ib sm" id="keysBtn" aria-haspopup="dialog" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
   <button class="btn small" id="creditsBtn" aria-expanded="false">Credits</button>
   <button class="btn small" id="backBtn" hidden>Looks</button>
   <button class="btn primary" id="exportTop" hidden>Export</button>
@@ -87,6 +90,10 @@ body{background:var(--bg);color:var(--fg)}
      <div class="field wide"><span class="hint" id="trackInfo">Title, producer and caption fields are remembered for next time.</span></div>
    </div>
   </div>
+  <section class="recent" id="recent" aria-labelledby="recentTtl" hidden>
+   <div class="looks-head"><h2 id="recentTtl">Recent projects</h2><div class="inrow"><button class="btn small" id="recentImport">Import .u2cproj</button><button class="btn small" id="recentAll">All projects</button></div></div>
+   <ul class="pj-list home" id="recentList"></ul>
+  </section>
   <div>
    <div class="looks-head">
      <h2>Pick a look. Each card is playing your beat.</h2>
@@ -101,7 +108,7 @@ body{background:var(--bg);color:var(--fg)}
 <section id="studio" hidden>
  <aside class="layers" id="layers" aria-label="Layers">
   <div class="rail" data-pane="layers">
-  <div class="pane-h rail-tabs" id="railTabs" role="tablist"><button role="tab" data-pane="layers" aria-selected="true">Layers</button><button role="tab" data-pane="media" aria-selected="false">Media</button><span class="hint" id="layerCount"></span></div>
+  <div class="pane-h rail-tabs" id="railTabs" role="tablist"><button role="tab" data-pane="layers" aria-selected="true">Layers</button><button role="tab" data-pane="media" aria-selected="false">Media</button><button role="tab" data-pane="markers" aria-selected="false">Markers</button><span class="hint" id="layerCount"></span></div>
   <div class="layer-list" id="layerList"></div>
   <div class="media" id="pane-media" aria-label="Media bin">
     <div class="group-h"><span class="lbl">Covers</span><span class="inrow"><button class="btn small" id="mediaAdd">Add images</button><button class="btn small" id="mediaReset">Reset</button></span></div>
@@ -114,23 +121,41 @@ body{background:var(--bg);color:var(--fg)}
     <div class="inrow"><label class="btn small" for="file">Replace beat</label><span class="hint" id="mediaAud"></span></div>
     <p class="hint">Drop images, a video or a beat anywhere on this panel. Everything stays in this browser.</p>
   </div>
+  <div class="markers" id="pane-markers" aria-label="Markers">
+    <div class="group-h"><span class="hint" id="markerCount"></span><button class="btn small" id="markerAdd" title="Add a marker at the playhead (M)">+ Marker</button></div>
+    <input class="inp small" id="markerFilter" placeholder="filter markers" aria-label="Filter markers">
+    <ul class="mk-list" id="markerItems"></ul>
   </div>
+  </div>
+  <div class="col-grip" id="gripL" role="separator" aria-orientation="vertical" aria-label="Resize the left panel" tabindex="0"></div>
  </aside>
  <div class="stage-col">
   <div class="stage-bar">
     <div class="inrow"><span class="lbl" id="metaLine">9:16 · 1080×1920 · 30 fps</span><span class="hint" id="measuring"></span></div>
     <div class="ctrls">
+      <button class="ib sm" id="leftToggle" aria-pressed="true" aria-label="Show the left panel" title="Left panel (Cmd/Ctrl+Alt+[)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2" width="11" height="10"/><path d="M5 2v10"/></svg></button>
       <div class="seg" id="aspectSeg"><button data-a="916" aria-pressed="true">9:16</button><button data-a="169" aria-pressed="false">16:9</button></div>
       <div class="seg" id="zoomSeg"><button data-z="fit" aria-pressed="true">Fit</button><button data-z="100" aria-pressed="false">100%</button></div>
       <button class="btn small" id="blurBtn" aria-pressed="false" title="Preview the export's motion blur (same sub-frames as the MP4)">Blur</button>
       <button class="btn small" id="safeBtn" aria-pressed="false">Safe area</button>
+      <span class="menuwrap"><button class="btn small" id="guidesBtn" aria-pressed="false" aria-expanded="false" aria-haspopup="true" aria-controls="guideMenu">Guides</button>
+        <div class="pop menu" id="guideMenu" hidden role="group" aria-label="Viewer guides">
+          <label class="tog"><input type="checkbox" data-g="action"> Action safe 93 %</label><label class="tog"><input type="checkbox" data-g="title"> Title safe 90 %</label>
+          <label class="tog"><input type="checkbox" data-g="thirds"> Rule of thirds</label><label class="tog"><input type="checkbox" data-g="center"> Centre cross</label></div></span>
+      <select class="inp mono small" id="resSel" aria-label="Preview resolution" title="Preview resolution (export is always full)"><option value="1">Full</option><option value="0.5">1/2</option><option value="0.25">1/4</option></select>
+      <button class="btn small" id="abBtn" aria-pressed="false" title="Compare A/B: current (left) vs snapshot B (right)">A/B</button>
+      <button class="btn small" id="abSnap" title="Snapshot B = the current state">Snap B</button>
       <button class="btn small" id="fsBtn">Fullscreen</button>
+      <button class="ib sm" id="rightToggle" aria-pressed="true" aria-label="Show the right panel" title="Right panel (Cmd/Ctrl+Alt+])"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2" width="11" height="10"/><path d="M9 2v10"/></svg></button>
     </div>
   </div>
-  <div class="stage" id="stage"><div class="cwrap" id="cwrap"><canvas id="view" width="540" height="960" aria-label="Video preview. Click a window to edit its properties; drag it to move it."></canvas><div class="safe" id="safe" hidden></div><div class="pick" id="pickBox" hidden></div></div></div>
+  <div class="stage" id="stage"><span class="fig" aria-hidden="true">FIG 001 · PROGRAM</span><span class="echo" id="stageEcho" aria-hidden="true"></span><div class="cwrap" id="cwrap"><canvas id="view" width="540" height="960" aria-label="Video preview. Click a window to edit its properties; drag it to move it."></canvas><div class="safe" id="safe" hidden></div><div class="guides" id="guides" hidden aria-hidden="true"></div><div class="abwipe" id="abWipe" hidden role="slider" tabindex="0" aria-label="A/B wipe position" aria-valuemin="0" aria-valuemax="100"><span>A</span><span>B</span></div><span class="abinfo hint" id="abInfo" hidden></span><div class="pick" id="pickBox" hidden></div></div></div>
   <div class="transport">
     <button class="play" id="playBtn" aria-label="Play"><svg id="playIco" width="16" height="16" viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z" fill="currentColor"/></svg></button>
     <button class="ib" id="restartBtn" aria-label="Back to bar 1"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 2v10M12 2L5 7l7 5z" stroke="currentColor" fill="currentColor" stroke-width="1.5"/></svg></button>
+ <button class="ib" id="frBack" aria-label="One frame back (,)" title="One frame back (,)"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M9 3L4 7l5 4z" fill="currentColor"/><path d="M11 3v8" stroke="currentColor" stroke-width="1.5"/></svg></button>
+    <button class="ib" id="frFwd" aria-label="One frame forward (.)" title="One frame forward (.)"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M5 3l5 4-5 4z" fill="currentColor"/><path d="M3 3v8" stroke="currentColor" stroke-width="1.5"/></svg></button>
+    <button class="ib" id="loopIOBtn" aria-pressed="false" aria-label="Loop in to out (I / O)" title="Loop the in / out range (I / O set it)"><svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 2v10M16 2v10M5 7h8M10 4l3 3-3 3"/></svg></button>
     <button class="ib" id="loopBtn" aria-label="Loop the video" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 6a3 3 0 013-3h6l-2-2M13 10a3 3 0 01-3 3H4l2 2"/></svg></button>
     <span class="tc" id="tc">00:00.000</span>
     <span class="pill" id="barPill">1.1.0</span>
@@ -139,10 +164,12 @@ body{background:var(--bg);color:var(--fg)}
   </div>
  </div>
  <aside class="panel">
+  <div class="col-grip" id="gripR" role="separator" aria-orientation="vertical" aria-label="Resize the right panel" tabindex="0"></div>
   <div class="tabs" role="tablist">
     <button role="tab" id="tab-inspect" aria-controls="pane-inspect" data-tab="inspect" aria-selected="true">Inspect</button>
     <button role="tab" id="tab-look" aria-controls="pane-look" data-tab="look" aria-selected="false">Look</button>
     <button role="tab" id="tab-text" aria-controls="pane-text" data-tab="text" aria-selected="false">Text</button>
+    <button role="tab" id="tab-meta" aria-controls="pane-meta" data-tab="meta" aria-selected="false">Meta</button>
     <button role="tab" id="tab-beat" aria-controls="pane-beat" data-tab="beat" aria-selected="false">Beat</button>
     <button role="tab" id="tab-export" aria-controls="pane-export" data-tab="export" aria-selected="false">Export</button>
     <i class="ul" id="tabUl"></i>
@@ -167,6 +194,12 @@ body{background:var(--bg);color:var(--fg)}
       <div class="inrow"><button class="btn small" id="capCopy">Copy all</button><button class="btn small" id="capSave">Save .txt</button><span class="hint" id="capInfo"></span></div>
     </div>
   </div>
+  <div class="pane" role="tabpanel" id="pane-meta" aria-labelledby="tab-meta" data-pane="meta" hidden>
+    <div class="group"><div class="group-h"><span class="lbl">Metadata</span><span class="hint">the metadata card, now playing, captions</span></div><div class="metaform" id="metaForm"></div></div>
+    <div class="group"><div class="group-h"><label class="lbl" for="wordSearch">Every word on screen</label><span class="hint" id="wordCount"></span></div>
+      <input class="inp" id="wordSearch" type="search" placeholder="search text or path, e.g. lab, cta, bpm" autocomplete="off">
+      <div class="tags" id="wordResults"></div></div>
+  </div>
   <div class="pane" role="tabpanel" id="pane-beat" aria-labelledby="tab-beat" data-pane="beat" hidden>
     <div class="group">
       <div class="field"><label class="lbl" for="sBpm">BPM</label><div class="inrow"><input class="inp mono" id="sBpm" type="number" min="40" max="250" step="0.01" style="width:96px"><button class="btn small" data-bpm="0.5">÷2</button><button class="btn small" data-bpm="2">×2</button><button class="btn small" id="tapBtn">Tap</button></div></div>
@@ -178,6 +211,12 @@ body{background:var(--bg);color:var(--fg)}
     <div class="group"><div class="lbl">Analysis</div><dl class="kv" id="anaKv"></dl></div>
   </div>
   <div class="pane" role="tabpanel" id="pane-export" aria-labelledby="tab-export" data-pane="export" hidden>
+    <div class="group queue">
+      <div class="group-h"><span class="lbl">Export queue</span><span class="inrow"><button class="btn small primary" id="qRun">Run queue</button><button class="btn small" id="qCancel" hidden>Cancel</button><button class="btn small" id="qClear">Clear</button></span></div>
+      <div class="inrow" id="qPresets" role="group" aria-label="Add a delivery preset"></div>
+      <div class="field"><label class="lbl" for="qTpl">File name template <span class="hint">{title} {preset} {aspect} {len} {look} {stage} {bpm} {key} {date} {time} {n}</span></label><input class="inp mono small" id="qTpl" spellcheck="false"></div>
+      <ul class="q-list" id="qList" aria-live="polite"></ul>
+    </div>
     <div class="group">
       <div class="group-h"><span class="lbl" id="exLenLbl">Length</span><span class="hint" id="exLenInfo"></span></div>
       <div class="seg full" id="exLen" role="group" aria-labelledby="exLenLbl"><button data-len="30" aria-pressed="false">30 s</button><button data-len="60" aria-pressed="false">1 min</button><button data-len="full" aria-pressed="false">Full beat</button></div>
@@ -236,10 +275,11 @@ body{background:var(--bg);color:var(--fg)}
     <div class="inrow"><button class="btn small" id="addTrackBtn" aria-label="Add track">+ Track</button><select class="inp mono small" id="presetSel" aria-label="Cue sheet preset"></select>
       <button class="btn small" id="cueImport">Import</button><input type="file" id="cueFile" accept=".json,application/json" hidden><button class="btn small" id="cueExport">Export</button>
       <span class="sep"></span><button class="ib sm wide" id="ripInBtn" aria-label="Insert a bar at the playhead (R)" title="Ripple: insert a bar at the playhead (R)">+bar</button><button class="ib sm wide" id="ripOutBtn" aria-label="Delete the bar at the playhead (Shift+R)" title="Ripple: delete the bar at the playhead (Shift+R)">−bar</button><button class="ib sm wide" id="graphBtn" aria-pressed="false" aria-label="Graph editor for the focused number lane (E)" title="Graph editor: the focused number lane (E)">Graph</button><button class="ib sm wide" id="compactBtn" aria-pressed="false" aria-label="Compact lanes" title="Compact lanes (fit every lane)">Compact</button>
-      <span class="sep"></span><button class="ib sm" id="zoomOut" aria-label="Zoom out (−)">−</button><button class="ib sm" id="zoomFit" aria-label="Fit the video">Fit</button><button class="ib sm" id="zoomIn" aria-label="Zoom in (+)">+</button><button class="ib sm" id="lanesBtn" aria-pressed="false" aria-label="Collapse lanes">≡</button></div>
+      <span class="sep"></span><button class="ib sm" id="zoomOut" aria-label="Zoom out (−)">−</button><button class="ib sm" id="zoomFit" aria-label="Fit the video">Fit</button><button class="ib sm" id="zoomIn" aria-label="Zoom in (+)">+</button><button class="ib sm" id="lanesBtn" aria-pressed="false" aria-label="Collapse lanes">≡</button><button class="ib sm wide" id="thumbsBtn" aria-pressed="true" aria-label="Filmstrip along the ruler" title="Filmstrip: frames of the film along the timeline">Film</button></div>
   </div>
+  <div class="thumbs" id="thumbs" title="Filmstrip: click to jump"><canvas id="thumbCv" aria-hidden="true"></canvas></div>
   <div class="cuewrap"><canvas id="cueCv" tabindex="0" role="application" aria-label="Cue timeline. Space play, J K L shuttle, I O loop, S split, Delete, arrows nudge, brackets previous and next key, M marker, Q quantise, B interpolation, G lane height, E graph, Z zoom to selection, R ripple a bar, Cmd+Z undo, plus and minus zoom."></canvas></div>
-  <div class="keys hint" id="keysHint"><kbd>Space</kbd> play <kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> shuttle <kbd>I</kbd><kbd>O</kbd> loop <kbd>S</kbd> split <kbd>Del</kbd> delete <kbd>←</kbd><kbd>→</kbd> nudge <kbd>⌘Z</kbd> undo <kbd>[</kbd><kbd>]</kbd> prev / next key <kbd>M</kbd> marker <kbd>Q</kbd> quantise <kbd>B</kbd> curve <kbd>G</kbd> lane height <kbd>E</kbd> graph <kbd>Z</kbd> zoom sel <kbd>R</kbd> ripple bar <kbd>N</kbd> magnet · double-click a lane to add a key</div>
+  <div class="keys hint" id="keysHint"><kbd>Space</kbd> play <kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> shuttle <kbd>I</kbd><kbd>O</kbd> loop <kbd>S</kbd> split <kbd>Del</kbd> delete <kbd>←</kbd><kbd>→</kbd> nudge <kbd>⌘Z</kbd> undo <kbd>[</kbd><kbd>]</kbd> prev / next key <kbd>M</kbd> marker <kbd>Q</kbd> quantise <kbd>B</kbd> curve <kbd>G</kbd> lane height <kbd>E</kbd> graph <kbd>Z</kbd> zoom sel <kbd>R</kbd> ripple bar <kbd>N</kbd> magnet · double-click a lane to add a key · <kbd>?</kbd> all shortcuts · <kbd>Ctrl K</kbd> commands</div>
  </section>
  <div class="sheet" id="sheet" aria-live="polite"><div class="sheet-h"><span class="lbl">Key</span><button class="btn small" id="sheetClose">Done</button></div><div id="sheetBody"></div></div>
 </section>
@@ -254,5 +294,20 @@ body{background:var(--bg);color:var(--fg)}
     </div>
   </div>
   <div class="rev-f"><span class="hint" id="revNote">Text edits apply live. Click a frame to move the playhead there.</span><button class="btn" id="revRefresh">Refresh frames</button><button class="btn primary" id="revExport">Export MP4</button></div>
+</dialog>
+<dialog class="review pjdlg" id="projects" aria-labelledby="pjTtl">
+  <div class="rev-h"><h2 class="ttl" id="pjTtl">Projects</h2><span class="hint" id="pjCount"></span><button class="btn small" id="pjClose">Close</button></div>
+  <div class="pj-bar"><label class="lbl" for="pjName">Name</label><input class="inp" id="pjName"><button class="btn primary small" id="pjSave">Save</button><button class="btn small" id="pjSaveAs">Save as new</button>
+    <span class="sep"></span><button class="btn small" id="pjExport">Export .u2cproj</button><label class="tog"><input type="checkbox" id="pjAudio"> include audio</label><button class="btn small" id="pjImport">Import</button><input type="file" id="pjFile" accept=".u2cproj,.json,application/json" hidden></div>
+  <ul class="pj-list" id="pjList"></ul>
+  <div class="rev-f"><span class="hint">Projects live in this browser (IndexedDB). A .u2cproj file holds the cue sheet, tags, settings and covers (and the beat if you tick include audio).</span></div>
+</dialog>
+<dialog class="palette" id="palette" aria-label="Command palette">
+  <div class="pal-h"><svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="6" cy="6" r="4.2"/><path d="M9.2 9.2L13 13"/></svg><input id="palIn" role="combobox" aria-expanded="true" aria-controls="palList" aria-autocomplete="list" placeholder="Type a command, a property or a word on screen…" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></div>
+  <ul id="palList" role="listbox" aria-label="Commands"></ul>
+</dialog>
+<dialog class="review keysdlg" id="keysDlg" aria-labelledby="keysTtl">
+  <div class="rev-h"><h2 class="ttl" id="keysTtl">Keyboard shortcuts</h2><span class="hint">press ? anywhere to toggle</span><button class="btn small" id="keysClose">Close</button></div>
+  <div class="keys-body" id="keysBody"></div>
 </dialog>
 <script type="module" src="src/main.js"></script>

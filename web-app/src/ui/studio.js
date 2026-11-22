@@ -13,14 +13,15 @@ const SAFE = { '916': { hard: { x0: 162, x1: 918, y0: 288, y1: 1248 }, relaxed: 
   '169': { hard: { x0: 96, x1: 1824, y0: 80, y1: 900 }, relaxed: { x0: 64, x1: 1856, y0: 54, y1: 960 }, zones: [{ x: 0, y: 960, w: 1920, h: 120, label: 'player controls' }] } };
 
 export function createStudio(app) {
-  const view = $('#view'), vctx = view.getContext('2d'), stage = $('#stage'); let zoom = 'fit', dirty = true, drag = null, info = {}, pick = null, shuttle = 0, lastNow = 0;
+  const view = $('#view'), vctx = view.getContext('2d'), stage = $('#stage'); let zoom = 'fit', res = 1, dirty = true, drag = null, info = {}, pick = null, shuttle = 0, lastNow = 0;
   const P = () => app.store.project, track = () => app.store.session.track, tl = () => app.cuetl;
   const markDirty = () => { dirty = true; };
   const phone = () => matchMedia('(max-width: 900px)').matches;
   function layout() { const { W, H } = ASPECTS[P().aspect], bw = stage.clientWidth - 24, bh = stage.clientHeight - 24, dpr = Math.max(1, Math.min(2, devicePixelRatio || 1));
     const cssW = zoom === 'fit' ? W * Math.max(.05, Math.min(bw / W, bh / H)) : W, cssH = cssW * H / W; view.style.width = cssW + 'px'; view.style.height = cssH + 'px';
     // the preview renders at the displayed size x dpr (capped at the delivery size), export always at full size
-    const pw = zoom === 'fit' ? Math.min(W, Math.round(cssW * dpr)) : W; if (view.width !== pw) { view.width = pw; view.height = Math.round(pw * H / W); }
+    // v21 playback resolution (Full / 1/2 / 1/4, Premiere's "Playback Resolution"): fewer pixels per preview frame, export untouched
+    const pw = Math.max(64, Math.round((zoom === 'fit' ? Math.min(W, Math.round(cssW * dpr)) : W) * res)); if (view.width !== pw) { view.width = pw; view.height = Math.round(pw * H / W); }
     stage.style.placeItems = zoom === 'fit' ? 'center' : 'start'; buildSafe(); markDirty(); tl().setCollapsed(P().timeline.collapsed ?? phone()); $('#lanesBtn').setAttribute('aria-pressed', !!tl().state.collapsed); }
   function buildSafe() { const a = P().aspect, Z = SAFE[a], { W, H } = ASPECTS[a], pc = (v, d) => (v / d * 100) + '%';
     $('#safe').innerHTML = Z.zones.map((z) => `<i style="left:${pc(z.x, W)};top:${pc(z.y, H)};width:${pc(z.w, W)};height:${pc(z.h, H)}">${z.label}</i>`).join('') +
@@ -140,7 +141,7 @@ export function createStudio(app) {
     else if (k === ',' || k === '.') { const f = (k === '.' ? 1 : -1) / 30; app.actions.seek(clamp(app.clock.time() + f, P().inT, P().outT - 1 / 30)); }
   });
   // ---- loop
-  let lastUI = 0, lastLayers = 0, lastTq = -1, blurOn = false; const blurF = createBlur();
+  let lastUI = 0, lastLayers = 0, lastTq = -1, blurOn = false; const blurF = createBlur(), post = [];   // post: v21 monitor overlays (A/B compare)
   try { blurOn = localStorage.getItem('u2c.previewBlur') === '1'; } catch {}
   const blurBtn = $('#blurBtn'); blurBtn.setAttribute('aria-pressed', blurOn);
   blurBtn.addEventListener('click', () => { blurOn = !blurOn; blurBtn.setAttribute('aria-pressed', blurOn); lastTq = -1; markDirty(); try { localStorage.setItem('u2c.previewBlur', blurOn ? '1' : '0'); } catch {} });
@@ -155,7 +156,7 @@ export function createStudio(app) {
     if (blurOn) { const fps = p.export.fps || 30, tq = p.inT + Math.round((t - p.inT) * fps) / fps; if (tq !== lastTq) { lastTq = tq; dirty = true; } }   // v20: blur previews on the export's frame grid
     if (app.clock.playing ? (!blurOn || dirty) : dirty) { dirty = false; info = {};
       if (blurOn) { let first = true; blurF((tt, s2, inf) => { const r = app.renderFrame(tt, s2, p, tr, { info: inf }); if (first) { first = false; info = inf; } return r; }, lastTq, surf, p.export.fps || 30, p.export.shutter ?? 0.5); }
-      else app.renderFrame(t, surf, p, tr, { info }); $('#measuring').textContent = info.look ? '' : 'measuring the section…'; if (pick) showPick();
+      else app.renderFrame(t, surf, p, tr, { info }); for (const fn of post) fn(t, surf, p, tr, info); $('#measuring').textContent = info.look ? '' : 'measuring the section…'; if (pick) showPick();
       app.timeline.setTime(t, !app.clock.playing); app.inspector.tick && app.inspector.tick(); }
     if (now - lastLayers > 250) { lastLayers = now; layers.update(); }
     tl().draw(); if (!app.clock.playing) app.inspector.tick && app.inspector.tick();
@@ -163,5 +164,7 @@ export function createStudio(app) {
   }
   requestAnimationFrame(frame);
   app.store.subscribe((st, keys) => { markDirty(); if (keys.some((k) => /project\.(inT|outT)/.test(k))) readouts(); });
-  return { layout, setAspectUI, readouts, markDirty, setPlayIcon, surf, sheetSync, syncTools };
+  return { layout, setAspectUI, readouts, markDirty, setPlayIcon, surf, sheetSync, syncTools,
+    /** v21: preview resolution factor (1, 0.5, 0.25) and post-draw hooks (fn(t, surf, project, track, info) after each preview frame). */
+    setRes(f) { res = f; layout(); }, get res() { return res; }, onPostDraw(fn) { post.push(fn); }, get info() { return info; } };
 }
