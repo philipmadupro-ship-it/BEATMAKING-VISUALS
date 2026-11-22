@@ -195,7 +195,9 @@ const tmp = path.join(FILM, 'renders', `${path.basename(out, '.mp4')}-video.mp4`
 const env = { ...process.env, HYPERFRAMES_NO_TELEMETRY: '1', DO_NOT_TRACK: '1', HYPERFRAMES_NO_UPDATE_CHECK: '1' };
 const q = args.quality ? ['--quality', String(args.quality)] : ['--video-bitrate', '12M', '--max-bitrate', '14M'];
 const t0 = Date.now();
-run('npx', ['hyperframes', 'render', '.', '-c', comp, '-o', tmp, ...q, '--fps', '30', '--quiet'], { cwd: FILM, env, quiet: true });
+// v24 (audit V5): capture-bound, ~1 s per frame per Chrome; 2 workers render as fast as 4 on this 4-core box, so each render takes 2 and the
+// 9:16 + 16:9 pair (rendered in parallel by u2c.py) fills the machine without oversubscribing it. --workers N overrides.
+run('npx', ['hyperframes', 'render', '.', '-c', comp, '-o', tmp, ...q, '--fps', '30', '--workers', String(args.workers ?? 2), '--quiet'], { cwd: FILM, env, quiet: true });
 const AUX = String(comp || 'u2c').replace(/\.html$/, '') + '-';   // v22.6: per-render temp audio (9:16 and 16:9 render in parallel)
 const useClicks = CLICKS.length && !/^(off|0|false|no)$/i.test(String(args.clicks ?? 'on'));
 if (useClicks) run('python3', [path.join(ROOT, 'tools', 'clicks.py'), '--out', path.join(FILM, 'renders', AUX + 'clicks.wav'), '--dur', String(D.duration + PRE), '--times', CLICKS.join(','), '--gain-db', String(args['click-db'] ?? -16)], { quiet: true });

@@ -13,7 +13,7 @@ intro, ElevenLabs inside the web app, full-beat YouTube versions, stills before 
 | V2 | The stove was mixed too quietly by the renderer (−47 dB RMS); the shipped MP4s were fixed by a remix afterwards, and the renderer now uses +6 dB | loudness profile 0–1 s | fixed |
 | V3 | **The voice phrase count must match the lines.** A new take with a stray breath or an extra pause splits into 4 phrases, and the last line drops | `placeVoice` / `voice.py` split at ≥ 0.2 s pauses | P1 |
 | V4 | The pre-roll (9.0 s) and the voice timings are still literals in render.mjs, not imported from `PRE_S` / `VOICE_ATS` | render.mjs lines 55, 122, 205 | P1 |
-| V5 | **Native renders take ~16 min for the two 30 s formats; a full beat (3 min) would take ~1.5 h** | render log timestamps | P1 |
+| V5 | Native renders are **capture-bound**: ~1 s per frame per Chrome worker. On 4 cores, 2 workers = 48 s and 4 workers = 48 s for 90 frames, so two 30 s formats take ~16 min and a 3-min full beat ~45–90 min. Chunking cannot beat the core count; more cores (or a GPU host) are the lever | hyperframes benchmark, workers 1 / 2 / 4 = 89 / 48 / 48 s | P1 (hardware) |
 | V6 | The web export has only synthesised twins of the lab SFX (stove, room). The native render uses the ElevenLabs samples, so the two exports sound different | labaudio.js vs render.mjs `smp()` | P1 |
 | V7 | The frame-0 thumbnail has no text (the hook rises at 0.25 s). That is fine for a looping feed, but YouTube / TikTok cover frames are chosen from frame 0 by default | review strip, frame 0 | P2 |
 | V8 | Colour stages (Albedo, Citrinitas, Rubedo, White) have not been re-checked since v22. The v23 Akira matrix and stove are only validated on Nigredo | no stills since v22 | P2 (deferred by user) |
@@ -21,7 +21,7 @@ intro, ElevenLabs inside the web app, full-beat YouTube versions, stills before 
 ### Web app (U2C Studio)
 | # | Finding | Evidence | Sev |
 |---|---|---|---|
-| W1 | **First-visit stalls**: building the film for an aspect the first time (switching 9:16 ↔ 16:9) blocks for 3.5–9 s; the first lab frame builds caches for ~0.35 s. After that the median frame is 3–6 ms and p90 45–83 ms | perf + cache profile per flag | P1 |
+| W1 | ~~First-visit stalls~~ **re-measured:** on a fresh page, building a film for an aspect takes ~50 ms and its first frame ~0.4 s (caches); the 3.5–9 s spikes in the first probe did not reproduce (most likely CPU contention with a render running at the same time). The idle warm-up removes the 0.4 s from the first scrub | perf2 probe: create 36–55 ms, first frame 337–448 ms, then 4–22 ms | resolved |
 | W2 | Canvas readbacks without `willReadFrequently` (Chrome warns; slower Review / halftone) | console warnings in the perf probe | P2 |
 | W3 | 14 visible buttons are smaller than 24 × 24 px (WCAG 2.5.8 target size) | perf probe DOM scan | P2 |
 | W4 | The Voice lab cannot be exercised outside claude.ai (it needs the ElevenLabs connector); the fallback path (copy the prompt, load the take) is tested | voicelab.js | P1 (verify live) |
@@ -59,8 +59,7 @@ intro, ElevenLabs inside the web app, full-beat YouTube versions, stills before 
 - **V6:** the web export can use recorded SFX: drop your stove / ambience / clink files in Media. They are stored in the page's asset store and used instead of the synth twins.
 
 ### Phase 3 — speed and scale
-- **W1 (rest):** build the film data (per aspect) in a Web Worker / at idle in slices, so switching 9:16 ↔ 16:9 never blocks the UI.
-- **V5:** native renders in parallel chunks (split the timeline into N segments, render them concurrently, concat with the audio). A full beat should take about the time of a 30 s clip × chunks / cores.
+- **V5:** each render now uses 2 workers (`--workers`), so the 9:16 + 16:9 pair fills the 4 cores without oversubscribing them. Real gains need more cores: render full beats on a bigger host, or overnight via a scheduled task.
 - **V7:** a "cover frame" option: frame 0 shows the hook card, for platforms that take frame 0 as the thumbnail.
 
 ### Phase 4 — when the user says go
@@ -77,3 +76,7 @@ intro, ElevenLabs inside the web app, full-beat YouTube versions, stills before 
   - Tests: smoke 44/44 (+ move length / History), editor 42/42.
   - Also: the warm-up now treats seeks / playback as activity, so it never stalls a scrub.
 - **Next:** Phase 3 (chunked parallel native renders; film build off the UI thread).
+- **Phase 3:**
+  - W1 re-measured and resolved.
+  - V5 benchmarked (capture-bound); workers set to 2 per render.
+  - V7 cover frame: done (`intro.coverFrame`, Quick controls → "Hook on the cover frame"; the loop seam is unchanged, 1.83 vs 1.88).

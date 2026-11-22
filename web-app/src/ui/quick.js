@@ -18,12 +18,14 @@ const G = [
     { id: 'seed', k: 'seed', label: 'Variation', hint: 'Same variation = same video. A new one reshuffles the camera order, intro direction and hook.' },
     { id: 'export.preroll', k: 'projbool', path: 'export.preroll', label: 'Click-to-play intro', hint: 'A silent browse before the beat starts; the cursor clicks play.' },
     { id: 'cursor.on', k: 'bool', path: 'cursor.on', label: 'Mouse cursor', hint: 'A Y2K cursor clicks each window before the camera moves.' },
-    { id: 'social.on', k: 'bool', path: 'social.on', label: 'Hook and pop-ups', hint: 'The hook dialog on frame 0 and the two call-to-action pop-ups.' }]],
+    { id: 'social.on', k: 'bool', path: 'social.on', label: 'Hook and pop-ups', hint: 'The hook dialog on frame 0 and the two call-to-action pop-ups.' },
+    { id: 'intro.coverFrame', k: 'bool', path: 'intro.coverFrame', label: 'Hook on the cover frame', hint: 'Frame 0 already shows the hook card (YouTube / TikTok often use frame 0 as the thumbnail). The loop still closes.' }]],
   ['Camera', 'How the camera moves', [
     { id: 'fx.punch', k: 'num', path: 'fx.punch', label: 'Kick punch', unit: '%', scale: 100, dp: 1, hint: 'The camera pushes in on every kick. 0 = still.' },
     { id: 'camera.zoom', k: 'num', path: 'camera.zoom', label: 'Zoom on windows', unit: '×', dp: 2, hint: 'How close the camera gets when it visits a window.' },
     { id: 'focus.dim', k: 'num', path: 'focus.dim', label: 'Dim the background', unit: '%', scale: 100 / 1.6, dp: 0, hint: 'How dark the other windows get while one is in front.' },
-    { id: 'outro.rewind', k: 'bool', path: 'outro.rewind', label: 'Seamless loop', hint: 'The ending flows back into the first frame, so the video loops.' }]],
+    { id: 'outro.rewind', k: 'bool', path: 'outro.rewind', label: 'Seamless loop', hint: 'The ending flows back into the first frame, so the video loops.' },
+    { id: 'outro.end', k: 'sel', path: 'outro.end', label: 'Ending', opts: [['auto', 'Auto (stop past 32 bars)'], ['loop', 'Loop into the intro'], ['stop', 'Play to the end and stop']], hint: 'Full-beat videos stay in the player view to the end instead of rewinding into the intro.' }]],
   ['Text', 'Every word on screen', [
     { id: 'title', k: 'proj', path: 'title', label: 'Beat title', hint: 'Used in the top bar, now playing and {title}.' },
     { id: 'producer', k: 'tag', path: 'producer', label: 'Producer tag', hint: 'Shown as PROD. … on the hero and the metadata.' },
