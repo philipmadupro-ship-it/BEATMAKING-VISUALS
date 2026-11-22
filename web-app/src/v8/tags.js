@@ -22,6 +22,7 @@ export const DEFAULT_TAGS = {
   "inserts": "inserts",
   "meta": "metadata"
  },
+ "voice": { "lines": ["EXPERIMENTATION 01", "BY UCHE2CRAZY", "{title}", "INITIATING PLAYBACK"], "ats": "0.45,2.15,4.3,5.55", "durs": "1.6,1.6,1.2,1.45", "style": "smooth, confident, slightly clinical, like a lab announcement" },
  "ground": { "vertical": "U2C \u00b7 NO SIMULATION \u00b7 EYES EVERYWHERE", "words": ["{titleWord}", "LAB TEST", "NO SIMULATION"], "notes": ["SUBJECT {title}|{bpm} BPM \u00b7 {key}", "NO SIMULATION|IT'S GONNA BE TRUE", "SIGNAL DETECTED|SOURCE: U2C LAB", "PROD. {producer}|ALL RIGHTS RESERVED", "ENTRY ONE|FIELD REPORT", "WARNING|UNSTABLE MATERIAL"] },
  "social": {
   "caption": "{title} \u00b7 {bpm} BPM \u00b7 {key}. this beat failed the lab test. comment LAB for the file \ud83e\uddea",

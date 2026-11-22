@@ -35,3 +35,18 @@ export function placeVoice(buf, take, ats, { gainDb = 0 } = {}) {
     out.forEach((d, c) => { const s = tk[Math.min(c, tk.length - 1)]; for (let i = 0; i < n && o0 + i < d.length; i++) { const x = a + i * k, x0 = Math.floor(x); d[o0 + i] += (s[x0] + (s[x0 + 1] - s[x0]) * (x - x0) || 0) * g; } }); });
   return segs.length;
 }
+
+// v22.5 serious bloop (deep falling sine + sub) and the lab room tone (mains hum, air, faint relay ticks) - same recipes as tools/sfx.py
+export function bloop(buf, t, { gainDb = -10 } = {}) {
+  const sr = buf.sampleRate, n = Math.round(0.55 * sr), g = Math.pow(10, gainDb / 20) * 0.9, chans = [...Array(buf.numberOfChannels)].map((_, c) => buf.getChannelData(c)), i0 = Math.round(t * sr); let ph = 0;
+  for (let i = 0; i < n; i++) { const x = i / sr, f = 62 + 148 * Math.exp(-x / 0.07); ph += 2 * Math.PI * f / sr; const v = (Math.sin(ph) + 0.35 * Math.sin(ph / 2)) * Math.exp(-x / 0.16) * Math.min(1, x / 0.006) * g; for (const d of chans) if (i0 + i < d.length && i0 + i >= 0) d[i0 + i] += v; }
+}
+export function room(buf, dur, { gainDb = -10, seed = 11 } = {}) {
+  const sr = buf.sampleRate, n = Math.min(buf.length, Math.round(dur * sr)), g = Math.pow(10, gainDb / 20), R = rng(seed), chans = [...Array(buf.numberOfChannels)].map((_, c) => buf.getChannelData(c));
+  let lp = 0; const ticks = new Set(); for (let k = 0; k < dur * 1.6; k++) ticks.add(Math.round((0.3 + R() * (dur - 0.5)) * sr));
+  let tk = -1;
+  for (let i = 0; i < n; i++) { const x = i / sr, e = Math.min(1, x / 0.8, (dur - x) / 0.6); lp += ((R() * 2 - 1) - lp) * 0.03;
+    if (ticks.has(i)) tk = i; const tv = tk >= 0 && i - tk < 0.006 * sr ? (R() * 2 - 1) * Math.exp(-(i - tk) / (0.0008 * sr)) * 0.06 : 0;
+    const v = (0.05 * Math.sin(2 * Math.PI * 50 * x) + 0.025 * Math.sin(2 * Math.PI * 100 * x) + 0.01 * Math.sin(2 * Math.PI * 150 * x) + lp * 0.35 * 3 + tv) * Math.max(0, e) * g;
+    for (const d of chans) d[i] += v; }
+}

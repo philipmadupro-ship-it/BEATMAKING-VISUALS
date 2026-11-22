@@ -493,14 +493,26 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const DOFC = { cv: null };
   function dof(amt, maxPx) { if (!(amt > 0.01) || !V('fx.dof', LOOK === 'player')) return; const cv = c.canvas; let t2 = DOFC.cv; if (!t2 || t2.width !== cv.width || t2.height !== cv.height) { t2 = DOFC.cv = document.createElement('canvas'); t2.width = cv.width; t2.height = cv.height; }
     const g2 = t2.getContext('2d'); g2.clearRect(0, 0, t2.width, t2.height); g2.drawImage(cv, 0, 0); c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.filter = `blur(${(amt * maxPx * cv.width / W).toFixed(2)}px)`; c.drawImage(t2, 0, 0); c.restore(); }
-  function typed(strs, typeT) { if (typeT == null) return strs; let n = Math.max(0, Math.floor(typeT / T(1 / 24) + 1e-6)); return strs.map((q) => { const s0 = String(q || ''), k = Math.min(s0.length, n); n -= k; return s0.slice(0, k); }); }
-  function dialog(cx, cy, wD, title, body, sub, t0, t, prog, typeT = null, slow = false) {
+  // v22.5 VOICE CAPTIONS (user: "the keyboard follows what she says"): each voice line (tags voice.lines, editable on the site) types as a console line
+  // while she says it: phrase i starts at voice.ats[i] (composition s) and types over 85 % of voice.durs[i]; lines stack upward, older ones dim.
+  const vNums = (k, def) => String(tag(k) || def).split(',').map(Number);
+  function voiceLines() { const L4 = (tag('voice.lines') || []).map((q) => String(q).toUpperCase()), at = vNums('voice.ats', '0.45,2.15,4.3,5.55'), du = vNums('voice.durs', '1.6,1.6,1.2,1.45');
+    return L4.map((txt, i) => ({ txt, t: at[i] ?? (0.45 + i * 1.6), rate: (du[i] ?? 1.4) * 0.85 / Math.max(1, txt.length) })); }
+  function voiceCaptions(tc) {
+    // 9:16 keeps only the newest two lines (clear of the card); 16:9 shows all four
+    if (!V('voice.captions', LOOK === 'player') || PRE <= 0 || tc > PRE + 0.05) return; const VL = voiceLines(), fz = port ? 26 : 20, x0 = port ? 64 : W / 2 - 560, y0 = port ? 1388 : 828, lh = fz * 1.55;
+    const live = VL.filter((q) => tc >= q.t).slice(port ? -2 : -4); live.forEach((q, j) => { const n = Math.min(q.txt.length, Math.floor((tc - q.t) / q.rate + 1e-6) + 1), str = '> ' + q.txt.slice(0, n), last = j === live.length - 1, y = y0 - (live.length - 1 - j) * lh;
+      text(c, str, x0, y, { size: fz, fam: DISPLAY, w: 800, col: rgba(S.ink, last ? 0.95 : 0.4), maxW: W - x0 - 60 });
+      if (last && (n < q.txt.length || Math.floor(tc / 0.27) % 2 === 0)) { c.font = `800 ${fz}px ${DISPLAY}`; const cw = Math.min(W - x0 - 60, c.measureText(str).width * 1.04); c.fillStyle = rgba(S.ink, 0.9); c.fillRect(x0 + cw + 6, y - fz * 0.42, fz * 0.5, fz * 0.84); } });
+  }
+  function typed(strs, typeT, rate = T(1 / 24)) { if (typeT == null) return strs; let n = Math.max(0, Math.floor(typeT / rate + 1e-6)); return strs.map((q) => { const s0 = String(q || ''), k = Math.min(s0.length, n); n -= k; return s0.slice(0, k); }); }
+  function dialog(cx, cy, wD, title, body, sub, t0, t, prog, typeT = null, slow = false, rate = T(1 / 24)) {
     const ue = Math.max(0, t - t0) / (slow ? 0.9 : 0.35), sp0 = spr(ue, slow ? 6 : 9), sc = (slow ? 0.9 : 0.94) + (slow ? 0.1 : 0.06) * sp0; cy += slow ? (1 - sp0) * 46 : 0; const big = port ? 22 : 0, h = (sub ? 168 : 136) + big, x = cx - wD / 2, y = cy - h / 2, col = S.grey ? '#0a0a0a' : S.hot;
     c.save(); c.translate(cx, cy); c.scale(sc, sc); c.translate(-cx, -cy);
     L.glass(c, x, y, wD, h, S, { r: 18, tint: 0.62, shadow: 1 });
     c.fillStyle = rgba(S.ink, 0.08); c.fillRect(x + 1, y + 1, wD - 2, 40); c.fillStyle = rgba(S.ink, 0.18); c.fillRect(x, y + 41, wD, 1);
     lights(x + 26, y + 21, S, true);
-    const full3 = [String(title).toUpperCase(), String(body).toUpperCase(), sub ? String(sub).toUpperCase() : ''], totalN = full3.join('').length; [title, body, sub] = typed(full3, typeT); const typing = typeT != null && (title.length + body.length + sub.length) < totalN;
+    const full3 = [String(title).toUpperCase(), String(body).toUpperCase(), sub ? String(sub).toUpperCase() : ''], totalN = full3.join('').length; [title, body, sub] = typed(full3, typeT, rate); const typing = typeT != null && (title.length + body.length + sub.length) < totalN;
     text(c, String(title).toUpperCase(), x + wD / 2, y + 21, { size: 18, fam: UI, w: 600, ls: 1.5, col: rgba(S.ink, 0.8), align: 'center', maxW: wD - 180 });
     text(c, String(body).toUpperCase(), x + wD / 2, y + 82 + big / 2, { size: port ? 56 : 32, fam: DISPLAY, w: 800, col: S.ink, align: 'center', maxW: wD - 48 });
     if (typing || (typeT != null && Math.floor(Math.max(0, typeT) / T(1 / 8)) % 2 === 0)) { const line = sub ? 2 : body ? 1 : 0, ly = [y + 21, y + 82 + big / 2, y + 126 + big][line], fz2 = [18, port ? 56 : 32, 20][line], str = [title, body, sub][line]; c.font = `800 ${fz2}px ${line === 1 ? DISPLAY : UI}`; const cw = Math.min(wD - 48, c.measureText(str).width * 1.04); c.fillStyle = rgba(S.ink, 0.9); c.fillRect(x + wD / 2 + cw / 2 + 4, ly - fz2 * 0.42, fz2 * 0.45, fz2 * 0.84); }
@@ -512,7 +524,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function social(t, intro) {
     if (!V('social.on', LOOK === 'player')) return;
     const wD = port ? 900 : 760, cx = W / 2;   // v19.5: wider + bigger hook text (reads at thumb-scroll size)
-    if (intro) { const p = clamp(t / T(IB)); const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hookTxt = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); const hs = -PRE + 0.25; if (t < hs) return; dialog(cx, port ? 330 : 150, wD, tag('social.title'), hookTxt, null, hs, t, p, t - hs - 0.75, true); return; }   // v22.1: frame 0 = no hook; it rises in slowly, then types   // v19.1: A/B hook variants
+    if (intro) { const p = clamp(t / T(IB)); const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hookTxt = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); const hs = -PRE + 0.25; if (t < hs) return; dialog(cx, port ? 330 : 150, wD, tag('social.title'), hookTxt, null, hs, t, p, t - hs - 0.75, true, T(1 / 12)); return; }   // v22.5: the hook types at half speed (user: too fast)   // v22.1: frame 0 = no hook; it rises in slowly, then types   // v19.1: A/B hook variants
     for (const [k, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) {
       const at = V(`social.${k}.at`, def), len = V(`social.${k}.len`, 8); if (b < at || b >= at + len) continue;
       dof(Math.min(clamp((b - at) / 0.6), clamp((at + len - b) / 0.6)), 7); dialog(cx, port ? H * 0.5 : H * 0.5, wD, tag(`social.${k}.title`), tag(`social.${k}.body`), tag(`social.${k}.sub`), T(at), t, null, t - T(at) - 0.15);
@@ -541,10 +553,12 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const clickTimes = () => mouseWays().filter((q) => q.click).map((q) => q.t + PRE).filter((x) => x >= 0);
   // v22.4: the typing moments in COMPOSITION seconds (for the web export's keyboard taps; render.mjs builds the same list for the native render):
   // [{t, n (characters), dt (seconds per character)}]. Call after one render().
+  const introMarks = () => ({ pick: LOOK === 'player' && PRE > 0 && ev.value('intro.style', -4, 'flow') === 'sphere' ? PRE + T(-6.1) + 0.03 : null });
   function typeEvents() {
     const E = [], rate = T(1 / 24), len = (q) => String(q ?? '').length, P = PRE, add = (t, n, dt) => { if (n > 0 && t >= 0) E.push({ t, n, dt }); };
     if (LOOK !== 'player' || !V('social.on', true)) return E;
-    const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hk = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); if (P > 0) add(1.0, len(tag('social.title')) + len(hk), rate);
+    const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hk = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); if (P > 0) add(1.0, len(tag('social.title')) + len(hk), T(1 / 12));
+    if (P > 0 && V('voice.captions', true)) for (const q of voiceLines()) add(q.t, q.txt.length + 2, q.rate);   // v22.5 the console lines follow the voice
     if (ev.value('intro.style', -4, 'flow') === 'sphere' && P > 0) { const n = len(tag('intro.title') || D.title) + len(tag('intro.credit') || 'prod. @uche2crazy'); add(P + T(-4.4), n, T(1) / Math.max(1, n)); }
     for (const [k, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) { const at = V(`social.${k}.at`, def); add(P + T(at) + 0.15, len(tag(`social.${k}.title`)) + len(tag(`social.${k}.body`)) + len(tag(`social.${k}.sub`)), rate); }
     const term = tag('social.terminal') || []; for (const k of ev.keysIn('term.line', 0, 1e6)) add(P + T(k.b), len(typeof k.v === 'number' ? term[k.v] : L.sub(String(k.v ?? ''))), T(1 / 16));
@@ -746,7 +760,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     }
     if (RWB && !OUTD && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); t = T(IB) - e * (T(IB) + PRE) + 0.5 / fps * (1 - e); if (PRE) t = Math.max(-PRE + 0.5 / fps, t); else t = Math.max(0.5 / fps, t); paused = t < 0; b = t / BEAT; }   // v19.3: rewinds through the browse back to the first frame
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
-      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player', ground: introGround }); c.setTransform(scale, 0, 0, scale, 0, 0); brutalFrame(t); social(t, true); textCues(t); textures(t); flash(t); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player', ground: introGround }); c.setTransform(scale, 0, 0, scale, 0, 0); brutalFrame(t); voiceCaptions(t + PRE); social(t, true); textCues(t); textures(t); flash(t); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
     }
     const cam = camera(), z = cam.z; L.view.camZ = z; L.view.base = scale;
@@ -798,6 +812,6 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function rects(evx, bb, look) { ev = evx; IB = INTRO.beats(ev); b = bb; setState(look || V('look', 'exe'), V('stage', 'nigredo')); return { ...LY }; }
   // motion trace in the pendant test geometry (testRect): hand, every joint, every link angle, the body angle
   const trace = (t, evx) => { if (evx) ev = evx; b = 0; pendulum(); const g = pendantGeom(testRect()); return BR.tracePts(g.ax, g.ay, g.size, t + 0.5 / FPS, g.len); };
-  return { W, H, D, render, clickTimes, typeEvents, schedule, rects, trace, testRect, waveRect, registry: (o = {}) => buildRegistry({ aspect, bars: NB, ...o }), core: L, brand: BR, WINDOW_IDS };
+  return { W, H, D, render, clickTimes, typeEvents, introMarks, schedule, rects, trace, testRect, waveRect, registry: (o = {}) => buildRegistry({ aspect, bars: NB, ...o }), core: L, brand: BR, WINDOW_IDS };
 }
 export { mergeDeep };

@@ -73,6 +73,11 @@ export function createMedia(app) {
   async function clearVoice() { voice = null; await dbDo('readwrite', (st) => st.delete('voice')); showVoice(); }
   document.getElementById('voiceFile')?.addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) await setVoice(f, f.name); });
   vClear?.addEventListener('click', clearVoice);
+  // v22.5: her words are the tags voice.lines (editable in Text / Review / Metadata); this builds the ElevenLabs prompt from them, so a new take matches the captions
+  document.getElementById('voicePrompt')?.addEventListener('click', async () => { const tg = app.cues.tags(''), L4 = (tg.voice && tg.voice.lines) || [], sub = (q) => String(q).replace(/\{title\}/g, String(tg.title || '').replace(/\{title\}/g, app.store.project.title || ''));
+    const words = L4.map((q) => sub(q).toLowerCase().replace(/\b(\w)/g, (m) => m.toUpperCase()).replace(/Uche2crazy/gi, 'Oo-chay Two Crazy').replace(/\b0?1\b/, 'one'));
+    const prompt = `[${(tg.voice && tg.voice.style) || 'calm, clinical lab announcement'}] ${words[0] || ''}... ${words[1] || ''}. [pause] ${words[2] || ''}. [long pause] ${words[3] || ''}.`;
+    try { await navigator.clipboard.writeText(prompt); if (vInfo) vInfo.textContent = 'prompt copied: ' + prompt; } catch { if (vInfo) vInfo.textContent = prompt; } });
   dbDo('readonly', (st) => st.get('voice')).then((r) => { if (r && r.blob) setVoice(r.blob, r.name, false); });
   return { setVoice, clearVoice, get voice() { return voice; }, setCover, resetCover, swap, addFiles, blobs, restore, list: () => meta.map((m, i) => ({ slot: i, name: m ? m.name : 'built-in', user: !!m, w: m ? m.w : covers[i] ? covers[i].width : 0 })), ready, get covers() { return covers; } };
 }

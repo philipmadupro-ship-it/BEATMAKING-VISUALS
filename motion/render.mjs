@@ -116,7 +116,9 @@ if (ENGINE === 'v9') {
   if (look === 'player' && !args.test && !/^(off|0|false|no)$/i.test(String(args.sfx ?? 'on'))) { const { DEFAULT_TAGS } = await import('./film/v9/src/v8/tags.js');
     const BT = D.beat, T2 = (bb) => bb * BT, P = PRE, rate = BT / 24, get = (o, p) => p.split('.').reduce((q, k) => (q == null ? q : q[k]), o), tg = (p) => get(sheet.tags || {}, p) ?? get(DEFAULT_TAGS, p);
     const sub = (x) => String(x ?? '').replace(/\{[a-zA-Z]+\}/g, (m) => (m === '{title}' || m === '{titleWord}' ? String(D.title || '') : m === '{bpm}' ? String(Math.round(60 / BT)) : 'XXXX')), len = (x) => sub(x).length, E = [];
-    E.push({ t: 0, kind: 'swell' }, { t: 0.25, kind: 'bleep' }, { t: 1.0, kind: 'type', n: len(tg('social.title')) + len(tg('social.hook')), dt: rate });
+    E.push({ t: 0, kind: 'swell' }, { t: 0.25, kind: 'bleep' }, { t: 1.0, kind: 'type', n: len(tg('social.title')) + len(tg('social.hook')), dt: BT / 12 });   // v22.5 hook at half speed
+    { const L4 = tg('voice.lines') || [], at = String(tg('voice.ats') || '0.45,2.15,4.3,5.55').split(',').map(Number), du = String(tg('voice.durs') || '1.6,1.6,1.2,1.45').split(',').map(Number);
+      if (P > 0) L4.forEach((q, i) => { const n = len(q) + 2; E.push({ t: at[i], kind: 'type', n, dt: (du[i] ?? 1.4) * 0.85 / Math.max(1, n - 2) }); }); }   // v22.5 the keys follow her lines
     if (sheet.base['intro.style'] === 'sphere') { const tl = String(D.title || '').length + 16; E.push({ t: P + T2(-10.5), kind: 'whir', dur: T2(3.5) }, { t: P + T2(-6.1) + 0.03, kind: 'lock' }, { t: P + T2(-4.4), kind: 'type', n: tl, dt: T2(1) / tl }); }
     if (P > 0) E.push({ t: P - 0.02, kind: 'boot' });
     for (const kk of ['cta1', 'cta2']) { const at = sheet.base[`social.${kk}.at`]; if (at != null) E.push({ t: P + T2(at), kind: 'bleep' }, { t: P + T2(at) + 0.15, kind: 'type', n: len(tg(`social.${kk}.title`)) + len(tg(`social.${kk}.body`)) + len(tg(`social.${kk}.sub`)), dt: rate }); }
@@ -125,6 +127,7 @@ if (ENGINE === 'v9') {
     if (IB2 && (sheet.base['outro.mode'] ?? 'dialog') === 'dialog' && D.duration > T2(IB2 + 16)) { const w0 = D.duration / BT - 6 - 5.5; E.push({ t: P + T2(w0), kind: 'bleep' }, { t: P + T2(w0) + 0.15, kind: 'type', n: len(tg('social.outro.title')) + len(tg('social.outro.body')) + len(tg('social.outro.sub')), dt: rate }); }
     // v22.3 (user: only keyboard taps, more serious): keep the typing, end each typed message with an enter press, drop the bleeps / chirps / swell / whir
     const keep = []; for (const e of E) if (e.kind === 'type') { keep.push(e); keep.push({ t: e.t + e.n * e.dt * 1.05 + 0.08, kind: 'enter' }); }
+    keep.push({ t: 0, kind: 'room', dur: P + 0.4 }, { t: 0.25, kind: 'bloop' }); if (sheet.base['intro.style'] === 'sphere') keep.push({ t: P + T2(-6.1) + 0.03, kind: 'bloop' });   // v22.5 room tone + two serious bloops (hook window, the pick)
     SFX = keep.filter((e) => e.t >= 0 && e.t < D.duration + P); }
   const cuesTags = {}; if (args.title) cuesTags.title = String(args.title);
   cuesTags.date = args.date ? String(args.date) : (tags.date === '{today}' || !tags.date ? today : tags.date);

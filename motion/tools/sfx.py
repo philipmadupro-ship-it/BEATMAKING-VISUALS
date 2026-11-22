@@ -67,6 +67,18 @@ def kinds(ev, rng):
     if k == 'boot':
         d = 0.35; s = tone(np.linspace(1600, 200, int(d * SR)), d, 0.002, 0.1) * 0.35; th = tone(60, 0.18, 0.002, 0.15) * 0.6
         out = np.zeros(int(d * SR)); out[:len(th)] += th; return out + s
+    if k == 'bloop':   # v22.5 serious bloop: a deep sine falling 210 -> 62 Hz with a soft attack, a sub octave and a short dark tail
+        d = 0.55; t = np.arange(int(d * SR)) / SR; f = 62 + 148 * np.exp(-t / 0.07); ph = 2 * np.pi * np.cumsum(f) / SR
+        w = (np.sin(ph) + 0.35 * np.sin(ph / 2)) * np.exp(-t / 0.16) * np.minimum(1, t / 0.006)
+        return w * 0.9
+    if k == 'room':   # v22.5 lab room tone under the intro: 50 Hz mains hum + harmonics, filtered air, faint distant relay ticks; fades in / out
+        d = float(ev.get('dur', 7)); n = int(d * SR); t = np.arange(n) / SR
+        hum = 0.05 * np.sin(2 * np.pi * 50 * t) + 0.025 * np.sin(2 * np.pi * 100 * t) + 0.01 * np.sin(2 * np.pi * 150 * t)
+        air = np.convolve(rng.standard_normal(n), np.ones(60) / 60, 'same') * 0.35
+        ticks = np.zeros(n)
+        for tk in np.sort(rng.uniform(0.3, d - 0.2, int(d * 1.6))):
+            i0 = int(tk * SR); m = int(0.006 * SR); ticks[i0:i0 + m] += np.diff(np.concatenate([[0], rng.standard_normal(m)])) * np.exp(-np.arange(m) / (0.0008 * SR)) * 0.06
+        return (hum + air + ticks) * env(n, 0.8, 0.6)
     return np.zeros(1)
 
 def main():
