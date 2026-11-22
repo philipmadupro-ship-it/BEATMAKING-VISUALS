@@ -123,7 +123,9 @@ if (ENGINE === 'v9') {
     const term = tg('social.terminal') || []; for (const tr of sheet.tracks) if (tr.path === 'term.line') for (const k of tr.keys) { const tx = typeof k.v === 'number' ? term[k.v] : k.v; E.push({ t: P + T2(k.b), kind: 'chirp' }, { t: P + T2(k.b), kind: 'type', n: len(tx), dt: T2(1 / 16) }); }
     const ilT2 = sheet.tracks.find((tr) => tr.path === 'intro.length'), IB2 = sheet.base['intro.on'] === false ? 0 : 4 * (ilT2 ? ilT2.keys[0].v : 2);
     if (IB2 && (sheet.base['outro.mode'] ?? 'dialog') === 'dialog' && D.duration > T2(IB2 + 16)) { const w0 = D.duration / BT - 6 - 5.5; E.push({ t: P + T2(w0), kind: 'bleep' }, { t: P + T2(w0) + 0.15, kind: 'type', n: len(tg('social.outro.title')) + len(tg('social.outro.body')) + len(tg('social.outro.sub')), dt: rate }); }
-    SFX = E.filter((e) => e.t >= 0 && e.t < D.duration + P); }
+    // v22.3 (user: only keyboard taps, more serious): keep the typing, end each typed message with an enter press, drop the bleeps / chirps / swell / whir
+    const keep = []; for (const e of E) if (e.kind === 'type') { keep.push(e); keep.push({ t: e.t + e.n * e.dt * 1.05 + 0.08, kind: 'enter' }); }
+    SFX = keep.filter((e) => e.t >= 0 && e.t < D.duration + P); }
   const cuesTags = {}; if (args.title) cuesTags.title = String(args.title);
   cuesTags.date = args.date ? String(args.date) : (tags.date === '{today}' || !tags.date ? today : tags.date);
   if (args.tags) Object.assign(cuesTags, JSON.parse(fs.readFileSync(path.resolve(String(args.tags)), 'utf8')));

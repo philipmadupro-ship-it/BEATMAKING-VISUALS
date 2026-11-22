@@ -37,13 +37,24 @@ def kinds(ev, rng):
         return (hum * env(len(t), 0.5, 0.4) + rise) * 0.8
     if k == 'bleep':
         return np.concatenate([tone(1320, 0.06), np.zeros(int(0.04 * SR)), tone(1760, 0.08)]) * 0.5
-    if k == 'type':
-        n, dt = int(ev.get('n', 10)), float(ev.get('dt', 0.02)); out = np.zeros(int((n * dt + 0.05) * SR))
+    if k == 'type' or k == 'enter':
+        # v22.3 mechanical keyboard (user: "taps of keyboard, more serious"): per key = switch click (bright noise transient) + plate thock (low
+        # decaying body ~170-240 Hz) + spring release ~45-60 ms later; human timing (+-30 %), velocity and pitch vary per key; enter = heavier, lower
+        n = 1 if k == 'enter' else int(ev.get('n', 10)); dt = float(ev.get('dt', 0.06));
+        if k == 'type' and dt < 0.05: tot = n * dt; n = max(1, round(tot / 0.065)); dt = tot / n   # human pace: ~15 taps/s across the same span
+        out = np.zeros(int((n * dt * 1.4 + 0.25) * SR)); tt = 0.0
         for i in range(n):
-            m = int(0.012 * SR); nz = rng.standard_normal(m) * np.exp(-np.arange(m) / (0.0018 * SR)); f = 2600 + rng.uniform(-500, 500)
-            click = (nz * 0.6 + np.sin(2 * np.pi * f * np.arange(m) / SR) * np.exp(-np.arange(m) / (0.002 * SR)) * 0.4) * rng.uniform(0.6, 1.0)
-            i0 = int(i * dt * SR); out[i0:i0 + m] += click
-        return out * 0.32
+            heavy = k == 'enter' or rng.random() < 0.08; vel = rng.uniform(0.7, 1.0) * (1.25 if heavy else 1)
+            m = int(0.09 * SR); x = np.arange(m) / SR
+            nz = rng.standard_normal(m); nz = np.diff(np.concatenate([[0], nz]))   # bright (high-passed) noise
+            click = nz * np.exp(-x / 0.0011) * 0.55
+            fb = (150 if heavy else 190) + rng.uniform(-20, 45); thock = np.sin(2 * np.pi * fb * x) * np.exp(-x / (0.022 if heavy else 0.014)) * 0.7
+            body = np.convolve(rng.standard_normal(m), np.ones(9) / 9, 'same') * np.exp(-x / 0.008) * 0.35
+            key = (click + thock + body) * vel
+            r0 = int(rng.uniform(0.045, 0.06) * SR); rel = np.zeros(m); rl = min(m - r0, int(0.012 * SR)); rel[r0:r0 + rl] = np.diff(np.concatenate([[0], rng.standard_normal(rl)])) * np.exp(-np.arange(rl) / (0.0009 * SR)) * 0.25 * vel
+            key = key + rel; i0 = int(tt * SR); out[i0:i0 + m] += key[:max(0, min(m, len(out) - i0))]
+            tt += dt * rng.uniform(0.7, 1.3) * (1.6 if rng.random() < 0.12 else 1)   # the odd hesitation
+        return out * 0.55
     if k == 'chirp':
         d = 0.25; t = np.arange(int(d * SR)) / SR; f = 1800 + 900 * np.sign(np.sin(2 * np.pi * 37 * t)) + 300 * np.sin(2 * np.pi * 11 * t)
         return tone(f, d, 0.002, 0.04, 'sq') * 0.22

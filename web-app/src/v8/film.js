@@ -634,7 +634,18 @@ export function createFilm({ D, assets, aspect = '916' }) {
     EDC.set(key, cv); return cv;
   }
   // v22.2 screen frame (refs: registration + counters): a hairline inset, corner crosses, a live frame counter and the beat clock, FIG labels. Real data only.
-  const introGround = () => { if (LOOK === 'player' && V('ground.editorial', true)) c.drawImage(editorial(), 0, 0, W, H); };
+  // v22.3 MATRIX DRIFT (user: "like in the Matrix, always going up and down, a bit fucked up"): the editorial layer is cut into vertical columns; each
+  // scrolls up or down (seeded direction + 1-2 whole cycles over the composition, so the loop closes), wraps around, and on some kicks a column
+  // jolts sideways and vertically for ~80 ms (a hard, deterministic glitch, no fade). TC = composition seconds, LC = composition length.
+  let TC = 0, LC = 1;
+  function drawEditorial() {
+    const cv = editorial(), N = port ? 7 : 10, cw = W / N, sp = V('ground.drift', 1);
+    for (let i = 0; i < N; i++) { const dir = hash(i * 3.7 + 1) < 0.5 ? -1 : 1, k = 1 + Math.floor(hash(i * 5.3 + 2) * 2), off0 = ((TC / LC) * k * dir * H * sp) % H;
+      const f = Math.floor(TC * FPS), kick = kickEnv[Math.max(0, Math.min(kickEnv.length - 1, Math.floor((TC - PRE) * FPS)))] || 0, jolt = TC > PRE && kick > 0.75 && hash(i * 11.1 + Math.floor(TC * 8)) > 0.7;
+      const jx = jolt ? (hash(f * 1.3 + i) - 0.5) * 14 : 0, jy = jolt ? (hash(f * 2.1 + i) - 0.5) * 40 : 0, off = ((off0 + jy) % H + H) % H, sx = i * cw;
+      c.drawImage(cv, sx, 0, cw, H, sx + jx, off, cw, H); c.drawImage(cv, sx, 0, cw, H, sx + jx, off - H, cw, H); }
+  }
+  const introGround = () => { if (LOOK === 'player' && V('ground.editorial', true)) drawEditorial(); };
   function brutalFrame(t) {
     if (!V('ground.brutal', LOOK === 'player')) return; const m = 14, ink = S.ink, fz = 12, fr = Math.max(0, Math.round((t + PRE) * FPS)), tot = Math.round((D.duration + PRE) * FPS);
     c.save(); c.strokeStyle = rgba(ink, 0.18); c.lineWidth = 1; c.strokeRect(m + 0.5, m + 0.5, W - 2 * m - 1, H - 2 * m - 1);
@@ -654,7 +665,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (p === 'graph') lab.graphPaper(c, 0, 0, W, H, Object.assign({}, S, { gridA: gA }), 20, 100, 1);
     else if (p === 'dots') { c.fillStyle = rgba(S.ink, 0.13 * gA / (S.gridA || 0.07)); for (let y = 30; y < H; y += 40) for (let x = 20; x < W; x += 40) c.fillRect(x, y, 2, 2); }
     else if (p === 'scan') { c.fillStyle = rgba(S.ink, 0.05 * gA / (S.gridA || 0.07)); for (let y = 0; y < H; y += 6) c.fillRect(0, y, W, 1); }
-    if (LOOK === 'player' && V('ground.editorial', true)) c.drawImage(editorial(), 0, 0);
+    if (LOOK === 'player' && V('ground.editorial', true)) drawEditorial();
   }
   // opt-in glitch: on each beat inside a glitch clip, 3-4 thin horizontal slices shifted sideways for <= 80 ms
   function glitch(t, scale) {
@@ -692,6 +703,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function flash(t) { const f = fidx(t); if (ev.keysIn('fx.flash', 0, NB * 4 + 1).some((k) => fidx(T(k.b) + 0.5 / FPS) === f)) { c.globalCompositeOperation = 'difference'; c.fillStyle = S.grey ? '#ffffff' : S.ink; c.fillRect(0, 0, W, H); c.globalCompositeOperation = 'source-over'; } }
   /** Draw clip time t into ctx (a canvas of width W*scale). opts: {ev, fps (sample at the frame centre), look, stage}. */
   function render(ctx, t, opts = {}) {
+    TC = t; LC = D.duration + Math.max(0, opts.preroll || 0);   // v22.3 composition clock for the drifting background
     c = ctx; ev = opts.ev || ev; tagDoc = opts.tags || DEFAULT_TAGS; IB = INTRO.beats(ev);
     const fps = opts.fps || FPS, scale = ctx.canvas.width / W;
     L.view.minPx = LOOK === 'player' && port ? 25 : 0;   // v19.1: phone legibility floor (player 9:16)
