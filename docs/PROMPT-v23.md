@@ -155,3 +155,19 @@ Show the moment list on the beat grid (bar.beat → what → window → cursor/v
   - Web: a synth twin.
 - **Gotcha:** the voice IDs are the user's account data. Keep them out of the public repo; the Voice lab picks the voice by name (`voice.voice_name`).
 </sound-design>
+
+<intro-pacing research v23.3>
+Short-form guidance (2026 creator / vendor write-ups, not TikTok's own docs, so treat the numbers as rough):
+- The hook window is the first ~3 s, with an early algorithmic read around 1.5 s.
+- Many first views start muted, so text has to be on screen in the first 1-2 s.
+- Motion in the first 2 s helps.
+- A sharp sound in the first second helps.
+
+Our intro against that:
+- The stove clicks at 0.25-0.4 s.
+- The sphere is already spinning at frame 0.
+- The hook dialog rises at 0.25 s and finishes typing by ~2.1 s at 128 BPM.
+
+So the 9 s calm build stays: the hook and the motion land inside the 3 s window, and the slower part (voice, drag, pick) plays after the viewer has stayed.
+**Gotcha:** never delay the hook text past ~2 s to make the intro "calmer". Slow the sphere and the voice instead.
+</intro-pacing>

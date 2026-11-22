@@ -173,6 +173,15 @@ await page.keyboard.press('Escape'); await ev(() => window.u2c.cuetl.clearSel())
 // 0. laptop fit: every lane reachable at 1440x900 (compact rows + folded groups), no vertical scrolling needed
 const fit0 = await tlEv(() => ({ fit: window.u2c.cuetl.lanesFit(), compact: window.u2c.cuetl.compact, rows: window.u2c.cuetl.rows().map((r) => r.path + ':' + r.h).join(' ') }));
 ok('laptop: all lanes fit the dock (compact rows, folded groups)', fit0.fit, `${fit0.compact ? 'compact' : 'normal'} · ${fit0.rows}`);
+// v23.3 Alt-drag a camera shot onto another: the windows swap, the times stay (one undo step)
+{ const before = await tlEv(() => { const t = window.u2c.cues.sheet.tracks.find((q) => q.path === 'camera.shot'), K = t.keys.filter((k) => k.b > 0); const i = K.findIndex((k, j) => j < K.length - 1 && K[j + 1].v !== k.v); return i < 0 ? null : { a: K[i].id, b: K[i + 1].id, va: K[i].v, vb: K[i + 1].v, ba: K[i].b, bb: K[i + 1].b }; });
+  let swapOk = false, info = 'no two different shots';
+  if (before) { const o = await cvR(), pa = await tlEv((id) => window.u2c.cuetl.keyPoint(id), before.a), pb = await tlEv((id) => window.u2c.cuetl.keyPoint(id), before.b);
+    if (pa && pb) { await page.keyboard.down('Alt'); await page.mouse.move(o.x + pa.x, o.y + pa.y); await page.mouse.down(); await page.mouse.move(o.x + pb.x, o.y + pb.y, { steps: 6 }); await page.mouse.up(); await page.keyboard.up('Alt'); await page.waitForTimeout(150);
+      const after = await tlEv((q) => { const K = window.u2c.cues.sheet.tracks.find((t) => t.path === 'camera.shot').keys, A = K.find((k) => k.id === q.a), B = K.find((k) => k.id === q.b); return { va: A.v, vb: B.v, ba: A.b, bb: B.b }; }, before);
+      swapOk = after.va === before.vb && after.vb === before.va && Math.abs(after.ba - before.ba) < 1e-6 && Math.abs(after.bb - before.bb) < 1e-6; info = `${before.va}/${before.vb} -> ${after.va}/${after.vb} · times ${after.ba},${after.bb}`;
+      await page.focus('#cueCv'); await page.keyboard.press('ControlOrMeta+z'); await page.waitForTimeout(100); } else info = 'keys not on screen'; }
+  ok('timeline: Alt-drag a camera shot onto another swaps the windows, times stay', swapOk, info); }
 // 1. previous / next key: click the Pendant lane header, ] from bar 1 lands on its next key, [ comes back
 await seekB(0.5); await clickHead('pendant.amp', 'label'); await page.focus('#cueCv'); await seekB(0.5);
 const P0 = await pend(); await page.keyboard.press(']'); const n1 = await tlEv(() => ({ ph: window.u2c.cuetl.state.playhead, sel: window.u2c.cuetl.selected().map(([r, k]) => r.path + '@' + k.b) }));

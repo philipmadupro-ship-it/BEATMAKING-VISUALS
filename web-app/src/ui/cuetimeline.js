@@ -391,6 +391,10 @@ export function createCueTimeline(app, cv) {
     if (d.kind === 'marquee') { if (d.moved) { const [x0, y0, x1, y1] = d.box, bx0 = bOf(Math.min(x0, x1)), bx1 = bOf(Math.max(x0, x1)), r0 = rowAt(Math.min(y0, y1)), r1 = rowAt(Math.max(y0, y1)); if (!d.add) st.sel.clear();
         rows.forEach((r, i) => { if (!st.collapsed && (i < r0 || i > r1)) return; for (const q of r.summary ? r.members : [r]) if (q.track && !locked(q)) for (const k of q.track.keys) if (k.b >= bx0 - 1e-6 && k.b <= bx1 + 1e-6) st.sel.add(k.id); }); app.inspector && app.inspector.show(); }
       else { st.sel.clear(); const [x] = pos(e); seekBeat(bOf(x), snapGrid()); app.inspector && app.inspector.show(); } }
+    // v23.3 (Premiere-style reorder): Alt-drag a camera shot onto another shot SWAPS their windows; the times stay on the grid
+    if (d.kind === 'move' && d.moved && d.alt && d.row && d.row.path === 'camera.shot' && d.key && d.orig.size === 1) { const f = findKey(d.key.id), tr = f && f[0].track, drop = d.key.b, o = d.orig.get(d.key.id);
+      const tgt = tr ? tr.keys.filter((k) => k !== d.key).reduce((best, k) => (Math.abs(k.b - drop) < (best ? Math.abs(best.b - drop) : 2.01) ? k : best), null) : null;
+      d.key.b = o.b; if (tgt) { const v = tgt.v; tgt.v = d.key.v; d.key.v = v; tr.auto = false; } sortAll(); if (tgt) cues.commit('swap shots'); else cues.cancel(); dirty = true; return; }
     if ((d.kind === 'move' || d.kind === 'resize' || d.kind === 'resizeL') && d.moved) { sortAll(); cues.commit(d.kind === 'move' ? 'move keys' : 'resize clip'); }
     if (d.kind === 'handle') { cues.commit('bezier handle'); app.inspector && app.inspector.show(); }
     if (d.kind === 'loopA' || d.kind === 'loopB') { if (st.loop.b - st.loop.a < 1e-6) st.loop = null; app.actions.loopChanged && app.actions.loopChanged(); }
