@@ -120,7 +120,7 @@ export function createIntro(L, A = {}) {
   }
   function coverCanvas(i, S) {
     const key = `cv${i}|${S.name}`; if (CACHE.v !== (covers.v || 0)) { CACHE.clear(); CACHE.v = covers.v || 0; } let cv = CACHE.get(key); if (cv) return cv;
-    cv = mk(TW, TW); const g = cv.getContext('2d'), im = covers[i];
+    cv = mk(TW, TW); const g = cv.getContext('2d', { willReadFrequently: true }), im = covers[i];
     if (im) { const s = Math.max(TW / im.width, TW / im.height); g.drawImage(im, (TW - im.width * s) / 2, (TW - im.height * s) / 2, im.width * s, im.height * s); }
     else {   // procedural placeholder: rings + a diagonal sweep, seeded by the card index
       const gr = g.createLinearGradient(0, 0, TW, TW); gr.addColorStop(0, '#202020'); gr.addColorStop(1, '#8a8a8a'); g.fillStyle = gr; g.fillRect(0, 0, TW, TW);
@@ -137,7 +137,7 @@ export function createIntro(L, A = {}) {
   // blurred colour bloom of a cover (48 x 48, three box passes), the light the whole scene sits in
   function bloomCanvas(i, S) {
     const key = `bl${i}|${S.name}`; if (CACHE.v !== (covers.v || 0)) { CACHE.clear(); CACHE.v = covers.v || 0; } let cv = CACHE.get(key); if (cv) return cv;
-    const N = 48; cv = mk(N, N); const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(coverCanvas(i, S), 0, 0, N, N);
+    const N = 48; cv = mk(N, N); const g = cv.getContext('2d', { willReadFrequently: true }); g.imageSmoothingQuality = 'high'; g.drawImage(coverCanvas(i, S), 0, 0, N, N);
     const d = g.getImageData(0, 0, N, N); boxBlur(d.data, N, N, 5); g.putImageData(d, 0, 0);
     let sum = 0; for (let p = 0; p < d.data.length; p += 4) sum += (d.data[p] + d.data[p + 1] + d.data[p + 2]) / 765;
     cv.lum = sum / (N * N); CACHE.set(key, cv); return cv;
@@ -362,7 +362,7 @@ export function createIntro(L, A = {}) {
       CACHE.set(key2, hv); return hv; }
     if (!mode || mode === 'none') return coverCanvas(i, S);
     const key = `fr${i}|${S.name}|${mode}`; if (CACHE.v !== (covers.v || 0)) { CACHE.clear(); CACHE.v = covers.v || 0; } let cv = CACHE.get(key); if (cv) return cv;
-    const src = coverCanvas(i, S); cv = mk(src.width, src.height); const g = cv.getContext('2d'); g.drawImage(src, 0, 0);
+    const src = coverCanvas(i, S); cv = mk(src.width, src.height); const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0);
     const d = g.getImageData(0, 0, cv.width, cv.height), px = d.data, lut = FRY[mode] ? FRY[mode].map(hexRgb) : null, R = ramp(S);
     for (let p = 0, n = 0; p < px.length; p += 4, n++) {
       let l = (0.299 * px[p] + 0.587 * px[p + 1] + 0.114 * px[p + 2]) / 255; if (mode === 'negative') l = 1 - l;

@@ -34,6 +34,9 @@ export function placeVoice(buf, take, ats, { gainDb = 0, subDb = null } = {}) {
   for (let i = 0; i < src.length; i += win) { let pk = 0; for (let j = i; j < Math.min(src.length, i + win); j++) pk = Math.max(pk, Math.abs(src[j]));
     if (pk >= thr) { if (!inSpeech) { inSpeech = true; s0 = i; } quiet = 0; } else if (inSpeech) { quiet += win / sr; if (quiet >= minGap) { segs.push([s0, i - Math.round(quiet * sr) + win]); inSpeech = false; } } }
   if (inSpeech) segs.push([s0, src.length]);
+  // v24 (audit V3): a take with an extra pause (a breath mid-line) would shift every later phrase: merge the shortest gaps until one phrase per line
+  for (let i = segs.length - 1; i >= 0; i--) if (segs[i][1] - segs[i][0] < 0.08 * sr) segs.splice(i, 1);
+  while (segs.length > ats.length && segs.length > 1) { let g = 0; for (let i = 1; i < segs.length - 1; i++) if (segs[i + 1][0] - segs[i][1] < segs[g + 1][0] - segs[g][1]) g = i; segs.splice(g, 2, [segs[g][0], segs[g + 1][1]]); }
   const g = Math.pow(10, gainDb / 20), out = [...Array(buf.numberOfChannels)].map((_, c) => buf.getChannelData(c)), tk = [...Array(take.numberOfChannels)].map((_, c) => take.getChannelData(c)), k = sr / buf.sampleRate, gs = subDb == null ? 0 : Math.pow(10, subDb / 20), sub = gs ? tk.map((ch) => octaveDown(ch)) : null;
   segs.slice(0, ats.length).forEach(([a, b], si) => { const o0 = Math.round(ats[si] * buf.sampleRate), n = Math.round((b - a) / k);
     out.forEach((d, c) => { const s = tk[Math.min(c, tk.length - 1)]; for (let i = 0; i < n && o0 + i < d.length; i++) { const x = a + i * k, x0 = Math.floor(x); d[o0 + i] += (s[x0] + (s[x0 + 1] - s[x0]) * (x - x0) || 0) * g; if (sub) { const u = sub[Math.min(c, sub.length - 1)], j = x0 - Math.round(0.012 * sr); d[o0 + i] += (u[j] || 0) * gs * g; } } }); });

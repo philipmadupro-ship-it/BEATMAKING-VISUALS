@@ -23,3 +23,8 @@ film/data/tags-*.js
 out/v7/stills/
 out/v7/*.mp4
 out/v7/passes/*.mp4
+
+# v24 (audit T3): render output and review strips never go in git
+out/
+*.mp4
+*-filmstrip.png

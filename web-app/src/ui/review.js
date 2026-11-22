@@ -45,7 +45,7 @@ export function createReview(app) {
     }
     // checks
     const c = []; const ok = (t, lvl = '') => c.push([t, lvl]);
-    const a0 = makeSurface(108, 192), a1 = makeSurface(108, 192); one(p.inT - PRE, a0, {}); one(p.outT - 1 / ex.fps, a1, {}); const seam = diff(a0, a1);
+    const a0 = makeSurface(108, 192, { read: true }), a1 = makeSurface(108, 192, { read: true });   // v24: read back by the seam diff one(p.inT - PRE, a0, {}); one(p.outT - 1 / ex.fps, a1, {}); const seam = diff(a0, a1);
     ok(p.look === 'player' ? (seam < 6 ? `Loop seam clean (difference ${seam.toFixed(1)})` : `Loop seam jumps (difference ${seam.toFixed(1)}): the last frame does not match frame 0`) : `Loop seam difference ${seam.toFixed(1)}`, p.look === 'player' && seam >= 6 ? 'bad' : '');
     const cv = app.media ? app.media.list() : []; const mine = cv.filter((x) => x.user).length;
     ok(cv[0] && cv[0].user ? `Beat cover: ${cv[0].name}${cv[0].w < 1000 ? ' (low resolution: under 1000 px)' : ''}` : 'Beat cover is the built-in one: drop yours in Media', cv[0] && cv[0].user ? (cv[0].w < 1000 ? 'warn' : '') : 'warn');

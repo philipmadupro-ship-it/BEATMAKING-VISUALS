@@ -51,3 +51,33 @@ The caption, hashtags and hook lines are in Tags (`social.caption`, `social.hash
 - **Status strip** at the bottom: beat, BPM, key, section, format, stage, intro, export preset and the play position. Click an item to change it.
 - **Timeline:** double-click a key to type its value (camera keys: pick the window by name); click a terminal or text clip to retype it; right-click for add / delete / ease; drag either edge of a clip. Wheel = lanes, Shift+wheel = time, Ctrl/Cmd+wheel = zoom.
 - **First run:** a 3-step guide (load a beat → pick a look → export); *Got it* hides it for good.
+
+## v23–v24: presets, voice lab, Premiere-style editing
+
+- **Look presets**:
+  - Lab (default)
+  - Hero
+  - Calm / YouTube
+  - Rack tour
+  - Full beat
+
+  They are on the home screen and in the Look tab. All of them have the player, the orbit-sphere intro, the hero card and the rack. You can switch at any time, and every track you edited by hand stays. EXE, LAB and SCOPE are under *Legacy looks*.
+- **Full beat**: pick *Full* length (or the Full beat preset). The video plays in the player to the end: CLOSE PROJECT?, the cursor clicks ×, and it stops (no loop back to the intro). Long videos visit the hero card every other move.
+- **Shot order** (Look tab): drag the camera stops to reorder them. The times stay and the windows move. Or Alt-drag a camera clip onto another one in the timeline. Use *+ Stop at playhead* to add one and *Shuffle order* for a new order.
+- **Voice lab** (left rail → Media):
+  - Pick one of your ElevenLabs voices (your own voices come first; *AI 1 girl* is the default).
+  - Set the experiment number and her three lines.
+  - *Generate intro take* makes one take. It spends credits only on that click.
+  - The take is split at its pauses and placed on the intro; a breath mid-line is merged automatically.
+  - Outside claude.ai: *Copy prompt*, then *Load voice take*.
+  - Under the voice: tag `voice.sub` sets the octave-down double (dB, or `off`), and tag `sfx.stove` turns the stove ignition on or off.
+- **Cover presets** (Media): Halftone print, Night vision, Thermal, Negative, Clean, Stage colours. *Every sphere tile* puts the treatment on the whole sphere.
+- **Markers** (left rail → Markers):
+  - Each marker has a type: Note, Cue, Drop, Hit, CTA or Chapter, each with its own colour on the timeline.
+  - ‹ › jump between markers.
+  - ◎ adds a camera visit at the marker.
+  - *Chapters* copies YouTube chapter lines (from Chapter markers, or from the sections when there are none).
+- **+ Layer** (timeline): text, terminal line, CTA, camera stop, zoom key, negative, flash, cover key or marker at the playhead. Each item says what it does.
+- **Workspaces** (top bar): Edit, Motion, Audio, Export rearrange the panels for the job.
+- **Tooltips**: hover any control for half a second to see its name, what it does and its shortcut.
+- **The preview is always visible**: when the monitor scrolls away (phone, long panels), a floating glass mini-preview follows you. Click it to jump back, drag it to a corner, × hides it.

@@ -648,3 +648,6 @@ body:has(#studio[hidden]) #wsSeg{display:none}
 /* dock toolbars stay as dense as before (the lanes must fit a 900 px laptop screen) */
 #dock .seg{padding:0;gap:0}#dock .seg button{border-radius:0}#dock .seg button:first-child{border-radius:7px 0 0 7px}#dock .seg button:last-child{border-radius:0 7px 7px 0}
 #dock .btn.small,#dock .ib.sm,#dock .inp.small{min-height:26px}
+/* v24 (audit W3): every visible button is at least 24 x 24 px (WCAG 2.5.8) */
+.btn.tiny{min-height:24px;min-width:24px}
+.chip{min-height:24px}

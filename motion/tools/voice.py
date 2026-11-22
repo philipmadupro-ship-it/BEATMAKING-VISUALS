@@ -31,6 +31,9 @@ def main():
         st = [float(x) for x in re.findall(r'silence_start: ([0-9.]+)', r)]; en = [float(x) for x in re.findall(r'silence_end: ([0-9.]+)', r)]
         cuts = [(0.0, st[0] if st else 99)] + [(e - 0.04, (st[i + 1] if i + 1 < len(st) else 99)) for i, e in enumerate(en)]
         ats = [float(x) for x in a.ats.split(',')]; d = tempfile.mkdtemp(); ins, parts = [], []
+        cuts = [c for c in cuts if c[1] - c[0] > 0.08]   # v24 (audit V3): drop slivers, then merge the shortest gaps until there is one phrase per line
+        while len(cuts) > len(ats) and len(cuts) > 1:
+            g = min(range(len(cuts) - 1), key=lambda i: cuts[i + 1][0] - cuts[i][1]); cuts[g:g + 2] = [(cuts[g][0], cuts[g + 1][1])]
         fx = f'highpass=f=150,lowpass=f=9000,acompressor=threshold=-18dB:ratio=2.5:attack=5:release=80,aecho=0.8:0.4:24:0.12,volume={a.gain_db}dB'
         for i, ((c0, c1), at) in enumerate(zip(cuts, ats)):
             f = os.path.join(d, f'{i}.wav'); subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', str(max(0, c0)), '-i', a.source, *(['-t', str(c1 - max(0, c0))] if c1 < 99 else []), f], check=True); ins += ['-i', f]; parts.append(f'[{i}:a]{fx},adelay={int(at * 1000)}:all=1,aresample=48000[p{i}]')

@@ -7,7 +7,7 @@ import { createClock } from './engine/clock.js';
 import { createRenderer } from './engine/render.js';
 import { createClipManager } from './engine/clip.js';
 import { createCueStore } from './cues/store.js';
-import { generateSheet, PRESETS } from './cues/generate.js';
+import { generateSheet, PRESETS, PRE_S } from './cues/generate.js';
 import { newId, defaultEase, snapBeat, SNAPS } from './cues/schema.js';
 import { buildRegistry } from './v8/registry.js';
 import { STAGES, loadFonts } from './v8/core.js';
@@ -21,6 +21,7 @@ import { createGrid } from './ui/grid.js';
 import { createStudio } from './ui/studio.js';
 import { createPanels } from './ui/panels.js';
 import { createMedia } from './ui/media.js';
+import { makeSurface } from './engine/render.js';
 import { createVoiceLab } from './ui/voicelab.js';
 import { createTips } from './ui/tips.js';
 import { createPip } from './ui/pip.js';
@@ -124,8 +125,16 @@ async function boot() {
     if (needGen) { needGen = false; const g = generateSheet({ ...genOpts(), preset: (cues.sheet.meta && cues.sheet.meta.preset) || 'default' }); cues.replace(g, 'generate', true); }
     else { const before = JSON.stringify(cues.sheet.tracks.filter((t) => t.auto).map((t) => t.keys.map((k) => [k.b, k.v]))), s2 = JSON.parse(JSON.stringify(cues.sheet)); refreshAutoIn(s2);
       if (JSON.stringify(s2.tracks.filter((t) => t.auto).map((t) => t.keys.map((k) => [k.b, k.v]))) !== before || s2.meta.bars !== cues.sheet.meta.bars) cues.edit((s) => refreshAutoIn(s), 'analysis'); }
-    app.panels.sync(); app.cuetl.markDirty(); app.inspector.show();
+    app.panels.sync(); app.cuetl.markDirty(); app.inspector.show(); warmCaches();
   }
+  // v24 (audit W1): the first draw of an intro / hero / ground frame builds big caches (editorial sheet, Akira columns, fried + halftone covers):
+  // 3-9 s once. Draw the key moments into a tiny offscreen surface while the browser is idle, so scrubbing there later is instant.
+  let warmKey = '', lastInput = 0; for (const ev2 of ['pointerdown', 'keydown', 'wheel']) window.addEventListener(ev2, () => { lastInput = performance.now(); }, { capture: true, passive: true });   // the warm-up only runs when the user is idle
+  function warmCaches() { const p = store.project, tr = store.session.track, e = app.clip.current(); if (!tr || !e || !e.ready || p.look !== 'player') return;
+    const k = [p.aspect, p.stage, p.inT, cues.version].join('|'); if (k === warmKey) return; warmKey = k;
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 300)), s = makeSurface(54, 96), ts = [p.inT - PRE_S + 0.3, p.inT - 1.2, p.inT + 2.5, p.inT + (p.outT - p.inT) * 0.6]; let i = 0;
+    const step = () => { if (i >= ts.length || store.session.exporting) return; if (performance.now() - lastInput < 1500 || clock.playing) { setTimeout(() => idle(step), 600); return; } try { app.renderFrame(ts[i++], s, p, tr, { entry: e, preroll: PRE_S, fps: 30, info: {} }); } catch (_) {} idle(step); };
+    idle(step); }
   A.syncCues = syncCues;
   A.setBpm = (bpm) => { if (store.session.track && bpm >= 40 && bpm <= 250) A.regrid(bpm); };
   A.regrid = (bpm, t0) => { const tr = regrid(store.session.track, bpm, t0); store.set({ session: { track: tr } }); app.clip.clear();

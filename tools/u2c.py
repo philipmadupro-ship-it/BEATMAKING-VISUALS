@@ -175,7 +175,7 @@ def test(_=None):
         if r.returncode: bad += 1; print('SYNTAX', os.path.relpath(f, WEB), (r.stderr.strip().splitlines() or [''])[0][:120])
     print(f'syntax: {"all modules OK" if not bad else str(bad) + " broken"}')
     env = dict(os.environ, NOEXPORT='1', CDN_CACHE='/tmp/cdncache')
-    for t in ('tests/meters.mjs', 'tests/smoke.mjs'):
+    for t in ('tests/meters.mjs', 'tests/smoke.mjs', 'tests/editor.mjs'):   # v24: + the editor UI suite
         r = subprocess.run(['node', t], cwd=WEB, env=env, capture_output=True, text=True, timeout=900)
         for ln in (r.stdout + r.stderr).splitlines():
             if ln.startswith('FAIL') or 'passed' in ln: print(t, ln)
@@ -185,12 +185,14 @@ def review(a):
     import numpy as np
     from PIL import Image
     pre, spb = a.pre, 60.0 / a.bpm; dur = float(sh(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', a.video]).stdout or 0)
-    marks = [('frame 0', 0.0), ('click play', pre + 0.02), ('browse', 0.45), ('choose', max(0.0, pre - 0.55)), ('push', pre + 2 * spb), ('cut', pre + 4 * spb + 0.05), ('build', pre + 5 * spb),
+    marks = [('frame 0', 0.0), ('click play', pre + 0.02), ('stove + hook', 1.2), ('drag', pre * 0.52), ('pick', pre * 0.72), ('choose', max(0.0, pre - 0.55)), ('push', pre + 2 * spb), ('cut', pre + 4 * spb + 0.05), ('build', pre + 5 * spb),
              ('first move', pre + 12 * spb - 0.5), ('negative', pre + 24.5 * spb), ('CTA 1', pre + 33 * spb), ('CTA 2', pre + 45 * spb), ('rewind', dur - 3.6), ('last', dur - 1 / 30)]
     ims = []; marks = [m for m in marks if m[0] == 'last' or m[1] < dur - 0.1]
     for name, t in marks:
         if os.path.exists('/tmp/u2c_r.png'): os.remove('/tmp/u2c_r.png')
         sh(['ffmpeg', '-v', 'error', '-y'] + (['-sseof', '-0.04'] if name == 'last' else ['-ss', f'{max(0, t):.3f}']) + ['-i', a.video, '-frames:v', '1', '/tmp/u2c_r.png'])
+        if not os.path.exists('/tmp/u2c_r.png'):   # v23.4: audio longer than video (aac padding) puts -sseof past the last frame: step back
+            sh(['ffmpeg', '-v', 'error', '-y', '-sseof', '-0.3', '-i', a.video, '-update', '1', '/tmp/u2c_r.png'])
         im = Image.open('/tmp/u2c_r.png').convert('RGB'); k = 240 / max(im.size); ims.append(im.resize((int(im.width * k), int(im.height * k))))
     sheet = Image.new('RGB', (sum(i.width for i in ims), max(i.height for i in ims))); x = 0
     for i in ims: sheet.paste(i, (x, 0)); x += i.width
@@ -225,7 +227,7 @@ q = sp.add_parser('covers'); q.set_defaults(fn=covers); q.add_argument('src', na
 q = sp.add_parser('batch'); q.set_defaults(fn=batch); q.add_argument('manifest')
 q = sp.add_parser('strip'); q.set_defaults(fn=strip); q.add_argument('video'); q.add_argument('-t', default='3.3:4.3:0.15')
 q = sp.add_parser('crop'); q.set_defaults(fn=crop); q.add_argument('png'); q.add_argument('box')
-q = sp.add_parser('review'); q.set_defaults(fn=review); q.add_argument('video'); q.add_argument('--pre', type=float, default=0.7); q.add_argument('--bpm', type=float, default=128)
+q = sp.add_parser('review'); q.set_defaults(fn=review); q.add_argument('video'); q.add_argument('--pre', type=float, default=9.0); q.add_argument('--bpm', type=float, default=128)
 q = sp.add_parser('bright'); q.set_defaults(fn=bright); q.add_argument('video')
 q = sp.add_parser('stage'); q.set_defaults(fn=stage); q.add_argument('files', nargs='+')
 a = p.parse_args(); a.fn(a)

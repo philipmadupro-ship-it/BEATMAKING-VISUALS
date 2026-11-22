@@ -52,7 +52,8 @@ if (!['exe', 'lab', 'scope', 'player'].includes(look)) throw new Error('look mus
 const aspect = String(args.aspect || '9:16').replace(':', '').replace('x', '');
 const len = Number(args.len || 30);
 // v19 --preroll <s> (player look default 0.7): silent pause on the stopped player before the cursor clicks play; the audio starts on the click
-const PRE = args.test ? 0 : Math.max(0, +(args.preroll ?? ((args.look || 'exe') === 'player' ? 9.0 : 0)));   // v22.2: 7 s pre-roll (voice); v22: 4 s pre-roll (orbit-sphere intro: spin, drag, pick, play)
+const { PRE_S } = await import('./film/v9/src/cues/generate.js'), { VOICE_ATS, VOICE_DURS } = await import('./film/v9/src/v8/tags.js');   // v24: one source of truth (web + native)
+const PRE = args.test ? 0 : Math.max(0, +(args.preroll ?? ((args.look || 'exe') === 'player' ? PRE_S : 0)));   // v22.2: 7 s pre-roll (voice); v22: 4 s pre-roll (orbit-sphere intro: spin, drag, pick, play)
 if (!['nigredo', 'albedo', 'citrinitas', 'rubedo', 'white'].includes(stage)) throw new Error('unknown stage ' + stage);
 if (!['916', '169'].includes(aspect)) throw new Error('aspect must be 9:16 or 16:9');
 const base = path.basename(beat).replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
@@ -119,7 +120,7 @@ if (ENGINE === 'v9') {
     const BT = D.beat, T2 = (bb) => bb * BT, P = PRE, rate = BT / 24, get = (o, p) => p.split('.').reduce((q, k) => (q == null ? q : q[k]), o), tg = (p) => get(sheet.tags || {}, p) ?? get(DEFAULT_TAGS, p);
     const sub = (x) => String(x ?? '').replace(/\{[a-zA-Z]+\}/g, (m) => (m === '{title}' || m === '{titleWord}' ? String(D.title || '') : m === '{bpm}' ? String(Math.round(60 / BT)) : 'XXXX')), len = (x) => sub(x).length, E = [];
     E.push({ t: 0, kind: 'swell' }, { t: 0.25, kind: 'bleep' }, { t: 1.0, kind: 'type', n: len(tg('social.title')) + len(tg('social.hook')), dt: BT / 12 });   // v22.5 hook at half speed
-    { const L4 = tg('voice.lines') || [], at = String(tg('voice.ats') || '1.4,3.9,7.3').split(',').map(Number), du = String(tg('voice.durs') || '2.0,1.6,1.45').split(',').map(Number);
+    { const L4 = tg('voice.lines') || [], at = String(tg('voice.ats') || VOICE_ATS).split(',').map(Number), du = String(tg('voice.durs') || VOICE_DURS).split(',').map(Number);
       if (P > 0) L4.forEach((q, i) => { const n = len(q) + 2; E.push({ t: at[i], kind: 'type', n, dt: (du[i] ?? 1.4) * 0.85 / Math.max(1, n - 2) }); }); }   // v22.5 the keys follow her lines
     const kb2 = (p, i, d) => { const tr = sheet.tracks.find((q) => q.path === p); return tr && tr.keys[i] ? tr.keys[i].b : d; }, SPK = kb2('intro.pick', 1, -6.1), STY = kb2('intro.type', 1, -4.4), STE = kb2('intro.type', 2, -3.4);
     if (sheet.base['intro.style'] === 'sphere') { const tl = String(D.title || '').length + 16; E.push({ t: P + T2(kb2('intro.pitch', 1, -10.5)), kind: 'whir', dur: T2(3.5) }, { t: P + T2(SPK) + 0.03, kind: 'lock' }, { t: P + T2(STY), kind: 'type', n: tl, dt: T2(STE - STY) / tl }); }
@@ -202,7 +203,7 @@ const audioIn = path.join(FILM, 'data', id + '.wav'), dly = PRE > 0 ? `adelay=${
 // v22.1 lab voice (offline Piper, tools/voice.py): "<title>. Experimentation." while the hook rises, "Initiating playback." just before the play click
 const useVoice = look === 'player' && PRE >= 3 && !args.test && !/^(off|0|false|no)$/i.test(String(args.voice ?? 'on')) && fs.existsSync(path.join(ROOT, 'tools', 'voice.py'));
 const useSfx = SFX.length > 0; if (useSfx) { fs.writeFileSync(path.join(FILM, 'renders', AUX + 'sfx.json'), JSON.stringify(SFX)); run('python3', [path.join(ROOT, 'tools', 'sfx.py'), '--events', path.join(FILM, 'renders', AUX + 'sfx.json'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', AUX + 'sfx.wav'), '--gain-db', String(args['sfx-db'] ?? -14)], { quiet: true }); }
-if (useVoice) run('python3', [path.join(ROOT, 'tools', 'voice.py'), '--title', String(D.title || args.title || 'U2C'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', AUX + 'voice.wav'), ...((args['voice-source'] || process.env.U2C_VOICE_SOURCE) ? ['--source', path.resolve(String(args['voice-source'] || process.env.U2C_VOICE_SOURCE)), '--ats', String(args['voice-ats'] || '1.4,3.9,7.3'), '--gain-db', '0'] : [])], { quiet: true });   // v22.2: a recorded take (ElevenLabs) when given
+if (useVoice) run('python3', [path.join(ROOT, 'tools', 'voice.py'), '--title', String(D.title || args.title || 'U2C'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', AUX + 'voice.wav'), ...((args['voice-source'] || process.env.U2C_VOICE_SOURCE) ? ['--source', path.resolve(String(args['voice-source'] || process.env.U2C_VOICE_SOURCE)), '--ats', String(args['voice-ats'] || (TAGS_AUDIO.voice || {}).ats || VOICE_ATS), '--gain-db', '0'] : [])], { quiet: true });   // v22.2: a recorded take (ElevenLabs) when given
 // v23 (user's sound design): the voice doubled one octave DOWN (-12 semitones, rubberband, formants shifted with it: a little scary), mixed
 // under the dry voice (tag voice.sub dB, default -8; 'off' = none); and a gas-stove ignition (clicks, then the flame) on frame 0 (sfx.stove)
 if (useVoice) { let subDb = String(args['voice-sub-db'] ?? (cueTagsForAudio().voice || {}).sub ?? '-8'); if (!/^(off|none|false)$/i.test(subDb)) { const vIn = path.join(FILM, 'renders', AUX + 'voice.wav'), vOut = path.join(FILM, 'renders', AUX + 'voice-sub.wav');
