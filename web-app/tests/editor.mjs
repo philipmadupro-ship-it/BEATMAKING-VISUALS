@@ -48,10 +48,90 @@ ok('boot + demo analysis', true, ((Date.now() - t0) / 1000).toFixed(1) + ' s');
 await page.setInputFiles('#file', AUDIO);
 await page.waitForFunction((b) => { const tr = window.u2c.store.session.track; return tr && !tr.meta.quick && tr.meta.name === b; }, path.basename(AUDIO), { timeout: 120000 });
 await page.waitForFunction(() => { const e = window.u2c.clip.current(); return e && e.ready && window.u2c.cues.sheet.tracks.length > 0; }, null, { timeout: 120000 });
+// ---------------------------------------------------------------- v22 home: big title -> drop -> recent -> looks, first-run coach
+const home = await ev(() => { const q = (s) => document.querySelector(s), order = ['.home-title', '.hero', '#recent', '#grid'].map((s) => [...document.querySelectorAll('#home *')].indexOf(q(s)));
+  return { order, sorted: order.every((v, i) => v >= 0 && (!i || v > order[i - 1])), h1: parseFloat(getComputedStyle(q('.home-title h1')).fontSize), coach: !q('#coachHome').hidden, steps: document.querySelectorAll('#coachHome li').length }; });
+await shot('home-first-run-1440.png');
+ok('home: big title, drop, recent, looks in that order; first-run coach with 3 steps', home.sorted && home.h1 >= 60 && home.coach && home.steps === 3, JSON.stringify(home));
 // open the PLAYER look in the studio
 await ev(() => window.u2c.actions.openStudio('player', '916'));
 await page.waitForFunction(() => !document.querySelector('#studio').hidden && window.u2c.clip.current().ready, null, { timeout: 60000 }); await wait(800);
 ok('studio open (player look)', await ev(() => window.u2c.store.project.look === 'player'));
+
+// ---------------------------------------------------------------- v22 status strip, task controls, advanced, coach
+await ev(() => window.u2c.actions.seek(window.u2c.store.project.inT + 9 * window.u2c.store.session.track.spb)); await wait(300);
+const sb = await ev(() => ({ t: document.querySelector('#statusBar').innerText.replace(/\s+/g, ' '), vis: document.querySelector('#statusBar').getBoundingClientRect().bottom <= innerHeight + 1 }));
+ok('status strip: beat, BPM, key, section, format, stage, intro, export preset, position', sb.vis && /atelmansion/i.test(sb.t) && /BPM 1\d\d/i.test(sb.t) && /Key \S/i.test(sb.t) && /Section \d+ bars/i.test(sb.t) && /Format 9:16/i.test(sb.t) && /Stage \S/i.test(sb.t) && /Intro (sphere|flow)/i.test(sb.t) && /Export \S+/i.test(sb.t) && /Position 3\.2\./i.test(sb.t), sb.t);
+const coach2 = await ev(() => ({ step: window.u2c.quick.coach.step, slim: !document.querySelector('#coachStudio').hidden }));
+const qrows = await ev(() => ({ groups: [...document.querySelectorAll('#quick .qg')].map((g) => g.dataset.g), rows: document.querySelectorAll('#quick .qc').length, labelled: [...document.querySelectorAll('#quick .qc')].filter((r) => r.querySelector('.qc-l').textContent && r.querySelector('.qc-v')).length, hints: document.querySelectorAll('#quick .qc-hint').length, adv: document.querySelector('#advInsp').open }));
+ok('controls by task: Intro, Camera, Text, Colours, Export; label + value + hint; raw paths under Advanced', qrows.groups.join() === 'Intro,Camera,Text,Colours,Export' && qrows.rows >= 25 && qrows.labelled === qrows.rows && qrows.hints >= 20 && !qrows.adv && coach2.step === 2 && coach2.slim, JSON.stringify({ ...qrows, coach: coach2 }));
+await page.click('#quick .qg[data-g="Intro"] button[data-v="flow"]'); await wait(150);
+const st1 = await ev(() => ({ v: window.u2c.cues.ev().value('intro.style', 0, 'x'), out: document.querySelector('#quick [data-out="intro.style"]').textContent }));
+await page.click('#quick .qg[data-g="Intro"] button[data-v="sphere"]'); await wait(150);
+const st2 = await ev(() => window.u2c.cues.ev().value('intro.style', 0, 'x'));
+const seed0 = await ev(() => ({ s: window.u2c.cues.sheet.meta.seed, cam: JSON.stringify(window.u2c.cues.sheet.tracks.find((t) => t.path === 'camera.shot').keys.map((k) => k.v)) }));
+await page.click('#quick [data-qact="newseed"]'); await wait(300);
+const seed1 = await ev(() => ({ s: window.u2c.cues.sheet.meta.seed, cam: JSON.stringify(window.u2c.cues.sheet.tracks.find((t) => t.path === 'camera.shot').keys.map((k) => k.v)), inp: document.querySelector('#quick [data-q="seed"]').value }));
+ok('intro style toggle (sphere / flow) + seed "New variation"', st1.v === 'flow' && st1.out === 'Flow' && st2 === 'sphere' && seed1.s && seed1.s !== seed0.s && seed1.inp === seed1.s, `flow→sphere ok · seed ${seed0.s || 'auto'} → ${seed1.s} · camera ${seed0.cam === seed1.cam ? 'same' : 'reshuffled'}`);
+await ev(() => window.u2c.quick.set('fx.punch', 0.03)); await wait(100);
+const punch = await ev(() => ({ v: window.u2c.cues.ev().value('fx.punch', window.u2c.cuetl.state.playhead, 0), out: document.querySelector('#quick [data-out="fx.punch"]').textContent }));
+await page.fill('#quick [data-q="social.terminal.2"]', 'LAB TEST: PASSED'); await page.press('#quick [data-q="social.terminal.2"]', 'Tab'); await wait(100);
+await page.fill('#quick [data-q="social.outro.body"]', 'SAVE THE LAB?'); await page.press('#quick [data-q="social.outro.body"]', 'Tab'); await wait(100);
+const words = await ev(() => { const t = window.u2c.cues.sheet.tags.social, m = window.u2c.cues.tags('').social; return { arr: Array.isArray(t.terminal), n: t.terminal.length, v2: m.terminal[2], v0: m.terminal[0], outro: m.outro.body, outroT: m.outro.title }; });
+await shot('controls-1440.png');
+ok('values with units; terminal lines (a list) and the outro dialog edit as words', Math.abs(punch.v - 0.03) < 1e-9 && punch.out === '3.0 %' && words.arr && words.n === 4 && words.v2 === 'LAB TEST: PASSED' && /LOADING/.test(words.v0) && words.outro === 'SAVE THE LAB?' && words.outroT === 'U2C LAB', JSON.stringify({ punch, words }));
+
+// ---------------------------------------------------------------- v22 edit in the timeline
+const tlp = (id) => ev((id) => { const p = window.u2c.cuetl.keyPoint(id), r = document.querySelector('#cueCv').getBoundingClientRect(); return { x: r.x + p.x, y: r.y + p.y }; }, id);
+const cam = await ev(() => { const t = window.u2c.cues.sheet.tracks.find((x) => x.path === 'camera.shot'), k = t.keys.find((q) => q.b > 4) || t.keys[0]; return { id: k.id, v: k.v }; });
+let pt = await tlp(cam.id); await page.mouse.dblclick(pt.x, pt.y); await wait(200);
+const inl = await ev(() => { const s = document.querySelector('.tl-inline select'); return s ? { opts: [...s.options].map((o) => o.textContent), vis: !document.querySelector('.tl-inline').hidden } : null; });
+const newT = cam.v === 'spectrum' ? 'session' : 'spectrum';
+if (inl) await page.selectOption('.tl-inline select', newT); await wait(150);
+const camV = await ev((id) => window.u2c.cuetl.findKey(id)[1].v, cam.id);
+ok('timeline: double-click a camera key -> dropdown of window names changes its target', inl && inl.vis && inl.opts.includes('Hero (cover + logo)') && camV === newT, `${cam.v} → ${camV} · ${inl && inl.opts.slice(0, 4).join(', ')}`);
+await shot('timeline-inline-1440.png');
+const num = await ev(() => { const t = window.u2c.cues.sheet.tracks.find((x) => x.kind === 'number' && x.keys.length && !x.lock); return t && { id: t.keys[0].id, path: t.path, v: t.keys[0].v }; });
+pt = await tlp(num.id); await page.mouse.dblclick(pt.x, pt.y); await wait(200);
+const hasNum = await ev(() => !!document.querySelector('.tl-inline input[type=number]'));
+const want = await ev((p) => { const r = window.u2c.registry().byPath[p.path] || {}, lo = r.min ?? 0, hi = r.max ?? 1; return +(lo + (hi - lo) * 0.37).toFixed(3); }, num);
+if (hasNum) { await page.fill('.tl-inline input[type=number]', String(want)); await page.keyboard.press('Enter'); } await wait(150);
+const numV = await ev((id) => window.u2c.cuetl.findKey(id)[1].v, num.id);
+ok('timeline: double-click a number key -> inline number field', hasNum && Math.abs(numV - want) < 1e-6, `${num.path}: ${num.v} → ${numV}`);
+const term = await ev(() => { const t = window.u2c.cues.sheet.tracks.find((x) => x.path === 'term.line'); if (!t || !t.keys.length) return null; const k = t.keys.find((q) => typeof q.v === 'number') || t.keys[0], T = window.u2c.cuetl, p = T.keyPoint(k.id), r = document.querySelector('#cueCv').getBoundingClientRect();
+  return { id: k.id, v: k.v, b: k.b, dur: k.dur, x: r.x + (p.x + T.xOf(k.b + (k.dur ?? 1))) / 2, y: r.y + p.y, x0: r.x + p.x }; });
+let termOk = false, termInfo = 'no term.line track';
+if (term) { await page.mouse.click(term.x, term.y); await wait(250); const has = await ev(() => { const i = document.querySelector('.tl-inline input'); return i ? i.value : null; });
+  if (has != null) { await page.fill('.tl-inline input', 'ANALYSING THE LAB'); await page.keyboard.press('Enter'); await wait(150); }
+  const after = await ev((v) => (typeof v === 'number' ? window.u2c.cues.tags('').social.terminal[v] : null), term.v); termOk = has != null && after === 'ANALYSING THE LAB'; termInfo = `"${has}" → "${after}"`; }
+ok('timeline: click a terminal clip -> edit its text in place', termOk, termInfo);
+if (term) { const p0 = await ev((id) => { const k = window.u2c.cuetl.findKey(id)[1]; return { b: k.b, end: k.b + (k.dur ?? 1) }; }, term.id), ppb = await ev(() => window.u2c.cuetl.xOf(1) - window.u2c.cuetl.xOf(0));
+  await page.mouse.move(term.x0 + 2, term.y); await page.mouse.down(); await page.mouse.move(term.x0 + 2 + ppb * 0.5, term.y, { steps: 5 }); await page.mouse.up(); await wait(150);
+  const p1 = await ev((id) => { const k = window.u2c.cuetl.findKey(id)[1]; return { b: k.b, end: k.b + (k.dur ?? 1) }; }, term.id);
+  ok('timeline: drag a clip\'s start edge (trim in, the end stays)', p1.b > p0.b + 0.2 && Math.abs(p1.end - p0.end) < 1e-6, `${p0.b}-${p0.end} → ${p1.b}-${p1.end}`); }
+pt = await tlp(cam.id); await page.mouse.click(pt.x, pt.y, { button: 'right' }); await wait(150);
+const menu = await ev(() => [...document.querySelectorAll('.tl-menu:not([hidden]) button')].map((b) => b.textContent));
+await shot('timeline-menu-1440.png');
+const nCam0 = await ev(() => window.u2c.cues.sheet.tracks.find((x) => x.path === 'camera.shot').keys.length);
+await page.click('.tl-menu button[data-m="delete"]'); await wait(150);
+const nCam1 = await ev(() => window.u2c.cues.sheet.tracks.find((x) => x.path === 'camera.shot').keys.length); await ev(() => window.u2c.cues.undo());
+const lane = await ev(() => { const T = window.u2c.cuetl, t = window.u2c.cues.sheet.tracks.find((x) => x.path === 'camera.shot'), ks = t.keys.map((k) => k.b).sort((a, b) => a - b); let b = 1.5; for (let i = 0; i < ks.length - 1; i++) if (ks[i + 1] - ks[i] > 4) { b = Math.floor(ks[i] + 2); break; }
+  const p = T.pointOf('camera.shot', b), r = document.querySelector('#cueCv').getBoundingClientRect(); return { x: r.x + p.x, y: r.y + p.y, b }; });
+ok('timeline: right-click menu (edit, targets, ease, copy, delete)', menu.some((m) => /Change target/.test(m)) && menu.some((m) => /Hold/.test(m)) && menu.some((m) => /Delete key/.test(m)) && nCam1 === nCam0 - 1, `${menu.length} items · delete ${nCam0} → ${nCam1}`);
+const sc0 = await ev(() => ({ v: window.u2c.cuetl.state.vscroll, s: window.u2c.cuetl.state.scroll, z: window.u2c.cuetl.state.ppb, fit: window.u2c.cuetl.lanesFit() }));
+const cvb = await page.$eval('#cueCv', (c) => { const r = c.getBoundingClientRect(); return { x: r.x + r.width * 0.6, y: r.y + r.height * 0.6 }; });
+await page.mouse.move(cvb.x, cvb.y); await page.keyboard.down('Control'); await page.mouse.wheel(0, -200); await page.keyboard.up('Control'); await wait(100);
+const sc2 = await ev(() => ({ z: window.u2c.cuetl.state.ppb, v: window.u2c.cuetl.state.vscroll, s: window.u2c.cuetl.state.scroll }));
+await page.keyboard.down('Shift'); await page.mouse.wheel(0, 300); await page.keyboard.up('Shift'); await wait(100);
+const sc1 = await ev(() => ({ s: window.u2c.cuetl.state.scroll })); await page.mouse.wheel(0, 200); await wait(100); const sc3 = await ev(() => window.u2c.cuetl.state.vscroll);
+ok('timeline wheel: shift = time, ctrl = zoom, vertical = lanes', sc1.s > sc2.s && sc2.z > sc0.z && (sc0.fit || sc3 > sc2.v), `scroll ${sc0.s.toFixed(1)} → ${sc1.s.toFixed(1)} · zoom ${sc0.z.toFixed(1)} → ${sc2.z.toFixed(1)} · lanes ${sc0.fit ? 'fit (page scrolls)' : sc2.v + ' → ' + sc3}`);
+await ev(() => window.u2c.cuetl.fit());
+await page.click('#coachStudio [data-coach="x"]'); await wait(100);
+ok('coach: dismissed and remembered', await ev(() => document.querySelector('#coachStudio').hidden && JSON.parse(localStorage.getItem('u2c.coach.v1')).done === true));
+await ev(() => window.u2c.cuetl.select([window.u2c.cues.sheet.tracks.find((x) => x.path === 'camera.shot').keys[0].id])); await wait(150);
+const advA = await ev(() => ({ adv: document.querySelector('#advInsp').open, quickHidden: document.querySelector('#quick').hidden })); await page.click('#quickBack'); await wait(150);
+const advB = await ev(() => ({ adv: document.querySelector('#advInsp').open, quick: !document.querySelector('#quick').hidden, sel: window.u2c.cuetl.selected().length }));
+ok('Advanced opens itself while keys are selected; "back" returns to the simple controls', advA.adv && advA.quickHidden && !advB.adv && advB.quick && !advB.sel, JSON.stringify({ advA, advB }));
 
 // ---------------------------------------------------------------- command palette
 await page.click('#cueCv', { position: { x: 400, y: 5 } }).catch(() => {});

@@ -29,7 +29,7 @@ export function createGrid(app) {
     requestAnimationFrame(frame); const tr = app.store.session.track; if (home.hidden || !tr || app.store.session.exporting || !entry || !entry.ready) return; tick++;
     const len = loop[1] - loop[0]; let t;
     if (hovered && app.clock.playing) { t = app.clock.time(); if (t >= loop[1] || t < loop[0] - .5) { app.clock.play(loop[0]); t = loop[0]; } } else t = loop[0] + (((performance.now() - t0) / 1000) % len);
-    for (const c of cards) { if (!c.vis) continue; if (c !== hovered && (tick + c.i) % 2) continue; render(c, t); }
+    for (const c of cards) { if (!c.vis && c.drawn) continue; if (c.vis && c !== hovered && (tick + c.i) % 2) continue; render(c, t); if (c.sheet && entry && entry.ready) c.drawn = true; }   // v22: off-screen cards still get one frame (a poster), so scrolling never shows a blank card
   }
   requestAnimationFrame(frame);
   return {

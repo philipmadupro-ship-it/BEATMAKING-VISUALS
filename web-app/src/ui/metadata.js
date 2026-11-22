@@ -14,7 +14,9 @@ const mmss = (s) => { s = Math.max(0, Math.round(s || 0)); return `${Math.floor(
 const parseDur = (v) => { v = String(v).trim(); if (!v) return null; const m = v.match(/^(\d+):(\d{1,2})$/); if (m) return +m[1] * 60 + +m[2]; const n = parseFloat(v); return isFinite(n) && n > 0 ? n : null; };
 
 export function setTagIn(s, path, v) { const parts = path.split('.'); s.tags = s.tags || {}; let o = s.tags;
-  for (let i = 0; i < parts.length - 1; i++) { const pre = parts.slice(0, i + 1).join('.'), d = getp(DEFAULT_TAGS, pre); if (o[parts[i]] == null || typeof o[parts[i]] !== 'object') o[parts[i]] = Array.isArray(d) ? [...d] : {}; o = o[parts[i]]; }
+  for (let i = 0; i < parts.length - 1; i++) { const pre = parts.slice(0, i + 1).join('.'), d = getp(DEFAULT_TAGS, pre); const k = parts[i]; if (o[k] == null || typeof o[k] !== 'object') o[k] = Array.isArray(d) ? [...d] : {};
+    else if (Array.isArray(d) && !Array.isArray(o[k])) o[k] = Object.assign([...d], o[k]);   // a list saved as {0: …} by an older build -> a list again
+    o = o[k]; }
   o[parts[parts.length - 1]] = v; }
 
 export function createMetadata(app) {

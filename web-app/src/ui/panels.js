@@ -10,6 +10,7 @@ import { PRESETS } from '../cues/generate.js';
 import { flattenTags, mergeDeep } from '../cues/schema.js';
 import { DEFAULT_TAGS } from '../v8/tags.js';
 import { makeSurface } from '../engine/render.js';
+import { setTagIn } from './metadata.js';
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 const nest = (path, v) => path.split('.').reverse().reduce((acc, k) => ({ [k]: acc }), v);
@@ -48,9 +49,7 @@ export function createPanels(app) {
       .map(([k, v]) => `<label class="tagrow${def[k] !== v ? ' changed' : ''}"><code>${esc(k)}</code><input class="inp mono" data-tag="${esc(k)}" value="${esc(v)}"></label>`).join('');
   }
   $('#tagFilter').addEventListener('input', tagList);
-  const setTag = (s, path, v) => { const parts = path.split('.'), base = flattenTags(DEFAULT_TAGS); let o = s.tags; const isArr = (p) => Array.isArray(getp(DEFAULT_TAGS, p));
-    for (let i = 0; i < parts.length - 1; i++) { const pre = parts.slice(0, i + 1).join('.'); if (o[parts[i]] == null) o[parts[i]] = isArr(pre) ? [...getp(DEFAULT_TAGS, pre)] : {}; o = o[parts[i]]; }
-    o[parts[parts.length - 1]] = v; void base; };
+  const setTag = setTagIn;   // v22: shared with Meta / Review / Quick: list tags (social.terminal[n]) stay lists
   $('#tagList').addEventListener('focusin', (e) => { if (e.target.dataset.tag) app.cues.begin(); });
   $('#tagList').addEventListener('input', (e) => { const el = e.target; if (el.dataset.tag) app.cues.preview((s) => setTag(s, el.dataset.tag, el.value)); });
   $('#tagList').addEventListener('focusout', (e) => { if (e.target.dataset.tag) app.cues.commit('tag'); });

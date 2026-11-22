@@ -5,17 +5,20 @@ import { makeSurface, createBlur } from '../engine/render.js';
 import { DEFAULT_TAGS } from '../v8/tags.js';
 import { mergeDeep } from '../cues/schema.js';
 import { fmtTC } from '../util/draw.js';
+import { setTagIn } from './metadata.js';
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 const getp = (o, path) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
 const FIELDS = [['title', 'Beat title', 'proj'], ['producer', 'Producer tag'], ['social.title', 'Hook window title'], ['social.hook', 'Hook (frame 0, sound off)'],
   ['social.cta1.title', 'CTA 1 window'], ['social.cta1.body', 'CTA 1 text'], ['social.cta1.sub', 'CTA 1 small print'],
   ['social.cta2.title', 'CTA 2 window'], ['social.cta2.body', 'CTA 2 text'], ['social.cta2.sub', 'CTA 2 small print'],
+  ['social.terminal.0', 'Terminal line 1'], ['social.terminal.1', 'Terminal line 2'], ['social.terminal.2', 'Terminal line 3'], ['social.terminal.3', 'Terminal line 4'],
+  ['social.outro.title', 'Outro dialog window'], ['social.outro.body', 'Outro dialog text'], ['social.outro.sub', 'Outro small print'],
   ['social.caption', 'Post caption (not in the video)', 'area'], ['social.hashtags', 'Hashtags (not in the video)', 'area']];
 
 export function createReview(app) {
   const dlg = $('#review'), P = () => app.store.project;
-  const setTag = (s, path, v) => { const parts = path.split('.'); s.tags = s.tags || {}; let o = s.tags; for (let i = 0; i < parts.length - 1; i++) { if (o[parts[i]] == null || typeof o[parts[i]] !== 'object') o[parts[i]] = {}; o = o[parts[i]]; } o[parts[parts.length - 1]] = v; };
+  const setTag = setTagIn;   // v22: array tags (social.terminal[n]) stay arrays
   function moments(p, tr, PRE) {
     const spb = tr.spb, ev = app.cues.ev(), out = [], add = (label, t, note = '') => { if (t >= p.inT - PRE - 1e-6 && t <= p.outT) out.push({ label, t, note }); };
     if (PRE > 0) { add('Frame 0 · thumbnail', p.inT - PRE, 'what the feed shows'); add('Hook + browse', p.inT - PRE + 0.8); add('Cursor picks the cover', p.inT - 0.5); }
