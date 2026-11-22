@@ -33,6 +33,9 @@ import { createMetadata } from './ui/metadata.js';
 import { createQueue } from './ui/queue.js';
 import { createProjects } from './ui/projects.js';
 import { createPalette } from './ui/palette.js';
+import { createTimelineEdit } from './ui/tledit.js';
+import { createQuick } from './ui/quick.js';
+import { createStatusBar } from './ui/statusbar.js';
 
 const $ = (s) => document.querySelector(s);
 const status = (html) => { $('#status').innerHTML = html; };
@@ -70,6 +73,8 @@ async function boot() {
   // projects, command palette + shortcut overlay
   app.toast = createToast(); app.workspace = createWorkspace(app); app.monitor = createMonitor(app); app.markerList = createMarkerList(app);
   app.meta = createMetadata(app); app.queue = createQueue(app); app.projects = createProjects(app); app.palette = createPalette(app);
+  // v22: edit in the timeline (inline values, text clips, context menu), task controls + coach, the status strip
+  app.tlEdit = createTimelineEdit(app); app.quick = createQuick(app); app.statusBar = createStatusBar(app);
   store.subscribe(() => { const tr = store.session.track, el = document.getElementById('mediaAud'); if (el) el.textContent = tr ? `${tr.meta.name} · ${Math.round(tr.bpm)} BPM · ${tr.key || ''}` : ''; });
   motion.press(document.body);
   let userClip = false;
@@ -92,8 +97,10 @@ async function boot() {
   A.setAspect = (a) => { store.set({ project: { aspect: a } }); cues.edit((s) => { s.meta.aspect = a; refreshAutoIn(s); }, 'aspect'); app.studio.setAspectUI(); app.studio.layout(); app.exporter.info(); };
   function setFirst(s, path, v) { const t = s.tracks.find((x) => x.path === path); if (t && t.keys.length) t.keys[0].v = v; else s.base[path] = v; }
   /** Regenerate the auto tracks for the current section / look / stage (keeps tracks the user edited). */
-  function genOpts() { const p = store.project, e = app.clip.current(); return { bars: e ? e.bars : 16, labels: e && e.ready ? e.labels : [], look: p.look, stage: p.stage, aspect: p.aspect, meta: { title: p.title } }; }
+  function genOpts() { const p = store.project, e = app.clip.current(); return { bars: e ? e.bars : 16, labels: e && e.ready ? e.labels : [], look: p.look, stage: p.stage, aspect: p.aspect, meta: { title: p.title, seed: cues.sheet.meta && cues.sheet.meta.seed } }; }
   function refreshAutoIn(s) { const g = generateSheet({ ...genOpts(), preset: s.meta.preset || 'default' }); for (const t of g.tracks) { const i = s.tracks.findIndex((x) => x.path === t.path); if (i < 0) s.tracks.push(t); else if (s.tracks[i].auto) s.tracks[i] = t; } s.meta.bars = g.meta.bars; }
+  /** v22: a new seeded variation (meta.seed): the auto tracks are rebuilt with the new seed; tracks you edited are kept. */
+  A.newVariation = (seed) => { seed = seed ?? Math.random().toString(36).slice(2, 8); cues.edit((s) => { s.meta.seed = String(seed); refreshAutoIn(s); }, 'new variation'); app.panels.sync(); return String(seed); };
   A.applyPreset = (id) => { const g = generateSheet({ ...genOpts(), preset: id }); g.tags = cues.sheet.tags; cues.replace(g, 'preset ' + id); app.panels.sync(); };
   /** Set a property at the playhead: the key there (or a new key) when it has a track, else its base value. */
   A.setProp = (path, v, live = false) => { const tr = store.session.track, b = snapBeat(app.cuetl.state.playhead, SNAPS[store.project.timeline.snap] || 0);

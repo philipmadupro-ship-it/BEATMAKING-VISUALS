@@ -108,7 +108,8 @@ export function createCueTimeline(app, cv) {
   const vyOf = (row, y, h) => { const [mn, mx] = vrange(row), pad = h >= 40 ? 10 : 4; return (v) => y + h - pad - (h - 2 * pad) * Math.max(-0.4, Math.min(1.4, (+v - mn) / ((mx - mn) || 1))); };
   const valAt = (row, y, h, py) => { const [mn, mx] = vrange(row), pad = h >= 40 ? 10 : 4; return mn + (y + h - pad - py) / (h - 2 * pad) * (mx - mn); };
   // ---------------------------------------------------------------- drawing
-  const valueText = (row, k) => { if (row.kind === 'clip' && row.path === 'text.cue') return String(k.v || '').slice(0, 40); if (row.kind === 'clip') return row.path === 'fx.glitch' ? `glitch ${Math.round((+k.v || 0) * 100)}%` : 'hero';
+  const valueText = (row, k) => { if (row.kind === 'clip' && row.path === 'text.cue') return String(k.v || '').slice(0, 40); if (row.kind === 'clip' && row.path === 'term.line') { const v = k.v, T = cues.tags('').social || {}; return String(typeof v === 'number' || /^\d+$/.test(String(v)) ? (T.terminal || [])[+v] ?? '' : v).slice(0, 40); }
+    if (row.kind === 'clip') return row.path === 'fx.glitch' ? `glitch ${Math.round((+k.v || 0) * 100)}%` : 'hero';
     if (row.kind === 'shot') return `${k.transition === 'cut' ? 'cut' : 'push'} → ${k.v}`; if (row.kind === 'number') return (+k.v).toFixed(+k.v % 1 ? 2 : 0); if (row.kind === 'bool') return k.v ? 'on' : 'off'; return String(k.v); };
   /** Key glyph by interpolation: diamond = linear / named ease, circle = bezier, circle + dot = auto, square = hold. */
   const shapeOf = (row, k) => (row.kind === 'number' || row.kind === 'color' || row.kind === 'shot' ? (k.ty === 'bezier' ? 'circle' : k.ty === 'auto' ? 'auto' : k.ty === 'hold' || (!k.ty && k.ease === 'step') ? 'square' : 'diamond') : 'diamond');
@@ -277,7 +278,7 @@ export function createCueTimeline(app, cv) {
     if (row.kind === 'number' && h >= 40) for (let i = 0; i < K.length; i++) if (st.sel.has(K[i].id)) { const hp = handlePoints(row, i, y0, h); for (const side of ['out', 'in']) if (hp[side] && Math.hypot(hp[side][0] - x, hp[side][1] - y) <= 6) return { zone: 'handle', row, key: K[i], idx: i, side, ri }; }
     const vy = vyOf(row, y0, h);
     for (let i = K.length - 1; i >= 0; i--) { const k = K[i], x0 = xOf(k.b);
-      if (row.kind === 'clip') { const x1 = xOf(k.b + (k.dur ?? 1)); if (x >= x1 - 6 && x <= x1 + 3) return { zone: 'key', row, key: k, part: 'end', ri }; if (x >= x0 - 3 && x < x1) return { zone: 'key', row, key: k, part: 'body', ri }; continue; }
+      if (row.kind === 'clip') { const x1 = xOf(k.b + (k.dur ?? 1)); if (x >= x1 - 6 && x <= x1 + 3) return { zone: 'key', row, key: k, part: 'end', ri }; if (x1 - x0 > 16 && x >= x0 - 3 && x <= x0 + 5) return { zone: 'key', row, key: k, part: 'start', ri }; if (x >= x0 - 3 && x < x1) return { zone: 'key', row, key: k, part: 'body', ri }; continue; }
       const ky = row.kind === 'number' ? vy(k.v) : mid;
       if (Math.abs(x - x0) <= 7 && Math.abs(y - ky) <= Math.max(7, Math.min(9, h / 2))) return { zone: 'key', row, key: k, part: 'body', ri };
       if (row.kind === 'shot' && k.transition !== 'cut' && x >= xOf(k.b - (k.dur ?? 1)) && x < x0) return { zone: 'key', row, key: k, part: 'body', ri };
@@ -348,14 +349,14 @@ export function createCueTimeline(app, cv) {
       const id = h.key.id; st.focusRow = h.ri; st.selMarker = null;
       if (e.shiftKey || e.metaKey || e.ctrlKey) { if (st.sel.has(id)) st.sel.delete(id); else st.sel.add(id); } else if (!st.sel.has(id)) st.sel = new Set([id]);
       const orig = new Map(); for (const sid of st.sel) { const f = findKey(sid); if (f) orig.set(sid, { b: f[1].b, dur: f[1].dur, v: f[1].v }); }
-      drag = { kind: h.part === 'end' ? 'resize' : 'move', x0: x, y0: y, key: h.key, row: h.row, orig, moved: false, alt: e.altKey };
+      drag = { kind: h.part === 'end' ? 'resize' : h.part === 'start' ? 'resizeL' : 'move', x0: x, y0: y, key: h.key, row: h.row, orig, moved: false, alt: e.altKey };
       app.inspector && app.inspector.show(); dirty = true; return; }
     if (h.zone === 'lane') { st.focusRow = Math.max(0, h.ri); st.selMarker = null; drag = { kind: 'marquee', x0: x, y0: y, box: [x, y, x, y], moved: false, add: e.shiftKey, ri: h.ri }; dirty = true; }
   });
   cv.addEventListener('pointermove', (e) => {
     const [x, y] = pos(e);
     if (!drag) { const h = hit(x, y), hov = h.zone === 'head' ? h.ri : -1; if (hov !== st.hover) { st.hover = hov; dirty = true; }
-      cv.style.cursor = h.zone === 'ruler' ? 'text' : h.zone === 'mark' || h.zone === 'markhead' || h.zone === 'mini' ? 'pointer' : h.zone === 'handle' ? 'move' : h.zone === 'key' ? (h.part === 'end' ? 'ew-resize' : 'grab') : h.zone === 'head' ? (h.part === 'resize' ? 'ns-resize' : h.part === 'label' ? 'default' : 'pointer') : 'default'; return; }
+      cv.style.cursor = h.zone === 'ruler' ? 'text' : h.zone === 'mark' || h.zone === 'markhead' || h.zone === 'mini' ? 'pointer' : h.zone === 'handle' ? 'move' : h.zone === 'key' ? (h.part === 'end' || h.part === 'start' ? 'ew-resize' : 'grab') : h.zone === 'head' ? (h.part === 'resize' ? 'ns-resize' : h.part === 'label' ? 'default' : 'pointer') : 'default'; return; }
     const grid = snapGrid();
     if (drag.kind === 'scrub') { const b = bOf(x); if (TL().magnet !== false && !e.altKey && e.shiftKey) { const s = buildSnap().closest(b, SNAP_PX / st.ppb); seekBeat(s ? s.b : b, s ? 0 : grid); } else seekBeat(b, e.shiftKey ? grid : 0); return; }
     if (drag.kind === 'laneH') { const nh = Math.max(MIN_H, Math.min(MAX_H, Math.round(drag.h0 + y - drag.y0))); viewTouch(() => { ensureTrack(drag.row).h = nh; }); return; }
@@ -376,6 +377,8 @@ export function createCueTimeline(app, cv) {
     const db = (x - drag.x0) / st.ppb;
     cues.preview(() => {
       if (drag.kind === 'resize') { const o = drag.orig.get(drag.key.id), end = snapTo(drag.key.b + (o.dur ?? 1) + db, { alt: e.altKey }); drag.key.dur = Math.max(grid || 1 / 16, end - drag.key.b); return; }
+      // v22: the clip's start edge (trim in): the end stays put
+      if (drag.kind === 'resizeL') { const o = drag.orig.get(drag.key.id), endB = o.b + (o.dur ?? 1), nb = Math.max(0, Math.min(endB - (grid || 1 / 16), snapTo(o.b + db, { alt: e.altKey }))); drag.key.b = tick(nb); drag.key.dur = endB - drag.key.b; if (drag.row.track) drag.row.track.auto = false; return; }
       const oa = drag.orig.get(drag.key.id), na = snapTo(oa.b + db, { alt: e.altKey }), d = na - oa.b;
       for (const [sid, o] of drag.orig) { const f = findKey(sid); if (f) { f[1].b = Math.max(0, tick(o.b + d)); if (f[0].track) f[0].track.auto = false; } }
       if (drag.row.kind === 'number' && !st.collapsed && Math.abs(y - drag.y0) > 2) { const p = reg().byPath[drag.row.path] || {}, ri = rowIdx(drag.row), rh = rowH(ri), [mn, mx] = vrange(drag.row), step = p.step || 0.01, dv = -(y - drag.y0) / (rh - (rh >= 40 ? 20 : 8)) * (mx - mn);
@@ -388,7 +391,7 @@ export function createCueTimeline(app, cv) {
     if (d.kind === 'marquee') { if (d.moved) { const [x0, y0, x1, y1] = d.box, bx0 = bOf(Math.min(x0, x1)), bx1 = bOf(Math.max(x0, x1)), r0 = rowAt(Math.min(y0, y1)), r1 = rowAt(Math.max(y0, y1)); if (!d.add) st.sel.clear();
         rows.forEach((r, i) => { if (!st.collapsed && (i < r0 || i > r1)) return; for (const q of r.summary ? r.members : [r]) if (q.track && !locked(q)) for (const k of q.track.keys) if (k.b >= bx0 - 1e-6 && k.b <= bx1 + 1e-6) st.sel.add(k.id); }); app.inspector && app.inspector.show(); }
       else { st.sel.clear(); const [x] = pos(e); seekBeat(bOf(x), snapGrid()); app.inspector && app.inspector.show(); } }
-    if ((d.kind === 'move' || d.kind === 'resize') && d.moved) { sortAll(); cues.commit(d.kind === 'resize' ? 'resize clip' : 'move keys'); }
+    if ((d.kind === 'move' || d.kind === 'resize' || d.kind === 'resizeL') && d.moved) { sortAll(); cues.commit(d.kind === 'move' ? 'move keys' : 'resize clip'); }
     if (d.kind === 'handle') { cues.commit('bezier handle'); app.inspector && app.inspector.show(); }
     if (d.kind === 'loopA' || d.kind === 'loopB') { if (st.loop.b - st.loop.a < 1e-6) st.loop = null; app.actions.loopChanged && app.actions.loopChanged(); }
     dirty = true;
@@ -397,12 +400,15 @@ export function createCueTimeline(app, cv) {
   cv.addEventListener('pointerleave', () => { if (st.hover !== -1 && !drag) { st.hover = -1; dirty = true; } });
   cv.addEventListener('dblclick', (e) => { const [x, y] = pos(e), h = hit(x, y);
     if (h.zone === 'lane' && h.row && !h.row.summary && !h.locked) addKeyAt(h.row, Math.max(0, snapBeat(bOf(x), snapGrid())));
-    else if (h.zone === 'key') app.inspector && app.inspector.focusValue();
+    else if (h.zone === 'key') { if (app.tlEdit) app.tlEdit.inline(h.row, h.key); else app.inspector && app.inspector.focusValue(); }
     else if (h.zone === 'head' && h.part === 'label' && rows[h.ri]) api.toggleLaneHeight(rows[h.ri]); dirty = true; });
-  cv.addEventListener('wheel', (e) => { e.preventDefault(); const [x, y] = pos(e);
+  cv.addEventListener('wheel', (e) => { const [x, y] = pos(e);
+    const horiz = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY), lanesFit = st.collapsed || totalH() <= H - TOP - MINI();
+    if (!(e.ctrlKey || e.metaKey) && !horiz && !(e.altKey && x < HEAD()) && lanesFit) return;   // v22: vertical wheel = lanes; when they all fit, the page / panel scrolls
+    e.preventDefault();
     if (e.altKey && x < HEAD() && !st.collapsed) { const ri = rowAt(y), r = rows[ri]; if (r && !r.summary) { const nh = Math.max(MIN_H, Math.min(MAX_H, Math.round(r.h - e.deltaY * 0.25))); viewTouch(() => { ensureTrack(r).h = nh; }); } }
     else if (e.ctrlKey || e.metaKey) zoomBy(Math.exp(-e.deltaY * 0.002), x);
-    else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY) || st.collapsed || totalH() <= H - TOP - MINI()) { st.scroll += (e.shiftKey ? e.deltaY : e.deltaX || e.deltaY) / st.ppb; clampScroll(); }
+    else if (horiz) { st.scroll += (e.shiftKey ? e.deltaY : e.deltaX || e.deltaY) / st.ppb; clampScroll(); }
     else { st.vscroll += e.deltaY; clampScroll(); } dirty = true; }, { passive: false });
   new ResizeObserver(() => { const first = W === 0; resize(); if (first || !P().timeline.pxPerBeat) fit(); }).observe(cv);
   cues.subscribe(() => { dirty = true; for (const id of [...st.sel]) if (!findKey(id)) st.sel.delete(id); if (st.selMarker && !(cues.sheet.markers || []).some((m) => m.id === st.selMarker)) st.selMarker = null; });

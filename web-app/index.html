@@ -66,10 +66,17 @@ body{background:var(--bg);color:var(--fg)}
 <main id="main" tabindex="-1">
 <section id="home">
  <div class="home-in">
+  <header class="home-title">
+   <span class="fig-l" aria-hidden="true">FIG 000 · U2C STUDIO · BEAT-PREVIEW EDITOR</span>
+   <h1><span>Your beat,</span> <span>in chains.</span></h1>
+   <span class="home-echo" aria-hidden="true">U2C</span>
+   <ol class="home-steps" aria-label="How it works"><li><i>[01]</i> drop a beat</li><li><i>[02]</i> pick a look</li><li><i>[03]</i> export</li></ol>
+  </header>
+  <div class="coach" id="coachHome" role="note" aria-label="First-run guide" hidden></div>
   <div class="hero">
    <div class="drop" id="drop">
      <div>
-       <h1>Your beat, in chains.</h1>
+       <span class="lbl fig-n">[01] Drop a beat</span>
        <p>Drop a beat. U2C Studio measures it, builds the lab looks on its grid, and gives you a timeline to decide what happens when.</p>
      </div>
      <div class="row">
@@ -130,6 +137,7 @@ body{background:var(--bg);color:var(--fg)}
   <div class="col-grip" id="gripL" role="separator" aria-orientation="vertical" aria-label="Resize the left panel" tabindex="0"></div>
  </aside>
  <div class="stage-col">
+  <div class="coach slim" id="coachStudio" role="note" aria-label="First-run guide" hidden></div>
   <div class="stage-bar">
     <div class="inrow"><span class="lbl" id="metaLine">9:16 · 1080×1920 · 30 fps</span><span class="hint" id="measuring"></span></div>
     <div class="ctrls">
@@ -175,7 +183,11 @@ body{background:var(--bg);color:var(--fg)}
     <i class="ul" id="tabUl"></i>
   </div>
   <div class="pane" role="tabpanel" id="pane-inspect" aria-labelledby="tab-inspect" data-pane="inspect">
+    <div class="quick" id="quick" aria-label="Controls by task"></div>
+    <p class="hint quick-note" id="quickNote" hidden><span>Advanced view: every property by its raw path.</span><button class="btn tiny" id="quickBack">Back to the simple controls</button></p>
+    <details class="adv" id="advInsp"><summary><b>Advanced</b><span class="hint">every property, raw paths, key editing</span></summary>
     <div id="inspHome"><div class="insp" id="insp"></div></div>
+    </details>
   </div>
   <div class="pane" role="tabpanel" id="pane-look" aria-labelledby="tab-look" data-pane="look" hidden>
     <div class="group"><div class="lbl">Look</div><div class="lookgrid" id="lookGrid"></div></div>
@@ -284,6 +296,7 @@ body{background:var(--bg);color:var(--fg)}
  <div class="sheet" id="sheet" aria-live="polite"><div class="sheet-h"><span class="lbl">Key</span><button class="btn small" id="sheetClose">Done</button></div><div id="sheetBody"></div></div>
 </section>
 </main>
+<footer class="statusbar" id="statusBar" aria-label="Status"><div class="sb-items"></div><div class="sb-pos" id="sbPos" aria-live="off"></div></footer>
 <dialog class="review" id="review" aria-labelledby="revTtl">
   <div class="rev-h"><h2 class="ttl" id="revTtl">Review before export</h2><span class="hint" id="revSum"></span><button class="btn small" id="revClose">Close</button></div>
   <div class="rev-body">

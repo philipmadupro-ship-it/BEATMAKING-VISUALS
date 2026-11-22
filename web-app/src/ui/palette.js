@@ -68,8 +68,8 @@ export function createPalette(app) {
     const flat = flattenTags(mergeDeep(DEFAULT_TAGS, app.cues.sheet.tags || {})); for (const [k, v] of Object.entries(flat)) C.push({ id: 'tag:' + k, label: String(v) || '(empty)', sub: k, group: 'Word', run: studioOnly(() => app.meta.focusWord(k)) });
     return C; }
   function jumpProp(path, el) { tab('inspect')(); app.inspector.showElement(el); try { tl().focusRowOf(path); } catch {}
-    requestAnimationFrame(() => { const row = document.querySelector(`#insp .prop[data-path="${CSS.escape(path)}"]`); if (!row) return; const d = row.closest('details'); if (d) d.open = true; row.scrollIntoView({ block: 'center' }); row.classList.add('flash'); setTimeout(() => row.classList.remove('flash'), 1200);
-      const f = row.querySelector('input,select,button'); if (f) f.focus(); }); }
+    setTimeout(() => requestAnimationFrame(() => { const row = document.querySelector(`#insp .prop[data-path="${CSS.escape(path)}"]`); if (!row) return; const d = row.closest('details'); if (d) d.open = true; row.scrollIntoView({ block: 'center' }); row.classList.add('flash'); setTimeout(() => row.classList.remove('flash'), 1200);
+      const f = row.querySelector('input,select,button'); if (f) f.focus(); }), 0); }
   /** Paste the clipboard keys into the focused lane at the playhead (any lane of the same kind: copy a curve from one property
    *  to another; values are clamped to the destination's range). Alt+Cmd/Ctrl+V. */
   function pasteToLane(path = null) { const T = tl(), C = app.cues.clipboard.keys, R = app.registry().byPath || {};
@@ -101,7 +101,8 @@ export function createPalette(app) {
     else if (e.key === 'Enter') { e.preventDefault(); if (res[sel]) run(res[sel]); } });
   list.addEventListener('click', (e) => { const li = e.target.closest('[data-i]'); if (li) run(res[+li.dataset.i]); });
   list.addEventListener('mousemove', (e) => { const li = e.target.closest('[data-i]'); if (li && +li.dataset.i !== sel) { sel = +li.dataset.i; for (const x of list.children) x.setAttribute('aria-selected', String(x === li)); } });
-  dlg.addEventListener('close', () => { if (before && before.focus && document.contains(before)) try { before.focus(); } catch {} });
+  // restore focus only when the command did not move it somewhere (jump to a property focuses that property)
+  dlg.addEventListener('close', () => { const a = document.activeElement; if (before && before.focus && document.contains(before) && (!a || a === document.body || a === before || dlg.contains(a))) try { before.focus(); } catch {} });
   dlg.addEventListener('click', (e) => { if (e.target === dlg) close(); });
   // ---- shortcut sheet
   const kd = $('#keysDlg');

@@ -322,3 +322,28 @@ Olive / Shotcut feature lists (proxy / playback resolution, render queue, guides
   its frame only), halftone accent and the project name huge and soft behind the home hero and the monitor; no opacity fades on entrance.
 - Tests: `web-app/tests/editor.mjs` (Playwright) exercises all of the above, renders 2 queue items (skipped with NOEXPORT=1), and
   takes 1440x900 + 390x844 screenshots (`SHOTS=dir`).
+
+## v22 editor (U2C Studio): clear for a newcomer, edit in place
+- **Controls by task** (Inspect tab): Intro, Camera, Text, Colours, Export. Each control = a plain label, its value with the unit
+  (`3.0 %`, `1.20 ×`, `On`, `Sphere`), and a one-line hint. They write the same cue paths / tags as the inspector (a property with
+  keys gets a key at the playhead). Intro: `intro.style` sphere / flow toggle, **Variation** (`sheet.meta.seed`; "New variation"
+  = `actions.newVariation()`: the auto tracks are rebuilt with the new seed, edited tracks kept), click-to-play intro, cursor, pop-ups.
+  Text: title, producer, hook, pop-ups, `social.terminal[0..3]`, `social.outro.{title,body,sub}`. **Advanced** (`<details>`) holds
+  the full inspector (raw paths, key editing); it opens by itself when keys, a marker, a window or a track are picked, and
+  "Back to the simple controls" closes it. API `u2c.quick.{set(id, v), value(id), rows(), advanced(open), coach}`.
+- **First-run coach**: 3 steps (load a beat → pick a look → export) inline on the home screen and above the viewer, ticked as you
+  go (file chosen, studio opened, export / queue started), dismiss = remembered (`localStorage u2c.coach.v1`).
+- **Status strip** (bottom, always visible): beat, BPM, key, section (bars · s), format, stage, intro style, export preset
+  (TikTok / Reels / Shorts / YouTube from format + length, + queued items) and the position (bar.beat.tick + time). Click an item
+  to open its panel.
+- **Edit in the timeline** (`ui/tledit.js`): double-click a key = inline editor on the key (number field with range + unit,
+  dropdown for enums, **camera shot keys list the windows by name**, colour well, switch, text); click a text clip (`text.cue`, or
+  `term.line` = edits tag `social.terminal[n]`) = edit its text in place; right-click = menu (add key here, paste, add marker,
+  edit value, camera targets, ease presets, copy, delete). Clips trim from both edges (start edge keeps the end). Terminal clips
+  show the line they type.
+- **Wheel**: vertical = lanes (when they all fit, the panel / page scrolls instead), Shift or horizontal = time, Ctrl/Cmd = zoom,
+  Alt over a lane header = lane height. Side columns scroll independently (`overscroll-behavior: contain`).
+- **Home**: big title (display face, glow, huge soft "U2C" echo, hairline column grid, halftone patch, FIG / [index] notes), the
+  coach, drop a beat (or the demo), recent projects with thumbnails, then the looks. Off-screen look cards get one poster frame.
+- **List tags** (`social.terminal`, `player.inserts` …): every editor (Text, Meta, Review, Quick, timeline) writes through one
+  `setTagIn` that copies the default list, so index paths stay lists (a list saved as `{0: …}` by an older build is repaired).

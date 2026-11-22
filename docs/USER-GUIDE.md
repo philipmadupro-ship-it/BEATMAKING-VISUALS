@@ -45,3 +45,9 @@ The caption, hashtags and hook lines are in Tags (`social.caption`, `social.hash
 - **Timeline:** drag in the ruler to scrub with sound; the **Film** strip shows frames along the ruler; **Markers** tab (left) lists every marker; Alt+Cmd/Ctrl+V pastes copied keys into another lane.
 - **Export queue:** add TikTok 30 s, Reels 15 s, Shorts 60 s, YouTube full; set the file name template; **Run queue** renders them one after another.
 - **Layout:** drag the side panel edges to resize; the two panel buttons in the viewer bar hide or show the side panels.
+
+## v22: the simple controls
+- **Inspect tab = controls by task:** Intro (sphere or flow intro, **New variation**, click-to-play, cursor, pop-ups), Camera (kick punch, zoom, background dim, seamless loop), Text (title, producer, hook, pop-ups, the 4 terminal lines, the outro dialog), Colours (stage, cover look, detection boxes, waveform bands), Export (format, length). Each shows its value and a one-line hint. **Advanced** opens every raw property.
+- **Status strip** at the bottom: beat, BPM, key, section, format, stage, intro, export preset and the play position. Click an item to change it.
+- **Timeline:** double-click a key to type its value (camera keys: pick the window by name); click a terminal or text clip to retype it; right-click for add / delete / ease; drag either edge of a clip. Wheel = lanes, Shift+wheel = time, Ctrl/Cmd+wheel = zoom.
+- **First run:** a 3-step guide (load a beat → pick a look → export); *Got it* hides it for good.
