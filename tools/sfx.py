@@ -28,6 +28,14 @@ def tone(f, d, a=0.004, r=0.03, kind='sin'):
     w = np.sin(ph) if kind == 'sin' else np.sign(np.sin(ph)) * 0.5
     return w * env(len(t), a, r)
 
+_CACHE = {}
+def load(path):
+    import subprocess
+    if path not in _CACHE:
+        raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', path, '-ac', '1', '-ar', str(SR), '-f', 'f32le', '-'], capture_output=True).stdout
+        x = np.frombuffer(raw, dtype=np.float32).astype(np.float64); pk = np.abs(x).max() or 1; _CACHE[path] = x / pk * 0.5
+    return _CACHE[path]
+
 def kinds(ev, rng):
     k = ev['kind']
     if k == 'swell':
@@ -79,6 +87,10 @@ def kinds(ev, rng):
         for tk in np.sort(rng.uniform(0.3, d - 0.2, int(d * 1.6))):
             i0 = int(tk * SR); m = int(0.006 * SR); ticks[i0:i0 + m] += np.diff(np.concatenate([[0], rng.standard_normal(m)])) * np.exp(-np.arange(m) / (0.0008 * SR)) * 0.06
         return (hum + air + ticks) * env(n, 0.8, 0.6)
+    if k == 'sample':   # v22.6 a recorded SFX (ElevenLabs library, never in the repo): peak-normalised to -6 dBFS, ev.db gain, loop to ev.dur when ev.loop
+        x = load(ev['file']) * (10 ** (float(ev.get('db', 0)) / 20))
+        if ev.get('loop'): n = int(float(ev.get('dur', 10)) * SR); reps = int(np.ceil(n / len(x))); x = np.tile(x, reps)[:n] * env(n, 0.6, 0.6)
+        return x
     return np.zeros(1)
 
 def main():

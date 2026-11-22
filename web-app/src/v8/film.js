@@ -669,7 +669,22 @@ export function createFilm({ D, assets, aspect = '916' }) {
     for (let i = 0; i < N; i++) { const dir = hash(i * 3.7 + 1) < 0.5 ? -1 : 1, k = 1 + Math.floor(hash(i * 5.3 + 2) * 2), off0 = ((TC / LC) * k * dir * H * sp) % H;
       const f = Math.floor(TC * FPS), kick = kickEnv[Math.max(0, Math.min(kickEnv.length - 1, Math.floor((TC - PRE) * FPS)))] || 0, jolt = TC > PRE && kick > 0.75 && hash(i * 11.1 + Math.floor(TC * 8)) > 0.7;
       const jx = jolt ? (hash(f * 1.3 + i) - 0.5) * 14 : 0, jy = jolt ? (hash(f * 2.1 + i) - 0.5) * 40 : 0, off = ((off0 + jy) % H + H) % H, sx = i * cw;
-      c.drawImage(cv, sx, 0, cw, H, sx + jx, off, cw, H); c.drawImage(cv, sx, 0, cw, H, sx + jx, off - H, cw, H); }
+      c.drawImage(cv, sx, 0, cw, H, sx + jx, off, cw, H); c.drawImage(cv, sx, 0, cw, H, sx + jx, off - H, cw, H);
+      if (V('ground.data', true)) dataRain(i, sx + jx, cw, off); }
+    if (V('ground.scan', true)) scanSweep();
+  }
+  // v22.6 TEST EXPERIMENT (user): the Matrix columns stream the beat's REAL band levels (dB of 6 bands, newest at the column's head), and a scanner
+  // line sweeps down the whole frame every 2 bars (beat-locked) leaving a short bright wake. Both deterministic; numbers are measurements, not noise.
+  function dataRain(i, x, cw, off) {
+    const fz = port ? 13 : 12, rows = Math.ceil(H / (fz * 1.5)) + 1, f0 = Math.max(0, Math.floor(Math.max(0, TC - PRE) * FPS)), FB = F.bands; if (!FB) return;
+    c.save(); c.font = `600 ${fz}px ${UI}`; c.textAlign = 'left';
+    for (let r = 0; r < rows; r++) { const y = ((off + r * fz * 1.5) % H + H) % H, ff = Math.max(0, f0 - r * 2), bi = (i + r) % 6, v = FB[Math.min(FB.length - 1, ff)][bi], db = 20 * Math.log10(Math.max(1e-4, v)), head = r < 3;
+      c.fillStyle = rgba(S.ink, head ? 0.5 - r * 0.12 : 0.13 * (1 - r / rows) + 0.03); c.fillText((db >= 0 ? '+' : '') + db.toFixed(1), x + 6 + (i % 2) * cw * 0.45, y); }
+    c.restore();
+  }
+  function scanSweep() {
+    const per = 8 * BEAT, u = ((Math.max(0, TC - PRE)) % per) / per, y = u * H * 1.15 - H * 0.075, g = c.createLinearGradient(0, y - 120, 0, y);
+    g.addColorStop(0, rgba(S.ink, 0)); g.addColorStop(1, rgba(S.ink, 0.07)); c.fillStyle = g; c.fillRect(0, y - 120, W, 120); c.fillStyle = rgba(S.ink, 0.35); c.fillRect(0, y, W, 1.5);
   }
   const introGround = () => { if (LOOK === 'player' && V('ground.editorial', true)) drawEditorial(); };
   function brutalFrame(t) {
@@ -679,6 +694,9 @@ export function createFilm({ D, assets, aspect = '916' }) {
     text(c, `F ${String(fr).padStart(4, '0')}/${tot}`, m + 12, H - m - 12, { size: fz, fam: UI, w: 600, ls: 1.4, col: rgba(ink, 0.5) });
     text(c, `${bbt(Math.max(0, t))} · ${String(tag('titleWord') || '').toUpperCase()}`, W - m - 12, H - m - 12, { size: fz, fam: UI, w: 600, ls: 1.4, col: rgba(ink, 0.5), align: 'right' });
     text(c, 'FIG 001 · ' + String(tag('player.meta.subject') || 'SUBJECT').toUpperCase(), m + 12, m + 14, { size: fz, fam: UI, w: 600, ls: 1.4, col: rgba(ink, 0.45) });
+    // v22.6 live test log (real data): trial, elapsed, kicks so far, status
+    if (V('ground.testlog', true)) { const el = Math.max(0, t), kk = (L.kickHits || []).filter((q) => q[0] <= el).length, lines = [`TEST 01 · TRIAL ${String(1 + Math.floor(el / (8 * BEAT))).padStart(2, '0')}`, `T+${tc(el)}`, `KICKS ${String(kk).padStart(3, '0')}`, String(tag('player.meta.status') || 'UNSTABLE').toUpperCase() === 'UNSTABLE' ? 'STATUS: UNSTABLE' : `STATUS: ${String(tag('player.meta.status')).toUpperCase()}`];
+      lines.forEach((ln, j) => text(c, ln, m + 12, H - m - 34 - (lines.length - 1 - j) * 16, { size: fz, fam: UI, w: 600, ls: 1.4, col: rgba(ink, j === lines.length - 1 ? 0.6 : 0.42) })); }
     c.restore();
   }
   function ground() {

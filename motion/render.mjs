@@ -127,6 +127,15 @@ if (ENGINE === 'v9') {
     if (IB2 && (sheet.base['outro.mode'] ?? 'dialog') === 'dialog' && D.duration > T2(IB2 + 16)) { const w0 = D.duration / BT - 6 - 5.5; E.push({ t: P + T2(w0), kind: 'bleep' }, { t: P + T2(w0) + 0.15, kind: 'type', n: len(tg('social.outro.title')) + len(tg('social.outro.body')) + len(tg('social.outro.sub')), dt: rate }); }
     // v22.3 (user: only keyboard taps, more serious): keep the typing, end each typed message with an enter press, drop the bleeps / chirps / swell / whir
     const keep = []; for (const e of E) if (e.kind === 'type') { keep.push(e); keep.push({ t: e.t + e.n * e.dt * 1.05 + 0.08, kind: 'enter' }); }
+    // v22.6 recorded lab SFX (ElevenLabs library in U2C_SFX_DIR): CRT power-on at the start, centrifuge on the sphere drag, a scanner sweep on every camera
+    // move, a relay clunk when each pop-up opens and on its x, data chatter on each terminal line, a quiet Geiger bed under the whole video
+    const SD = process.env.U2C_SFX_DIR || '/home/user/research/sfx', has = (n) => fs.existsSync(path.join(SD, n + '.mp3')), smp = (t, n, db, extra = {}) => { if (has(n) && t >= 0) keep.push({ t, kind: 'sample', file: path.join(SD, n + '.mp3'), db, ...extra }); };
+    if (P > 0) smp(0, 'crt', -4); if (sheet.base['intro.style'] === 'sphere') smp(P + T2(-10.5), 'centrifuge', 0);
+    for (const tr of sheet.tracks) if (tr.path === 'camera.shot') for (const k of tr.keys) if (k.v !== 'wide') smp(P + T2(k.b - (k.dur ?? 1)), 'scan', -2);
+    for (const kk of ['cta1', 'cta2']) { const at = sheet.base[`social.${kk}.at`], ln = sheet.base[`social.${kk}.len`] ?? 8; if (at != null) { smp(P + T2(at), 'relay', -6); smp(P + T2(at + ln) - 0.02, 'relay', -9); } }
+    for (const tr of sheet.tracks) if (tr.path === 'term.line') for (const k of tr.keys) smp(P + T2(k.b), 'data', -4);
+    if (IB2 && (sheet.base['outro.mode'] ?? 'dialog') === 'dialog' && D.duration > T2(IB2 + 16)) { const w0 = D.duration / BT - 6 - 5.5; smp(P + T2(w0), 'relay', -6); smp(P + T2(w0 + 2.5) - 0.02, 'relay', -9); }
+    smp(0, 'geiger', -14, { loop: true, dur: D.duration + P });
     keep.push({ t: 0, kind: 'room', dur: P + 0.4 }, { t: 0.25, kind: 'bloop' }); if (sheet.base['intro.style'] === 'sphere') keep.push({ t: P + T2(-6.1) + 0.03, kind: 'bloop' });   // v22.5 room tone + two serious bloops (hook window, the pick)
     SFX = keep.filter((e) => e.t >= 0 && e.t < D.duration + P); }
   const cuesTags = {}; if (args.title) cuesTags.title = String(args.title);
