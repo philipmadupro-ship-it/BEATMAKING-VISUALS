@@ -123,7 +123,6 @@ export function createQuick(app) {
   adv.addEventListener('toggle', syncMode);
   const I = app.inspector; for (const fn of ['showElement', 'showTrack', 'focusValue']) { const f0 = I[fn]; I[fn] = (...a) => { advOpen(true); return f0(...a); }; }
   const s0 = I.show; I.show = (...a) => { const r = s0(...a); syncMode(); return r; };
-  $('#addTrackBtn').addEventListener('click', () => advOpen(true), true);
   $('#quickBack').addEventListener('click', () => { tl().clearSel(); adv.open = false; syncMode(); });
   app.cues.subscribe((why) => { if (why !== 'saved' && why !== 'preview') { syncMode(); if (!root.hidden) render(); } });
   app.store.subscribe((s, keys) => { if (keys.some((k) => /project\.(stage|aspect|clipLen|look|title|export)|session\.track/.test(k))) render(); });

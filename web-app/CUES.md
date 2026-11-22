@@ -347,3 +347,18 @@ Olive / Shotcut feature lists (proxy / playback resolution, render queue, guides
   coach, drop a beat (or the demo), recent projects with thumbnails, then the looks. Off-screen look cards get one poster frame.
 - **List tags** (`social.terminal`, `player.inserts` …): every editor (Text, Meta, Review, Quick, timeline) writes through one
   `setTagIn` that copies the default list, so index paths stay lists (a list saved as `{0: …}` by an older build is repaired).
+
+## v23 (player presets, full beat, one-form camera, Akira matrix)
+
+| path | kind | default | what |
+|---|---|---|---|
+| `outro.end` | enum auto/loop/stop | auto | stop = play to the end in the player view and stop (no rewind into the intro); auto = stop past 32 bars |
+| `camera.oneform` | bool | true (player) | zoom in log space around the two framings' fixed point; position follows it |
+| `camera.dip` | number | 1 | panel-to-panel travel dips out (max 12 %, sine, 0 at both ends) |
+| `ground.akira` | bool | true | Akira Expanded words in the drift columns: big vertical stretched, medium squashed wide, small labels |
+| `cover.all` | bool | false | the cover preset (hero.fry + hero.halftone) on every sphere tile |
+
+Tags: `voice.lines` (3 lines; the title is no longer spoken), `voice.ats` `1.4,3.9,7.3`, `voice.durs`, `voice.voice_id` / `voice.voice_name`
+(Voice lab), `ground.matrix` (extra matrix words). Marker kinds add `cta` and `chapter` (YouTube chapters).
+Presets (`sheet.meta.preset`): `default` (Lab), `hero`, `calm`, `tour`, `full` for the player; the intro keys are generated from
+`INTRO_S` (composition seconds) and `PRE_S` = 9.0 with the beat length (`meta.spb`), so the intro times the same at every BPM.

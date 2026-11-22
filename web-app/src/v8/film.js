@@ -10,7 +10,7 @@ import { createMeters } from './meters.js';
 import { createBrand } from './brand.js';
 import { LAYOUT, CONTENT, openBeat, WINDOW_IDS, HUD_BAND, HERO, SIDEBAR, TOPBAR } from './layout.js';
 import { createPlayer, TAB_OF } from './player.js';   // v14 player look
-import { DEFAULT_TAGS } from './tags.js';
+import { DEFAULT_TAGS, VOICE_ATS, VOICE_DURS } from './tags.js';
 import { mergeDeep, createEvaluator, emptySheet } from '../cues/schema.js';
 import { buildRegistry, meterPath } from './registry.js';
 import { INTRO_HIT, createIntro, coverScrim } from './intro.js';   // v11 intro
@@ -21,7 +21,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const L = createCore(D), lab = createLab(L), M = createMeters(L), BR = createBrand(L, assets), INTRO = createIntro(L, assets && assets.intro);
   const { F, FPS, BEAT, BAR, T, U, steps, rgba, mix, text, fmt, tc, bbt, fidx, clamp, lerp, hs, hash, kickEnv, labelAt, SANS, MONO, SERIF, HAND, DISPLAY, UI } = L;
   const port = aspect === '916', W = port ? 1080 : 1920, H = port ? 1920 : 1080, NB = D.bars;
-  let PRE = 0, RWB0 = 0, RWB = 0, OUTD = false, c = null, ev = createEvaluator(emptySheet()), b = 0, IB = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
+  let PRE = 0, RWB0 = 0, RWB = 0, OUTD = false, STOPB = 0, c = null, ev = createEvaluator(emptySheet()), b = 0, IB = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
   const V = (path, def) => ev.value(path, b, def);
   // ---------------------------------------------------------------- tag variables (every on-screen word is editable)
   const titleCase = D.title.split(' ').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
@@ -76,7 +76,13 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function camera() {
     const s = ev.shot(b), A = framing(s.from), Bf = framing(s.to), u = s.u, zm = V('camera.zoom', 1);
     L.shotTo = s.to;   // meters can switch to their focus-shot version when the camera is on their window
-    const cam = { x: lerp(A.x, Bf.x, u) + V('camera.x', 0), y: lerp(A.y, Bf.y, u) + V('camera.y', 0), z: lerp(A.z, Bf.z, u) * zm };
+    // v23 ONE FORM (user: the zooms must read as one whole form, continuous frames): zoom interpolates in log space and the position follows the
+    // fixed point of the two framings (the point that stays put on screen), so the frame slides and scales as one surface; panel-to-panel travel
+    // dips out a little (<= 12 %, sin-shaped, 0 at both ends) so both windows share the frame mid-move. Equal zooms: plain lerp + the dip.
+    let zz = A.z, wq = u; if (Math.abs(Bf.z - A.z) > 1e-4) { zz = A.z * Math.pow(Bf.z / A.z, u); wq = (1 / zz - 1 / A.z) / (1 / Bf.z - 1 / A.z); } else zz = lerp(A.z, Bf.z, u);
+    if (V('camera.oneform', LOOK === 'player') === false) { zz = lerp(A.z, Bf.z, u); wq = u; }
+    else if (s.from !== s.to && s.from !== 'wide' && s.to !== 'wide') { const dd = Math.hypot(Bf.x - A.x, Bf.y - A.y) / W; zz *= 1 - Math.min(0.12, 0.12 * dd * 1.6) * V('camera.dip', 1) * Math.sin(Math.PI * clamp(u)); }
+    const cam = { x: lerp(A.x, Bf.x, wq) + V('camera.x', 0), y: lerp(A.y, Bf.y, wq) + V('camera.y', 0), z: zz * zm };
     // v13 (intro agent): the lab opens ON the cover (match cut from the intro push) and dollies out; L.openFx drives the streak copies + hides the HUD
     let op = IB ? INTRO.openCam(b, ev, IB, cam, { W, H, look: LOOK, aspect }) : null;
     // v17.1 loop: the beats before the rewind mirror the opening dolly (dolly IN onto the hero cover, same framing + streaks as the match cut)
@@ -496,7 +502,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // v22.5 VOICE CAPTIONS (user: "the keyboard follows what she says"): each voice line (tags voice.lines, editable on the site) types as a console line
   // while she says it: phrase i starts at voice.ats[i] (composition s) and types over 85 % of voice.durs[i]; lines stack upward, older ones dim.
   const vNums = (k, def) => String(tag(k) || def).split(',').map(Number);
-  function voiceLines() { const nn = String(tag('voice.number') || '01'), L4 = (tag('voice.lines') || []).map((q) => String(q).replace(/\{n\}/g, nn).toUpperCase()), at = vNums('voice.ats', '0.4,2.6,4.4,5.85'), du = vNums('voice.durs', '2.0,1.6,1.3,1.45');
+  function voiceLines() { const nn = String(tag('voice.number') || '01'), L4 = (tag('voice.lines') || []).map((q) => String(q).replace(/\{n\}/g, nn).toUpperCase()), at = vNums('voice.ats', VOICE_ATS), du = vNums('voice.durs', VOICE_DURS);
     return L4.map((txt, i) => ({ txt, t: at[i] ?? (0.45 + i * 1.6), rate: (du[i] ?? 1.4) * 0.85 / Math.max(1, txt.length) })); }
   function voiceCaptions(tc) {
     // 9:16 keeps only the newest two lines (clear of the card); 16:9 shows all four
@@ -539,27 +545,29 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function mouseWays() { if (MW && MW.ev === ev) return MW.w; const w = [], P = PRE, rest = { sx: W * 0.8, sy: H * (port ? 0.84 : 0.88) };
     w.push({ t: -P, ...rest }); if (P > 0) w.push({ t: -0.06, play: true, click: true });
     if (IB && LOOK === 'player' && P > 0 && ev.value('intro.style', -4, 'flow') === 'sphere') { const g = INTRO.geom(W, H), R = Math.min(g.cw * 0.95, 420), cy0 = g.cy - R * 0.05;   // v22 sphere: press low on the sphere, drag up (held), click the beat cover
-      w.push({ t: T(-10.5) - 0.02, sx: g.cx + g.cw * 0.06, sy: cy0 + R * 0.5, click: true }); w.push({ t: T(-7), sx: g.cx + g.cw * 0.04, sy: cy0 + R * 0.04, drag: true, click: true }); w.push({ t: T(-6.1) - 0.02, sx: g.cx + g.cw * 0.03, sy: cy0 - R * 0.02, click: true }); }
+      const sm2 = sphM(); w.push({ t: T(sm2.press) - 0.02, sx: g.cx + g.cw * 0.06, sy: cy0 + R * 0.5, click: true }); w.push({ t: T(sm2.release), sx: g.cx + g.cw * 0.04, sy: cy0 + R * 0.04, drag: true, click: true }); w.push({ t: T(sm2.pick) - 0.02, sx: g.cx + g.cw * 0.03, sy: cy0 - R * 0.02, click: true }); }
     else if (IB && LOOK === 'player' && P > 0) { const g = INTRO.geom(W, H); const br = Math.round(ev.value('intro.browse', -4, 1)); if (br) for (const bb of [-3, -2]) w.push({ t: T(bb) - 0.02, sx: g.cx - br * g.xs1 * 0.95, sy: g.cy + g.cw * 0.1, click: true }); w.push({ t: T(-1.25) - 0.02, sx: g.cx + g.cw * 0.12, sy: g.cy + g.cw * 0.25, click: true }); }   // v19.3: browse x2, choose; v21: browse side follows the seed (+1 left card, -1 right card, 0 direct)
     else if (IB) { const g = INTRO.geom(W, H); w.push({ t: T(Math.max(1, IB - 2)) - 0.02, sx: g.cx + g.cw * 0.18, sy: g.cy + g.cw * 0.2, click: true }); }
     for (const k of ev.keysIn('camera.shot', 0, 1e6)) { const r = k.v !== 'wide' && LY[k.v]; if (!r) continue; const d = k.dur ?? 1; w.push({ t: T(k.b - d) - 0.02, wx: r[0] + 92, wy: r[1] + (port ? 28 : 26), click: true }); }
     if (V('social.on', LOOK === 'player')) for (const [kk, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) { const at = V(`social.${kk}.at`, def), len = V(`social.${kk}.len`, 8);
       w.push({ t: T(at + len) - 0.02, sx: W / 2 - (port ? 450 : 380) + 26, sy: H * 0.5 - (port ? 95 : 84) + 21, click: true, cta: kk }); }
-    if (RWB0 && OUTD) { const w2 = outroWin(); w.push({ t: T(w2[1]) - 0.02, sx: W / 2 - (port ? 450 : 380) + 26, sy: H * 0.5 - (port ? 95 : 84) + 21, click: true }); }   // v21: the x of JOIN / CREATE PROJECT
+    if ((RWB0 || STOPB) && OUTD) { const w2 = outroWin(); w.push({ t: T(w2[1]) - 0.02, sx: W / 2 - (port ? 450 : 380) + 26, sy: H * 0.5 - (port ? 95 : 84) + 21, click: true }); }   // v21: the x of JOIN / CREATE PROJECT
     else if (RWB0) w.push({ t: T(RWB0) - T(3) - 0.02, wx: (LY.stage || [W / 2, H / 2, 0, 0])[0] + (LY.stage ? LY.stage[2] * 0.5 : 0), wy: (LY.stage || [0, H / 2, 0, 0])[1] + (LY.stage ? LY.stage[3] * 0.55 : 0), click: true });
     w.push({ t: D.duration, ...rest }); w.sort((a2, b2) => a2.t - b2.t); MW = { ev, w }; return w; }
   const mj = (u) => u * u * u * (10 - 15 * u + 6 * u * u);
+  // v23: the sphere's cursor moments come from the sheet's own keys (press / release = intro.pitch keys 1-2, pick = intro.pick key 1, title = intro.type key 1)
+  function sphM() { const k = (p) => ((ev.tracksOf(p)[0] || { keys: [] }).keys); const pk = k('intro.pitch'), pi = k('intro.pick'), ty = k('intro.type'); return { press: pk[1] ? pk[1].b : -10.5, release: pk[2] ? pk[2].b : -7, pick: pi[1] ? pi[1].b : -6.1, type: ty[1] ? ty[1].b : -4.4, typeEnd: ty[2] ? ty[2].b : -3.4 }; }
   // v19.4: click times in COMPOSITION seconds (film time + pre-roll), for the export's UI click sounds; call after one render()
   const clickTimes = () => mouseWays().filter((q) => q.click).map((q) => q.t + PRE).filter((x) => x >= 0);
   // v22.4: the typing moments in COMPOSITION seconds (for the web export's keyboard taps; render.mjs builds the same list for the native render):
   // [{t, n (characters), dt (seconds per character)}]. Call after one render().
-  const introMarks = () => ({ pick: LOOK === 'player' && PRE > 0 && ev.value('intro.style', -4, 'flow') === 'sphere' ? PRE + T(-6.1) + 0.03 : null });
+  const introMarks = () => ({ pick: LOOK === 'player' && PRE > 0 && ev.value('intro.style', -4, 'flow') === 'sphere' ? PRE + T(sphM().pick) + 0.03 : null });
   function typeEvents() {
     const E = [], rate = T(1 / 24), len = (q) => String(q ?? '').length, P = PRE, add = (t, n, dt) => { if (n > 0 && t >= 0) E.push({ t, n, dt }); };
     if (LOOK !== 'player' || !V('social.on', true)) return E;
     const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hk = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); if (P > 0) add(1.0, len(tag('social.title')) + len(hk), T(1 / 12));
     if (P > 0 && V('voice.captions', true)) for (const q of voiceLines()) add(q.t, q.txt.length + 2, q.rate);   // v22.5 the console lines follow the voice
-    if (ev.value('intro.style', -4, 'flow') === 'sphere' && P > 0) { const n = len(tag('intro.title') || D.title) + len(tag('intro.credit') || 'prod. @uche2crazy'); add(P + T(-4.4), n, T(1) / Math.max(1, n)); }
+    if (ev.value('intro.style', -4, 'flow') === 'sphere' && P > 0) { const n = len(tag('intro.title') || D.title) + len(tag('intro.credit') || 'prod. @uche2crazy'); { const sm3 = sphM(); add(P + T(sm3.type), n, T(sm3.typeEnd - sm3.type) / Math.max(1, n)); } }
     for (const [k, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) { const at = V(`social.${k}.at`, def); add(P + T(at) + 0.15, len(tag(`social.${k}.title`)) + len(tag(`social.${k}.body`)) + len(tag(`social.${k}.sub`)), rate); }
     const term = tag('social.terminal') || []; for (const k of ev.keysIn('term.line', 0, 1e6)) add(P + T(k.b), len(typeof k.v === 'number' ? term[k.v] : L.sub(String(k.v ?? ''))), T(1 / 16));
     const w2 = outroWin(); if (w2) add(P + T(w2[0]) + 0.15, len(tag('social.outro.title')) + len(tag('social.outro.body')) + len(tag('social.outro.sub')), rate);
@@ -579,7 +587,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c.fillStyle = '#ffffff'; c.fill(); c.shadowColor = 'transparent'; c.lineWidth = 1.2; c.strokeStyle = '#000000'; c.stroke(); c.restore();
   }
   // v21 outro dialog (screen space, on the hero shot): JOIN / CREATE PROJECT pops (spring) 5 beats before the cut back, the cursor closes it with x 2 beats later
-  const outroWin = () => (OUTD && RWB ? [RWB - 5.5, RWB - 3] : null);   // v22.1: 2.5 beats so CLOSE PROJECT? types out fully
+  const outroWin = () => (OUTD && (RWB || STOPB) ? [(RWB || STOPB) - 5.5, (RWB || STOPB) - 3] : null);   // v23: full beat (STOPB) counts from the clip end   // v22.1: 2.5 beats so CLOSE PROJECT? types out fully
   function outroDialog(t) { const w2 = outroWin(); if (!w2 || b < w2[0] || b >= w2[1] + 0.5) return; const uo = clamp((b - w2[1]) / 0.5), ox = b >= w2[1] ? 1 - uo * uo * (3 - 2 * uo) : 1; if (ox <= 0.01) return; dof(Math.min(clamp((b - w2[0]) / 0.6), ox), 7); c.save(); c.translate(W / 2, H * 0.5); c.scale(ox, ox); c.translate(-W / 2, -H * 0.5); dialog(W / 2, H * 0.5, port ? 900 : 760, tag('social.outro.title') || 'U2C LAB', tag('social.outro.body') || 'JOIN / CREATE PROJECT', tag('social.outro.sub') || '', T(w2[0]), t, null, t - T(w2[0]) - 0.15); c.restore(); }   // v22: CLOSE PROJECT?; after the x click it shrinks away (half a beat) as the dolly starts
   // v21 TERMINAL WORDS (user: "words that come in and out, like on a computer"): term.line clips type in one character per 64th note, hold, then delete backwards
   // (one character per 128th) before the clip ends; a small system toast, bottom-left inside the safe zone; text is a tag string with {vars}
@@ -664,12 +672,30 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // scrolls up or down (seeded direction + 1-2 whole cycles over the composition, so the loop closes), wraps around, and on some kicks a column
   // jolts sideways and vertically for ~80 ms (a hard, deterministic glitch, no fade). TC = composition seconds, LC = composition length.
   let TC = 0, LC = 1;
+  // v23 AKIRA MATRIX (user: the Matrix in Akira, stretched big / small Akira typefaces visible): one tall strip per drift column, words set in the
+  // display face (Akira Expanded), alternating a BIG word running down the column (rotated, stretched 1.3-2.4x along the line, faint), a MEDIUM word
+  // squashed wide and clipped by the column edge, and SMALL crisp labels. Seeded per column; cached (rebuilt once the font has loaded).
+  const AKC = new Map();
+  function akiraCols(N, cw) {
+    const fontOk = typeof document !== 'undefined' && document.fonts && document.fonts.check ? document.fonts.check(`700 40px ${DISPLAY}`) : true;
+    const words = [...(tag('ground.words') || []), ...(tag('ground.matrix') || []), D.title || 'U2C'].map((q) => String(q).toUpperCase()).filter(Boolean), key = [S.name, aspect, N, words.join('/'), fontOk].join('|');
+    let cols = AKC.get(key); if (cols) return cols; cols = [];
+    for (let i = 0; i < N; i++) { const cv = document.createElement('canvas'); cv.width = Math.ceil(cw); cv.height = H; const g = cv.getContext('2d'); let y = 20 + hash(i * 7.7) * 80, k = 0;
+      while (y < H - 10) { const r = hash(i * 31.3 + k * 7.1), wd = words[Math.floor(hash(i * 3.1 + k * 13.7) * words.length)] || 'U2C'; k++;
+        if (r < 0.4) { const fz = cw * (0.62 + 0.3 * hash(k + i * 9)), sx = 1.3 + 1.1 * hash(k * 3 + i), al = 0.1 + 0.12 * hash(k * 5 + i * 2); g.save(); g.font = `700 ${fz}px ${DISPLAY}`; const tw = g.measureText(wd).width * sx;
+          g.translate(cw * 0.5 + fz * 0.36, y); g.rotate(Math.PI / 2); g.scale(sx, 1); g.fillStyle = rgba(S.ink, al); g.fillText(wd, 0, 0); g.restore(); y += tw + 36; }
+        else if (r < 0.72) { const fz = 30 + 26 * hash(k * 11 + i), sx = 1.6 + 0.9 * hash(k * 2 + i * 5); g.save(); g.font = `700 ${fz}px ${DISPLAY}`; g.translate(4 - hash(k + i) * cw * 0.6, y + fz * 0.8); g.scale(sx, 0.62 + 0.3 * hash(k * 4 + i)); g.fillStyle = rgba(S.ink, 0.2 + 0.12 * hash(k * 6 + i)); g.fillText(wd, 0, 0); g.restore(); y += fz * 0.9 + 22; }
+        else { const fz = port ? 13 : 12; g.save(); g.font = `700 ${fz}px ${DISPLAY}`; g.fillStyle = rgba(S.ink, 0.5); g.fillText(wd.slice(0, 14), 6, y + fz); g.font = `500 ${fz - 2}px ${UI}`; g.fillStyle = rgba(S.ink, 0.32); g.fillText(`${String(i + 1).padStart(2, '0')}.${String(k).padStart(3, '0')}`, 6, y + fz * 2.4); g.restore(); y += fz * 3.4 + 18; } }
+      cols.push(cv); }
+    if (fontOk) AKC.set(key, cols); return cols;
+  }
   function drawEditorial() {
-    const cv = editorial(), N = port ? 7 : 10, cw = W / N, sp = V('ground.drift', 1);
+    const cv = editorial(), N = port ? 7 : 10, cw = W / N, sp = V('ground.drift', 1), AKC_cols = V('ground.akira', true) ? akiraCols(N, cw) : [];
     for (let i = 0; i < N; i++) { const dir = hash(i * 3.7 + 1) < 0.5 ? -1 : 1, k = 1 + Math.floor(hash(i * 5.3 + 2) * 2), off0 = ((TC / LC) * k * dir * H * sp) % H;
       const f = Math.floor(TC * FPS), kick = kickEnv[Math.max(0, Math.min(kickEnv.length - 1, Math.floor((TC - PRE) * FPS)))] || 0, jolt = TC > PRE && kick > 0.75 && hash(i * 11.1 + Math.floor(TC * 8)) > 0.7;
       const jx = jolt ? (hash(f * 1.3 + i) - 0.5) * 14 : 0, jy = jolt ? (hash(f * 2.1 + i) - 0.5) * 40 : 0, off = ((off0 + jy) % H + H) % H, sx = i * cw;
       c.drawImage(cv, sx, 0, cw, H, sx + jx, off, cw, H); c.drawImage(cv, sx, 0, cw, H, sx + jx, off - H, cw, H);
+      if (V('ground.akira', true)) { const ak = AKC_cols[i]; c.drawImage(ak, sx + jx, off); c.drawImage(ak, sx + jx, off - H); }
       if (V('ground.data', true)) dataRain(i, sx + jx, cw, off); }
     if (V('ground.scan', true)) scanSweep();
   }
@@ -759,6 +785,9 @@ export function createFilm({ D, assets, aspect = '916' }) {
     // v17.1 seamless loop (player): the final bar plays the intro BACKWARDS (cubic ease-out into t = 0), so the last frame flows into frame 0
     OUTD = LOOK === 'player' && V('outro.mode', 'dialog') === 'dialog';
     RWB = LOOK === 'player' && IB && V('outro.rewind', true) && D.duration > T(IB + 16) ? (OUTD ? D.duration / BEAT - 6 : (D.duration - 2 * BAR) / BEAT) : 0;   // v17.2: 2-bar rewind; v21 dialog outro: the cut back into the intro 6 beats before the end
+    // v23 FULL BEAT (user: it should not go back to the intro but continue in the player view till the end): outro.end stop = no rewind; the
+    // CLOSE PROJECT? dialog still pops (6.5 .. 4 beats before the end), the x closes it, the player plays on to the last frame and the video stops.
+    { const oe = V('outro.end', 'auto'), stop = oe === 'stop' || (oe === 'auto' && NB > 32); if (stop && RWB) { RWB = 0; STOPB = D.duration / BEAT - 1; } else STOPB = 0; }
     RWB0 = RWB;
     if (RWB && OUTD && t >= RWB * BEAT) {
       // v21 OUTRO (user: "a JOIN / CREATE PROJECT pop-up, the cursor presses x, it goes back and it stops"; never glitchy): the dialog lived on the hero (E-11 .. E-9),

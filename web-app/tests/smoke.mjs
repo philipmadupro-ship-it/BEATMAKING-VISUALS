@@ -53,12 +53,12 @@ ok('analysis: tempo, downbeat, sections', ana.bpm > 60 && ana.phrases.includes('
 await page.waitForFunction(() => window.u2c.grid.entry && window.u2c.grid.entry.ready, null, { timeout: 60000 }); await page.waitForTimeout(1500); await shot('home-1440.png');
 await page.evaluate(() => { const c = document.querySelectorAll('#grid .card'); if (c.length) c[c.length - 1].scrollIntoView({ block: 'center' }); }); await page.waitForFunction(() => { const c = document.querySelectorAll('#grid .card canvas'); const l = c[c.length - 1]; if (!l) return false; const d = l.getContext('2d').getImageData(0, 0, l.width, l.height).data; let mn = 765, mx = 0; for (let i = 0; i < d.length; i += 400) { const v = d[i] + d[i + 1] + d[i + 2]; mn = Math.min(mn, v); mx = Math.max(mx, v); } return mx - mn > 60; }, null, { timeout: 45000 }).catch(() => {});   // v14: four looks, the last may sit below the fold
 const cards = await page.$$eval('#grid .card canvas', (cs) => cs.map((c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let mn = 765, mx = 0; for (let i = 0; i < d.length; i += 400) { const v = d[i] + d[i + 1] + d[i + 2]; mn = Math.min(mn, v); mx = Math.max(mx, v); } return mx - mn; }));
-ok('home: four look cards draw the beat', cards.length === 4 && cards.every((v) => v > 60), cards.join(' / '));
+ok('home: five player preset cards draw the beat', cards.length === 5 && cards.every((v) => v > 60), cards.join(' / '));
 // ---- studio + default cue sheet
 await page.click('#grid .card >> nth=0');
 await page.waitForFunction(() => !document.querySelector('#studio').hidden && window.u2c.clip.current().ready, null, { timeout: 60000 }); await page.waitForTimeout(800);
 const def = await ev(() => { const s = window.u2c.cues.sheet, cam = s.tracks.find((t) => t.path === 'camera.shot'); return { n: s.tracks.length, cam: cam.keys.map((k) => `${k.b}:${k.v}`).join(' '), bars: s.meta.bars, labels: window.u2c.clip.current().labels.join(',') }; });
-ok('default cue sheet from the analysis (v8 focus plan by section)', def.n >= 10 && /chains|eq|elephant|spectrum/.test(def.cam), `${def.n} tracks · ${def.bars} bars · camera ${def.cam} · sections ${def.labels}`);
+ok('default cue sheet from the analysis (v8 focus plan by section)', def.n >= 10 && /chains|eq|elephant|spectrum|stage|session|inserts/.test(def.cam), `${def.n} tracks · ${def.bars} bars · camera ${def.cam} · sections ${def.labels}`);
 // helpers to reach the timeline canvas
 const cvBox = await page.$eval('#cueCv', (c) => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
 const keyXY = (pathName, idx) => ev(([p, i]) => { const tl = window.u2c.cuetl, t = tl.rows().find((r) => r.path === p).track, k = t.keys[i], pt = tl.pointOf(p, k.b), r = document.querySelector('#cueCv').getBoundingClientRect();
@@ -75,7 +75,7 @@ const before = await frameAt(k0.b + 0.5);
 const target = await ev(() => { const o = [...document.querySelectorAll('#insp [data-k="v"] option')].map((x) => x.value); const cur = window.u2c.cuetl.selected()[0][1].v; return o.includes('spectrum') && cur !== 'spectrum' ? 'spectrum' : o.find((v) => v !== 'wide' && v !== cur && v !== 'chains'); });   // v9: session + chains are both full width (same framing): prefer a half-width window
 await page.selectOption('#insp [data-k="v"]', target); await page.waitForTimeout(200);
 const after = await frameAt(k0.b + 0.5), rect = await ev((id) => window.u2c.clip.film(window.u2c.clip.current(), '916').rects(window.u2c.cues.ev(), 0, window.u2c.store.project.look)[id], target);
-const camOn = after.cam && rect && Math.abs(after.cam.x - (rect[0] + rect[2] / 2)) < rect[2] && after.cam.z > 1.1;
+const camOn = after.cam && rect && Math.abs(after.cam.x - (rect[0] + rect[2] / 2)) < rect[2] && after.cam.z > 1.02;   // v23: the player frames the whole panel (zoom >= 1)
 ok('UI: retarget in the inspector -> preview pushes to that window', camOn && diff(before, after) > 1, `${k0.v} → ${target} · camera ${after.cam && after.cam.x.toFixed(0)},${after.cam && after.cam.y.toFixed(0)} z ${after.cam && after.cam.z.toFixed(2)} · frame changed ${diff(before, after).toFixed(1)} %`);
 await shot('studio-edit-1440.png');
 // 3. drag the key one bar later (snap = beat) then undo / redo with the keyboard

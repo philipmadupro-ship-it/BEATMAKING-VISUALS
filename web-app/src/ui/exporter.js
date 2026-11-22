@@ -1,5 +1,7 @@
 // Export tab: MP4 from the cue sheet (offline WebCodecs via Mediabunny, MediaRecorder fallback), batch sets
 // (look x length, each with a cue sheet rebuilt from the analysis of its own section), voice tag, cue sheet JSON.
+import { PRE_S } from '../cues/generate.js';
+import { VOICE_ATS } from '../v8/tags.js';
 import { ASPECTS, LOOKS, LOOK_NAMES } from '../v8/layout.js';
 import { STAGES } from '../v8/core.js';
 import { makeSurface, createBlur } from '../engine/render.js';
@@ -7,7 +9,7 @@ import { prepareAudio } from '../export/audio.js';
 import { canOffline, exportOffline } from '../export/offline.js';
 import { exportRealtime } from '../export/recorder.js';
 import { saveFile } from '../export/save.js';
-import { generateSheet } from '../cues/generate.js';
+import { generateSheet, PRESETS, PLAYER_PRESETS } from '../cues/generate.js';
 import { serializeSheet } from '../cues/schema.js';
 import { slug, fmtTC } from '../util/draw.js';
 import { keyTaps, placeVoice, bloop, room } from '../export/labaudio.js';
@@ -30,7 +32,7 @@ export function createExporter(app) {
     status(`Preparing audio for ${label}…`);
     const au = await prepareAudio(buf, project, { loopSafe: ex.loopSafe, xf: Math.min(tr.spb, (project.outT - project.inT) / 4), loudness: ex.loudness, voiceTag: ex.voiceTag ? app.store.session.voiceTag : null, voiceEvery: ex.voiceEvery });
     $('#loudKv').innerHTML = `<dt>Measured in</dt><dd>${au.stats.inLufs.toFixed(1)} LUFS</dd><dt>Gain</dt><dd>${au.stats.gainDb >= 0 ? '+' : ''}${au.stats.gainDb.toFixed(1)} dB</dd><dt>Out</dt><dd>${au.stats.outLufs.toFixed(1)} LUFS · peak ${au.stats.peakDb.toFixed(1)} dBTP (4× oversampled)</dd>`;
-    const PRE = ex.preroll !== false && project.look === 'player' ? 7.0 : 0;   // v22 4 s (sphere intro); v19.4 click-to-play pre-roll (as the native --preroll)
+    const PRE = ex.preroll !== false && project.look === 'player' ? PRE_S : 0;   // v22 4 s (sphere intro); v19.4 click-to-play pre-roll (as the native --preroll)
     const work = makeSurface(W, H), renderOne = (t, surf, info) => app.renderFrame(t, surf, project, tr, { entry, sheet, fps: ex.fps, info, preroll: PRE }), blur = ex.mblur !== false, SH = ex.shutter ?? 0.5;
     // Motion blur: the shared engine/render.js createBlur (the preview's Blur button runs the same code)
     const blurF = createBlur(), render = (t) => (blur ? blurF(renderOne, t, work, ex.fps, SH) : renderOne(t, work, {}) || work.canvas);
@@ -49,7 +51,7 @@ export function createExporter(app) {
       // v22.4 lab audio (parity with the native render): keyboard taps on the film's typing moments + the intro voice take from the Media bin
       if (ex.keys !== false && film && film.typeEvents) keyTaps(outB, film.typeEvents(), { gainDb: ex.keysDb ?? -10 });
       if (PRE > 0 && ex.labSfx !== false) { room(outB, PRE + 0.4, { gainDb: -14 }); }   // v22.5
-      const vt = app.media && app.media.voice; if (PRE > 0 && vt && ex.voice !== false) { try { const take = await app.clock.ctx.decodeAudioData(await vt.blob.arrayBuffer()); placeVoice(outB, take, ex.voiceAts || String((app.cues.tags('').voice || {}).ats || '0.4,2.6,4.4,5.85').split(',').map(Number)); } catch (err) { console.warn('[u2c] voice take could not be decoded', err); } }
+      const vt = app.media && app.media.voice; if (PRE > 0 && vt && ex.voice !== false) { try { const take = await app.clock.ctx.decodeAudioData(await vt.blob.arrayBuffer()); placeVoice(outB, take, ex.voiceAts || String((app.cues.tags('').voice || {}).ats || VOICE_ATS).split(',').map(Number)); } catch (err) { console.warn('[u2c] voice take could not be decoded', err); } }
     }
     const vl = app.videoLayer && app.videoLayer.loaded ? app.videoLayer : null, codecs = await canOffline(app.libs.mediabunny, W, H, mbps, ex.fps); let res;
     if (codecs) { try { res = await exportOffline({ mb: app.libs.mediabunny, codecs, W, H, fps: ex.fps, mbps, inT: project.inT - PRE, outT: project.outT, audio: audioOut, render, beforeFrame: vl ? (t) => vl.seek(t, project) : undefined, isCancelled: () => cancel,
@@ -81,13 +83,14 @@ export function createExporter(app) {
   $('#exCancel').addEventListener('click', () => { cancel = true; });
   $('#cueSave').addEventListener('click', () => saveFile(new Blob([JSON.stringify(serializeSheet(app.cues.sheet), null, 1)], { type: 'application/json' }), slug(P().title) + '.cues.json'));
   // batch
-  const bt = $('#batchTpl'); bt.innerHTML = LOOKS.map((id) => `<label class="tog"><input type="checkbox" data-btpl="${id}"> ${LOOK_NAMES[id]}</label>`).join('');
+  // v23: batches are built from the player presets (player:<preset>); the legacy looks stay available
+  const bt = $('#batchTpl'); bt.innerHTML = [...PLAYER_PRESETS.map((k) => ['player:' + k, PRESETS[k].name]), ...LOOKS.filter((id) => id !== 'player').map((id) => [id, LOOK_NAMES[id] + ' (legacy)'])].map(([id, nm]) => `<label class="tog"><input type="checkbox" data-btpl="${id}"> ${nm}</label>`).join('');
   function syncBatch() { const ex = P().export; $$('[data-btpl]').forEach((c) => (c.checked = ex.batch.includes(c.dataset.btpl))); $$('[data-blen]').forEach((c) => (c.checked = ex.batchLens.includes(+c.dataset.blen))); }
   bt.addEventListener('change', () => app.store.set({ project: { export: { batch: $$('[data-btpl]').filter((c) => c.checked).map((c) => c.dataset.btpl) } } }));
   $$('[data-blen]').forEach((c) => c.addEventListener('change', () => app.store.set({ project: { export: { batchLens: $$('[data-blen]').filter((x) => x.checked).map((x) => +x.dataset.blen) } } })));
   $('#batchBtn').addEventListener('click', () => { const base = app.store.snapshot(), tr = app.store.session.track, jobs = [];
-    for (const id of base.export.batch) for (const L of (base.export.batchLens.length ? base.export.batchLens : [15])) { const p = JSON.parse(JSON.stringify(base)); p.look = id; const w = app.hook(tr, L); p.inT = w[0]; p.outT = w[1];
-      jobs.push({ project: p, name: nameFor(p), sheet: async () => { const e = await app.clip.ensure(p.inT, p.outT); return generateSheet({ bars: e.bars, labels: e.labels, look: id, stage: p.stage, aspect: p.aspect }); } }); }
+    for (const id of base.export.batch) for (const L of (base.export.batchLens.length ? base.export.batchLens : [15])) { const p = JSON.parse(JSON.stringify(base)), [lk, pr] = id.includes(':') ? id.split(':') : [id, 'default']; p.look = lk; const w = app.hook(tr, L); p.inT = w[0]; p.outT = w[1];
+      jobs.push({ project: p, name: nameFor(p) + (id.includes(':') ? '-' + pr : ''), sheet: async () => { const e = await app.clip.ensure(p.inT, p.outT); const g = generateSheet({ bars: e.bars, labels: e.labels, look: lk, stage: p.stage, aspect: p.aspect, preset: pr, meta: { title: p.title, seed: app.cues.sheet.meta.seed, spb: tr.spb } }); g.tags = JSON.parse(JSON.stringify(app.cues.sheet.tags || {})); return g; } }); }
     if (!jobs.length) { status('Tick at least one look for the batch.'); return; } run(jobs); });
   // voice tag
   $('#vtFile').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; try { const b = await app.clock.ctx.decodeAudioData(await f.arrayBuffer()); app.store.set({ session: { voiceTag: b }, project: { export: { voiceTag: true } } }); $('#vtInfo').textContent = `${f.name} · ${b.duration.toFixed(1)} s`; $('#vtOn').checked = true; } catch (_) { $('#vtInfo').textContent = 'could not decode that file'; } });

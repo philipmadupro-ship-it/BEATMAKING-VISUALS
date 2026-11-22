@@ -8,7 +8,7 @@
 // tall (or in the graph view of one property). Lane header: chevron (group), name, prev / add-remove / next key,
 // target, solo, lock, mute. Phone: lanes collapse into one tap-to-select strip.
 import { SNAPS, snapBeat, newId, defaultEase, beatsToBbt, laneOf, PPQ } from '../cues/schema.js';
-import { markerList, DENSITY, DENSITY_LABEL, MARKER_PRI, anchorsFor } from '../cues/markers.js';
+import { markerList, DENSITY, DENSITY_LABEL, MARKER_PRI, MARKER_COLOR, anchorsFor } from '../cues/markers.js';
 import { createSnapModel } from '../cues/snap.js';
 import { quantiseKeys, gridTargets, ripple, stamp, attrsOf, applyAttrs, applyEasePreset, toBezier, presetFromSelection, BUILTIN_PRESETS } from '../cues/ops.js';
 import { read, write } from '../state.js';
@@ -171,7 +171,7 @@ export function createCueTimeline(app, cv) {
     const C = colors, y0 = RULER + SECT, M = markers(); g.save(); g.beginPath(); g.rect(hx, y0, W - hx, MARK); g.clip();
     for (const m of [...M.filter((q) => !q.user), ...M.filter((q) => q.user)]) { const x = Math.round(xOf(m.b)) + .5; if (x < hx - 40 || x > W + 2) continue;
       if (m.user) { if (m.label && st.ppb > 6) { g.font = '500 9px "JetBrains Mono", monospace'; const tw = Math.min(80, g.measureText(m.label).width); g.fillStyle = C.panel; g.fillRect(x + 7, y0 + 1, tw + 4, MARK - 2); }
-        g.fillStyle = m.id === st.selMarker ? C.fg : C.acc; g.beginPath(); g.moveTo(x - .5, y0 + 1); g.lineTo(x + 6, y0 + 1); g.lineTo(x + 6, y0 + 6); g.lineTo(x + 1.5, y0 + 9); g.lineTo(x - .5, y0 + MARK); g.closePath(); g.fill();
+        g.fillStyle = m.id === st.selMarker ? C.fg : (MARKER_COLOR[m.kind] || C.acc); g.beginPath(); g.moveTo(x - .5, y0 + 1); g.lineTo(x + 6, y0 + 1); g.lineTo(x + 6, y0 + 6); g.lineTo(x + 1.5, y0 + 9); g.lineTo(x - .5, y0 + MARK); g.closePath(); g.fill();
         if (m.label && st.ppb > 6) { g.font = '500 9px "JetBrains Mono", monospace'; g.fillText(m.label, x + 9, y0 + MARK / 2, 80); } continue; }
       if (m.kind === 'section') { g.fillStyle = C.fg; g.fillRect(x - .5, y0, 2, MARK); continue; }
       if (m.kind === 'downbeat') { g.fillStyle = C.line2; g.fillRect(x - .5, y0 + 2, 1, MARK - 3); continue; }

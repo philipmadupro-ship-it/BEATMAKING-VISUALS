@@ -226,7 +226,7 @@ export function createIntro(L, A = {}) {
     // ---- v22 ORBIT SPHERE (user ref "Orbit Sphere"): the covers tiled on a 3D sphere; intro.yaw / intro.pitch turn it (the cursor drags it up),
     // intro.pick 0..1 flies the picked tile (the beat cover) out of the sphere onto the card's cover square; at pick 1 the normal card takes over
     const SPH = V('intro.style', 'flow') === 'sphere', pick = SPH ? clamp(V('intro.pick', 1)) : 1;
-    if (SPH) { sphere(c, g, S, V('intro.yaw', 0), V('intro.pitch', 0), pick, kick, coverCy);
+    if (SPH) { const tm = V('cover.all', false) ? V('hero.fry', S.grey ? 'negative' : S.name === 'RUBEDO' ? 'thermal' : 'stage') + (V('hero.halftone', true) ? '+ht' : '') : null; sphere(c, g, S, V('intro.yaw', 0), V('intro.pitch', 0), pick, kick, coverCy, tm);   // v23 cover preset on every tile (cover.all)
       if (pick >= 1 && V('fx.dof', true)) { const cv = c.canvas, t2 = DOFI.cv && DOFI.cv.width === cv.width && DOFI.cv.height === cv.height ? DOFI.cv : (DOFI.cv = Object.assign(document.createElement('canvas'), { width: cv.width, height: cv.height })), g2 = t2.getContext('2d');
         g2.clearRect(0, 0, t2.width, t2.height); g2.drawImage(cv, 0, 0); c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.filter = `blur(${(5 * cv.width / W).toFixed(2)}px)`; c.drawImage(t2, 0, 0); c.restore(); } }   // v22.1: the sphere goes soft behind the chosen card
     // ---- cover-flow
@@ -295,7 +295,8 @@ export function createIntro(L, A = {}) {
   const SPH_RINGS = [-62, -37, -12, 12, 37, 62].map((d) => d * Math.PI / 180), SPH_TILES = [];
   SPH_RINGS.forEach((lat, ri) => { const n = Math.max(5, Math.round(14 * Math.cos(lat))); for (let j = 0; j < n; j++) SPH_TILES.push({ lat, lon: j * 2 * Math.PI / n, w: Math.cos(lat) * 2 * Math.PI / n * 0.84, h: 0.4 * 0.84, cov: ri === 1 && j === 0 ? 0 : (1 + (SPH_TILES.length % 4)) }); });
   /** Beat-cover target: (lat of ring 1, lon 0); the generator aims the drag so yaw 0 / pitch = SPH_TARGET_LAT puts it front and centre. */
-  function sphere(c, g, S, yaw, pitch, pick, kick, coverCy) {
+  function sphere(c, g, S, yaw, pitch, pick, kick, coverCy, tileMode = null) {
+    const tileImg = (i) => (tileMode && tileMode !== 'none' ? coverFried(i, S, tileMode) : coverCanvas(i, S));
     const R = Math.min(g.cw * 0.95, 420), cx = g.cx, cy = g.cy - R * 0.05, F = 3, sc = 1 - 0.34 * ss(pick), cyS = cy - 40 * ss(pick), cY = Math.cos(yaw), sY = Math.sin(yaw), cP = Math.cos(pitch), sP = Math.sin(pitch);
     const rot = (x, y, z) => { const x1 = x * cY + z * sY, z1 = -x * sY + z * cY, y2 = y * cP - z1 * sP, z2 = y * sP + z1 * cP; return [x1, y2, z2]; };
     const list = [];
@@ -307,11 +308,11 @@ export function createIntro(L, A = {}) {
     const tgtM = [g.cw, 0, 0, g.cw, g.cx, coverCy];   // the card's cover square
     for (const it of list) { const isT = it.T0.cov === 0 && it.T0.lat === SPH_RINGS[1]; let m = it.m;
       if (isT && pick > 0) continue;   // flying: drawn last, on top
-      c.save(); c.transform(...m); c.drawImage(coverCanvas(it.T0.cov, S), -0.5, -0.5, 1, 1);
+      c.save(); c.transform(...m); c.drawImage(tileImg(it.T0.cov), -0.5, -0.5, 1, 1);
       const shade = (1 - it.z) * 0.75 + (isT && pick > 0 ? -1 : 0.25 * ss(pick)); if (shade > 0.01) { c.fillStyle = `rgba(0,0,0,${Math.min(0.92, shade)})`; c.fillRect(-0.5, -0.5, 1, 1); }
       c.lineWidth = 1.5 / Math.max(1, Math.hypot(m[0], m[1])); c.strokeStyle = 'rgba(255,255,255,0.22)'; c.strokeRect(-0.5, -0.5, 1, 1); c.restore(); }
     // the picked tile is drawn last (on top) while it flies
-    if (pick > 0 && pick < 1) { const it = list.find((q) => q.T0.cov === 0 && q.T0.lat === SPH_RINGS[1]); if (it) { const u = ss(pick), m = it.m.map((v, q) => lerp(v, tgtM[q], u)); c.save(); c.transform(...m); c.drawImage(coverCanvas(0, S), -0.5, -0.5, 1, 1); c.restore(); } }
+    if (pick > 0 && pick < 1) { const it = list.find((q) => q.T0.cov === 0 && q.T0.lat === SPH_RINGS[1]); if (it) { const u = ss(pick), m = it.m.map((v, q) => lerp(v, tgtM[q], u)); c.save(); c.transform(...m); c.drawImage(tileImg(0), -0.5, -0.5, 1, 1); c.restore(); } }
     void kick;
   }
   // selection brackets: an explicit intro.select key, else they step in where the push starts (first intro.push key)

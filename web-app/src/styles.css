@@ -557,3 +557,37 @@ body.col-resizing{cursor:ew-resize;user-select:none}
 /* perf (software-rendered machines): nothing sits behind the side columns, so their backdrop blur only cost repaints; dialogs dim without a blur */
 .layers,.panel{backdrop-filter:none;-webkit-backdrop-filter:none;background:color-mix(in srgb,var(--panel) 94%,transparent)}
 .review::backdrop{backdrop-filter:none;background:rgba(0,0,0,.66)}
+/* v23: rich tooltips (Adobe-style), + Layer menu, workspaces, voice lab, shot list, cover presets, marker colours, legacy looks */
+.rtip{position:fixed;z-index:60;max-width:300px;background:var(--panel);border:1px solid var(--line-2);border-radius:var(--radius);box-shadow:0 10px 28px rgba(0,0,0,.4);padding:8px 10px;display:grid;grid-template-columns:1fr auto;gap:3px 10px;pointer-events:none;font:400 12px/1.4 var(--sans);color:var(--fg)}
+.rtip b{font:600 12px var(--sans)}.rtip kbd{justify-self:end;align-self:start}.rtip span{grid-column:1/-1;color:var(--muted)}
+.pop.menu.addlayer{left:0;right:auto;top:auto;bottom:calc(100% + 6px);width:min(360px,calc(100vw - 32px));max-height:min(70vh,520px);overflow:auto;gap:4px}
+.addlayer .al-g{display:flex;flex-direction:column;gap:2px;padding:4px 0;border-bottom:1px solid var(--line)}.addlayer .al-g:last-child{border-bottom:0}
+.addlayer .al-h{font:500 10px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:2px 6px}
+.addlayer button{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:var(--radius)}
+.addlayer button:hover,.addlayer button:focus-visible{background:var(--tint);outline:1px solid var(--accent)}
+.addlayer button b{font:600 12px var(--sans)}.addlayer button span{font:400 11px/1.35 var(--sans);color:var(--muted)}
+.seg.ws button{min-width:54px}
+.voicelab{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:var(--radius);padding:10px;margin:6px 0}
+.vl-grid{display:grid;grid-template-columns:88px minmax(0,1fr);gap:6px 8px;align-items:center}
+.vl-grid select,.vl-grid input{width:100%;min-width:0}
+.vl-say{font:500 12px/1.4 var(--sans);color:var(--fg);margin:0}
+.vl-status.ok{color:var(--fg)}.vl-status.warn{color:var(--accent)}
+.vl-takes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font:400 11px var(--sans)}
+.shots{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-direction:column;gap:4px}
+.shot-row{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto auto auto auto;gap:6px;align-items:center;padding:4px 6px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+.shot-row .grip{cursor:grab;color:var(--muted);letter-spacing:-2px;user-select:none}
+.shot-row.over{border-color:var(--accent);box-shadow:0 -2px 0 var(--accent)}.shot-row.dragging{opacity:.45}
+.shot-row select{min-width:0;width:100%}
+.cvp-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px}
+.cvp{all:unset;cursor:pointer;font:500 11px var(--sans);padding:5px 9px;border:1px solid var(--line-2);border-radius:999px;color:var(--fg)}
+.cvp[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.cvp:focus-visible{outline:2px solid var(--accent)}
+.mk-chip{display:inline-block;width:10px;height:10px;border-radius:2px;flex:none}
+.mk-k{max-width:96px}
+details.legacy{grid-column:1/-1;margin-top:6px}details.legacy summary{cursor:pointer;font:500 11px var(--sans);color:var(--muted);padding:4px 0}
+details.legacy .lookgrid{margin-top:8px}
+@media (max-width:760px){.vl-grid{grid-template-columns:1fr}.shot-row{grid-template-columns:auto minmax(0,1fr) auto auto auto}.shot-row .grip,.shot-row .hint{display:none}}
+.mk.marker{grid-template-columns:62px 10px minmax(0,1fr) 84px auto auto}
+.mk.section{grid-template-columns:62px minmax(0,1fr) auto}
+.markers .group-h{flex-wrap:wrap;gap:6px}
+.mk-v{all:unset;cursor:pointer;width:24px;height:24px;display:grid;place-items:center;color:var(--muted);font:600 14px var(--sans);border-radius:var(--radius)}.mk-v:hover{color:var(--accent)}.mk-v:focus-visible{outline:2px solid var(--accent)}

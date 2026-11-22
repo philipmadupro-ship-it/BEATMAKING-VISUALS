@@ -3,13 +3,13 @@
 const PROJECT_KEY = 'u2c.project.v4', PROFILE_KEY = 'u2c.profile.v3';
 export const LOOK_IDS = ['exe', 'lab', 'scope', 'player'];
 export const DEFAULT_PROJECT = {
-  look: 'exe', stage: 'nigredo', aspect: '916',
+  look: 'player', stage: 'nigredo', aspect: '916',
   title: 'Night Shift', producer: '@uche2crazy', key: '',
   text: { artistA: 'Travis Scott', artistB: 'Future', price: '$29', link: 'link in bio', titleFormat: '' },
   inT: 0, outT: 15, loop: true, clipLen: 30,
   meta: {},   // v21 metadata overrides of the metadata card: { bits, sr, bytes, duration } (empty = from the file)
   timeline: { snap: 'beat', pxPerBeat: 0, collapsed: null, compact: null, closed: {}, density: 'fewer', magnet: true },
-  export: { fps: 30, mbps: 12, loudness: -14, loopSafe: false, draft: false, voiceTag: false, voiceEvery: 25, batch: ['exe', 'lab', 'scope'], batchLens: [15], both: false, mblur: true, shutter: 0.5, preroll: true, clicks: true },
+  export: { fps: 30, mbps: 12, loudness: -14, loopSafe: false, draft: false, voiceTag: false, voiceEvery: 25, batch: ['player:default', 'player:hero', 'player:calm'], batchLens: [15], both: false, mblur: true, shutter: 0.5, preroll: true, clicks: true },
 };
 const clone = (o) => JSON.parse(JSON.stringify(o));
 function deepMerge(a, b) { for (const k in b) { const v = b[k]; if (v && typeof v === 'object' && !Array.isArray(v) && a[k] && typeof a[k] === 'object' && !Array.isArray(a[k])) deepMerge(a[k], v); else a[k] = v; } return a; }
@@ -19,7 +19,7 @@ export function write(key, v) { try { localStorage.setItem(key, JSON.stringify(v
 export function migrateProject(p) {
   if (!p || typeof p !== 'object') return p;
   if (!LOOK_IDS.includes(p.look)) p.look = 'exe';
-  if (p.export && Array.isArray(p.export.batch)) { const b = p.export.batch.filter((id) => LOOK_IDS.includes(id)); p.export.batch = b.length ? b : [...DEFAULT_PROJECT.export.batch]; }
+  if (p.export && Array.isArray(p.export.batch)) { const b = p.export.batch.filter((id) => LOOK_IDS.includes(id) || /^player:(default|hero|calm|tour|full)$/.test(id)); p.export.batch = b.length ? b : [...DEFAULT_PROJECT.export.batch]; }
   return p;
 }
 export function createStore() {

@@ -6,7 +6,7 @@
 export const DENSITY = ['fewer', 'more', 'all', 'off'];
 export const DENSITY_LABEL = { fewer: 'Fewer', more: 'More', all: 'All', off: 'Off' };
 /** Snap / draw priority by kind (higher wins when two candidates are inside the snap distance). */
-export const MARKER_PRI = { cue: 6, drop: 6, hit: 6, note: 6, section: 5, kick: 4, snare: 4, downbeat: 3, hat: 2, beat: 1 };
+export const MARKER_PRI = { cue: 6, drop: 6, hit: 6, note: 6, cta: 6, chapter: 6, section: 5, kick: 4, snare: 4, downbeat: 3, hat: 2, beat: 1 };
 
 /** Analysis markers for a clip entry {D, labels, bars}: sorted [{b, kind, s (0..1 strength), label}]. */
 export function analysisMarkers(e) {
@@ -40,3 +40,7 @@ export function anchorsFor(rule, e, sheet, b0, b1, density = 'all') {
   for (const m of all) if (m.b >= b0 - 1e-9 && m.b < b1 - 1e-9 && (!out.length || Math.abs(out[out.length - 1] - m.b) > 1e-6)) out.push(m.b);
   return out;
 }
+
+// v23 marker colours by kind (Premiere-style colour labels): the timeline flag, the Markers list chip
+export const MARKER_COLOR = { note: '#8fa3ff', cue: '#e7e2d6', drop: '#ff5a4e', hit: '#ffb347', cta: '#5ee0a0', chapter: '#c792ff' };
+export const MARKER_KIND_LABEL = { note: 'Note', cue: 'Cue', drop: 'Drop', hit: 'Hit', cta: 'CTA', chapter: 'Chapter (YouTube)' };

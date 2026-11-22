@@ -120,18 +120,20 @@ body{background:var(--bg);color:var(--fg)}
   <div class="media" id="pane-media" aria-label="Media bin">
     <div class="group-h"><span class="lbl">Covers</span><span class="inrow"><button class="btn small" id="mediaAdd">Add images</button><button class="btn small" id="mediaReset">Reset</button></span></div>
     <p class="hint" id="mediaInfo"></p>
+    <div class="group-h"><span class="lbl">Cover presets</span></div><div class="cvp-row" id="coverPresets" role="group" aria-label="Cover presets"></div>
     <div class="cv-grid" id="mediaCovers"></div>
     <input type="file" id="mediaFile" accept="image/*" multiple hidden>
     <div class="group-h"><span class="lbl">Video layer</span></div>
     <div class="inrow"><label class="btn small" for="vidFile">Load video</label><span class="hint" id="mediaVid">drop a DAW screen recording here</span></div>
     <div class="group-h"><span class="lbl">Intro voice</span></div>
     <div class="inrow"><label class="btn small" for="voiceFile">Load voice take</label><input type="file" id="voiceFile" accept="audio/*" hidden><button class="btn small" id="voiceClear" hidden>Remove</button><button class="btn small" id="voicePrompt" title="Copy an ElevenLabs prompt built from the voice lines (Text → voice.lines)">Copy ElevenLabs prompt</button><span class="hint" id="mediaVoice">one take with pauses between the phrases (e.g. ElevenLabs): split at the pauses, placed on the intro</span></div>
+    <div class="voicelab" id="voiceLab" aria-label="Voice lab (ElevenLabs)"></div>
     <div class="group-h"><span class="lbl">Audio</span></div>
     <div class="inrow"><label class="btn small" for="file">Replace beat</label><span class="hint" id="mediaAud"></span></div>
     <p class="hint">Drop images, a video or a beat anywhere on this panel. Everything stays in this browser.</p>
   </div>
   <div class="markers" id="pane-markers" aria-label="Markers">
-    <div class="group-h"><span class="hint" id="markerCount"></span><button class="btn small" id="markerAdd" title="Add a marker at the playhead (M)">+ Marker</button></div>
+    <div class="group-h"><span class="hint" id="markerCount"></span><span class="inrow"><button class="ib sm" id="markerPrev" aria-label="Previous marker" data-tip="Previous marker|Jump the playhead to the previous marker.|Shift+[">‹</button><button class="ib sm" id="markerNext" aria-label="Next marker" data-tip="Next marker|Jump the playhead to the next marker.|Shift+]">›</button><button class="btn small" id="markerChapters" data-tip="YouTube chapters|Copies chapter lines (0:00 Intro …) from your Chapter markers, or the sections when there are none.|">Chapters</button></span><button class="btn small" id="markerAdd" title="Add a marker at the playhead (M)">+ Marker</button></div>
     <input class="inp small" id="markerFilter" placeholder="filter markers" aria-label="Filter markers">
     <ul class="mk-list" id="markerItems"></ul>
   </div>
@@ -144,6 +146,7 @@ body{background:var(--bg);color:var(--fg)}
     <div class="inrow"><span class="lbl" id="metaLine">9:16 · 1080×1920 · 30 fps</span><span class="hint" id="measuring"></span></div>
     <div class="ctrls">
       <button class="ib sm" id="leftToggle" aria-pressed="true" aria-label="Show the left panel" title="Left panel (Cmd/Ctrl+Alt+[)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2" width="11" height="10"/><path d="M5 2v10"/></svg></button>
+      <div class="seg ws" id="wsSeg" role="group" aria-label="Workspace"></div>
       <div class="seg" id="aspectSeg"><button data-a="916" aria-pressed="true">9:16</button><button data-a="169" aria-pressed="false">16:9</button></div>
       <div class="seg" id="zoomSeg"><button data-z="fit" aria-pressed="true">Fit</button><button data-z="100" aria-pressed="false">100%</button></div>
       <button class="btn small" id="blurBtn" aria-pressed="false" title="Preview the export's motion blur (same sub-frames as the MP4)">Blur</button>
@@ -192,8 +195,9 @@ body{background:var(--bg);color:var(--fg)}
     </details>
   </div>
   <div class="pane" role="tabpanel" id="pane-look" aria-labelledby="tab-look" data-pane="look" hidden>
-    <div class="group"><div class="lbl">Look</div><div class="lookgrid" id="lookGrid"></div></div>
+    <div class="group"><div class="group-h"><span class="lbl">Look preset</span><span class="hint">all built on the player · switch any time, your edits stay</span></div><div class="lookgrid" id="lookGrid"></div></div>
     <div class="group"><div class="lbl">Stage</div><div class="stagegrid" id="stageGrid"></div><p class="hint">A stage is a condition, not a recolour: camera, swing, tape and residue change with it.</p></div>
+    <div class="group"><div class="group-h"><span class="lbl">Shot order</span><span class="hint">drag to reorder · times stay, windows move</span></div><div id="shotList"></div></div>
     <div class="group"><div class="group-h"><span class="lbl">Cue sheet preset</span><button class="btn small" id="regenBtn">Rebuild from analysis</button></div><div class="presets" id="presetList"></div>
       <p class="hint">Applying a preset replaces the timeline (Cmd/Ctrl+Z brings it back). Tracks you edited are kept when the analysis or section changes.</p></div>
   </div>

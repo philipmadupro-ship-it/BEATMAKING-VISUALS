@@ -21,6 +21,10 @@ import { createGrid } from './ui/grid.js';
 import { createStudio } from './ui/studio.js';
 import { createPanels } from './ui/panels.js';
 import { createMedia } from './ui/media.js';
+import { createVoiceLab } from './ui/voicelab.js';
+import { createTips } from './ui/tips.js';
+import { createShotList } from './ui/shotlist.js';
+import { createAddLayer, createWorkspaces, createCoverPresets } from './ui/addlayer.js';
 import { createReview } from './ui/review.js';
 import { createExporter } from './ui/exporter.js';
 import { slug } from './util/draw.js';
@@ -68,13 +72,15 @@ async function boot() {
   app.timeline = createTimeline(app); app.grid = createGrid(app); app.studio = createStudio(app);
   app.cuetl = createCueTimeline(app, $('#cueCv')); app.inspector = createInspector(app, $('#insp'));
   app.panels = createPanels(app); app.exporter = createExporter(app);
-  app.media = createMedia(app); app.review = createReview(app);   // v20: media bin (covers / video / audio) + review before export
+  app.media = createMedia(app); app.review = createReview(app); app.voiceLab = createVoiceLab(app); app.shotList = createShotList(app); app.coverPresets = createCoverPresets(app);   // v20: media bin (covers / video / audio) + review before export
   // v21 editor: toasts, workspace (resizable / collapsible panels), program monitor, marker list, metadata, export queue,
   // projects, command palette + shortcut overlay
   app.toast = createToast(); app.workspace = createWorkspace(app); app.monitor = createMonitor(app); app.markerList = createMarkerList(app);
   app.meta = createMetadata(app); app.queue = createQueue(app); app.projects = createProjects(app); app.palette = createPalette(app);
   // v22: edit in the timeline (inline values, text clips, context menu), task controls + coach, the status strip
   app.tlEdit = createTimelineEdit(app); app.quick = createQuick(app); app.statusBar = createStatusBar(app);
+  // v23: + Layer menu (grouped, described), workspaces (Edit / Motion / Audio / Export), Adobe-style rich tooltips
+  app.addLayer = createAddLayer(app); app.workspaces = createWorkspaces(app); app.tips = createTips(document);
   store.subscribe(() => { const tr = store.session.track, el = document.getElementById('mediaAud'); if (el) el.textContent = tr ? `${tr.meta.name} · ${Math.round(tr.bpm)} BPM · ${tr.key || ''}` : ''; });
   motion.press(document.body);
   let userClip = false;
@@ -97,11 +103,12 @@ async function boot() {
   A.setAspect = (a) => { store.set({ project: { aspect: a } }); cues.edit((s) => { s.meta.aspect = a; refreshAutoIn(s); }, 'aspect'); app.studio.setAspectUI(); app.studio.layout(); app.exporter.info(); };
   function setFirst(s, path, v) { const t = s.tracks.find((x) => x.path === path); if (t && t.keys.length) t.keys[0].v = v; else s.base[path] = v; }
   /** Regenerate the auto tracks for the current section / look / stage (keeps tracks the user edited). */
-  function genOpts() { const p = store.project, e = app.clip.current(); return { bars: e ? e.bars : 16, labels: e && e.ready ? e.labels : [], look: p.look, stage: p.stage, aspect: p.aspect, meta: { title: p.title, seed: cues.sheet.meta && cues.sheet.meta.seed } }; }
+  function genOpts() { const p = store.project, e = app.clip.current(); return { bars: e ? e.bars : 16, labels: e && e.ready ? e.labels : [], look: p.look, stage: p.stage, aspect: p.aspect, meta: { title: p.title, seed: cues.sheet.meta && cues.sheet.meta.seed, spb: store.session.track ? store.session.track.spb : undefined } }; }
   function refreshAutoIn(s) { const g = generateSheet({ ...genOpts(), preset: s.meta.preset || 'default' }); for (const t of g.tracks) { const i = s.tracks.findIndex((x) => x.path === t.path); if (i < 0) s.tracks.push(t); else if (s.tracks[i].auto) s.tracks[i] = t; } s.meta.bars = g.meta.bars; }
   /** v22: a new seeded variation (meta.seed): the auto tracks are rebuilt with the new seed; tracks you edited are kept. */
   A.newVariation = (seed) => { seed = seed ?? Math.random().toString(36).slice(2, 8); cues.edit((s) => { s.meta.seed = String(seed); refreshAutoIn(s); }, 'new variation'); app.panels.sync(); return String(seed); };
-  A.applyPreset = (id) => { const g = generateSheet({ ...genOpts(), preset: id }); g.tags = cues.sheet.tags; cues.replace(g, 'preset ' + id); app.panels.sync(); };
+  // v23: a preset rebuilds the AUTO tracks only (tracks you edited by hand stay), so a preset can be changed at any time
+  A.applyPreset = (id) => { cues.edit((s2) => { s2.meta.preset = id; refreshAutoIn(s2); }, 'preset ' + id); app.panels.sync(); app.exporter && app.exporter.info && app.exporter.info(); };
   /** Set a property at the playhead: the key there (or a new key) when it has a track, else its base value. */
   A.setProp = (path, v, live = false) => { const tr = store.session.track, b = snapBeat(app.cuetl.state.playhead, SNAPS[store.project.timeline.snap] || 0);
     const fn = (s) => { const t = s.tracks.find((x) => x.path === path && x.keys.length); if (!t) { s.base[path] = v; return; } t.auto = false; const k = t.keys.find((q) => Math.abs(q.b - b) < 1e-6); if (k) k.v = v; else { t.keys.push({ id: newId(), b, v, ease: defaultEase(t.kind) }); t.keys.sort((x, y) => x.b - y.b); } };
@@ -113,7 +120,7 @@ async function boot() {
     if (!needGen) { const look = cues.ev().value('look', 0, store.project.look), stage = cues.ev().value('stage', 0, store.project.stage); store.set({ project: { look, stage } }); accent(); } }
   function syncCues() {
     const e = app.clip.current(); if (!e || !e.ready) return;
-    if (needGen) { needGen = false; const g = generateSheet({ ...genOpts(), preset: 'default' }); cues.replace(g, 'generate', true); }
+    if (needGen) { needGen = false; const g = generateSheet({ ...genOpts(), preset: (cues.sheet.meta && cues.sheet.meta.preset) || 'default' }); cues.replace(g, 'generate', true); }
     else { const before = JSON.stringify(cues.sheet.tracks.filter((t) => t.auto).map((t) => t.keys.map((k) => [k.b, k.v]))), s2 = JSON.parse(JSON.stringify(cues.sheet)); refreshAutoIn(s2);
       if (JSON.stringify(s2.tracks.filter((t) => t.auto).map((t) => t.keys.map((k) => [k.b, k.v]))) !== before || s2.meta.bars !== cues.sheet.meta.bars) cues.edit((s) => refreshAutoIn(s), 'analysis'); }
     app.panels.sync(); app.cuetl.markDirty(); app.inspector.show();
