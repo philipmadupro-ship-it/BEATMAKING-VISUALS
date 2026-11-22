@@ -496,7 +496,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // v22.5 VOICE CAPTIONS (user: "the keyboard follows what she says"): each voice line (tags voice.lines, editable on the site) types as a console line
   // while she says it: phrase i starts at voice.ats[i] (composition s) and types over 85 % of voice.durs[i]; lines stack upward, older ones dim.
   const vNums = (k, def) => String(tag(k) || def).split(',').map(Number);
-  function voiceLines() { const nn = String(tag('voice.number') || '01'), L4 = (tag('voice.lines') || []).map((q) => String(q).replace(/\{n\}/g, nn).toUpperCase()), at = vNums('voice.ats', '0.7,3.0,5.0'), du = vNums('voice.durs', '2.0,1.6,1.3');
+  function voiceLines() { const nn = String(tag('voice.number') || '01'), L4 = (tag('voice.lines') || []).map((q) => String(q).replace(/\{n\}/g, nn).toUpperCase()), at = vNums('voice.ats', '0.4,2.6,4.4,5.85'), du = vNums('voice.durs', '2.0,1.6,1.3,1.45');
     return L4.map((txt, i) => ({ txt, t: at[i] ?? (0.45 + i * 1.6), rate: (du[i] ?? 1.4) * 0.85 / Math.max(1, txt.length) })); }
   function voiceCaptions(tc) {
     // 9:16 keeps only the newest two lines (clear of the card); 16:9 shows all four

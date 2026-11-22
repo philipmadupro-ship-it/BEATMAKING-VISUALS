@@ -22,7 +22,7 @@ NAT = os.environ.get('U2C_NATIVE', '/home/user/u2c-motion-v14')
 OUT = os.environ.get('U2C_OUT', '/home/user/research/review')
 PUB = os.environ.get('U2C_PUB', '')
 DELIVER = os.environ.get('U2C_DELIVER', '/home/user/beatmaking-visuals/deliver-v14')
-DEFAULT_VOICE = os.environ.get('U2C_VOICE_SOURCE', '/home/user/research/voices/el-miami-v3.mp3')   # never in the public repo (v22.7: 'Experimentation number one... by Uche Two Crazy... <title>')
+DEFAULT_VOICE = os.environ.get('U2C_VOICE_SOURCE', '/home/user/research/voices/el-miami-v4.mp3')   # never in the public repo (v22.7: 'Experimentation number one... by Uche Two Crazy... <title>')
 SAFE_916 = [(0, 0, 1080, 200), (0, 1548, 1080, 1920), (960, 1000, 1080, 1548)]   # TikTok/Reels header, caption + sound, button rail
 
 def sh(cmd, cwd=None, quiet=True, timeout=None):
