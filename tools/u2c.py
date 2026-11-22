@@ -7,6 +7,7 @@
   python3 tools/u2c.py strip VIDEO -t 3.3:4.3:0.15            # frames from an MP4 in one strip (transitions)
   python3 tools/u2c.py crop PNG x,y,w,h                       # zoom into a still (panel review)
   python3 tools/u2c.py render [-l player] [-s ...] [-a ...] [--len 30]   # final MP4s (sequential) -> out/v14 + deliver dir
+  python3 tools/u2c.py doctor                    # verify every tool, library, font, skill and repo is installed
   python3 tools/u2c.py test                      # web meters + smoke (prints pass counts + failures only)
   python3 tools/u2c.py covers DIR|IMG... [--web]  # your covers -> the native renderer (slot 0 = the beat cover, 1-4 = browse); --web also into web-app/assets
   python3 tools/u2c.py batch MANIFEST.json       # many beats in one go (see docs/AUTOMATION.md): each job = beat + covers + cue sheet + stages + lengths
@@ -140,6 +141,30 @@ def batch(a):
         if J.get('covers'): sync()   # restore the default covers for the next job
     print(f'batch: {n} render sets in {(time.time() - t0) / 60:.1f} min -> {DELIVER}')
 
+def doctor(_=None):
+    """Verify everything the loop needs is installed (one line per check, OK / MISSING). Cheap: no renders."""
+    import importlib, shutil as sh2
+    R = []
+    def chk(name, ok, info=''): R.append(ok); print(('OK      ' if ok else 'MISSING ') + name + (('  ' + info) if info else ''))
+    for b in ('node', 'ffmpeg', 'ffprobe', 'git', 'gh'): chk('bin ' + b, bool(sh2.which(b)), sh2.which(b) or '')
+    for m in ('PIL', 'numpy'):
+        try: importlib.import_module(m); chk('python ' + m, True)
+        except Exception as e: chk('python ' + m, False, str(e)[:60])
+    r = subprocess.run(['node', '-e', "require('playwright').chromium.launch().then(b=>{console.log('ok');b.close()})"], capture_output=True, text=True, timeout=120); chk('playwright + chromium', 'ok' in r.stdout, (r.stderr or '')[-80:])
+    chk('native renderer', os.path.exists(os.path.join(NAT, 'render.mjs')), NAT)
+    chk('hyperframes chrome', bool(glob.glob('/root/.cache/hyperframes/chrome/*')))
+    for f in ('AkiraExpanded.otf', 'Synkopy.otf'): chk('font ' + f, os.path.exists(os.path.join(WEB, 'assets', 'fonts', f)))
+    chk('covers 0-4', all(os.path.exists(os.path.join(WEB, 'assets', 'covers', f'cover-{i}.jpg')) for i in range(5)))
+    chk('test beat', os.path.exists('/home/user/u2c-motion/audio/atelmansion-3c-fmin-128.wav'))
+    SK = '/root/.claude/skills'
+    for k in ('u2c-beat-preview-motion', 'u2c-beat-timing', 'u2c-camera-cuts', 'u2c-cue-sheet', 'u2c-meters', 'u2c-waveform', 'u2c-render-qa', 'u2c-stage-palettes', 'u2c-logo-chain', 'hyperframes', 'hyperframes-cli', 'hyperframes-registry', 'media-use'):
+        chk('skill ' + k, os.path.exists(os.path.join(SK, k, 'SKILL.md')))
+    RP = '/home/user/research/repos'
+    for k in ('LottieFiles_motion-design-skill', 'motiondivision_ai-kit', 'remotion-dev_skills', 'kajisho5_ffmpeg-skill', 'cocopon_tweakpane'):
+        chk('repo ' + k, os.path.isdir(os.path.join(RP, k)))
+    print('ozone-mastering-suite: present but UNTRUSTED (not code; never run)' if os.path.isdir(os.path.join(RP, 'ozone-mastering-suite')) else '')
+    print(f'doctor: {sum(R)}/{len(R)} OK')
+
 def test(_=None):
     env = dict(os.environ, NOEXPORT='1', CDN_CACHE='/tmp/cdncache')
     for t in ('tests/meters.mjs', 'tests/smoke.mjs'):
@@ -180,7 +205,7 @@ def stage(a):
         rel = os.path.relpath(os.path.abspath(f), WEB); d = os.path.join(PUB, rel); os.makedirs(os.path.dirname(d), exist_ok=True); shutil.copy2(f, d); print(rel)
 
 p = argparse.ArgumentParser(); sp = p.add_subparsers(dest='cmd', required=True)
-sp.add_parser('sync').set_defaults(fn=sync); sp.add_parser('test').set_defaults(fn=test)
+sp.add_parser('sync').set_defaults(fn=sync); sp.add_parser('test').set_defaults(fn=test); sp.add_parser('doctor').set_defaults(fn=doctor)
 for name, fn in (('stills', stills), ('render', render)):
     q = sp.add_parser(name); q.set_defaults(fn=fn); q.add_argument('-l', default='player'); q.add_argument('-s', default='nigredo'); q.add_argument('-a', default='9:16,16:9')
     q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3'); q.add_argument('--mblur', type=int, default=3); q.add_argument('--hook', type=int, default=None)
