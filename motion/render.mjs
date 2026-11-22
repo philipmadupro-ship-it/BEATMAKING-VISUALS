@@ -52,7 +52,7 @@ if (!['exe', 'lab', 'scope', 'player'].includes(look)) throw new Error('look mus
 const aspect = String(args.aspect || '9:16').replace(':', '').replace('x', '');
 const len = Number(args.len || 30);
 // v19 --preroll <s> (player look default 0.7): silent pause on the stopped player before the cursor clicks play; the audio starts on the click
-const PRE = args.test ? 0 : Math.max(0, +(args.preroll ?? ((args.look || 'exe') === 'player' ? 4.0 : 0)));   // v22: 4 s pre-roll (orbit-sphere intro: spin, drag, pick, play)
+const PRE = args.test ? 0 : Math.max(0, +(args.preroll ?? ((args.look || 'exe') === 'player' ? 7.0 : 0)));   // v22.2: 7 s pre-roll (voice); v22: 4 s pre-roll (orbit-sphere intro: spin, drag, pick, play)
 if (!['nigredo', 'albedo', 'citrinitas', 'rubedo', 'white'].includes(stage)) throw new Error('unknown stage ' + stage);
 if (!['916', '169'].includes(aspect)) throw new Error('aspect must be 9:16 or 16:9');
 const base = path.basename(beat).replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
@@ -85,7 +85,7 @@ if (tags.date === '{today}') tags.date = today;
 if (args.title) tags.title = String(args.title);
 const tagFile = `data/tags-${look}-${stage}-${aspect}-${id}.js`;
 fs.writeFileSync(path.join(FILM, tagFile), 'window.U2C_TAGS=' + JSON.stringify(tags) + ';\n');
-let comp, CLICKS = [];
+let comp, CLICKS = [], SFX = [];
 if (ENGINE === 'v9') {
   const sync = spawnSync('node', [path.join(ROOT, 'tools', 'sync_web.mjs'), '--check'], { encoding: 'utf8' });
   if (sync.status !== 0) console.warn('[v9] ' + sync.stdout.trim().split('\n').pop());
@@ -105,12 +105,25 @@ if (ENGINE === 'v9') {
   }
   // v19 click times (composition seconds) = the mouse layer's clicks (same rules as film.js mouseWays): play, card, camera travels, CTA closes, hero
   if (look === 'player' && !args.test) { const BT = D.beat, ilT = sheet.tracks.find((tr) => tr.path === 'intro.length'), IBb = sheet.base['intro.on'] === false ? 0 : 4 * (ilT ? ilT.keys[0].v : 2), T2 = (bb) => bb * BT, w = [];
-    if (PRE > 0) w.push(-0.06); if (IBb && PRE > 0 && sheet.base['intro.style'] === 'sphere') w.push(T2(-6) - 0.02, T2(-4), T2(-3.5) - 0.02);   // v22 sphere: press, release after the drag, pick
+    if (PRE > 0) w.push(-0.06); if (IBb && PRE > 0 && sheet.base['intro.style'] === 'sphere') w.push(T2(-10.5) - 0.02, T2(-7), T2(-6.1) - 0.02);   // v22 sphere: press, release after the drag, pick
     else if (IBb && PRE > 0) w.push(...(sheet.base['intro.browse'] === 0 ? [] : [T2(-3) - 0.02, T2(-2) - 0.02]), T2(-1.25) - 0.02);   // v21: no browse clicks on a direct pick else if (IBb) w.push(T2(Math.max(1, IBb - 2)) - 0.02);   // v19.3 browse x2 + choose, then play
     for (const tr of sheet.tracks) if (tr.path === 'camera.shot') for (const k of tr.keys) if (k.v !== 'wide') w.push(T2(k.b - (k.dur ?? 1)) - 0.02);
     for (const kk of ['cta1', 'cta2']) { const at = sheet.base[`social.${kk}.at`], ln = sheet.base[`social.${kk}.len`]; if (at != null) w.push(T2(at + (ln ?? 8)) - 0.02); }
     if (IBb && D.duration > T2(IBb + 16)) w.push((sheet.base['outro.mode'] ?? 'dialog') === 'dialog' ? D.duration - T2(9) - 0.02 : D.duration - 2 * 4 * BT - T2(3) - 0.02);   // v21: the x of JOIN / CREATE PROJECT (E-9 beats)
     CLICKS = w.filter((x) => x + PRE >= 0 && x < D.duration).map((x) => +(x + PRE).toFixed(4)); }
+  // v22.2 lab / computer SFX timeline (tools/sfx.py): the same moments the film shows: start swell, hook bleep + typing, sphere whir, lock-on, card title typing,
+  // play boot, CTA bleeps + typing, terminal chirps + typing, the CLOSE PROJECT bleep + typing. Text lengths come from the film's own tags.
+  if (look === 'player' && !args.test && !/^(off|0|false|no)$/i.test(String(args.sfx ?? 'on'))) { const { DEFAULT_TAGS } = await import('./film/v9/src/v8/tags.js');
+    const BT = D.beat, T2 = (bb) => bb * BT, P = PRE, rate = BT / 24, get = (o, p) => p.split('.').reduce((q, k) => (q == null ? q : q[k]), o), tg = (p) => get(sheet.tags || {}, p) ?? get(DEFAULT_TAGS, p);
+    const sub = (x) => String(x ?? '').replace(/\{[a-zA-Z]+\}/g, (m) => (m === '{title}' || m === '{titleWord}' ? String(D.title || '') : m === '{bpm}' ? String(Math.round(60 / BT)) : 'XXXX')), len = (x) => sub(x).length, E = [];
+    E.push({ t: 0, kind: 'swell' }, { t: 0.25, kind: 'bleep' }, { t: 1.0, kind: 'type', n: len(tg('social.title')) + len(tg('social.hook')), dt: rate });
+    if (sheet.base['intro.style'] === 'sphere') { const tl = String(D.title || '').length + 16; E.push({ t: P + T2(-10.5), kind: 'whir', dur: T2(3.5) }, { t: P + T2(-6.1) + 0.03, kind: 'lock' }, { t: P + T2(-4.4), kind: 'type', n: tl, dt: T2(1) / tl }); }
+    if (P > 0) E.push({ t: P - 0.02, kind: 'boot' });
+    for (const kk of ['cta1', 'cta2']) { const at = sheet.base[`social.${kk}.at`]; if (at != null) E.push({ t: P + T2(at), kind: 'bleep' }, { t: P + T2(at) + 0.15, kind: 'type', n: len(tg(`social.${kk}.title`)) + len(tg(`social.${kk}.body`)) + len(tg(`social.${kk}.sub`)), dt: rate }); }
+    const term = tg('social.terminal') || []; for (const tr of sheet.tracks) if (tr.path === 'term.line') for (const k of tr.keys) { const tx = typeof k.v === 'number' ? term[k.v] : k.v; E.push({ t: P + T2(k.b), kind: 'chirp' }, { t: P + T2(k.b), kind: 'type', n: len(tx), dt: T2(1 / 16) }); }
+    const ilT2 = sheet.tracks.find((tr) => tr.path === 'intro.length'), IB2 = sheet.base['intro.on'] === false ? 0 : 4 * (ilT2 ? ilT2.keys[0].v : 2);
+    if (IB2 && (sheet.base['outro.mode'] ?? 'dialog') === 'dialog' && D.duration > T2(IB2 + 16)) { const w0 = D.duration / BT - 6 - 5.5; E.push({ t: P + T2(w0), kind: 'bleep' }, { t: P + T2(w0) + 0.15, kind: 'type', n: len(tg('social.outro.title')) + len(tg('social.outro.body')) + len(tg('social.outro.sub')), dt: rate }); }
+    SFX = E.filter((e) => e.t >= 0 && e.t < D.duration + P); }
   const cuesTags = {}; if (args.title) cuesTags.title = String(args.title);
   cuesTags.date = args.date ? String(args.date) : (tags.date === '{today}' || !tags.date ? today : tags.date);
   if (args.tags) Object.assign(cuesTags, JSON.parse(fs.readFileSync(path.resolve(String(args.tags)), 'utf8')));
@@ -168,9 +181,11 @@ if (useClicks) run('python3', [path.join(ROOT, 'tools', 'clicks.py'), '--out', p
 const audioIn = path.join(FILM, 'data', id + '.wav'), dly = PRE > 0 ? `adelay=${Math.round(PRE * 1000)}:all=1,` : '';
 // v22.1 lab voice (offline Piper, tools/voice.py): "<title>. Experimentation." while the hook rises, "Initiating playback." just before the play click
 const useVoice = look === 'player' && PRE >= 3 && !args.test && !/^(off|0|false|no)$/i.test(String(args.voice ?? 'on')) && fs.existsSync(path.join(ROOT, 'tools', 'voice.py'));
-if (useVoice) run('python3', [path.join(ROOT, 'tools', 'voice.py'), '--title', String(D.title || args.title || 'U2C'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', 'voice.wav')], { quiet: true });
+const useSfx = SFX.length > 0; if (useSfx) { fs.writeFileSync(path.join(FILM, 'renders', 'sfx.json'), JSON.stringify(SFX)); run('python3', [path.join(ROOT, 'tools', 'sfx.py'), '--events', path.join(FILM, 'renders', 'sfx.json'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', 'sfx.wav'), '--gain-db', String(args['sfx-db'] ?? -14)], { quiet: true }); }
+if (useVoice) run('python3', [path.join(ROOT, 'tools', 'voice.py'), '--title', String(D.title || args.title || 'U2C'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', 'voice.wav'), ...((args['voice-source'] || process.env.U2C_VOICE_SOURCE) ? ['--source', path.resolve(String(args['voice-source'] || process.env.U2C_VOICE_SOURCE)), '--ats', String(args['voice-ats'] || '0.45,2.15,4.3,5.55'), '--gain-db', '0'] : [])], { quiet: true });   // v22.2: a recorded take (ElevenLabs) when given
 { const ins = ['-i', tmp, '-i', audioIn], parts = [`[1:a]${dly}aresample=48000[b]`], lab = ['[b]']; let n = 2;
   if (useClicks) { ins.push('-i', path.join(FILM, 'renders', 'clicks.wav')); parts.push(`[${n}:a]aresample=48000[k]`); lab.push('[k]'); n++; }
+  if (useSfx) { ins.push('-i', path.join(FILM, 'renders', 'sfx.wav')); parts.push(`[${n}:a]aresample=48000[s]`); lab.push('[s]'); n++; }
   if (useVoice) { ins.push('-i', path.join(FILM, 'renders', 'voice.wav')); parts.push(`[${n}:a]aresample=48000[v]`); lab.push('[v]'); n++; }
   const fc = parts.join(';') + `;${lab.join('')}amix=inputs=${lab.length}:normalize=0:duration=first[a]`;
   run('ffmpeg', ['-v', 'error', '-y', ...ins, '-filter_complex', fc, '-map', '0:v:0', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-movflags', '+faststart', '-shortest', out], { quiet: true }); }

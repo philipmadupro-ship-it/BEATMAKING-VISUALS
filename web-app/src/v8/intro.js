@@ -203,7 +203,7 @@ export function createIntro(L, A = {}) {
     // v13 start: enter 0 -> 1 over the first 2 beats (linear keys; the shapes live here): the cards fan out of one stack and land on beat 2
     // (index 1 of the 4), the player rises into place and lands on beat 3. Without the key (old sheets) enter = 1 = the carousel as it was.
     const enter = clamp(V('intro.enter', 1)), fanU = clamp(enter * 2), playerE = easeOut3(enter), groupS = lerp(0.6, 1, backOut(fanU, 0.8));
-    c.fillStyle = S.bg; c.fillRect(0, 0, W, H);
+    c.fillStyle = S.bg; c.fillRect(0, 0, W, H); if (o.ground) o.ground();   // v22.2: the brutalist editorial layer behind the sphere
     // blurred bloom of the cards near the centre (pulses with the kick): the light the glass is made of
     const wts = []; for (let i = 0; i < COVER_N; i++) { const od = ((((i - pos + 2.5) % 5) + 5) % 5) - 2.5, w = Math.max(0, 1 - Math.abs(od)); if (w > 0) wts.push([i, w]); }
     // the cover is only a soft, low-intensity glow behind the centre card: every bloom is normalised to the same mean luminance

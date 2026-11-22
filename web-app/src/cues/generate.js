@@ -120,14 +120,15 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     // (beats -6 .. -4: pitch to the beat cover's ring, yaw to its longitude) -> clicks the beat cover (-3.5) -> it flies onto the card (-3.5 .. -2)
     // -> the selection brackets (-1.25) -> the cursor clicks play. Old flow (cards) = intro.style 'flow'.
     const SPIN = rng(seed ^ 0x51ed)() < 0.5 ? -1 : 1; sheet.base['intro.style'] = 'sphere'; sheet.base['intro.browse'] = 0;
-    sheet.tracks.push(track('intro.yaw', 'number', 'stage', [key(-8.5, SPIN * 1.1, { ease: 'linear' }), key(-6, SPIN * 0.45, { ease: 'standard' }), key(-4, 0, { ease: 'step' })]));
-    sheet.tracks.push(track('intro.pitch', 'number', 'stage', [key(-8.5, 0, { ease: 'step' }), key(-6, 0, { ease: 'easeInOut' }), key(-4, -37 * Math.PI / 180, { ease: 'step' })]));
-    sheet.tracks.push(track('intro.pick', 'number', 'stage', [key(-8.5, 0, { ease: 'step' }), key(-3.5, 0, { ease: 'emphasized' }), key(-2, 1, { ease: 'step' })]));
-    sheet.tracks.push(track('intro.type', 'number', 'stage', [key(-8.5, 0, { ease: 'step' }), key(-2, 0, { ease: 'linear' }), key(-1.1, 1, { ease: 'step' })]));   // v22.1: the card title types in once it lands
-    sheet.tracks.push(track('intro.player.opacity', 'number', 'stage', [key(-8.5, 0, { ease: 'standard' }), key(-7.3, 1, { ease: 'step' })]));   // v22.1: the player fades in (user)
-    sheet.tracks.push(track('intro.index', 'number', 'stage', [key(-8.5, 0, { ease: 'step' })]));   // v21 browse kept for intro.style 'flow' (see intro.browse)
+    // v22.2: 7 s pre-roll (the voice: "Experimentation one... by Uche Two Crazy. Atelmansion three. Initiating playback."), first keys at -15 (<= frame 0)
+    sheet.tracks.push(track('intro.yaw', 'number', 'stage', [key(-15, SPIN * 1.1, { ease: 'linear' }), key(-10.5, SPIN * 0.45, { ease: 'standard' }), key(-7, 0, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.pitch', 'number', 'stage', [key(-15, 0, { ease: 'step' }), key(-10.5, 0, { ease: 'easeInOut' }), key(-7, -37 * Math.PI / 180, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.pick', 'number', 'stage', [key(-15, 0, { ease: 'step' }), key(-6.1, 0, { ease: 'emphasized' }), key(-4.4, 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.type', 'number', 'stage', [key(-15, 0, { ease: 'step' }), key(-4.4, 0, { ease: 'linear' }), key(-3.4, 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.player.opacity', 'number', 'stage', [key(-15, 0, { ease: 'standard' }), key(-13.4, 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.index', 'number', 'stage', [key(-15, 0, { ease: 'step' })]));   // v21 browse kept for intro.style 'flow' (see intro.browse)
     void browse; void s0;
-    sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(-8.5, 1, { ease: 'step' })]));   // v22: the sphere needs no fan-out
+    sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(-15, 1, { ease: 'step' })]));   // v22: the sphere needs no fan-out
     sheet.tracks.push(track('intro.select', 'enum', 'stage', [key(-1.25, true, { ease: 'step' })]));
     sheet.tracks.push(track('intro.push', 'number', 'stage', [key(0, 0, { ty: 'bezier', ob: [0.42, 0], ease: 'easeInOut' }), key(4, 1, { ib: [0, 0], ease: 'step' })]));
   } else if (NB >= 8) {

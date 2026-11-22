@@ -22,6 +22,7 @@ NAT = os.environ.get('U2C_NATIVE', '/home/user/u2c-motion-v14')
 OUT = os.environ.get('U2C_OUT', '/home/user/research/review')
 PUB = os.environ.get('U2C_PUB', '')
 DELIVER = os.environ.get('U2C_DELIVER', '/home/user/beatmaking-visuals/deliver-v14')
+DEFAULT_VOICE = os.environ.get('U2C_VOICE_SOURCE', '/home/user/research/voices/el-miami-take1.mp3')   # never in the public repo
 SAFE_916 = [(0, 0, 1080, 200), (0, 1548, 1080, 1920), (960, 1000, 1080, 1548)]   # TikTok/Reels header, caption + sound, button rail
 
 def sh(cmd, cwd=None, quiet=True, timeout=None):
@@ -122,6 +123,8 @@ def extra(a):
     if getattr(a, 'beat', None): x += ['--beat', os.path.abspath(a.beat)]
     if getattr(a, 'cues', None): x += ['--cues', os.path.abspath(a.cues)]
     if getattr(a, 'tags', None): x += ['--tags', os.path.abspath(a.tags)]
+    vs = getattr(a, 'voice_source', None) or (DEFAULT_VOICE if os.path.exists(DEFAULT_VOICE) else None)   # v22.2: the ElevenLabs take (MIAMI BADDIE 2) by default
+    if vs: x += ['--voice-source', os.path.abspath(vs)]
     return x
 
 def batch(a):
@@ -214,7 +217,7 @@ sp.add_parser('sync').set_defaults(fn=sync); sp.add_parser('test').set_defaults(
 for name, fn in (('stills', stills), ('render', render)):
     q = sp.add_parser(name); q.set_defaults(fn=fn); q.add_argument('-l', default='player'); q.add_argument('-s', default='nigredo'); q.add_argument('-a', default='9:16,16:9')
     q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3'); q.add_argument('--mblur', type=int, default=3); q.add_argument('--hook', type=int, default=None)
-    q.add_argument('--beat'); q.add_argument('--covers'); q.add_argument('--cues'); q.add_argument('--tags'); q.add_argument('--prefix', default='')
+    q.add_argument('--beat'); q.add_argument('--voice-source'); q.add_argument('--covers'); q.add_argument('--cues'); q.add_argument('--tags'); q.add_argument('--prefix', default='')
     if name == 'stills': q.add_argument('-t', default='12'); q.add_argument('--safe', type=int, default=1)
 q = sp.add_parser('beats'); q.set_defaults(fn=beats); q.add_argument('-l', default='player'); q.add_argument('-s', default='nigredo'); q.add_argument('-a', default='9:16')
 q.add_argument('--bars', default='0:4'); q.add_argument('--bpm', type=float, default=128); q.add_argument('--len', type=int, default=30); q.add_argument('--title', default='ATELMANSION 3'); q.add_argument('--safe', type=int, default=0)

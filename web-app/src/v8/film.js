@@ -527,7 +527,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function mouseWays() { if (MW && MW.ev === ev) return MW.w; const w = [], P = PRE, rest = { sx: W * 0.8, sy: H * (port ? 0.84 : 0.88) };
     w.push({ t: -P, ...rest }); if (P > 0) w.push({ t: -0.06, play: true, click: true });
     if (IB && LOOK === 'player' && P > 0 && ev.value('intro.style', -4, 'flow') === 'sphere') { const g = INTRO.geom(W, H), R = Math.min(g.cw * 0.95, 420), cy0 = g.cy - R * 0.05;   // v22 sphere: press low on the sphere, drag up (held), click the beat cover
-      w.push({ t: T(-6) - 0.02, sx: g.cx + g.cw * 0.06, sy: cy0 + R * 0.5, click: true }); w.push({ t: T(-4), sx: g.cx + g.cw * 0.04, sy: cy0 + R * 0.04, drag: true, click: true }); w.push({ t: T(-3.5) - 0.02, sx: g.cx + g.cw * 0.03, sy: cy0 - R * 0.02, click: true }); }
+      w.push({ t: T(-10.5) - 0.02, sx: g.cx + g.cw * 0.06, sy: cy0 + R * 0.5, click: true }); w.push({ t: T(-7), sx: g.cx + g.cw * 0.04, sy: cy0 + R * 0.04, drag: true, click: true }); w.push({ t: T(-6.1) - 0.02, sx: g.cx + g.cw * 0.03, sy: cy0 - R * 0.02, click: true }); }
     else if (IB && LOOK === 'player' && P > 0) { const g = INTRO.geom(W, H); const br = Math.round(ev.value('intro.browse', -4, 1)); if (br) for (const bb of [-3, -2]) w.push({ t: T(bb) - 0.02, sx: g.cx - br * g.xs1 * 0.95, sy: g.cy + g.cw * 0.1, click: true }); w.push({ t: T(-1.25) - 0.02, sx: g.cx + g.cw * 0.12, sy: g.cy + g.cw * 0.25, click: true }); }   // v19.3: browse x2, choose; v21: browse side follows the seed (+1 left card, -1 right card, 0 direct)
     else if (IB) { const g = INTRO.geom(W, H); w.push({ t: T(Math.max(1, IB - 2)) - 0.02, sx: g.cx + g.cw * 0.18, sy: g.cy + g.cw * 0.2, click: true }); }
     for (const k of ev.keysIn('camera.shot', 0, 1e6)) { const r = k.v !== 'wide' && LY[k.v]; if (!r) continue; const d = k.dur ?? 1; w.push({ t: T(k.b - d) - 0.02, wx: r[0] + 92, wy: r[1] + (port ? 28 : 26), click: true }); }
@@ -607,8 +607,42 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const notes = (tag('ground.notes') || []).map((q) => String(q).toUpperCase());
     let k = 0; for (const xx of xs) for (const yy of ys) { if (R(k + 30) < 0.45) { k++; continue; } g.font = `600 13px ${UI}`; g.fillStyle = rgba(ink, 0.55); g.fillText(`FIG ${String(k + 1).padStart(3, '0')}`, xx + 6, yy - 6);
       const nt = notes[k % Math.max(1, notes.length)]; if (nt) { g.font = `500 11px ${UI}`; g.fillStyle = rgba(ink, 0.38); nt.split('|').forEach((ln, j) => g.fillText(ln.trim(), xx + 6, yy + 16 + j * 14)); } k++; }
-    g.font = `800 28px ${DISPLAY}`; g.fillStyle = rgba(ink, 0.3); g.fillText('[01]', xs[1] + 14, ys[2] + 40); g.textAlign = 'right'; g.fillText('07/??', W - 40, ys[0] - 14);
+    g.font = `800 28px ${DISPLAY}`; g.fillStyle = rgba(ink, 0.3); g.fillText('[01]', xs[1] + 14, ys[2] + 40); g.textAlign = 'right'; g.fillText('07/??', W - 40, ys[0] - 14); g.textAlign = 'left';
+    // v22.2 BRUTALIST CHAOS (user refs + cc-dr Nigredo rules: overprint until signs lose authority, misregistration, structure forcing through, no decoration
+    // for its own sake: every word is a tag or real data)
+    if (V('ground.brutal', true)) {
+      // misregistered ghost of the big words (a second pass, offset, no blur)
+      g.fillStyle = rgba(ink, 0.07); words.forEach((wd, i) => { g.font = `800 ${bs}px ${DISPLAY}`; const tw = g.measureText(wd).width, sx = Math.min(1, (W - 60) / tw); g.save(); g.translate(30 + 9, (port ? 420 : 300) + i * bs * (port ? 2.6 : 2.2) + 7); g.scale(sx, 1); g.fillText(wd, 0, 0); g.restore(); });
+      // overprinted block: the title word repeated until unreadable
+      const ow = String(tag('titleWord') || D.title || 'U2C').toUpperCase(), oz = port ? 46 : 40, ox = W * (port ? 0.42 : 0.58), oy = H * (port ? 0.58 : 0.18);
+      g.font = `800 ${oz}px ${DISPLAY}`; g.fillStyle = rgba(ink, 0.085); for (let r = 0; r < 7; r++) for (let q = 0; q < 3; q++) g.fillText(ow, ox + q * oz * 2.9 - r * 11, oy + r * oz * 0.58);
+      // typewriter-sheet columns: every word of the video as small ruled text (tags), like the lyric sheet
+      const lines = [...(tag('social.hooks') || []), tag('social.hook'), ...(tag('social.terminal') || []), ...notes.flatMap((n) => n.split('|')), tag('social.caption'), tag('social.hashtags')].filter(Boolean).map((q) => String(q).toUpperCase());
+      g.font = `500 12px ${UI}`; g.fillStyle = rgba(ink, 0.42);
+      const col = (x0, y0, n, w0) => { for (let j = 0; j < n; j++) { const ln = lines[(j * 7 + Math.floor(x0)) % lines.length]; g.fillText(ln.length > 46 ? ln.slice(0, 46) : ln, x0, y0 + j * 15, w0); } };
+      col(W * 0.56, H * (port ? 0.07 : 0.09), port ? 9 : 7, W * 0.4); col(W * 0.04, H * (port ? 0.81 : 0.72), port ? 7 : 6, W * 0.36); col(W * 0.62, H * (port ? 0.86 : 0.82), 6, W * 0.34);
+      // strike-through bars on the second big word
+      if (words[1]) { g.fillStyle = rgba(ink, 0.14); const y1 = (port ? 420 : 300) + bs * (port ? 2.6 : 2.2) - bs * 0.32; g.fillRect(24, y1, W * 0.7, 3); g.fillRect(24, y1 + 14, W * 0.46, 2); }
+      // vertical pill label (ANGEL "EYES EVERYWHERE")
+      const vt = String(tag('ground.vertical') || 'U2C · NO SIMULATION · ©').toUpperCase(), vx = port ? 22 : xs[2] - 20, vy = H * (port ? 0.36 : 0.3); g.save(); g.translate(vx, vy); g.rotate(Math.PI / 2);
+      g.font = `600 13px ${UI}`; const vw = g.measureText(vt).width + 28; g.strokeStyle = rgba(ink, 0.4); g.lineWidth = 1.2; g.beginPath(); g.roundRect ? g.roundRect(0, -12, vw, 24, 12) : g.rect(0, -12, vw, 24); g.stroke(); g.fillStyle = rgba(ink, 0.45); g.fillText(vt, 14, 5); g.restore();
+      // circled numerals (CORTEX), a barcode of the title, a halftone dot field
+      g.lineWidth = 1.2; for (let q = 0; q < 6; q++) { const cx = xs[0] + 40 + (q % 2) * 30, cy = ys[1] + 30 + Math.floor(q / 2) * 30; g.strokeStyle = rgba(ink, 0.35); g.beginPath(); g.arc(cx, cy, 11, 0, 6.2832); g.stroke(); g.font = `700 12px ${DISPLAY}`; g.fillStyle = rgba(ink, 0.45); g.textAlign = 'center'; g.fillText(String([5, 6, 3, 4, 1, 2][q]), cx, cy + 4); g.textAlign = 'left'; }
+      if (PL.barcode) PL.barcode(g, S, W - (port ? 250 : 300), H * (port ? 0.955 : 0.94), port ? 200 : 240, 26, D.title || 'U2C', rgba(ink, 0.35));
+      for (let yy = 0; yy < 9; yy++) for (let xx = 0; xx < 14; xx++) { const r0 = 3.4 * (1 - (xx + yy) / 22); if (r0 <= 0.3) continue; g.fillStyle = rgba(ink, 0.16); g.beginPath(); g.arc(W - 40 - xx * 12, H * (port ? 0.2 : 0.45) + yy * 12, r0, 0, 6.2832); g.fill(); }
+    }
     EDC.set(key, cv); return cv;
+  }
+  // v22.2 screen frame (refs: registration + counters): a hairline inset, corner crosses, a live frame counter and the beat clock, FIG labels. Real data only.
+  const introGround = () => { if (LOOK === 'player' && V('ground.editorial', true)) c.drawImage(editorial(), 0, 0, W, H); };
+  function brutalFrame(t) {
+    if (!V('ground.brutal', LOOK === 'player')) return; const m = 14, ink = S.ink, fz = 12, fr = Math.max(0, Math.round((t + PRE) * FPS)), tot = Math.round((D.duration + PRE) * FPS);
+    c.save(); c.strokeStyle = rgba(ink, 0.18); c.lineWidth = 1; c.strokeRect(m + 0.5, m + 0.5, W - 2 * m - 1, H - 2 * m - 1);
+    c.strokeStyle = rgba(ink, 0.5); c.beginPath(); for (const [x, y] of [[m, m], [W - m, m], [m, H - m], [W - m, H - m]]) { c.moveTo(x - 7, y); c.lineTo(x + 7, y); c.moveTo(x, y - 7); c.lineTo(x, y + 7); } c.stroke();
+    text(c, `F ${String(fr).padStart(4, '0')}/${tot}`, m + 12, H - m - 12, { size: fz, fam: UI, w: 600, ls: 1.4, col: rgba(ink, 0.5) });
+    text(c, `${bbt(Math.max(0, t))} · ${String(tag('titleWord') || '').toUpperCase()}`, W - m - 12, H - m - 12, { size: fz, fam: UI, w: 600, ls: 1.4, col: rgba(ink, 0.5), align: 'right' });
+    text(c, 'FIG 001 · ' + String(tag('player.meta.subject') || 'SUBJECT').toUpperCase(), m + 12, m + 14, { size: fz, fam: UI, w: 600, ls: 1.4, col: rgba(ink, 0.45) });
+    c.restore();
   }
   function ground() {
     c.fillStyle = S.paper; c.fillRect(-W, -H, 3 * W, 3 * H);
@@ -681,14 +715,14 @@ export function createFilm({ D, assets, aspect = '916' }) {
       if (ev.value('intro.style', bI, 'flow') === 'sphere') { const uP = sm((o - 3) / 1.25), uR = sm((o - 3.5) / 1.5);   // v22: the card flies back into the sphere, the sphere turns back to frame 0
         OV['intro.pick'] = lerp(1, ev.value('intro.pick', bI, 0), uP); OV['intro.type'] = 1 - clamp((o - 2.3) / 0.7); OV['intro.player.opacity'] = lerp(1, ev.value('intro.player.opacity', bI, 1), uR); OV['intro.pitch'] = lerp(ev.value('intro.pitch', 0, 0), ev.value('intro.pitch', bI, 0), uR); OV['intro.yaw'] = lerp(ev.value('intro.yaw', 0, 0), ev.value('intro.yaw', bI, 0), uR); }
       b = bI; const Vo = (pth, d) => (pth in OV ? OV[pth] : V(pth, d));
-      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, tI, { S, V: Vo, ev, tag, W, H, look: LOOK, aspect, paused: true, playerIn: !!PRE });
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, tI, { S, V: Vo, ev, tag, W, H, look: LOOK, aspect, paused: true, playerIn: !!PRE, ground: introGround });
       c.setTransform(scale, 0, 0, scale, 0, 0);
-      textures(tI); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+      brutalFrame(t); textures(tI); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: OV['intro.index'], push: OV['intro.push'], enter: OV['intro.enter'] };
     }
     if (RWB && !OUTD && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); t = T(IB) - e * (T(IB) + PRE) + 0.5 / fps * (1 - e); if (PRE) t = Math.max(-PRE + 0.5 / fps, t); else t = Math.max(0.5 / fps, t); paused = t < 0; b = t / BEAT; }   // v19.3: rewinds through the browse back to the first frame
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
-      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player' }); c.setTransform(scale, 0, 0, scale, 0, 0); social(t, true); textCues(t); textures(t); flash(t); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player', ground: introGround }); c.setTransform(scale, 0, 0, scale, 0, 0); brutalFrame(t); social(t, true); textCues(t); textures(t); flash(t); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
     }
     const cam = camera(), z = cam.z; L.view.camZ = z; L.view.base = scale;
@@ -714,7 +748,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     videoDraw('full', 0, 0, W, H);   // v19 video layer, full frame (screen space, over the windows, under halation / overlays)
     if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16));
     if (L.openFx) INTRO.streak(c, L.openFx.px, L.openFx.py, L.openFx.dl);   // v13 intro: directional streak copies on the opening dolly-out
-    result(t); hud(t, ev.shot(b)); social(t, false); outroDialog(t); terminal(t); textCues(t); textures(t); mouse(filmT, cam);
+    result(t); hud(t, ev.shot(b)); brutalFrame(t); social(t, false); outroDialog(t); terminal(t); textCues(t); textures(t); mouse(filmT, cam);
     flash(t);
     glitch(t, scale);
     c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
