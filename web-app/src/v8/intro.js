@@ -226,7 +226,9 @@ export function createIntro(L, A = {}) {
     // ---- v22 ORBIT SPHERE (user ref "Orbit Sphere"): the covers tiled on a 3D sphere; intro.yaw / intro.pitch turn it (the cursor drags it up),
     // intro.pick 0..1 flies the picked tile (the beat cover) out of the sphere onto the card's cover square; at pick 1 the normal card takes over
     const SPH = V('intro.style', 'flow') === 'sphere', pick = SPH ? clamp(V('intro.pick', 1)) : 1;
-    if (SPH) sphere(c, g, S, V('intro.yaw', 0), V('intro.pitch', 0), pick, kick, coverCy);
+    if (SPH) { sphere(c, g, S, V('intro.yaw', 0), V('intro.pitch', 0), pick, kick, coverCy);
+      if (pick >= 1 && V('fx.dof', true)) { const cv = c.canvas, t2 = DOFI.cv && DOFI.cv.width === cv.width && DOFI.cv.height === cv.height ? DOFI.cv : (DOFI.cv = Object.assign(document.createElement('canvas'), { width: cv.width, height: cv.height })), g2 = t2.getContext('2d');
+        g2.clearRect(0, 0, t2.width, t2.height); g2.drawImage(cv, 0, 0); c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.filter = `blur(${(5 * cv.width / W).toFixed(2)}px)`; c.drawImage(t2, 0, 0); c.restore(); } }   // v22.1: the sphere goes soft behind the chosen card
     // ---- cover-flow
     const items = []; for (let i = 0; i < COVER_N; i++) items.push([i, ((((i - pos + 2.5) % 5) + 5) % 5) - 2.5]); items.sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]));
     if (SPH) { items.length = 0; if (pick >= 1) items.push([0, 0]); }   // sphere mode: only the chosen card, once it has landed
@@ -240,7 +242,7 @@ export function createIntro(L, A = {}) {
       if (k <= 0.001) continue;
       const x = g.cx + sg * (Math.min(a0, 1) * g.xs1 + clamp(a0 - 1, 0, 1.5) * g.xs2), y = g.cy + g.dy1 * Math.min(a0, 1) + 22 * clamp(a0 - 1, 0, 1);
       const ang = sg * (0.78 * Math.min(a0, 1) + 0.16 * clamp(a0 - 1, 0, 1)), w = g.cw * k, h = w * TH / TW, hw = w / 2, ca = Math.cos(ang), sa = Math.sin(ang);
-      const nm = names[i] != null ? String(names[i]) : title, ct = cardTex(i, S, nm, credit), n = clamp(Math.ceil(w * dev / 3), 6, 320), shade = 0.52 * Math.min(a0, 1) + 0.12 * clamp(a0 - 1, 0, 1);
+      const nm0 = names[i] != null ? String(names[i]) : title, tyN = SPH ? Math.round(clamp(V('intro.type', 1)) * (nm0.length + String(credit).length)) : 1e9, nm = nm0.slice(0, tyN), ct = cardTex(i, S, nm, String(credit).slice(0, Math.max(0, tyN - nm0.length))), n = clamp(Math.ceil(w * dev / 3), 6, 320), shade = 0.52 * Math.min(a0, 1) + 0.12 * clamp(a0 - 1, 0, 1);
       for (let j = 0; j < n; j++) {
         const u0 = -hw + w * j / n, u1 = -hw + w * (j + 1) / n, s0 = d3 / (d3 + u0 * sa), s1 = d3 / (d3 + u1 * sa), sm = (s0 + s1) / 2, xa = x + u0 * ca * s0, xb = x + u1 * ca * s1, hh = h * sm, top = y - hh / 2;
         c.drawImage(ct.tex, j * TW / n, 0, TW / n, TH, xa, top, xb - xa + 0.7, hh);
@@ -289,6 +291,7 @@ export function createIntro(L, A = {}) {
   }
   // v22 sphere geometry: 6 latitude rings, ~14 tiles on the equator; tile k shows cover (k % 5) except the target (ring 1, lon 0 = the beat cover).
   // Rotation: yaw about the vertical axis, then pitch about the horizontal one; perspective F = 3 R; only the front hemisphere draws, edge tiles darker.
+  const DOFI = { cv: null };
   const SPH_RINGS = [-62, -37, -12, 12, 37, 62].map((d) => d * Math.PI / 180), SPH_TILES = [];
   SPH_RINGS.forEach((lat, ri) => { const n = Math.max(5, Math.round(14 * Math.cos(lat))); for (let j = 0; j < n; j++) SPH_TILES.push({ lat, lon: j * 2 * Math.PI / n, w: Math.cos(lat) * 2 * Math.PI / n * 0.84, h: 0.4 * 0.84, cov: ri === 1 && j === 0 ? 0 : (1 + (SPH_TILES.length % 4)) }); });
   /** Beat-cover target: (lat of ring 1, lon 0); the generator aims the drag so yaw 0 / pitch = SPH_TARGET_LAT puts it front and centre. */

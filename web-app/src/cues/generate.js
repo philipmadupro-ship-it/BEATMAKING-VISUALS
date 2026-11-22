@@ -123,6 +123,8 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     sheet.tracks.push(track('intro.yaw', 'number', 'stage', [key(-8.5, SPIN * 1.1, { ease: 'linear' }), key(-6, SPIN * 0.45, { ease: 'standard' }), key(-4, 0, { ease: 'step' })]));
     sheet.tracks.push(track('intro.pitch', 'number', 'stage', [key(-8.5, 0, { ease: 'step' }), key(-6, 0, { ease: 'easeInOut' }), key(-4, -37 * Math.PI / 180, { ease: 'step' })]));
     sheet.tracks.push(track('intro.pick', 'number', 'stage', [key(-8.5, 0, { ease: 'step' }), key(-3.5, 0, { ease: 'emphasized' }), key(-2, 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.type', 'number', 'stage', [key(-8.5, 0, { ease: 'step' }), key(-2, 0, { ease: 'linear' }), key(-1.1, 1, { ease: 'step' })]));   // v22.1: the card title types in once it lands
+    sheet.tracks.push(track('intro.player.opacity', 'number', 'stage', [key(-8.5, 0, { ease: 'standard' }), key(-7.3, 1, { ease: 'step' })]));   // v22.1: the player fades in (user)
     sheet.tracks.push(track('intro.index', 'number', 'stage', [key(-8.5, 0, { ease: 'step' })]));   // v21 browse kept for intro.style 'flow' (see intro.browse)
     void browse; void s0;
     sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(-8.5, 1, { ease: 'step' })]));   // v22: the sphere needs no fan-out

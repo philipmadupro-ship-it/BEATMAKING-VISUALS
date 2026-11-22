@@ -166,6 +166,11 @@ def doctor(_=None):
     print(f'doctor: {sum(R)}/{len(R)} OK')
 
 def test(_=None):
+    bad = 0   # v22.1: strict ES-module syntax check (catches a // comment that swallowed the rest of a line: node --check alone misses it)
+    for f in glob.glob(os.path.join(WEB, 'src', '**', '*.js'), recursive=True):
+        r = subprocess.run(['node', '--input-type=module', '--check'], stdin=open(f), capture_output=True, text=True)
+        if r.returncode: bad += 1; print('SYNTAX', os.path.relpath(f, WEB), (r.stderr.strip().splitlines() or [''])[0][:120])
+    print(f'syntax: {"all modules OK" if not bad else str(bad) + " broken"}')
     env = dict(os.environ, NOEXPORT='1', CDN_CACHE='/tmp/cdncache')
     for t in ('tests/meters.mjs', 'tests/smoke.mjs'):
         r = subprocess.run(['node', t], cwd=WEB, env=env, capture_output=True, text=True, timeout=900)

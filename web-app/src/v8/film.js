@@ -64,7 +64,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // ---------------------------------------------------------------- camera: wide, or a push / cut to one window
   function framing(id) {
     if (!id || id === 'wide' || !LY[id]) return { x: W / 2, y: H / 2, z: 1 };
-    const [x, y, w, h] = LY[id], pad = 40, z = clamp(Math.min(W / (w + 2 * pad), H / (h + 2 * pad)), 1.15, 2.2), mx = 30;
+    const [x, y, w, h] = LY[id], pad = 40, z = clamp(Math.min(W / (w + 2 * pad), H / (h + 2 * pad)), LOOK === 'player' ? 1 : 1.15, 2.2), mx = 30;
+    if (LOOK === 'player') return { x: x + w / 2, y: y + h / 2, z };   // v22.1 (user: panels framed correctly): the whole panel fits (zoom >= 1) and sits centred; the ground extends past the desktop
     return { x: clamp(x + w / 2, W / (2 * z) - mx, W - W / (2 * z) + mx), y: clamp(y + h / 2, H / (2 * z) - mx, H - H / (2 * z) + mx), z };
   }
   // v17 closed-form spring punch (v17 prompt, build 2): the sum of one critically damped impulse response per kick, x(tau) = (tau / tp) e^(1 - tau / tp),
@@ -485,14 +486,24 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // v18 social layer (Y2K system dialogs, screen space, inside the TikTok safe zone): HOOK on frame 0 (readable with the sound off; a loading bar
   // fills over the intro = anticipation), CTA 1 (comment keyword) and CTA 2 (link in bio) as pop-up alerts; spring pop-in (no fade), hard out.
   // All text is tags (social.*), timing is cue paths (social.cta1.at / .len, social.cta2.at / .len in beats); social.on switches it all.
-  function dialog(cx, cy, wD, title, body, sub, t0, t, prog) {
-    const sc = 0.94 + 0.06 * spr(Math.max(0, t - t0) / 0.35, 9), big = port ? 22 : 0, h = (sub ? 168 : 136) + big, x = cx - wD / 2, y = cy - h / 2, col = S.grey ? '#0a0a0a' : S.hot;
+  // v22.1 TYPING (user: "every notification typed like a computer"): title, then body, then sub, one character per 64th note from typeT = 0;
+  // a block caret rides the end of the line being typed. slow = the hook's slow entrance (rises 46 px on a soft spring over ~0.9 s).
+  // v22.1 DEPTH OF FIELD (user: "a blur on anything not in focus, fading in and out, high luxury"): blur what is already drawn by amt x maxPx
+  // (logical px), via a snapshot + ctx.filter, before the in-focus layer (focused window, dialog) is drawn on top. amt eases with the cause.
+  const DOFC = { cv: null };
+  function dof(amt, maxPx) { if (!(amt > 0.01) || !V('fx.dof', LOOK === 'player')) return; const cv = c.canvas; let t2 = DOFC.cv; if (!t2 || t2.width !== cv.width || t2.height !== cv.height) { t2 = DOFC.cv = document.createElement('canvas'); t2.width = cv.width; t2.height = cv.height; }
+    const g2 = t2.getContext('2d'); g2.clearRect(0, 0, t2.width, t2.height); g2.drawImage(cv, 0, 0); c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.filter = `blur(${(amt * maxPx * cv.width / W).toFixed(2)}px)`; c.drawImage(t2, 0, 0); c.restore(); }
+  function typed(strs, typeT) { if (typeT == null) return strs; let n = Math.max(0, Math.floor(typeT / T(1 / 24) + 1e-6)); return strs.map((q) => { const s0 = String(q || ''), k = Math.min(s0.length, n); n -= k; return s0.slice(0, k); }); }
+  function dialog(cx, cy, wD, title, body, sub, t0, t, prog, typeT = null, slow = false) {
+    const ue = Math.max(0, t - t0) / (slow ? 0.9 : 0.35), sp0 = spr(ue, slow ? 6 : 9), sc = (slow ? 0.9 : 0.94) + (slow ? 0.1 : 0.06) * sp0; cy += slow ? (1 - sp0) * 46 : 0; const big = port ? 22 : 0, h = (sub ? 168 : 136) + big, x = cx - wD / 2, y = cy - h / 2, col = S.grey ? '#0a0a0a' : S.hot;
     c.save(); c.translate(cx, cy); c.scale(sc, sc); c.translate(-cx, -cy);
     L.glass(c, x, y, wD, h, S, { r: 18, tint: 0.62, shadow: 1 });
     c.fillStyle = rgba(S.ink, 0.08); c.fillRect(x + 1, y + 1, wD - 2, 40); c.fillStyle = rgba(S.ink, 0.18); c.fillRect(x, y + 41, wD, 1);
     lights(x + 26, y + 21, S, true);
+    const full3 = [String(title).toUpperCase(), String(body).toUpperCase(), sub ? String(sub).toUpperCase() : ''], totalN = full3.join('').length; [title, body, sub] = typed(full3, typeT); const typing = typeT != null && (title.length + body.length + sub.length) < totalN;
     text(c, String(title).toUpperCase(), x + wD / 2, y + 21, { size: 18, fam: UI, w: 600, ls: 1.5, col: rgba(S.ink, 0.8), align: 'center', maxW: wD - 180 });
     text(c, String(body).toUpperCase(), x + wD / 2, y + 82 + big / 2, { size: port ? 56 : 32, fam: DISPLAY, w: 800, col: S.ink, align: 'center', maxW: wD - 48 });
+    if (typing || (typeT != null && Math.floor(Math.max(0, typeT) / T(1 / 8)) % 2 === 0)) { const line = sub ? 2 : body ? 1 : 0, ly = [y + 21, y + 82 + big / 2, y + 126 + big][line], fz2 = [18, port ? 56 : 32, 20][line], str = [title, body, sub][line]; c.font = `800 ${fz2}px ${line === 1 ? DISPLAY : UI}`; const cw = Math.min(wD - 48, c.measureText(str).width * 1.04); c.fillStyle = rgba(S.ink, 0.9); c.fillRect(x + wD / 2 + cw / 2 + 4, ly - fz2 * 0.42, fz2 * 0.45, fz2 * 0.84); }
     if (sub) text(c, String(sub).toUpperCase(), x + wD / 2, y + 126 + big, { size: 20, fam: UI, w: 500, ls: 1.2, col: rgba(S.ink, 0.65), align: 'center', maxW: wD - 48 });
     if (prog != null) { const bx = x + 24, by = y + h - 18, bw = wD - 48; c.fillStyle = rgba(S.ink, 0.12); c.fillRect(bx, by, bw, 6); const n = Math.floor(clamp(prog) * 24);
       c.fillStyle = S.grey ? S.ink : col; for (let i = 0; i < n; i++) c.fillRect(bx + i * bw / 24 + 1, by, bw / 24 - 2, 6); }
@@ -501,10 +512,10 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function social(t, intro) {
     if (!V('social.on', LOOK === 'player')) return;
     const wD = port ? 900 : 760, cx = W / 2;   // v19.5: wider + bigger hook text (reads at thumb-scroll size)
-    if (intro) { const p = clamp(t / T(IB)); const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hookTxt = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); dialog(cx, port ? 330 : 150, wD, tag('social.title'), hookTxt, null, -1, t, p); return; }   // v19.1: A/B hook variants
+    if (intro) { const p = clamp(t / T(IB)); const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hookTxt = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); const hs = -PRE + 0.25; if (t < hs) return; dialog(cx, port ? 330 : 150, wD, tag('social.title'), hookTxt, null, hs, t, p, t - hs - 0.75, true); return; }   // v22.1: frame 0 = no hook; it rises in slowly, then types   // v19.1: A/B hook variants
     for (const [k, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) {
       const at = V(`social.${k}.at`, def), len = V(`social.${k}.len`, 8); if (b < at || b >= at + len) continue;
-      dialog(cx, port ? H * 0.5 : H * 0.5, wD, tag(`social.${k}.title`), tag(`social.${k}.body`), tag(`social.${k}.sub`), T(at), t, null);
+      dof(Math.min(clamp((b - at) / 0.6), clamp((at + len - b) / 0.6)), 7); dialog(cx, port ? H * 0.5 : H * 0.5, wD, tag(`social.${k}.title`), tag(`social.${k}.body`), tag(`social.${k}.sub`), T(at), t, null, t - T(at) - 0.15);
     }
   }
   // v19 MOUSE LAYER (screen space, drawn last): the cursor drives the film like a real computer. Waypoints in film time (pre-roll < 0):
@@ -542,8 +553,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c.fillStyle = '#ffffff'; c.fill(); c.shadowColor = 'transparent'; c.lineWidth = 1.2; c.strokeStyle = '#000000'; c.stroke(); c.restore();
   }
   // v21 outro dialog (screen space, on the hero shot): JOIN / CREATE PROJECT pops (spring) 5 beats before the cut back, the cursor closes it with x 2 beats later
-  const outroWin = () => (OUTD && RWB ? [RWB - 5, RWB - 3] : null);
-  function outroDialog(t) { const w2 = outroWin(); if (!w2 || b < w2[0] || b >= w2[1] + 0.5) return; const uo = clamp((b - w2[1]) / 0.5), ox = b >= w2[1] ? 1 - uo * uo * (3 - 2 * uo) : 1; if (ox <= 0.01) return; c.save(); c.translate(W / 2, H * 0.5); c.scale(ox, ox); c.translate(-W / 2, -H * 0.5); dialog(W / 2, H * 0.5, port ? 900 : 760, tag('social.outro.title') || 'U2C LAB', tag('social.outro.body') || 'JOIN / CREATE PROJECT', tag('social.outro.sub') || '', T(w2[0]), t, null); c.restore(); }   // v22: CLOSE PROJECT?; after the x click it shrinks away (half a beat) as the dolly starts
+  const outroWin = () => (OUTD && RWB ? [RWB - 5.5, RWB - 3] : null);   // v22.1: 2.5 beats so CLOSE PROJECT? types out fully
+  function outroDialog(t) { const w2 = outroWin(); if (!w2 || b < w2[0] || b >= w2[1] + 0.5) return; const uo = clamp((b - w2[1]) / 0.5), ox = b >= w2[1] ? 1 - uo * uo * (3 - 2 * uo) : 1; if (ox <= 0.01) return; dof(Math.min(clamp((b - w2[0]) / 0.6), ox), 7); c.save(); c.translate(W / 2, H * 0.5); c.scale(ox, ox); c.translate(-W / 2, -H * 0.5); dialog(W / 2, H * 0.5, port ? 900 : 760, tag('social.outro.title') || 'U2C LAB', tag('social.outro.body') || 'JOIN / CREATE PROJECT', tag('social.outro.sub') || '', T(w2[0]), t, null, t - T(w2[0]) - 0.15); c.restore(); }   // v22: CLOSE PROJECT?; after the x click it shrinks away (half a beat) as the dolly starts
   // v21 TERMINAL WORDS (user: "words that come in and out, like on a computer"): term.line clips type in one character per 64th note, hold, then delete backwards
   // (one character per 128th) before the clip ends; a small system toast, bottom-left inside the safe zone; text is a tag string with {vars}
   function terminal(t) {
@@ -668,11 +679,10 @@ export function createFilm({ D, assets, aspect = '916' }) {
       const idx0 = ev.value('intro.index', bI, 0), ent0 = ev.value('intro.enter', bI, 1), u1 = clamp(o / 3), u2 = sm((o - 3) / 2);
       const OV = { 'intro.push': Math.pow(1 - u1, 3), 'intro.index': lerp(0, idx0, u2), 'intro.enter': lerp(1, ent0, u2), 'intro.select': false };
       if (ev.value('intro.style', bI, 'flow') === 'sphere') { const uP = sm((o - 3) / 1.25), uR = sm((o - 3.5) / 1.5);   // v22: the card flies back into the sphere, the sphere turns back to frame 0
-        OV['intro.pick'] = lerp(1, ev.value('intro.pick', bI, 0), uP); OV['intro.pitch'] = lerp(ev.value('intro.pitch', 0, 0), ev.value('intro.pitch', bI, 0), uR); OV['intro.yaw'] = lerp(ev.value('intro.yaw', 0, 0), ev.value('intro.yaw', bI, 0), uR); }
+        OV['intro.pick'] = lerp(1, ev.value('intro.pick', bI, 0), uP); OV['intro.type'] = 1 - clamp((o - 2.3) / 0.7); OV['intro.player.opacity'] = lerp(1, ev.value('intro.player.opacity', bI, 1), uR); OV['intro.pitch'] = lerp(ev.value('intro.pitch', 0, 0), ev.value('intro.pitch', bI, 0), uR); OV['intro.yaw'] = lerp(ev.value('intro.yaw', 0, 0), ev.value('intro.yaw', bI, 0), uR); }
       b = bI; const Vo = (pth, d) => (pth in OV ? OV[pth] : V(pth, d));
       L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, tI, { S, V: Vo, ev, tag, W, H, look: LOOK, aspect, paused: true, playerIn: !!PRE });
       c.setTransform(scale, 0, 0, scale, 0, 0);
-      if (o >= 4) { const sc2 = 0.9 + 0.1 * spr((o - 4) * BEAT / 0.45, 9), hy = port ? 330 : 150; c.save(); c.translate(W / 2, hy); c.scale(sc2, sc2); c.translate(-W / 2, -hy); social(tI, true); c.restore(); }
       textures(tI); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: OV['intro.index'], push: OV['intro.push'], enter: OV['intro.enter'] };
     }
@@ -694,7 +704,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     // v19.3 window focus (user): a clicked panel comes to the front: everything else sinks behind a scrim, the panel is redrawn on top, 3 % bigger
     if (LOOK === 'player' && V('focus.window', true)) { const s2 = ev.shot(b), id2 = s2.to !== 'wide' ? s2.to : s2.from !== 'wide' ? s2.from : null;
       if (id2 && LY[id2]) { const amt = s2.to !== 'wide' ? (s2.from === s2.to ? 1 : s2.u) : 1 - s2.u; if (amt > 0.01) { const r2 = LY[id2], cx2 = r2[0] + r2[2] / 2, cy2 = r2[1] + r2[3] / 2, sc2 = 1 + 0.03 * amt;
-        c.fillStyle = rgba(S.bg, 0.55 * amt * V('focus.dim', 1)); c.fillRect(-W, -H, 3 * W, 3 * H);
+        { const sv = c.getTransform(); dof(amt, 6); c.setTransform(sv); } c.fillStyle = rgba(S.bg, 0.55 * amt * V('focus.dim', 1)); c.fillRect(-W, -H, 3 * W, 3 * H);   // v22.1: the rest goes soft behind the focused window
         // v19.5: a window that rests under the TikTok caption (y > 1548) or the header lifts into the safe band while focused (same spring as the camera)
         let lift = 0; if (port) { const syC = (cy2 - cam.y) * z + H / 2, hh2 = r2[3] * z * sc2 / 2, want = Math.min(Math.max(syC, 230 + hh2), 1530 - hh2); lift = (want - syC) / z * amt; }
         c.save(); c.translate(cx2, cy2 + lift); c.scale(sc2, sc2); c.translate(-cx2, -cy2); card(id2, t, true); c.restore(); } } }
