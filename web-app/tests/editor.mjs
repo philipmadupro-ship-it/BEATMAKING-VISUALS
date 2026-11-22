@@ -144,7 +144,7 @@ ok('palette: Ctrl+K opens, fuzzy search, Enter runs and closes', palOpen && palT
 const palDyn = await ev(() => { const P = window.u2c.palette, a = P.search('cursor on'), w = P.search('lab test'); return { prop: a.filter((c) => c.group === 'Property').length, word: w.filter((c) => c.group === 'Word').length, n: P.commands().length }; });
 ok('palette: every property and every on-screen word is reachable', palDyn.prop > 0 && palDyn.word > 0 && palDyn.n > 150, `${palDyn.n} commands · "cursor on" ${palDyn.prop} properties · "lab test" ${palDyn.word} words`);
 await ev(() => window.u2c.palette.open('cursor')); await wait(100);
-await page.keyboard.press('Enter'); await wait(400);
+await page.keyboard.press('Enter'); await page.waitForFunction(() => document.activeElement && document.activeElement.closest('#insp'), null, { timeout: 5000 }).catch(() => {});
 const jumped = await ev(() => { const a = document.activeElement; return { tab: document.querySelector('.tabs [aria-selected="true"]').dataset.tab, inInsp: !!(a && a.closest('#insp')) }; });
 ok('palette: jump to a property focuses it in the inspector', jumped.tab === 'inspect' && jumped.inInsp, JSON.stringify(jumped));
 await ev(() => window.u2c.palette.open('')); await wait(50); await shot('palette-1440.png'); await page.keyboard.press('Escape'); await wait(100);

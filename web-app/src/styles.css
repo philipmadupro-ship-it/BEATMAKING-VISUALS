@@ -554,3 +554,6 @@ body.col-resizing{cursor:ew-resize;user-select:none}
 .layers::before,.panel::before{content:none}
 .rail-tabs{gap:12px}.rail-tabs button{letter-spacing:.1em}
 .coach.slim{padding:6px 10px;gap:4px 12px}.coach.slim .coach-k{display:none}.coach.slim li b{font-size:12px}.coach.slim li i{width:18px;height:18px;line-height:18px}
+/* perf (software-rendered machines): nothing sits behind the side columns, so their backdrop blur only cost repaints; dialogs dim without a blur */
+.layers,.panel{backdrop-filter:none;-webkit-backdrop-filter:none;background:color-mix(in srgb,var(--panel) 94%,transparent)}
+.review::backdrop{backdrop-filter:none;background:rgba(0,0,0,.66)}
