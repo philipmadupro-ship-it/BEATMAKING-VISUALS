@@ -50,7 +50,7 @@ export function createExporter(app) {
       audioOut = outB;
       // v22.4 lab audio (parity with the native render): keyboard taps on the film's typing moments + the intro voice take from the Media bin
       if (ex.keys !== false && film && film.typeEvents) keyTaps(outB, film.typeEvents(), { gainDb: ex.keysDb ?? -10 });
-      if (PRE > 0 && ex.labSfx !== false) { room(outB, PRE + 0.4, { gainDb: -14 }); if ((app.cues.tags('').sfx || {}).stove !== false) stove(outB, 0.05); }   // v22.5 room; v23 the stove lights the lab
+      if (PRE > 0 && ex.labSfx !== false) { room(outB, PRE + 0.4, { gainDb: -14 }); if ((app.cues.tags('').sfx || {}).stove !== false) stove(outB, 0.05, { gainDb: 0 }); }   // v22.5 room; v23 the stove lights the lab
       const vt = app.media && app.media.voice; if (PRE > 0 && vt && ex.voice !== false) { try { const take = await app.clock.ctx.decodeAudioData(await vt.blob.arrayBuffer()); { const vt2 = app.cues.tags('').voice || {}, sd = String(vt2.sub ?? '-8'); placeVoice(outB, take, ex.voiceAts || String(vt2.ats || VOICE_ATS).split(',').map(Number), { subDb: /^(off|none|false)$/i.test(sd) ? null : +sd }); } } catch (err) { console.warn('[u2c] voice take could not be decoded', err); } }
     }
     const vl = app.videoLayer && app.videoLayer.loaded ? app.videoLayer : null, codecs = await canOffline(app.libs.mediabunny, W, H, mbps, ex.fps); let res;

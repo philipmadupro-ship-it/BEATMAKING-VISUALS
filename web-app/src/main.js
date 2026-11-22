@@ -23,6 +23,7 @@ import { createPanels } from './ui/panels.js';
 import { createMedia } from './ui/media.js';
 import { createVoiceLab } from './ui/voicelab.js';
 import { createTips } from './ui/tips.js';
+import { createPip } from './ui/pip.js';
 import { createShotList } from './ui/shotlist.js';
 import { createAddLayer, createWorkspaces, createCoverPresets } from './ui/addlayer.js';
 import { createReview } from './ui/review.js';
@@ -80,7 +81,7 @@ async function boot() {
   // v22: edit in the timeline (inline values, text clips, context menu), task controls + coach, the status strip
   app.tlEdit = createTimelineEdit(app); app.quick = createQuick(app); app.statusBar = createStatusBar(app);
   // v23: + Layer menu (grouped, described), workspaces (Edit / Motion / Audio / Export), Adobe-style rich tooltips
-  app.addLayer = createAddLayer(app); app.workspaces = createWorkspaces(app); app.tips = createTips(document);
+  app.addLayer = createAddLayer(app); app.workspaces = createWorkspaces(app); app.tips = createTips(document); app.pip = createPip(app);
   store.subscribe(() => { const tr = store.session.track, el = document.getElementById('mediaAud'); if (el) el.textContent = tr ? `${tr.meta.name} · ${Math.round(tr.bpm)} BPM · ${tr.key || ''}` : ''; });
   motion.press(document.body);
   let userClip = false;

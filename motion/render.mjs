@@ -134,7 +134,7 @@ if (ENGINE === 'v9') {
     // move, a relay clunk when each pop-up opens and on its x, data chatter on each terminal line, a quiet Geiger bed under the whole video
     const SD = process.env.U2C_SFX_DIR || '/home/user/research/sfx', has = (n) => fs.existsSync(path.join(SD, n + '.mp3')), smp = (t, n, db, extra = {}) => { if (has(n) && t >= 0) keep.push({ t, kind: 'sample', file: path.join(SD, n + '.mp3'), db, ...extra }); };
     // v22.7 (user: calmer, organic busy lab): lab ambience bed under the intro, glass clinks and little dings, no CRT / centrifuge / bloops
-    if (P > 0 && (tg('sfx.stove') ?? true) !== false) smp(0.05, 'stove', -3);   // v23 the stove lights the lab
+    if (P > 0 && (tg('sfx.stove') ?? true) !== false) smp(0.05, 'stove', 6);   // v23 the stove lights the lab
     if (P > 0) { smp(0.6, 'labamb', -7, { loop: true, dur: P - 0.2 }); for (const [tc, db] of [[1.1, -14], [2.9, -12], [5.2, -13], [6.9, -15]]) smp(tc, 'clink', db); smp(0.25, 'ding', -15); if (sheet.base['intro.style'] === 'sphere') { smp(P + T2(SPK) + 0.03, 'ding', -11); smp(P + T2(STY), 'clink', -10); } }   // v23: sparser, quieter (a room you could stand in)
     for (const tr of sheet.tracks) if (tr.path === 'camera.shot') for (const k of tr.keys) if (k.v !== 'wide') smp(P + T2(k.b - (k.dur ?? 1)), 'scan', -2);
     for (const kk of ['cta1', 'cta2']) { const at = sheet.base[`social.${kk}.at`], ln = sheet.base[`social.${kk}.len`] ?? 8; if (at != null) { smp(P + T2(at), 'relay', -6); smp(P + T2(at + ln) - 0.02, 'relay', -9); } }

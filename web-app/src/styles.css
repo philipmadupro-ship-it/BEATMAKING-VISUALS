@@ -591,3 +591,60 @@ details.legacy .lookgrid{margin-top:8px}
 .mk.section{grid-template-columns:62px minmax(0,1fr) auto}
 .markers .group-h{flex-wrap:wrap;gap:6px}
 .mk-v{all:unset;cursor:pointer;width:24px;height:24px;display:grid;place-items:center;color:var(--muted);font:600 14px var(--sans);border-radius:var(--radius)}.mk-v:hover{color:var(--accent)}.mk-v:focus-visible{outline:2px solid var(--accent)}
+/* ===================================================================================================================
+   v23.2 ADOBE-STYLE EDITOR + LIQUID GLASS CONTROLS (user: Adobe-like, always see the preview, better sliders / buttons)
+   Panels: flat graphite, 1px hairlines, small caps headers, dense 11-12px UI. Controls: liquid glass (translucent fill, blur,
+   a specular top edge, an inner shadow, a soft accent glow when active). Every control keeps its focus ring. */
+:root{--glass:color-mix(in srgb,var(--fg) 6%,transparent);--glass-2:color-mix(in srgb,var(--fg) 11%,transparent);--glass-hi:color-mix(in srgb,#fff 22%,transparent);--glass-edge:color-mix(in srgb,var(--fg) 16%,transparent);--glass-sh:0 1px 0 var(--glass-hi) inset,0 -1px 0 rgba(0,0,0,.25) inset,0 4px 14px rgba(0,0,0,.28);--r-ctl:8px}
+:root[data-theme="light"]{--glass-hi:rgba(255,255,255,.9);--glass-sh:0 1px 0 rgba(255,255,255,.9) inset,0 -1px 0 rgba(0,0,0,.06) inset,0 3px 10px rgba(0,0,0,.08)}
+#studio .layers,#studio .panel{background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 96%,var(--fg) 4%),var(--panel))}
+#studio .pane-h,#studio .tabs,#studio .rail-tabs{border-bottom:1px solid var(--line)}
+#studio .lbl{font:600 10px/1.3 var(--sans);letter-spacing:.1em}
+#studio .group{padding-bottom:10px;border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+#studio .group:last-child{border-bottom:0}
+#studio .group-h{min-height:28px}
+/* buttons, segmented controls, icon buttons: liquid glass */
+.btn,.ib,.seg{background:linear-gradient(180deg,var(--glass-2),var(--glass));border:1px solid var(--glass-edge);border-radius:var(--r-ctl);box-shadow:var(--glass-sh);-webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4)}
+.btn:hover,.ib:hover{border-color:color-mix(in srgb,var(--accent) 60%,var(--glass-edge));background:linear-gradient(180deg,color-mix(in srgb,var(--fg) 15%,transparent),var(--glass))}
+.btn:active,.ib:active{box-shadow:0 1px 3px rgba(0,0,0,.35) inset}
+.btn.primary{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 100%,#fff 18%),var(--accent));border-color:color-mix(in srgb,var(--accent) 80%,#fff 20%);box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 6px 18px color-mix(in srgb,var(--accent) 35%,transparent)}
+.btn[aria-pressed="true"],.ib[aria-pressed="true"]{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 26%,transparent),color-mix(in srgb,var(--accent) 12%,transparent));border-color:color-mix(in srgb,var(--accent) 70%,transparent);box-shadow:var(--glass-sh),0 0 14px color-mix(in srgb,var(--accent) 22%,transparent)}
+.seg{padding:2px;gap:2px;overflow:visible}
+.seg button{border:0;border-radius:6px;transition:background .18s var(--ease),color .18s var(--ease)}
+.seg button[aria-pressed="true"]{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 100%,#fff 16%),var(--accent));color:var(--on-accent);box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 2px 8px color-mix(in srgb,var(--accent) 35%,transparent)}
+.inp{background:color-mix(in srgb,var(--bg) 82%,transparent);border:1px solid var(--glass-edge);border-radius:var(--r-ctl);box-shadow:0 1px 2px rgba(0,0,0,.35) inset}
+.inp:focus{border-color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.35) inset,0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+/* sliders: a recessed glass track with the value filled, a glass bead thumb (Adobe scrub feel: bigger hit area, no jump) */
+input[type=range]{-webkit-appearance:none;appearance:none;height:22px;background:transparent;cursor:ew-resize;--v:50%}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:999px;background:linear-gradient(90deg,var(--accent) 0 var(--v),color-mix(in srgb,var(--fg) 10%,transparent) var(--v));box-shadow:0 1px 2px rgba(0,0,0,.45) inset,0 1px 0 var(--glass-hi)}
+input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:color-mix(in srgb,var(--fg) 10%,transparent);box-shadow:0 1px 2px rgba(0,0,0,.45) inset}
+input[type=range]::-moz-range-progress{height:6px;border-radius:999px;background:var(--accent)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-6px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 18%,color-mix(in srgb,#fff 70%,var(--accent)) 40%,color-mix(in srgb,var(--accent) 70%,#000) 100%);border:1px solid rgba(255,255,255,.55);box-shadow:0 2px 6px rgba(0,0,0,.45),0 0 0 4px color-mix(in srgb,var(--accent) 0%,transparent);transition:box-shadow .15s var(--ease),transform .15s var(--ease)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 18%,color-mix(in srgb,#fff 70%,var(--accent)) 40%,color-mix(in srgb,var(--accent) 70%,#000) 100%);border:1px solid rgba(255,255,255,.55);box-shadow:0 2px 6px rgba(0,0,0,.45)}
+input[type=range]:hover::-webkit-slider-thumb,input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 2px 6px rgba(0,0,0,.45),0 0 0 5px color-mix(in srgb,var(--accent) 22%,transparent);transform:scale(1.08)}
+input[type=range]:active::-webkit-slider-thumb{transform:scale(.95)}
+.ctl output{background:var(--glass);border:1px solid var(--glass-edge);border-radius:6px;padding:2px 5px}
+/* switches: glass pill */
+.sw i{background:linear-gradient(180deg,var(--glass),var(--glass-2))!important;border:1px solid var(--glass-edge)!important;box-shadow:0 1px 2px rgba(0,0,0,.4) inset!important}
+.sw input:checked+i{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 100%,#fff 15%),var(--accent))!important;box-shadow:0 0 12px color-mix(in srgb,var(--accent) 30%,transparent)!important}
+/* the monitor reads as the centre of the workspace */
+#studio .stage{border-radius:10px;box-shadow:0 0 0 1px var(--line),0 18px 40px rgba(0,0,0,.35) inset}
+/* narrow layouts: the monitor stays pinned while the panels scroll underneath */
+@media (max-width:900px){#studio .stage{position:sticky;top:0;z-index:6;height:38vh;min-height:220px}}
+/* floating glass mini-monitor (when the monitor is out of view) */
+.pip{position:fixed;right:16px;bottom:16px;z-index:55;padding:6px;border-radius:12px;background:color-mix(in srgb,var(--panel) 55%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);border:1px solid var(--glass-edge);box-shadow:var(--glass-sh),0 18px 40px rgba(0,0,0,.45);cursor:grab;touch-action:none}
+.pip canvas{display:block;border-radius:8px;background:var(--stage)}
+.pip-l{position:absolute;left:12px;top:10px;font:600 9px var(--sans);letter-spacing:.12em;color:#fff;text-shadow:0 1px 2px #000;pointer-events:none}
+.pip-x{all:unset;cursor:pointer;position:absolute;right:10px;top:8px;width:20px;height:20px;display:grid;place-items:center;border-radius:50%;background:rgba(0,0,0,.45);color:#fff;font:600 13px var(--sans)}
+.pip:focus-visible,.pip-x:focus-visible{outline:2px solid var(--accent)}
+@media (prefers-reduced-transparency:reduce){.btn,.ib,.seg,.pip{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--panel)}}
+/* v23.2: workspaces live in the top bar (studio only); the viewer toolbar stays ONE row so the monitor keeps its height */
+body:has(#studio[hidden]) #wsSeg{display:none}
+#wsSeg{margin-right:auto;margin-left:12px}
+#studio .stage-bar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:6px}#studio .stage-bar::-webkit-scrollbar{display:none}
+#studio .stage-bar>*{flex:none}#studio .stage-bar .inrow{flex-wrap:nowrap}
+
+@media (max-width:900px){#wsSeg{display:none}}
+/* dock toolbars stay as dense as before (the lanes must fit a 900 px laptop screen) */
+#dock .seg{padding:0;gap:0}#dock .seg button{border-radius:0}#dock .seg button:first-child{border-radius:7px 0 0 7px}#dock .seg button:last-child{border-radius:0 7px 7px 0}
+#dock .btn.small,#dock .ib.sm,#dock .inp.small{min-height:26px}
