@@ -96,7 +96,7 @@ export function createMonitor(app) {
   let grains = 0;
 
   // ---------------------------------------------------------------- filmstrip along the ruler
-  const strip = $('#thumbs'), sc = $('#thumbCv'), sctx = sc.getContext('2d'), cache = new Map(); let cacheKey = '', pendingKey = '', keyAt = 0, lastDraw = '';
+  const strip = $('#thumbs'), sc = $('#thumbCv'), sctx = sc.getContext('2d'), cache = new Map(); let cacheKey = '', pendingKey = '', keyAt = 0, lastDraw = '', lastThumb = 0, thumbCost = 0;
   function setThumbs(on) { pref.thumbs = on == null ? !pref.thumbs : !!on; strip.hidden = !pref.thumbs; $('#thumbsBtn').setAttribute('aria-pressed', String(pref.thumbs)); save(); lastDraw = ''; }
   $('#thumbsBtn').addEventListener('click', () => setThumbs());
   strip.hidden = !pref.thumbs; $('#thumbsBtn').setAttribute('aria-pressed', String(pref.thumbs));
@@ -111,8 +111,10 @@ export function createMonitor(app) {
     const { W, H } = ASPECTS[p.aspect], th = r.height, tw = th * W / H, T = tl(), V = T.view(), ppb = (T.xOf(1) - T.xOf(0)) || 1, q = Math.pow(2, Math.round(Math.log2(Math.max(1 / 16, tw / ppb))));
     const head = T.xOf(V.a), b0 = Math.max(0, Math.floor(V.a / q) * q), b1 = Math.min(V.total, V.z);
     // render missing thumbs within a small per-frame budget (not while playing: the preview has priority)
-    if (!app.clock.playing) { const t0 = performance.now(); for (let b = b0; b < b1 && performance.now() - t0 < 8; b += q) { const k = b.toFixed(4); if (cache.has(k)) continue;
-      const s = makeSurface(Math.round(tw * 2), Math.round(th * 2)); app.renderFrame(p.inT + (b + q / 2) * tr.spb, s, p, tr, {}); cache.set(k, s.canvas); lastDraw = ''; } }
+    // one thumb per ~120 ms (+ the time the last one took), so a slow machine keeps its frame rate for the preview and the UI
+    if (!app.clock.playing && now - lastThumb > 120 + thumbCost * 2 && !document.querySelector('dialog[open]')) for (let b = b0; b < b1; b += q) { const k = b.toFixed(4); if (cache.has(k)) continue;
+      const s = makeSurface(Math.round(tw * 2), Math.round(th * 2)), t1 = performance.now(); app.renderFrame(p.inT + (b + q / 2) * tr.spb, s, p, tr, {}); cache.set(k, s.canvas); lastDraw = '';
+      thumbCost = performance.now() - t1; lastThumb = performance.now(); break; }
     const dk = [V.a.toFixed(3), V.z.toFixed(3), cache.size, sc.width].join('|'); if (dk === lastDraw) return; lastDraw = dk;
     sctx.setTransform(dpr, 0, 0, dpr, 0, 0); sctx.clearRect(0, 0, r.width, th);
     for (let b = b0; b < b1; b += q) { const c = cache.get(b.toFixed(4)); const x = T.xOf(b), w = q * ppb; if (x + w < head || !c) continue;

@@ -263,3 +263,43 @@ stills of the same sheet differ by 0 (bit-identical, same browser build) when fe
 - **Blur** (viewer bar): the preview runs the export's motion blur (shared `createBlur` in `engine/render.js`) on the export frame grid.
 - **Review** (Export tab): key moments rendered as the MP4 will have them (pre-roll, blur), checks (loop seam vs frame 0, covers, length, blur, intro, clicks, video layer, long text) and every word in the video as live, undoable fields.
 - Fix: switching look / stage also updates the sheet base, and the film reads look / stage at beat 0 during the pre-roll. Before this fix, a web Player export opened its intro without the hook, cursor and play icon.
+
+## v21 editor (U2C Studio)
+Research (ideas only, no code copied): omniclip (MIT: project manager, multi-resolution export), Theatre.js studio (focus range
+loop, keyframe copy / paste), Remotion Player (frame stepping, loop range), Tweakpane (dense monospaced property rows), Kdenlive /
+Olive / Shotcut feature lists (proxy / playback resolution, render queue, guides), Premiere / Media Encoder / Resolve conventions.
+- **Projects** (header → Projects, Cmd/Ctrl+S save, Shift+Cmd/Ctrl+S dialog, home → Recent projects): named projects in IndexedDB
+  `u2c-projects` (index in localStorage `u2c.projects.index`): save, save as new, open, duplicate, rename, delete. A record holds the
+  project settings, the cue sheet (with tags), the metadata overrides, the user covers (blobs) and the audio file (demo: re-synthesised).
+  Opening loads the audio (analysis as usual), restores section / look / stage / aspect / covers and adopts the sheet as saved
+  (`actions.adoptSheet`: no regeneration over it). **.u2cproj** = JSON `{format: 'u2cproj', version: 1, name, project, sheet, tags,
+  covers: [{slot, name, data: dataURL}], audio: {name, data?} , thumb}`; "include audio" embeds the beat. Import stores a new project and opens it.
+  API `u2c.projects.{list, save, saveAs, open, duplicate, rename, remove, exportFile, importFile, openDialog, current}`.
+- **Metadata** (right panel → Meta): title, producer, BPM (regrid), key, date (tag `date`, `{today}` = render date), tags
+  (`player.meta.tags`), and the metadata card's FORMAT (bit depth, sample rate), DURATION and SIZE. File values are overrides in
+  `project.meta = {bits, sr, bytes, duration}` applied to the section's film data (`D.fileInfo`, `D.song.duration`) through a
+  wrapper on `clip.film`, so preview, Review and export agree. **Every word on screen**: search over every tag leaf, edit in place
+  (one undo step per field). API `u2c.meta.{fields, set(field, v), search(q), focusWord(path)}`.
+- **Command palette** (Cmd/Ctrl+K, header search button): ~450 commands: actions (playback, edit, timeline, viewer, look, panels,
+  project, export queue), every registry property (jump: inspector row focused + its lane), every on-screen word (jump: Meta search).
+  Fuzzy (letters in order, spaces ignored, word starts and recent commands first). **Shortcut sheet** (?): every key, 4 groups.
+- **Keyframes across lanes**: Alt+Cmd/Ctrl+V (or the palette "Paste keys into the focused lane") pastes the clipboard into the
+  focused lane of the same kind at the playhead, values clamped to the destination's range.
+- **Marker list** (left rail → Markers): sheet markers + section starts in time order; click a time to jump, rename in place, ×
+  delete, + Marker, filter.
+- **Program monitor**: Guides (action-safe 93 %, title-safe 90 %, rule of thirds, centre cross), preview resolution Full / 1/2 / 1/4
+  (export is always full), Compare A/B (wipe: A = current, B = "Snap B" or the last saved project version; B renders with its own
+  sheet, tags, look and stage), frame back / forward buttons, Loop I/O button (4 bars at the playhead when no loop is set).
+  Timeline: **audio scrub** while dragging the playhead in the ruler (70 ms grains), **filmstrip** of the film along the ruler
+  ("Film" toggle; rendered lazily with renderFrame, cached per sheet version, click to jump).
+- **Export queue** (Export tab, top): presets TikTok 9:16 30 s, Reels 9:16 15 s, Shorts 9:16 60 s, YouTube 16:9 full; Run queue
+  renders them in turn with a progress row each; file names from a template (`{title} {preset} {aspect} {len} {look} {stage} {bpm}
+  {key} {date} {time} {n}`). An item of the current section length keeps the current section and sheet (the other aspect drops
+  window geometry); other lengths get their auto-picked section and a regenerated sheet with your tags. API `u2c.queue`.
+- **Workspace**: drag the side panel edges to resize (double-click resets, ← → when focused), hide / show the side panels (viewer
+  bar buttons, Cmd/Ctrl+Alt+[ / ]), remembered per browser; toasts for project / queue messages.
+- **Look** (v21 design pass): dossier rows (hairline rules, small dim keys, bold values), phosphor glow on headings and readouts,
+  FIG / [index] labels and registration crosshairs on the panels, the program monitor dominant (scanlines and centre hairlines on
+  its frame only), halftone accent and the project name huge and soft behind the home hero and the monitor; no opacity fades on entrance.
+- Tests: `web-app/tests/editor.mjs` (Playwright) exercises all of the above, renders 2 queue items (skipped with NOEXPORT=1), and
+  takes 1440x900 + 390x844 screenshots (`SHOTS=dir`).
