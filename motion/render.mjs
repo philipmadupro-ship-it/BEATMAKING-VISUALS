@@ -166,7 +166,14 @@ run('npx', ['hyperframes', 'render', '.', '-c', comp, '-o', tmp, ...q, '--fps', 
 const useClicks = CLICKS.length && !/^(off|0|false|no)$/i.test(String(args.clicks ?? 'on'));
 if (useClicks) run('python3', [path.join(ROOT, 'tools', 'clicks.py'), '--out', path.join(FILM, 'renders', 'clicks.wav'), '--dur', String(D.duration + PRE), '--times', CLICKS.join(','), '--gain-db', String(args['click-db'] ?? -16)], { quiet: true });
 const audioIn = path.join(FILM, 'data', id + '.wav'), dly = PRE > 0 ? `adelay=${Math.round(PRE * 1000)}:all=1,` : '';
-run('ffmpeg', ['-v', 'error', '-y', '-i', tmp, '-i', audioIn, ...(useClicks ? ['-i', path.join(FILM, 'renders', 'clicks.wav'), '-filter_complex', `[1:a]${dly}aresample=48000[b];[2:a]aresample=48000[k];[b][k]amix=inputs=2:normalize=0:duration=first[a]`, '-map', '0:v:0', '-map', '[a]'] : ['-map', '0:v:0', ...(PRE > 0 ? ['-af', `adelay=${Math.round(PRE * 1000)}:all=1`] : []), '-map', '1:a:0']), '-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-movflags', '+faststart', '-shortest', out], { quiet: true });
+// v22.1 lab voice (offline Piper, tools/voice.py): "<title>. Experimentation." while the hook rises, "Initiating playback." just before the play click
+const useVoice = look === 'player' && PRE >= 3 && !args.test && !/^(off|0|false|no)$/i.test(String(args.voice ?? 'on')) && fs.existsSync(path.join(ROOT, 'tools', 'voice.py'));
+if (useVoice) run('python3', [path.join(ROOT, 'tools', 'voice.py'), '--title', String(D.title || args.title || 'U2C'), '--dur', String(D.duration + PRE), '--out', path.join(FILM, 'renders', 'voice.wav')], { quiet: true });
+{ const ins = ['-i', tmp, '-i', audioIn], parts = [`[1:a]${dly}aresample=48000[b]`], lab = ['[b]']; let n = 2;
+  if (useClicks) { ins.push('-i', path.join(FILM, 'renders', 'clicks.wav')); parts.push(`[${n}:a]aresample=48000[k]`); lab.push('[k]'); n++; }
+  if (useVoice) { ins.push('-i', path.join(FILM, 'renders', 'voice.wav')); parts.push(`[${n}:a]aresample=48000[v]`); lab.push('[v]'); n++; }
+  const fc = parts.join(';') + `;${lab.join('')}amix=inputs=${lab.length}:normalize=0:duration=first[a]`;
+  run('ffmpeg', ['-v', 'error', '-y', ...ins, '-filter_complex', fc, '-map', '0:v:0', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-movflags', '+faststart', '-shortest', out], { quiet: true }); }
 const lo = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', out, '-af', 'ebur128=peak=true', '-f', 'null', '-'], { encoding: 'utf8' }).stderr;
 const s = lo.slice(lo.lastIndexOf('Summary:'));
 console.log(`${out}  ${((Date.now() - t0) / 1000).toFixed(0)} s  I ${s.match(/I:\s+(-?[\d.]+)/)[1]} LUFS  TP ${s.match(/Peak:\s+(-?[\d.]+)/)[1]} dBTP  section: song bars ${D.song.startBar}-${D.song.startBar + D.bars - 1}`);
