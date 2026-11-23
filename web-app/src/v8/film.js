@@ -769,7 +769,9 @@ export function createFilm({ D, assets, aspect = '916' }) {
   }
   // v14 stage `white` (NIGREDO INVERSE): the finished frame inverted, the same op as the flash (grey in = grey out, so R=G=B holds)
   function invertAll() { const neg = ev.clipsAt('fx.invert', b).some((q) => q.v !== false && q.v !== 0); if (!S.inverse === !neg) return;   // v15: stage inverse XOR the fx.invert clip
-    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'difference'; c.fillStyle = '#ffffff'; c.fillRect(0, 0, c.canvas.width, c.canvas.height); c.restore(); }
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'difference'; c.fillStyle = '#ffffff'; c.fillRect(0, 0, c.canvas.width, c.canvas.height);
+    if (!S.grey && neg) { c.globalCompositeOperation = 'color'; c.fillStyle = S.bg; c.fillRect(0, 0, c.canvas.width, c.canvas.height); }   // v25 colour stages: the negative keeps the stage's hue (an inverted Albedo stays bone / iron, not navy)
+    c.restore(); }
   function flash(t) { const f = fidx(t); if (ev.keysIn('fx.flash', 0, NB * 4 + 1).some((k) => fidx(T(k.b) + 0.5 / FPS) === f)) { c.globalCompositeOperation = 'difference'; c.fillStyle = S.grey ? '#ffffff' : S.ink; c.fillRect(0, 0, W, H); c.globalCompositeOperation = 'source-over'; } }
   /** Draw clip time t into ctx (a canvas of width W*scale). opts: {ev, fps (sample at the frame centre), look, stage}. */
   function render(ctx, t, opts = {}) {
