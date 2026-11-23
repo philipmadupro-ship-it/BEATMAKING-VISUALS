@@ -33,6 +33,13 @@ export const INTRO_HIT = { play: null, fall: { z: 1, px: 0, py: 0 } };   // v19:
 // drop (ln z = lerp(fall, ln zmax, push)), so the outro's fall into the cover never stops: it carries through the seam, the whole pre-roll, the
 // push and the match cut. A = ln 1.18 (9:16) / ln 1.10 (16:9): the player stays inside the frame. intro.fall scales it (0 = a locked-off camera).
 export const FALL_Z = { port: 1.18, land: 1.10 };
+// v27 THE MIRROR (docs/MOTION-v27.md): the intro is the time-reverse of the v25 outro. Frame 0 = the intro world zoomed into the card's cover
+// (the cover fills the frame, its centre fixed on screen); the camera zooms OUT on the outro's own curve, mirrored (ln z = ln z0 * (1 - tukey(u)),
+// u = 0..1 over the outro zoom's duration o.zoomS), speed 0 at the seam, and lands on the paused player; the v26 fall is added on top, so the
+// camera turns round without a stop and falls back into the cover through the drop push. tukey: the outro's Tukey-window progress (taper 0.3).
+const TK = 0.3, tkA = (x) => 0.5 * (x - TK / Math.PI * Math.sin(Math.PI * x / TK));
+export const tukey = (u) => { u = clamp(u); const s0 = u < TK ? tkA(u) : u <= 1 - TK ? TK / 2 + (u - TK) : TK / 2 + (1 - 2 * TK) + (TK / 2 - tkA(1 - u)); return s0 / (1 - TK); };
+export const tukeyV = (u) => { u = clamp(u); const v = u < TK ? 0.5 * (1 - Math.cos(Math.PI * u / TK)) : u <= 1 - TK ? 1 : 0.5 * (1 - Math.cos(Math.PI * (1 - u) / TK)); return v / (1 - TK); };
 const cd30 = (tau) => { const w = 30, ts = 6.64 / w, n = 1 - (1 + w * ts) * Math.exp(-w * ts); return tau <= 0 ? 0 : tau >= ts ? 1 : (1 - (1 + w * tau) * Math.exp(-w * tau)) / n; };   // the v25 reveal spring (zeta 1, omega 30, 99 % at 0.22 s)
 export function coverTarget(L, look, aspect) {
   const cr = L && L.coverRect, r = typeof cr === 'function' ? cr() : cr;
@@ -125,15 +132,16 @@ export function createIntro(L, A = {}) {
     if (S.grey) return null;
     const st = S.spec.map(hexRgb).sort((a, b) => (a[0] + a[1] + a[2]) - (b[0] + b[1] + b[2])); return st;
   }
-  function coverCanvas(i, S) {
-    const key = `cv${i}|${S.name}`; if (CACHE.v !== (covers.v || 0)) { CACHE.clear(); CACHE.v = covers.v || 0; } let cv = CACHE.get(key); if (cv) return cv;
-    cv = mk(TW, TW); const g = cv.getContext('2d', { willReadFrequently: true }), im = covers[i];
-    if (im) { const s = Math.max(TW / im.width, TW / im.height); g.drawImage(im, (TW - im.width * s) / 2, (TW - im.height * s) / 2, im.width * s, im.height * s); }
+  function coverCanvas(i, S, hi = false) {   // v27 hi: the cover at its source resolution (up to 1536 px), for the zoomed-in frame 0
+    const im = covers[i], N = hi && im ? Math.max(TW, Math.min(1536, im.width, im.height)) : TW;
+    const key = `cv${i}|${S.name}|${N}`; if (CACHE.v !== (covers.v || 0)) { CACHE.clear(); CACHE.v = covers.v || 0; } let cv = CACHE.get(key); if (cv) return cv;
+    cv = mk(N, N); const g = cv.getContext('2d', { willReadFrequently: true });
+    if (im) { const s = Math.max(N / im.width, N / im.height); g.drawImage(im, (N - im.width * s) / 2, (N - im.height * s) / 2, im.width * s, im.height * s); }
     else {   // procedural placeholder: rings + a diagonal sweep, seeded by the card index
-      const gr = g.createLinearGradient(0, 0, TW, TW); gr.addColorStop(0, '#202020'); gr.addColorStop(1, '#8a8a8a'); g.fillStyle = gr; g.fillRect(0, 0, TW, TW);
-      g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 3; for (let k = 1; k < 7; k++) { g.beginPath(); g.arc(TW * (0.3 + 0.1 * i), TW * 0.55, k * 48, 0, 7); g.stroke(); }
+      const gr = g.createLinearGradient(0, 0, N, N); gr.addColorStop(0, '#202020'); gr.addColorStop(1, '#8a8a8a'); g.fillStyle = gr; g.fillRect(0, 0, N, N);
+      g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 3 * N / 600; for (let k = 1; k < 7; k++) { g.beginPath(); g.arc(N * (0.3 + 0.1 * i), N * 0.55, k * 48 * N / 600, 0, 7); g.stroke(); }
     }
-    const d = g.getImageData(0, 0, TW, TW), px = d.data, R = ramp(S);
+    const d = g.getImageData(0, 0, N, N), px = d.data, R = ramp(S);
     for (let p = 0; p < px.length; p += 4) {
       const lum = (0.299 * px[p] + 0.587 * px[p + 1] + 0.114 * px[p + 2]) / 255;
       if (!R) { const v = Math.round(255 * Math.pow(lum, 1.08)); px[p] = px[p + 1] = px[p + 2] = v; }
@@ -206,6 +214,27 @@ export function createIntro(L, A = {}) {
     const tau = clamp((t + pre) / (pre + ib * BEAT)), A = Math.log(o.H >= o.W ? FALL_Z.port : FALL_Z.land) * Math.max(0, o.V('intro.fall', 1));
     return A * (tau - Math.sin(Math.PI * tau) / Math.PI);
   }
+  const coverCyOf = (g) => g.cy - g.cw * TH / TW / 2 + g.cw / 2;   // the card's cover centre (world y)
+  /** v27: the mirror is on for the player look's sphere intro with a pre-roll whose beat cover is already on the card at frame 0 (no pick flight).
+   *  z0 = the zoom that makes the cover fill the frame with its centre where it rests (object-fit cover about a fixed point, + the 6 % overscan). */
+  function mirror(o, ev) {
+    const pre = +o.pre || 0; if (!(pre > 0) || o.look !== 'player' || !beats(ev)) return null;
+    const b0 = (-pre + 0.5 / D.fps) / BEAT; if (ev.value('intro.style', b0, 'flow') !== 'sphere' || !(ev.value('intro.pick', b0, 0) >= 1)) return null;
+    const g = geom(o.W, o.H), cy = coverCyOf(g), z0 = OVERSCAN * Math.max(g.cx, o.W - g.cx, cy, o.H - cy) / (g.cw / 2);
+    return { z0, d: o.zoomS > 0 ? o.zoomS : 9 * BEAT };
+  }
+  /** The intro camera before the push: ln z of the world and of the player (both about the cover centre). Mirror: f(t) = ln z0 (1 - tukey(u)) + fall(t),
+   *  minus f at its minimum (the apex ta), so the camera turns round exactly at z = 1 (the designed layout). The player rides the world until the
+   *  apex (speed 0 there) and then stays on the glass at z = 1; only the push carries it off. */
+  function camLn(t, o, ev) {
+    const m = mirror(o, ev); if (!m) return { ln: fallLn(t, o, ev), lnP: 0 };
+    const pre = +o.pre, L0 = Math.log(m.z0), f = (tt) => L0 * (1 - tukey((tt + pre) / m.d)) + fallLn(tt, o, ev);
+    let a = 0.5 * m.d - pre, bq = Math.min(m.d + 2, pre) - pre; const gr = 0.6180339887;   // golden-section search for the apex (f is unimodal there)
+    let x1 = bq - gr * (bq - a), x2 = a + gr * (bq - a), f1 = f(x1), f2 = f(x2);
+    for (let k = 0; k < 48; k++) { if (f1 < f2) { bq = x2; x2 = x1; f2 = f1; x1 = bq - gr * (bq - a); f1 = f(x1); } else { a = x1; x1 = x2; f1 = f2; x2 = a + gr * (bq - a); f2 = f(x2); } }
+    const ta = (a + bq) / 2, ln = f(t) - f(ta);
+    return { ln, lnP: t < ta ? ln : 0, ta };
+  }
   function draw(c, t, o) {
     const { S, V, W, H, ev } = o, g = geom(W, H), b = t / BEAT, f = Math.max(0, fidx(t)), kick0 = t < 0 ? 0 : kickEnv[f] || 0;   // v19.3: t < 0 = the silent pre-roll browse
     const title = o.tag('intro.title') || D.title, credit = o.tag('intro.credit') || 'prod. @uche2crazy', names = o.tag('intro.cards');
@@ -224,7 +253,7 @@ export function createIntro(L, A = {}) {
     const bloom = (k) => { c.save(); for (const [i, w] of wts) { const bc = bloomCanvas(i, S); c.globalAlpha = clamp(w * bloomA * k * Math.min(1.6, REF / Math.max(0.05, bc.lum))); c.drawImage(bc, g.cx - bs * 0.5, g.cy - bs * 0.5, bs, bs); } c.restore(); };
     c.save();
     // push-in: exponential zoom about the chosen cover's centre; the pivot glides to the frame centre so the cover ends centred, filling the frame
-    const cardH = g.cw * TH / TW, coverCy = g.cy - cardH / 2 + g.cw / 2, lnF = fallLn(t, o, ev), lnZ = lerp(lnF, Math.log(zmax), push), Z = Math.exp(lnZ), gk = ss(push * 1.4);   // v26: the fall hands over to the push
+    const coverCy = coverCyOf(g), CM = camLn(t, o, ev), lnF = CM.ln, lnZ = lerp(lnF, Math.log(zmax), push), Z = Math.exp(lnZ), gk = ss(push * 1.4);   // v26: the fall hands over to the push; v27: the mirror zoom-out before it
     const pvx = lerp(g.cx, W / 2, gk), pvy = lerp(coverCy, H / 2, gk);
     c.translate(pvx, pvy); c.scale(Z, Z); c.translate(-g.cx, -coverCy); INTRO_HIT.fall = { z: Z, px: pvx, py: pvy, cx: g.cx, cy: coverCy };
     // the fan-out also scales the whole group about the carousel centre
@@ -239,7 +268,7 @@ export function createIntro(L, A = {}) {
     // intro.pick 0..1 flies the picked tile (the beat cover) out of the sphere onto the card's cover square; at pick 1 the normal card takes over
     const SPH = V('intro.style', 'flow') === 'sphere', pick = SPH ? clamp(V('intro.pick', 1)) : 1;
     // v26 container before content: the card's glass (caption plate, rim, rounded corners) springs in when the flying cover lands (intro.pick's last key)
-    const pkK = (ev.tracksOf('intro.pick')[0] || { keys: [] }).keys, landT = pkK.length ? pkK[pkK.length - 1].b * BEAT : -1e9, cardA = SPH ? cd30(t - landT) : 1;
+    const pkK = (ev.tracksOf('intro.pick')[0] || { keys: [] }).keys, landT = pkK.length > 1 ? pkK[pkK.length - 1].b * BEAT : -1e9, cardA = SPH ? cd30(t - landT) : 1;   // v27: one key = the cover is on the card from frame 0
     if (SPH) { const tm = V('cover.all', false) ? V('hero.fry', S.grey ? 'negative' : S.name === 'RUBEDO' ? 'thermal' : 'stage') + (V('hero.halftone', true) ? '+ht' : '') : null; sphere(c, g, S, V('intro.yaw', 0), V('intro.pitch', 0), pick, kick, coverCy, tm);   // v23 cover preset on every tile (cover.all)
       if (pick >= 1 && cardA > 0.02 && V('fx.dof', true)) { const cv = c.canvas, t2 = DOFI.cv && DOFI.cv.width === cv.width && DOFI.cv.height === cv.height ? DOFI.cv : (DOFI.cv = Object.assign(document.createElement('canvas'), { width: cv.width, height: cv.height })), g2 = t2.getContext('2d');
         g2.clearRect(0, 0, t2.width, t2.height); g2.drawImage(cv, 0, 0); c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.filter = `blur(${(5 * cardA * cv.width / W).toFixed(2)}px)`; c.drawImage(t2, 0, 0); c.restore(); } }   // v22.1: the sphere goes soft behind the chosen card
@@ -264,6 +293,10 @@ export function createIntro(L, A = {}) {
         if (shade > 0.004) { c.fillStyle = `rgba(0,0,0,${shade})`; c.fillRect(xa, top, xb - xa + 0.7, hh); }
         c.globalAlpha = 0.30 * (1 - 0.5 * Math.min(a0, 1)); c.drawImage(ct.refl, j * TW / n, 0, TW / n, ct.RH, xa, top + hh + 8 * sm, xb - xa + 0.7, hh * ct.RH / TH); c.globalAlpha = 1;
       }
+      if (SPH && i === 0 && a0 < 1e-6) {   // v27: the flat chosen card's cover again at its source resolution (frame 0 is zoomed into it), inside the rim
+        const x0 = x - w / 2, y0 = y - h / 2, ri = 2.4 / TW * w, rad = Math.max(0.01, 36 / TW * w - ri), X0 = x0 + ri, X1 = x0 + w - ri, Y0 = y0 + ri, Y1 = y0 + w;
+        c.save(); c.beginPath(); c.moveTo(X0, Y1); c.lineTo(X0, Y0 + rad); c.arcTo(X0, Y0, X0 + rad, Y0, rad); c.lineTo(X1 - rad, Y0); c.arcTo(X1, Y0, X1, Y0 + rad, rad); c.lineTo(X1, Y1); c.closePath(); c.clip();
+        c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(coverCanvas(0, S, true), x0, y0, w, w); c.restore(); }
     }
     if (SPH && items.length && cardA < 1) {   // the landed cover stays solid on top while its card arrives around it; its corners round with the glass
       c.restore(); const cs = g.cw, rad = 36 / TW * cs * cardA; c.save(); rr(c, g.cx - cs / 2, coverCy - cs / 2, cs, cs, Math.max(0.01, rad)); c.clip(); c.drawImage(coverCanvas(0, S), g.cx - cs / 2, coverCy - cs / 2, cs, cs); c.restore(); }
@@ -282,10 +315,11 @@ export function createIntro(L, A = {}) {
       const pE = o.playerIn ? 1 : playerE, psE = ps * (0.88 + 0.12 * pE), rise = (1 - pE) * (H - g.pl[1] + 40);   // v19: o.playerIn = the player is already in place (click-to-play opening)   // v13: the player rises from below the frame into place
       const [px0, py0, pw0, ph0] = g.pl, pw = pw0 * psE, ph = ph0 * psE, px = px0 + (pw0 - pw) / 2, py = py0 + (ph0 - ph) / 2 + rise, v = psE * ph0 / 150, hz = psE;   // v: vertical / type scale, hz: horizontal
       c.save(); c.globalAlpha = pa;
-      { const k = Math.exp(Math.log(zmax) * push) / Z; if (Math.abs(k - 1) > 1e-6) { c.translate(g.cx, coverCy); c.scale(k, k); c.translate(-g.cx, -coverCy); } }   // v26: the player is the app's chrome, on the glass: it ignores the fall, only the push on the drop carries it off
+      { const k = Math.exp(lerp(CM.lnP, Math.log(zmax), push)) / Z; if (Math.abs(k - 1) > 1e-6) { c.translate(g.cx, coverCy); c.scale(k, k); c.translate(-g.cx, -coverCy); } }   // v26: the player is the app's chrome, on the glass: it ignores the fall, only the push on the drop carries it off; v27: it rides the mirror zoom-out up to the apex
       glass(c, S, bloom, px, py, pw, ph, ph / 2);
       const cy = py + ph / 2, ink = 'rgba(255,255,255,0.92)';
-      icon(c, 'prev', px + 96 * hz, cy, 30 * v, ink); icon(c, o.paused ? 'play' : 'pause', px + 182 * hz, cy, 40 * v, ink); { const m = c.getTransform(), k0 = c.canvas.width / W, qx = px + 182 * hz; INTRO_HIT.play = [(m.a * qx + m.c * cy + m.e) / k0, (m.b * qx + m.d * cy + m.f) / k0]; }   // v26: screen px (the fall camera moves it) icon(c, 'next', px + 268 * hz, cy, 30 * v, ink);
+      icon(c, 'prev', px + 96 * hz, cy, 30 * v, ink); icon(c, o.paused ? 'play' : 'pause', px + 182 * hz, cy, 40 * v, ink); icon(c, 'next', px + 268 * hz, cy, 30 * v, ink);
+      { const m = c.getTransform(), k0 = c.canvas.width / W, qx = px + 182 * hz; INTRO_HIT.play = [(m.a * qx + m.c * cy + m.e) / k0, (m.b * qx + m.d * cy + m.f) / k0]; }   // v26: screen px (the camera moves it); v27: the 'next' icon is back (a mid-line comment had swallowed it)
       const x0 = px + 348 * hz, x1 = px + pw - 200 * hz, y0 = py + 17 * v, y1 = py + ph - 17 * v;
       glass(c, S, bloom, x0, y0, x1 - x0, y1 - y0, 30 * v, { dark: true, shadow: 0, frost: 0.4 });
       const th = 76 * v, tX = x0 + 16 * v, tY = (y0 + y1) / 2 - th / 2 - 6 * v;
@@ -304,8 +338,8 @@ export function createIntro(L, A = {}) {
     // v13: the push darkens into the lab's cover scrim (the same function, anchored where the lab's card lands at the cut), so the cut shows no brightness jump
     if (push > 0) { const sa = ss(push), [rx, ry, rw, rh] = tgt, K = zf; coverScrim(c, S, W / 2 - rw * K / 2, H / 2 - rh * K / 2, rw * K, rh * K, { dim: V('cover.dim', 1), light: false, amount: sa, fill: [0, 0, W, H] }); }
     // v13: directional motion blur on the zoom: the scale change over the last frame time (the same exponential zoom at t - 0.9 frame)
-    const tP = t - 0.9 / D.fps, pPrev = clamp(ev.value('intro.push', tP / BEAT, 0)), dl = lnZ - lerp(fallLn(tP, o, ev), Math.log(zmax), pPrev);
-    if (dl > 0) streak(c, pvx, pvy, dl);
+    const tP = t - 0.9 / D.fps, pPrev = clamp(ev.value('intro.push', tP / BEAT, 0)), dl = lnZ - lerp(camLn(tP, o, ev).ln, Math.log(zmax), pPrev);
+    streak(c, pvx, pvy, Math.abs(dl));   // v27: the zoom-out blurs too (the copies are the bigger sub-frames it just left)
   }
   // v22 sphere geometry: 6 latitude rings, ~14 tiles on the equator; tile k shows cover (k % 5) except the target (ring 1, lon 0 = the beat cover).
   // Rotation: yaw about the vertical axis, then pitch about the horizontal one; perspective F = 3 R; only the front hemisphere draws, edge tiles darker.
@@ -392,5 +426,5 @@ export function createIntro(L, A = {}) {
     }
     g.putImageData(d, 0, 0); CACHE.set(key, cv); return cv;
   }
-  return { SPH_TARGET_LAT: -37 * Math.PI / 180, draw, beats, events, geom, cardTex, coverCanvas, coverFried, openCam, streak, coverTarget: (look, aspect) => coverTarget(L, look, aspect) };
+  return { SPH_TARGET_LAT: -37 * Math.PI / 180, coverCyOf, mirror, camLn, draw, beats, events, geom, cardTex, coverCanvas, coverFried, openCam, streak, coverTarget: (look, aspect) => coverTarget(L, look, aspect) };
 }
