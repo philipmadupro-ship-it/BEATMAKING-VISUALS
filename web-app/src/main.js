@@ -28,6 +28,7 @@ import { createPip } from './ui/pip.js';
 import { createHistory } from './ui/history.js';
 import { createPresets } from './ui/presets.js';
 import { createSimpleMode } from './ui/simple.js';
+import { createTimelineGuide } from './ui/tlguide.js';
 import { createShotList } from './ui/shotlist.js';
 import { createAddLayer, createWorkspaces, createCoverPresets } from './ui/addlayer.js';
 import { createReview } from './ui/review.js';
@@ -85,7 +86,7 @@ async function boot() {
   // v22: edit in the timeline (inline values, text clips, context menu), task controls + coach, the status strip
   app.tlEdit = createTimelineEdit(app); app.quick = createQuick(app); app.statusBar = createStatusBar(app);
   // v23: + Layer menu (grouped, described), workspaces (Edit / Motion / Audio / Export), Adobe-style rich tooltips
-  app.addLayer = createAddLayer(app); app.workspaces = createWorkspaces(app); app.tips = createTips(document); app.pip = createPip(app); app.history = createHistory(app); app.presets = createPresets(app); app.simple = createSimpleMode(app);
+  app.addLayer = createAddLayer(app); app.workspaces = createWorkspaces(app); app.tips = createTips(document); app.pip = createPip(app); app.history = createHistory(app); app.presets = createPresets(app); app.simple = createSimpleMode(app); app.tlGuide = createTimelineGuide(app);
   store.subscribe(() => { const tr = store.session.track, el = document.getElementById('mediaAud'); if (el) el.textContent = tr ? `${tr.meta.name} · ${Math.round(tr.bpm)} BPM · ${tr.key || ''}` : ''; });
   motion.press(document.body);
   let userClip = false;

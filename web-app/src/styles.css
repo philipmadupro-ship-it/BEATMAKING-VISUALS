@@ -699,3 +699,59 @@ body.simple #studio:not([style*="--dock-h"]){grid-template-rows:minmax(0,1fr) 30
 body.simple #studio .song .songbar{display:none}
 .presets-pane,.history{padding:12px 16px;overflow:auto;min-height:0;flex:1;display:flex;flex-direction:column;gap:10px}
 .rail:not([data-pane="presets"]) .presets-pane,.rail:not([data-pane="history"]) .history{display:none}
+/* ===================================================================================================================
+   v26 TYPE SYSTEM (user: "Akira only for the big things; small ones not"; brand utility type = condensed grotesque, caps, tracked)
+   Akira Expanded (--display): brand, page titles, the big echo words, section headings, primary buttons (Load, Save as preset, Export).
+   Barlow Condensed (--ui), caps, tracked: every small button, tab, label, preset name, chip.  JetBrains Mono (--mono): values, timecode.
+   Instrument Sans (--sans): sentences (help lines, hints, inputs).  */
+.btn,.seg button,.ib,.tabs button,.rail-tabs button,.lbl,details.sec>summary,details.fx.sec>summary,.chip,.pr-q,.cvp,.pickbar button,.pickbar b,.ins-h b,.cv-cap b,.coach li i,.tog,.lname,.lhead,.al-h,.addlayer button b,.pr-apply b,.mk-t,.modesw,.qc-l,.q-h b{font-family:var(--ui);letter-spacing:.06em}
+.btn,.seg button,.tabs button,.rail-tabs button,.pr-q,.cvp,.pickbar button,.chip,details.sec>summary,.lhead,.al-h{text-transform:uppercase}
+.btn{font-weight:600;font-size:13px}.btn.small{font-size:12.5px}.btn.tiny{font-size:12px;font-family:var(--ui)}
+.seg button{font-weight:600;font-size:12px}
+.tabs button,.rail-tabs button{font-weight:600;font-size:12.5px;letter-spacing:.1em}
+.lbl{font-weight:600;font-size:11.5px;letter-spacing:.12em}
+.lname{font-weight:500;font-size:14px;letter-spacing:.03em}
+.pr-q{font-weight:700;font-size:13px;letter-spacing:.1em}
+.ttl{font-family:var(--ui);font-weight:600;font-size:11px;letter-spacing:.12em}
+.tc,.sb-pos b,#fBpm,#sBpm{font-family:var(--mono)}
+.sb-i.big b{font-family:var(--ui);font-weight:700;font-size:13px;letter-spacing:.06em}
+.pane-help,.hint,.note,.inp,.rtip span,.pr-apply span,.addlayer button span{font-family:var(--sans)}
+/* the big things keep the signature face */
+.btn.primary,#prSave,#exBtn,#exportTop,#qRun,#vlGen,.drop .btn,#demoBtn{font-family:var(--display);font-weight:400;letter-spacing:.04em;text-transform:none}
+.presets-pane .group:first-child .lbl{font-family:var(--display);font-weight:400;font-size:12px;letter-spacing:.06em}
+/* v26 timeline guide strip + "How it works" card */
+.tl-guide{display:flex;align-items:center;gap:10px;min-height:30px;padding:3px 8px;border:1px solid var(--line);border-bottom:0;border-radius:8px 8px 0 0;background:color-mix(in srgb,var(--panel) 85%,transparent)}
+.tg-msg{flex:1;min-width:0;font:400 12px/1.35 var(--sans);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tg-msg b{color:var(--fg);font-weight:600}
+.tg-add{display:flex;gap:4px}
+.tg-add button,.tg-how{all:unset;cursor:pointer;font:600 12px var(--ui);letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:6px;border:1px solid var(--glass-edge);background:linear-gradient(180deg,var(--glass-2),var(--glass));min-height:24px;box-sizing:border-box}
+.tg-add button:hover,.tg-how:hover{border-color:var(--accent)}.tg-add button:focus-visible,.tg-how:focus-visible{outline:2px solid var(--accent)}
+.tg-card{position:absolute;right:12px;bottom:calc(100% - 40px);z-index:40;width:min(420px,calc(100vw - 32px));padding:14px;border-radius:12px;background:color-mix(in srgb,var(--panel) 90%,transparent);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border:1px solid var(--glass-edge);box-shadow:var(--glass-sh),0 20px 44px rgba(0,0,0,.5)}
+.tg-card[hidden]{display:none}
+.tg-card-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.tg-card-h b{font:400 13px var(--display)}
+.tg-lead{font:400 12.5px/1.45 var(--sans);color:var(--muted);margin:6px 0}
+.tg-card ul{list-style:none;margin:8px 0;padding:0;display:grid;gap:8px}
+.tg-card li{display:grid;grid-template-columns:26px 64px minmax(0,1fr);gap:8px;align-items:center;font:400 12.5px/1.35 var(--sans)}
+.tg-card li b{font:700 12px var(--ui);letter-spacing:.08em;text-transform:uppercase}
+.dock{position:relative}
+@media (max-width:900px){.tg-add{display:none}.tg-msg{white-space:normal}}
+/* v26 Voice lab timing strip */
+.vl-time{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:8px}
+.vl-tl{width:100%;height:auto;touch-action:none;user-select:none}
+.vl-tl .vl-bg{fill:color-mix(in srgb,var(--fg) 6%,transparent);stroke:var(--line-2)}
+.vl-tl .vl-tick{stroke:var(--muted)}.vl-tl .vl-tt{fill:var(--muted);font:500 9px var(--mono);text-anchor:middle}
+.vl-tl .vl-ev{stroke:color-mix(in srgb,var(--fg) 35%,transparent);stroke-dasharray:3 3}.vl-tl .vl-ev.play{stroke:var(--accent);stroke-dasharray:none;stroke-width:2}
+.vl-tl .vl-et{fill:var(--muted);font:600 9px var(--ui);text-transform:uppercase;letter-spacing:.08em}
+.vl-tl .vl-ph{cursor:ew-resize}.vl-tl .vl-ph rect{fill:color-mix(in srgb,var(--accent) 75%,transparent);stroke:var(--accent)}
+.vl-tl .vl-ph text{fill:var(--on-accent);font:700 11px var(--ui)}
+.vl-tl .vl-ph:focus{outline:none}.vl-tl .vl-ph:focus rect{stroke:var(--fg);stroke-width:2}
+.vl-ats{display:flex;gap:8px;flex-wrap:wrap}
+.vl-at{display:flex;align-items:center;gap:4px;font:600 11px var(--ui);letter-spacing:.06em;text-transform:uppercase}
+.vl-at input{width:68px}.vl-at i{font:400 11px var(--mono);font-style:normal;color:var(--muted)}
+body:not(.simple) .tl-guide{display:none}
+#dock .cuebar .btn,#dock .cuebar .seg button,#dock .cuebar .ib{font-size:11.5px;letter-spacing:.02em;padding-left:7px;padding-right:7px}
+#dock .cuebar .lbl{letter-spacing:.06em}
+/* the Voice lab lives in the narrow left rail: labels above fields */
+.voicelab .vl-grid{grid-template-columns:minmax(0,1fr);gap:4px}
+.voicelab .vl-grid .lbl{margin-top:4px}
+.voicelab .vl-tl .vl-tt{font-size:8px}.voicelab .vl-tl .vl-et{font-size:7.5px}.voicelab .vl-tl .vl-ph text{font-size:10px}

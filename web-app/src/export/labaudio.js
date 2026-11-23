@@ -77,3 +77,14 @@ export function sample(buf, src, t, { gainDb = 0, loop = false, dur = 0 } = {}) 
   for (let i = 0; i < n; i++) { const o = i0 + i; if (o < 0) continue; if (o >= buf.length) break; const x = (i * k) % src.length, x0 = Math.floor(x), f = x - x0, e = loop ? Math.min(1, i / fade, (n - i) / fade) : 1;
     out.forEach((d, c) => { const s = chs[Math.min(c, chs.length - 1)]; d[o] += ((s[x0] || 0) * (1 - f) + (s[x0 + 1] || 0) * f) * g * e; }); }
 }
+
+// v26 the phrases of a take as [start, end] seconds (same split + merge rule as placeVoice), for the Voice lab timing view
+export function phrases(take, n = 99) {
+  const sr = take.sampleRate, src = take.getChannelData(0), win = Math.round(0.01 * sr), thr = Math.pow(10, -35 / 20), segs = []; let inSpeech = false, s0 = 0, quiet = 0;
+  for (let i = 0; i < src.length; i += win) { let pk = 0; for (let j = i; j < Math.min(src.length, i + win); j++) pk = Math.max(pk, Math.abs(src[j]));
+    if (pk >= thr) { if (!inSpeech) { inSpeech = true; s0 = i; } quiet = 0; } else if (inSpeech) { quiet += win / sr; if (quiet >= 0.2) { segs.push([s0, i - Math.round(quiet * sr) + win]); inSpeech = false; } } }
+  if (inSpeech) segs.push([s0, src.length]);
+  for (let i = segs.length - 1; i >= 0; i--) if (segs[i][1] - segs[i][0] < 0.08 * sr) segs.splice(i, 1);
+  while (segs.length > n && segs.length > 1) { let g = 0; for (let i = 1; i < segs.length - 1; i++) if (segs[i + 1][0] - segs[i][1] < segs[g + 1][0] - segs[g][1]) g = i; segs.splice(g, 2, [segs[g][0], segs[g + 1][1]]); }
+  return segs.map(([a, b]) => [a / sr, b / sr]);
+}

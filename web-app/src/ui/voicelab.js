@@ -6,6 +6,8 @@
 // API: app.voiceLab = { refresh(), prompt(), voices() }.
 import { setTagIn } from './metadata.js';
 import { VOICE_ATS, VOICE_DURS } from '../v8/tags.js';
+import { phrases, placeVoice, room, stove } from '../export/labaudio.js';
+import { PRE_S, INTRO_S } from '../cues/generate.js';
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 const SERVER = 'ElevenLabs', MODEL = 'eleven_v4';
@@ -34,10 +36,14 @@ export function createVoiceLab(app) {
         <label class="lbl" for="vlStyle">Delivery</label><input class="inp small" id="vlStyle" value="${esc(v.style || '')}" placeholder="smooth, calm, confident" data-tip="Delivery|ElevenLabs v4 direction tag, e.g. calm, clinical, close to the mic.">
       </div>
       <p class="hint vl-say" aria-live="polite"></p>
+      <div class="vl-time"><div class="group-h"><span class="lbl">When she speaks</span><span class="inrow"><button class="btn tiny" id="vlListen" data-tip="Listen|Plays the intro sound (stove, room, her lines where you placed them). Click again to stop.|">▶ Listen</button><button class="btn tiny" id="vlAuto" data-tip="Auto-place|First line after the stove, last line ends just before the play click, the middle one in between.|">Auto-place</button></span></div>
+        <svg class="vl-tl" viewBox="0 0 300 96" role="img" aria-label="Intro timeline: drag her lines to place them"></svg>
+        <div class="vl-ats">${L.map((q, i) => `<label class="vl-at"><span>Line ${i + 1}</span><input class="inp mono small" type="number" step="0.05" min="0" max="${PRE_S}" data-at="${i}" aria-label="Line ${i + 1} starts at (seconds)"><i>s</i></label>`).join('')}</div>
+        <p class="hint">Drag a line on the strip (or type its start). The beat starts at ${PRE_S.toFixed(1)} s, on the play click. The keyboard follows her words.</p></div>
       <div class="inrow"><button class="btn small primary" id="vlGen" data-tip="Generate a new intro|One ElevenLabs take with these lines and voice (spends credits). It becomes the intro voice take.">Generate intro take</button><button class="btn small" id="vlCopy" data-tip="Copy prompt|Copy the exact prompt to paste into ElevenLabs yourself.">Copy prompt</button></div>
       <p class="hint vl-status" role="status"></p><ul class="vl-takes"></ul>`;
     root.querySelector('.vl-say').textContent = '“' + spoken().join(' … ') + '”';
-    fillVoices(); renderTakes();
+    fillVoices(); renderTakes(); drawTime();
   }
   function fillVoices() { const sel = root.querySelector('#vlVoice'), cur = V().voice_id || ''; if (!voices.length) return;
     const own = voices.filter((q) => !q.is_library_voice), lib = voices.filter((q) => q.is_library_voice);
@@ -78,8 +84,40 @@ export function createVoiceLab(app) {
     } catch (err) { status(`Generation failed (${(err && (err.code || err.message)) || 'error'}). Nothing was retried.`, 'warn'); }
     busy = false; const g = root.querySelector('#vlGen'); if (g) g.disabled = false;
   }
+  // ---- v26 timing: her lines on the 0..PRE_S intro strip (seconds), with the intro moments; drag or type; listen; auto-place
+  let durs = null, takeKey = '', playing = null;
+  const ats = () => String(V().ats || VOICE_ATS).split(',').map(Number), nL = () => (V().lines || []).length;
+  async function measure() { const vt = app.media && app.media.voice; if (!vt) { durs = null; return; } const k = vt.name + vt.blob.size; if (k === takeKey) return; takeKey = k;
+    try { const take = await app.clock.ctx.decodeAudioData(await vt.blob.arrayBuffer()); durs = phrases(take, nL()).map(([a, b]) => b - a); drawTime(); } catch (_) { durs = null; } }
+  const X = (t) => 10 + t / PRE_S * 280;
+  function drawTime() { const svg = root.querySelector('.vl-tl'); if (!svg) return; const A = ats(), D = durs || String(V().durs || VOICE_DURS).split(',').map(Number);
+    const ev = [['hook', 0.25], ['drag', INTRO_S.press], ['pick', INTRO_S.pick], ['play', PRE_S]];
+    let h = `<rect x="10" y="26" width="280" height="44" rx="4" class="vl-bg"/>`;
+    for (let s2 = 0; s2 <= PRE_S; s2++) h += `<line x1="${X(s2)}" x2="${X(s2)}" y1="70" y2="76" class="vl-tick"/><text x="${X(s2)}" y="88" class="vl-tt">${s2}</text>`;
+    for (const [n, t] of ev) h += `<line x1="${X(t)}" x2="${X(t)}" y1="12" y2="72" class="vl-ev${n === 'play' ? ' play' : ''}"/><text x="${X(t) + (n === 'play' ? -3 : 2)}" y="10" class="vl-et" text-anchor="${n === 'play' ? 'end' : 'start'}">${n}</text>`;
+    A.forEach((t, i) => { const d = D[i] ?? 1.4; h += `<g class="vl-ph" data-ph="${i}" tabindex="0" role="slider" aria-label="Line ${i + 1}" aria-valuemin="0" aria-valuemax="${PRE_S}" aria-valuenow="${t.toFixed(2)}"><rect x="${X(t)}" y="${30 + (i % 2) * 18}" width="${Math.max(8, d / PRE_S * 280)}" height="16" rx="3"/><text x="${X(t) + 4}" y="${42 + (i % 2) * 18}">${i + 1}</text></g>`; });
+    svg.innerHTML = h; root.querySelectorAll('[data-at]').forEach((inp) => { if (document.activeElement !== inp) inp.value = (A[+inp.dataset.at] ?? 0).toFixed(2); }); }
+  const setAts = (A, live) => { const str = A.map((x) => Math.max(0, Math.min(PRE_S - 0.2, x)).toFixed(2)).join(','); if (live) app.cues.preview((s) => setTagIn(s, 'voice.ats', str)); else app.cues.edit((s) => setTagIn(s, 'voice.ats', str), 'voice timing'); drawTime(); };
+  let dragPh = null;
+  root.addEventListener('pointerdown', (e) => { const g = e.target.closest('.vl-ph'); if (!g) return; const svg = root.querySelector('.vl-tl'), r = svg.getBoundingClientRect(); dragPh = { i: +g.dataset.ph, x0: e.clientX, a0: ats(), k: 300 / r.width }; app.cues.begin(); g.setPointerCapture(e.pointerId); });
+  root.addEventListener('pointermove', (e) => { if (!dragPh) return; const A = dragPh.a0.slice(); A[dragPh.i] = Math.round((dragPh.a0[dragPh.i] + (e.clientX - dragPh.x0) * dragPh.k / 280 * PRE_S) * 20) / 20; setAts(A, true); });
+  root.addEventListener('pointerup', () => { if (!dragPh) return; dragPh = null; app.cues.commit('voice timing'); drawTime(); });
+  root.addEventListener('keydown', (e) => { const g = e.target.closest && e.target.closest('.vl-ph'); if (!g || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return; e.preventDefault(); const A = ats(), i = +g.dataset.ph; A[i] += (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 0.5 : 0.05); setAts(A, false); root.querySelector(`[data-ph="${i}"]`)?.focus(); });
+  root.addEventListener('change', (e) => { const el = e.target; if (el.dataset.at == null) return; const A = ats(); A[+el.dataset.at] = +el.value; setAts(A, false); });
+  function autoPlace() { const n = nL(), D = durs || String(V().durs || VOICE_DURS).split(',').map(Number), A = [];
+    const first = 1.4, lastEnd = PRE_S - 0.3, last = Math.max(first + 1, lastEnd - (D[n - 1] ?? 1.4));
+    for (let i = 0; i < n; i++) A.push(n === 1 ? first : i === n - 1 ? last : first + (last - first) * i / (n - 1) - (D[i] ?? 1.4) * 0.25);
+    setAts(A, false); if (durs) app.cues.edit((s) => setTagIn(s, 'voice.durs', durs.map((d) => d.toFixed(2)).join(',')), 'voice phrase lengths'); }
+  async function listen() { const btn = root.querySelector('#vlListen'); if (playing) { try { playing.stop(); } catch (_) {} playing = null; btn.textContent = '▶ Listen'; return; }
+    const ac = app.clock.ctx, vt = app.media && app.media.voice, buf = ac.createBuffer(2, Math.round((PRE_S + 1) * ac.sampleRate), ac.sampleRate);
+    room(buf, PRE_S + 0.4, { gainDb: -14 }); if ((tags().sfx || {}).stove !== false) stove(buf, 0.05, { gainDb: 0 });
+    if (vt) { try { const take = await ac.decodeAudioData(await vt.blob.arrayBuffer()); const sd = String(V().sub ?? '-8'); placeVoice(buf, take, ats(), { subDb: /^(off|none|false)$/i.test(sd) ? null : +sd }); } catch (_) { status('Could not read the voice take.', 'warn'); } }
+    else status('No voice take yet: generate one or load one (Media → Load voice take). Playing the room and the stove.', 'warn');
+    const src = ac.createBufferSource(); src.buffer = buf; src.connect(ac.destination); if (ac.state === 'suspended') await ac.resume(); src.start(); playing = src; btn.textContent = '■ Stop';
+    src.onended = () => { if (playing === src) { playing = null; btn.textContent = '▶ Listen'; } }; }
+  setInterval(measure, 1500);
   root.addEventListener('click', (e) => { const t = e.target.closest('button'); if (!t) return;
-    if (t.id === 'vlLoad') loadVoices(); else if (t.id === 'vlGen') generate();
+    if (t.id === 'vlLoad') loadVoices(); else if (t.id === 'vlGen') generate(); else if (t.id === 'vlListen') listen(); else if (t.id === 'vlAuto') autoPlace();
     else if (t.id === 'vlCopy') { navigator.clipboard?.writeText(prompt()).then(() => status('Prompt copied.', 'ok'), () => status(prompt())); }
     else if (t.dataset.use != null) { const tk = takes[+t.dataset.use]; if (tk.blob) app.media.setVoice(tk.blob, tk.name).then(() => status('Take loaded.', 'ok')); else window.open(tk.url, '_blank', 'noopener'); } });
   app.cues.subscribe((why) => { if (why !== 'preview' && why !== 'saved' && !root.contains(document.activeElement)) render(); });
