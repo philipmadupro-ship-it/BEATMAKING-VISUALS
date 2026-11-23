@@ -14,6 +14,7 @@ import { DEFAULT_TAGS, VOICE_ATS, VOICE_DURS } from './tags.js';
 import { mergeDeep, createEvaluator, emptySheet } from '../cues/schema.js';
 import { buildRegistry, meterPath } from './registry.js';
 import { INTRO_HIT, createIntro, coverScrim, tukey, tukeyV } from './intro.js';   // v11 intro; v27 the outro's Tukey curve lives there (the intro mirrors it)
+import { userEffects } from './usereffects.js';   // v27 user effects (ufx.*)
 
 const METER_KIND = { scope: 'logo', session: 'waveform', spectro: 'spectrogram', loud: 'loudness' };
 
@@ -926,6 +927,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (zo) INTRO.streak(c, zo.px, zo.py, zo.dl);   // v25: radial motion blur of the zoom, about its fixed point   // v13 intro: directional streak copies on the opening dolly-out
     result(t); hud(t, ev.shot(b)); brutalFrame(t); social(t, false); outroDialog(t); terminal(t); textCues(t); textures(t); mouse(filmT, cam);
     flash(t);
+    userEffects(c, t, b, ev, { beat: BEAT, accent: S.hot });   // v27: the user's Effects track (ufx.* clips), post pass
     glitch(t, scale);
     c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
     return { look: LOOK, stage: S.name, cam, attention: att };

@@ -9,6 +9,7 @@
 import { bbtToBeats, beatsToBbt, snapBeat, SNAPS, newId, defaultEase, EASE_PRESETS, MARKER_KINDS } from '../cues/schema.js';
 import { presetOf } from '../cues/ops.js';
 import { LAYOUT } from '../v8/layout.js';
+import { UFX_TYPES, isUfx } from '../v8/usereffects.js';
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 const fmtNum = (v, step) => { const d = step && step < 1 ? Math.min(4, Math.ceil(-Math.log10(step))) : 0; return (+v).toFixed(d); };
 const RULES = [['beat', 'every beat'], ['offbeat', 'every offbeat'], ['bar', 'every bar'], ['2bar', 'every 2 bars'], ['section', 'every section'], ['kick', 'every kick'], ['snare', 'every snare'], ['marker', 'every marker']];
@@ -19,7 +20,7 @@ export function createInspector(app, root) {
   let element = 'camera', selfEdit = false, stampRule = 'beat', quantTo = 'markers', quantStr = 100, presetSel = '';
   const open = {};   // <details> state per element id
   const playBeat = () => tl().state.playhead, grid = () => SNAPS[P().timeline.snap] || 0;
-  const edit = (fn, label) => { selfEdit = true; cues.edit(fn, label); selfEdit = false; };
+  const edit = (fn, label) => { selfEdit = true; cues.edit(fn, label); selfEdit = false; }, edit0 = edit;
   const winIds = () => Object.keys(LAYOUT[P().look][P().aspect]);
   /** One value control, compact. Returns [main, extra]: main sits right of the label, extra (slider) under it. */
   function ctlParts(prop, v, attrs = '') {
@@ -75,6 +76,14 @@ export function createInspector(app, root) {
       <div class="grid2"><label class="field"><span class="lbl">At (bar.beat.tick)</span><input class="inp mono" data-k="at" value="${beatsToBbt(k.b)}" aria-label="Key time"></label>
       <label class="field"><span class="lbl">Beat</span><input class="inp mono" type="number" step="${grid() || 0.0625}" min="0" data-k="b" value="${+k.b.toFixed(4)}"></label></div>
       <p class="hint">${(k.b * bt).toFixed(3)} s from bar 1 · frame ${Math.round(k.b * bt * 30)}</p>`;
+    if (isUfx(row.path)) { const T = UFX_TYPES[row.path.slice(4)] || { name: row.path, desc: '' }, iv = k.v === true ? 1 : +k.v || 0, num = (f, l, v, st) => `<label class="field"><span class="lbl">${l}</span><input class="inp mono" type="number" min="0" step="${st}" data-k="${f}" value="${+(+v).toFixed(4)}" aria-label="${l}"></label>`;
+      h = h.replace(/<div class="ins-h">[\s\S]*?<\/div>/, `<div class="ins-h fx-h"><b>Effect · ${esc(T.name)}</b><code>${esc(row.path)}</code></div><p class="hint">${esc(T.desc)}</p>`);
+      h += `<div class="field fx-int"><span class="lbl">Intensity</span>${control({ kind: 'number', label: 'Intensity', min: 0, max: 1, step: 0.01, default: T.v }, iv, 'data-k="v"')}</div>
+        <div class="grid3">${num('dur', 'Length (beats)', k.dur ?? 1, grid() || 0.25)}${num('ein', 'Ease in (beats)', k.ein || 0, 0.25)}${num('eout', 'Ease out (beats)', k.eout || 0, 0.25)}</div>
+        ${row.path === 'ufx.tint' ? `<div class="field"><span class="lbl">Colour</span>${control({ kind: 'color', label: 'Tint colour' }, /^#[0-9a-f]{6}$/i.test(String(k.col)) ? k.col : '#ff3b6b', 'data-k="col"')}</div>` : ''}
+        <label class="tog fx-vis"><span class="sw"><input type="checkbox" role="switch" data-k="show" ${k.off ? '' : 'checked'} aria-label="Effect visible"><i aria-hidden="true"></i></span> Visible (the eye in Layers)</label>
+        <div class="inrow"><button class="btn small" data-act="jump">Go to effect</button><button class="btn small" data-act="copy">Copy</button><button class="btn small danger" data-act="del">Delete effect</button></div>`;
+      return h; }
     const vprop = row.path === 'fx.glitch' ? { ...prop, kind: 'number', min: 0, max: 1, step: 0.01, label: 'Amount' } : row.path === 'logo.hero' ? null : row.kind === 'event' ? null : prop;
     if (row.path === 'text.cue') {
       h += `<label class="field"><span class="lbl">Text ({title}, {bpm}, {key} … work)</span><textarea class="inp mono" rows="2" data-k="v">${esc(k.v)}</textarea></label>
@@ -112,7 +121,7 @@ export function createInspector(app, root) {
   }
   // Inspector sections: the elements of the registry grouped the way a designer looks for them.
   const SECTIONS = [['Scene', (e) => ['scene', 'intro', 'video', 'ground', 'overlays'].includes(e.id)], ['Camera', (e) => ['camera', 'focus'].includes(e.id)], ['Hero', (e) => ['hero', 'logo', 'pendant'].includes(e.id)],
-    ['Windows', (e) => e.id.startsWith('win.')], ['Meters', (e) => e.id.startsWith('meter.')], ['Colours', (e) => ['stagecol', 'wavecols'].includes(e.id)], ['FX', (e) => e.id === 'fx'], ['Tags', (e) => e.id === 'text' || e.id.startsWith('tag.')]];
+    ['Windows', (e) => e.id.startsWith('win.')], ['Meters', (e) => e.id.startsWith('meter.')], ['Colours', (e) => ['stagecol', 'wavecols'].includes(e.id)], ['FX', (e) => e.id === 'fx' || e.id === 'ufx'], ['Tags', (e) => e.id === 'text' || e.id.startsWith('tag.')]];
   const secOf = (e) => (SECTIONS.find(([, f]) => f(e)) || ['Other'])[0];
   const secOpen = { Camera: true };
   function elementView() {
@@ -144,14 +153,16 @@ export function createInspector(app, root) {
     document.body.classList.toggle('has-sel', S.length > 0); if (app.studio && app.studio.sheetSync) app.studio.sheetSync();
   }
   // ---------------------------------------------------------------- events
-  function setKeyField(f, val) {
+  function setKeyField(f, val, live = false) {
     const S = tl().selected().filter(([r]) => !(r.track && r.track.lock)); if (!S.length) return;
+    const edit = live ? (fn) => { cues.begin(); selfEdit = true; cues.preview(fn); selfEdit = false; } : edit0;
     if (f === 'interp') { if (val) { selfEdit = true; tl().setInterp(val); selfEdit = false; } return; }
     if (f === 'strength') { selfEdit = true; tl().setEaseStrength(+val); selfEdit = false; return; }
     edit(() => { for (const [r, k] of S) { r.track.auto = false; const K = r.track.keys, nx = r.kind === 'shot' ? k : K[K.indexOf(k) + 1];
       if (f === 'at') { try { k.b = Math.max(0, bbtToBeats(val)); } catch (_) {} }
       else if (f === 'b') k.b = Math.max(0, +val);
-      else if (['x', 'y', 'size', 'dur'].includes(f)) k[f] = f === 'dur' ? Math.max(1 / 16, +val) : +val;
+      else if (['x', 'y', 'size', 'dur', 'ein', 'eout'].includes(f)) k[f] = f === 'dur' ? Math.max(1 / 16, +val) : f === 'ein' || f === 'eout' ? Math.max(0, +val || 0) : +val;
+      else if (f === 'show') { if (val) delete k.off; else k.off = true; }
       else if (f.startsWith('h-')) { k.ty = 'bezier'; const o = k.ob || [1 / 3, 1 / 3]; if (f === 'h-ox') k.ob = [Math.min(1, Math.max(0, +val)), o[1]]; else if (f === 'h-oy') k.ob = [o[0], +val];
         else if (nx) { const i = nx.ib || [-1 / 3, -1 / 3]; nx.ib = f === 'h-ix' ? [Math.min(0, Math.max(-1, +val - 1)), i[1]] : [i[0], +val - 1]; } }
       else k[f] = val; }
@@ -169,7 +180,7 @@ export function createInspector(app, root) {
     tl().addKeyAt(row, b); tl().focusRowOf(path);
   }
   function setMarker(f, val) { const id = tl().state.selMarker; edit((s) => { const m = (s.markers || []).find((q) => q.id === id); if (!m) return; if (f === 'm-label') m.label = val; else if (f === 'm-kind') m.kind = val; else if (f === 'm-at') { try { m.b = Math.max(0, bbtToBeats(val)); } catch (_) {} } s.markers.sort((a, b) => a.b - b.b); }, 'edit marker'); }
-  const PASSIVE = ['v', 'element', 'q-to', 'stamp-rule', 'preset', 'preset-name', 'interp'];
+  const PASSIVE = ['v', 'show', 'col', 'element', 'q-to', 'stamp-rule', 'preset', 'preset-name', 'interp'];
   root.addEventListener('input', (e) => { const el = e.target, f = el.dataset.k; if (!f) return;
     if (f === 'prop') { const path = el.closest('.prop').dataset.path, v = readInput(el); if (el.type === 'range' || el.type === 'color') syncSibling(el, v); setProp(path, v); return; }
     if (f === 'q-str') { quantStr = +el.value; const o = root.querySelector('[data-q-val]'); if (o) o.textContent = quantStr + '%'; return; }
@@ -180,10 +191,13 @@ export function createInspector(app, root) {
     if (f === 'q-to') { quantTo = el.value; return; } if (f === 'stamp-rule') { stampRule = el.value; return; } if (f === 'preset') { presetSel = el.value; render(); return; }
     if (f.startsWith('m-')) { setMarker(f, el.value); return; }
     if (f === 'interp' || f.startsWith('h-') || f === 'strength') { setKeyField(f, el.value); render(); return; }
-    if (f === 'v') { const v = el.dataset.type ? readInput(el) : el.value; syncSibling(el, v); setKeyField('v', v); return; }
+    if (f === 'v') { const v = el.dataset.type ? readInput(el) : el.value; syncSibling(el, v); if (el.type === 'range' || el.type === 'color') { setKeyField('v', v, true); selfEdit = true; cues.commit('edit key'); selfEdit = false; } else setKeyField('v', v); return; }
+    if (f === 'col') { syncSibling(el, el.value); setKeyField('col', el.value, true); selfEdit = true; cues.commit('effect colour'); selfEdit = false; return; }
+    if (f === 'show') { setKeyField('show', el.checked); render(); return; }
     if (f === 'at') setKeyField('at', el.value); });
   // live typing for text values and range sliders on keys
-  root.addEventListener('input', (e) => { const el = e.target; if (el.dataset.k === 'v' && (el.type === 'range' || el.type === 'color' || el.tagName === 'TEXTAREA')) { const v = readInput(el); syncSibling(el, v); setKeyField('v', v); } });
+  root.addEventListener('input', (e) => { const el = e.target; if (el.dataset.k === 'v' && (el.type === 'range' || el.type === 'color' || el.tagName === 'TEXTAREA')) { const v = readInput(el); syncSibling(el, v); setKeyField('v', v, el.type !== 'textarea' && el.tagName !== 'TEXTAREA'); }
+    if (el.dataset.k === 'col' && el.type === 'color') { syncSibling(el, el.value); setKeyField('col', el.value, true); } });
   function syncSibling(el, v) { const box = el.closest('.field,.prop'); if (!box) return; box.querySelectorAll(`[data-type="${el.dataset.type}"]`).forEach((o) => { if (o !== el && o.type !== 'radio') { if (o.type === 'checkbox') o.checked = !!v; else o.value = v; } }); }
   root.addEventListener('toggle', (e) => { const d = e.target; if (d.tagName !== 'DETAILS') return; let changed = false;
     if (d.dataset.el && (open[d.dataset.el] ?? d.dataset.el === element) !== d.open) { open[d.dataset.el] = d.open; changed = true; }
@@ -227,6 +241,8 @@ export function createInspector(app, root) {
       if ((Math.abs(b - lastB) > 1e-6 || vk !== lastV) && now - lastT > (app.clock.playing ? 300 : 60) && !root.contains(document.activeElement) && !scrub) { lastB = b; lastT = now; lastV = vk; render(); } },
     showTrack(path) { const p = reg().byPath[path]; if (p) { element = p.element; reveal(element); if (!tl().selected().length) render(); } },
     showElement(id) { element = id; reveal(id); tl().clearSel(); render(); const n = root.querySelector(`details[data-el="${id}"]`); if (n && n.scrollIntoView) n.scrollIntoView({ block: 'nearest' }); },
+    /** v27: open the element that owns `path` and bring that property row into view (flashed), e.g. from a Layers row. */
+    showProp(path) { const p = reg().byPath[path]; if (!p) return false; this.showElement(p.element); const n = root.querySelector(`.prop[data-path="${CSS.escape(path)}"]`); if (n) { n.scrollIntoView && n.scrollIntoView({ block: 'center' }); n.classList.remove('flash'); void n.offsetWidth; n.classList.add('flash'); } return true; },
     focusValue() { const el = root.querySelector('[data-k="v"]'); if (el) el.focus(); },
     get element() { return element; },
   };

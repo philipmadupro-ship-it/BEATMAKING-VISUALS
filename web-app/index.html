@@ -170,7 +170,7 @@ body{background:var(--bg);color:var(--fg)}
       <button class="ib sm" id="rightToggle" aria-pressed="true" aria-label="Show the right panel" title="Right panel (Cmd/Ctrl+Alt+])"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2" width="11" height="10"/><path d="M9 2v10"/></svg></button>
     </div>
   </div>
-  <div class="stage" id="stage"><span class="fig" aria-hidden="true">FIG 001 · PROGRAM</span><span class="echo" id="stageEcho" aria-hidden="true"></span><div class="cwrap" id="cwrap"><canvas id="view" width="540" height="960" aria-label="Video preview. Click a window to edit its properties; drag it to move it."></canvas><div class="safe" id="safe" hidden></div><div class="guides" id="guides" hidden aria-hidden="true"></div><div class="abwipe" id="abWipe" hidden role="slider" tabindex="0" aria-label="A/B wipe position" aria-valuemin="0" aria-valuemax="100"><span>A</span><span>B</span></div><span class="abinfo hint" id="abInfo" hidden></span><div class="pick" id="pickBox" hidden></div></div></div>
+  <div class="stage" id="stage"><span class="fig" aria-hidden="true">FIG 001 · PROGRAM</span><span class="echo" id="stageEcho" aria-hidden="true"></span><div class="cwrap" id="cwrap"><canvas id="view" width="540" height="960" aria-label="Video preview. Click a window to select it: drag to move, drag a handle to resize (Shift keeps proportions, Alt from the centre). Arrow keys nudge 1 px, Shift 10 px; Alt plus arrows resize; Enter or Escape deselects."></canvas><div class="safe" id="safe" hidden></div><div class="guides" id="guides" hidden aria-hidden="true"></div><div class="abwipe" id="abWipe" hidden role="slider" tabindex="0" aria-label="A/B wipe position" aria-valuemin="0" aria-valuemax="100"><span>A</span><span>B</span></div><span class="abinfo hint" id="abInfo" hidden></span><div class="pick" id="pickBox" hidden></div></div></div>
   <div class="transport">
     <button class="play" id="playBtn" aria-label="Play"><svg id="playIco" width="16" height="16" viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z" fill="currentColor"/></svg></button>
     <button class="ib" id="restartBtn" aria-label="Back to bar 1"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 2v10M12 2L5 7l7 5z" stroke="currentColor" fill="currentColor" stroke-width="1.5"/></svg></button>
@@ -196,8 +196,9 @@ body{background:var(--bg);color:var(--fg)}
     <i class="ul" id="tabUl"></i>
   </div>
   <div class="pane" role="tabpanel" id="pane-inspect" aria-labelledby="tab-inspect" data-pane="inspect">
+    <div class="quick-h" id="quickH"><b>Quick setup</b><span class="hint">the main settings by task · always here</span></div>
     <div class="quick" id="quick" aria-label="Controls by task"></div>
-    <p class="hint quick-note" id="quickNote" hidden><span>Advanced view: every property by its raw path.</span><button class="btn tiny" id="quickBack">Back to the simple controls</button></p>
+    <div class="hint quick-note" id="quickNote" hidden><span class="qn-k">Selected</span><b class="qn-name" id="quickSel"></b><span class="qn-sub">Advanced view: every property by its raw path.</span><button class="btn tiny" id="quickBack">Back to the simple controls</button></div>
     <details class="adv" id="advInsp"><summary><b>Advanced</b><span class="hint">every property, raw paths, key editing</span></summary>
     <div id="inspHome"><div class="insp" id="insp"></div></div>
     </details>
