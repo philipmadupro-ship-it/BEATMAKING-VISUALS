@@ -26,7 +26,7 @@ export function createEffects(app) {
   const introBeats = () => { const ev = app.cues.ev(); return ev.value('intro.on', 0, true) === false ? 0 : Math.max(0, Math.round(ev.value('intro.length', 0, 2) * 4)); };
   function add(type, o = {}) {
     const T = UFX_TYPES[type]; if (!T) return null; const path = 'ufx.' + type, id = newId();
-    let b = o.b != null ? o.b : Math.round(ph()); const ib = introBeats(); const moved = b < ib; if (moved) b = ib;
+    let b = o.b != null ? o.b : Math.round(ph()); const ib = 0; const moved = false; void introBeats;   // v27 merge: effects now render in the intro push and the outro too, so they land exactly at the playhead
     const dur = o.dur ?? T.dur, k = { id, b, v: o.v ?? T.v, dur, ein: o.ein ?? 0, eout: o.eout ?? (dur >= 2 ? 0.5 : 0), ease: 'step' }; if (type === 'tint') k.col = o.col || '#ff3b6b';
     app.cues.edit((s) => { let t = s.tracks.find((q) => q.path === path); if (!t) { t = { id: newId('t'), path, kind: 'clip', lane: 'fx', auto: false, keys: [] }; s.tracks.push(t); } t.auto = false; t.keys.push(k); t.keys.sort((a, c) => a.b - c.b); }, 'add effect ' + T.name);
     const T2 = app.cuetl; if (T2) { if (T2.focusRowOf) T2.focusRowOf(path); if (T2.select) T2.select([id]); if (T2.markDirty) T2.markDirty(); }

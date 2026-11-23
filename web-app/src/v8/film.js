@@ -893,12 +893,12 @@ export function createFilm({ D, assets, aspect = '916' }) {
     // and IS frame 0. The last beat holds frame 0 (drawn directly) with the sphere already spinning at its frame-0 speed, so the loop seam is motion-continuous.
     const ZO = outroZoom();
     if (ZO && b >= ZO.b1 - 0.75 / fps / BEAT) {   // v27: the last frame IS frame 0 (drawn directly)
-      frame0(t, fps, scale); brutalFrame(t); textures(-PRE + 0.5 / fps); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+      frame0(t, fps, scale); brutalFrame(t); textures(-PRE + 0.5 / fps); userEffects(c, t, b, ev, { beat: BEAT, accent: S.hot }); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();   // v27: user effects in the intro push and the outro zoom too
       return { look: LOOK, stage: S.name, intro: true, zoom: 1 };
     }
     if (RWB && !OUTD && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); t = T(IB) - e * (T(IB) + PRE) + 0.5 / fps * (1 - e); if (PRE) t = Math.max(-PRE + 0.5 / fps, t); else t = Math.max(0.5 / fps, t); paused = t < 0; b = t / BEAT; }   // v19.3: rewinds through the browse back to the first frame
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
-      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player', pre: PRE, zoomS: ZD, ground: introGround }); c.setTransform(scale, 0, 0, scale, 0, 0); brutalFrame(t); voiceCaptions(t + PRE); social(t, true); textCues(t); textures(t); flash(t); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player', pre: PRE, zoomS: ZD, ground: introGround }); c.setTransform(scale, 0, 0, scale, 0, 0); brutalFrame(t); voiceCaptions(t + PRE); social(t, true); textCues(t); textures(t); flash(t); userEffects(c, t, b, ev, { beat: BEAT, accent: S.hot }); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
     }
     const camRef = camera(); let cam = camRef, zo = null;
