@@ -144,3 +144,15 @@ Loop seam (browser, 270 × 480, frame 0 against the last frame):
 - **2.82** with `intro.coverFrame` off (v25: 2.80);
 - **2.78** with it on (v25: 2.76);
 - the threshold is 6.
+
+Render (native, `u2c.py review`):
+- 9:16: last − first = **2.08**, against a median frame-to-frame change of 1.99 → **SEAMLESS**;
+- 16:9: last − first = **1.10**, against a median of 1.63 → **SEAMLESS**.
+
+Tests:
+- syntax OK;
+- meters 125/125;
+- smoke 44/44;
+- editor 43/43. One flaky status-strip timing check failed once (the position text was read 300 ms after a seek) and passed on a clean rerun.
+
+No test was changed.
