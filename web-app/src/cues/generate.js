@@ -22,7 +22,8 @@ export const PLAYER_PRESETS = ['default', 'hero', 'calm', 'tour', 'full'];
 // v23 intro moments in COMPOSITION seconds (0 = frame 0, PRE_S = the play click / beat 0); the generator turns them into beats with the beat length,
 // so the intro (and the voice, which is placed in seconds) times the same at every BPM. PRE_S is THE pre-roll (exporter, review and render.mjs read it).
 export const PRE_S = 9.0;
-export const INTRO_S = { playerIn: [0.5, 2.1], press: 3.7, release: 5.9, pick: 6.3, land: 7.1, typeEnd: 7.9, select: 8.25 };
+// v26: no playerIn fade any more: the paused player is in place on frame 0 (the thumbnail = the loop's last frame is a finished picture)
+export const INTRO_S = { press: 3.7, release: 5.9, pick: 6.3, land: 7.1, typeEnd: 7.9, select: 8.25 };
 // v21 seeded randomness: mulberry32 on a string hash, so every beat gets its own (repeatable) variation; meta.seed overrides
 const hashStr = (str) => { let h = 2166136261; for (const ch of String(str)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
 const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
@@ -59,7 +60,11 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     const heroPref = preset === 'hero' || preset === 'full' || NB > 32, WIDE = preset === 'calm' ? [1, 3] : preset === 'tour' ? [4] : [2, 4], CYC = preset === 'calm' ? 4 : 5, STEP = preset === 'calm' ? 4 : 2;
     const DUR = preset === 'calm' ? 4 : preset === 'full' || aspect === '169' ? 3 : 2; let nVis = 0;
     let pool = cyc(), pi = 0, slot = 0; const seq = { next() { { const sl = slot++ % CYC; if (WIDE.includes(sl)) return 'wide'; } if (heroPref && ids.includes('stage') && nVis++ % 2 === 1 && last !== 'stage') { last = 'stage'; return 'stage'; } if (pi >= pool.length) { pool = cyc(); pi = 0; } let id = pool[pi++]; if (heroPref && id === 'stage') { if (pi >= pool.length) { pool = cyc(); pi = 0; } id = pool[pi++]; } if (id === last && pi < pool.length) { [pool[pi - 1], pool[pi]] = [pool[pi], pool[pi - 1]]; id = pool[pi - 1]; } last = id; return id; } };
-    for (; bar < NB - 4; bar += STEP) { const id = seq.next(); if (id === 'wide') wides.push(bar); cam.push(key(bar * 4, id, { transition: 'push', dur: DUR, ease: 'spring' })); }   // v19.1: YouTube 16:9 moves are calmer (3 beats)
+    // v26 camera rule (user: "when you zoom, it always goes back to full screen before and after clicking a window, if not it's too much"): every visit is
+    // wide -> push into the window (DUR beats, landing ON the bar) -> hold HOLD beats -> back to wide (OUT beats); never panel-to-panel travel. A 'wide'
+    // slot adds nothing (the camera is already wide): it is the long breath the two CTAs land on. The drop push (intro) and the hero ending stay in.
+    const HOLD = preset === 'calm' ? 4 : 2, OUT = preset === 'calm' ? 4 : 2;
+    for (; bar < NB - 4; bar += STEP) { const id = seq.next(); if (id === 'wide') { wides.push(bar); continue; } cam.push(key(bar * 4, id, { transition: 'push', dur: DUR, ease: 'spring' })); cam.push(key(bar * 4 + HOLD + OUT, 'wide', { transition: 'push', dur: OUT, ease: 'spring' })); }   // v19.1: YouTube 16:9 moves are calmer (3 beats)
     if (preset === 'full') sheet.base['outro.end'] = 'stop';
     if (wides[0] != null) { sheet.base['social.cta1.at'] = wides[0] * 4 + 1; sheet.base['social.cta1.len'] = 4; }
     if (wides[1] != null) { sheet.base['social.cta2.at'] = wides[1] * 4 + 1; sheet.base['social.cta2.len'] = 4; }
@@ -141,7 +146,7 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     sheet.tracks.push(track('intro.pitch', 'number', 'stage', [key(F0, 0, { ease: 'step' }), key(sb(M.press), 0, { ease: 'easeInOut' }), key(sb(M.release), -37 * Math.PI / 180, { ease: 'step' })]));
     sheet.tracks.push(track('intro.pick', 'number', 'stage', [key(F0, 0, { ease: 'step' }), key(sb(M.pick), 0, { ease: 'emphasized' }), key(sb(M.land), 1, { ease: 'step' })]));
     sheet.tracks.push(track('intro.type', 'number', 'stage', [key(F0, 0, { ease: 'step' }), key(sb(M.land), 0, { ease: 'linear' }), key(sb(M.typeEnd), 1, { ease: 'step' })]));
-    sheet.tracks.push(track('intro.player.opacity', 'number', 'stage', [key(F0, 0, { ease: 'step' }), key(sb(M.playerIn[0]), 0, { ease: 'standard' }), key(sb(M.playerIn[1]), 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.player.opacity', 'number', 'stage', [key(F0, 1, { ease: 'step' })]));   // v26: the player is there from frame 0
     sheet.tracks.push(track('intro.index', 'number', 'stage', [key(F0, 0, { ease: 'step' })]));   // v21 browse kept for intro.style 'flow' (see intro.browse)
     void browse; void s0;
     sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(F0, 1, { ease: 'step' })]));   // v22: the sphere needs no fan-out

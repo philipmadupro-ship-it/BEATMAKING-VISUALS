@@ -541,10 +541,11 @@ export function createFilm({ D, assets, aspect = '916' }) {
     return L4.map((txt, i) => ({ txt, t: at[i] ?? (0.45 + i * 1.6), rate: (du[i] ?? 1.4) * 0.85 / Math.max(1, txt.length) })); }
   function voiceCaptions(tc) {
     // 9:16 keeps only the newest two lines (clear of the card); 16:9 shows all four
-    if (!V('voice.captions', LOOK === 'player') || PRE <= 0 || tc > PRE + 0.05) return; const VL = voiceLines(), fz = port ? 26 : 20, x0 = port ? 64 : W / 2 - 560, y0 = port ? 1388 : 828, lh = fz * 1.55;
+    if (!V('voice.captions', LOOK === 'player') || PRE <= 0 || tc >= PRE + REV_TS) return; c.save(); c.globalAlpha = 1 - cdSpring(tc - PRE); const VL = voiceLines(), fz = port ? 26 : 20, x0 = port ? 64 : W / 2 - 560, y0 = port ? 1388 : 828, lh = fz * 1.55;   // v26: the console lines leave on the spring at the play click
     const live = VL.filter((q) => tc >= q.t).slice(port ? -2 : -4); live.forEach((q, j) => { const n = Math.min(q.txt.length, Math.floor((tc - q.t) / q.rate + 1e-6) + 1), str = '> ' + q.txt.slice(0, n), last = j === live.length - 1, y = y0 - (live.length - 1 - j) * lh;
       text(c, str, x0, y, { size: fz, fam: DISPLAY, w: 800, col: rgba(S.ink, last ? 0.95 : 0.4), maxW: W - x0 - 60 });
       if (last && (n < q.txt.length || Math.floor(tc / 0.27) % 2 === 0)) { c.font = `800 ${fz}px ${DISPLAY}`; const cw = Math.min(W - x0 - 60, c.measureText(str).width * 1.04); c.fillStyle = rgba(S.ink, 0.9); c.fillRect(x0 + cw + 6, y - fz * 0.42, fz * 0.5, fz * 0.84); } });
+    c.restore();
   }
   function typed(strs, typeT, rate = T(1 / 24)) { if (typeT == null) return strs; let n = Math.max(0, Math.floor(typeT / rate + 1e-6)); return strs.map((q) => { const s0 = String(q || ''), k = Math.min(s0.length, n); n -= k; return s0.slice(0, k); }); }
   function dialog(cx, cy, wD, title, body, sub, t0, t, prog, typeT = null, slow = false, rate = T(1 / 24)) {
@@ -565,7 +566,11 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function social(t, intro) {
     if (!V('social.on', LOOK === 'player')) return;
     const wD = port ? 900 : 760, cx = W / 2;   // v19.5: wider + bigger hook text (reads at thumb-scroll size)
-    if (intro) { const p = clamp(t / T(IB)); const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hookTxt = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); const hs = -PRE + 0.25, cf = V('intro.coverFrame', false); if (!cf && t < hs) return; dialog(cx, port ? 330 : 150, wD, tag('social.title'), hookTxt, null, cf ? -1e3 : hs, t, p, cf ? 1e3 : t - hs - 0.75, true, T(1 / 12)); return; }   // v24 (audit V7) intro.coverFrame: the hook card is fully there from frame 0 (the platform thumbnail)   // v22.5: the hook types at half speed (user: too fast)   // v22.1: frame 0 = no hook; it rises in slowly, then types   // v19.1: A/B hook variants
+    if (intro) { const p = clamp(t / T(IB)); const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hookTxt = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); const hs = -PRE + 0.25, cf = V('intro.coverFrame', false); if (!cf && t < hs) return;
+      // v26: the window title is chrome (it arrives with the glass), the hook types from 0.35 s after the rise: readable by ~1.7 s with the sound off.
+      // At the play click it leaves as the camera passes it: content and container on the v25 spring (0.22 s), growing 6 % (we move through it).
+      const rate = T(1 / 12), tl = String(tag('social.title') || '').length * rate, ex = t > 0 ? cdSpring(t) : 0; if (ex >= 1) return; c.save(); if (ex > 0) { const sc = 1 + 0.06 * ex; c.globalAlpha = 1 - ex; c.translate(cx, port ? 330 : 150); c.scale(sc, sc); c.translate(-cx, -(port ? 330 : 150)); }
+      dialog(cx, port ? 330 : 150, wD, tag('social.title'), hookTxt, null, cf ? -1e3 : hs, t, p, cf ? 1e3 : Math.max(0, t - hs - 0.35) + tl, true, rate); c.restore(); return; }   // v24 (audit V7) intro.coverFrame: the hook card is fully there from frame 0 (the platform thumbnail)   // v22.5: the hook types at half speed (user: too fast)   // v22.1: frame 0 = no hook; it rises in slowly, then types   // v19.1: A/B hook variants
     for (const [k, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) {
       const at = V(`social.${k}.at`, def), len = V(`social.${k}.len`, 8); if (b < at || b >= at + len) continue;
       dof(Math.min(clamp((b - at) / 0.6), clamp((at + len - b) / 0.6)), 7); dialog(cx, port ? H * 0.5 : H * 0.5, wD, tag(`social.${k}.title`), tag(`social.${k}.body`), tag(`social.${k}.sub`), T(at), t, null, t - T(at) - 0.15);
@@ -580,7 +585,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function mouseWays() { if (MW && MW.ev === ev) return MW.w; const w = [], P = PRE, rest = { sx: W * 0.8, sy: H * (port ? 0.84 : 0.88) };
     w.push({ t: -P, ...rest }); if (P > 0) w.push({ t: -0.06, play: true, click: true });
     if (IB && LOOK === 'player' && P > 0 && ev.value('intro.style', -4, 'flow') === 'sphere') { const g = INTRO.geom(W, H), R = Math.min(g.cw * 0.95, 420), cy0 = g.cy - R * 0.05;   // v22 sphere: press low on the sphere, drag up (held), click the beat cover
-      const sm2 = sphM(); w.push({ t: T(sm2.press) - 0.02, sx: g.cx + g.cw * 0.06, sy: cy0 + R * 0.5, click: true }); w.push({ t: T(sm2.release), sx: g.cx + g.cw * 0.04, sy: cy0 + R * 0.04, drag: true, click: true }); w.push({ t: T(sm2.pick) - 0.02, sx: g.cx + g.cw * 0.03, sy: cy0 - R * 0.02, click: true }); }
+      const sm2 = sphM(); w.push({ t: T(sm2.press) - 0.02, sx: g.cx + g.cw * 0.06, sy: cy0 + R * 0.5, click: true, iw: true }); w.push({ t: T(sm2.release), sx: g.cx + g.cw * 0.04, sy: cy0 + R * 0.04, drag: true, click: true, iw: true }); w.push({ t: T(sm2.pick) - 0.02, sx: g.cx + g.cw * 0.03, sy: cy0 - R * 0.02, click: true, iw: true }); }   // v26 iw: intro-world points, carried by the fall camera
     else if (IB && LOOK === 'player' && P > 0) { const g = INTRO.geom(W, H); const br = Math.round(ev.value('intro.browse', -4, 1)); if (br) for (const bb of [-3, -2]) w.push({ t: T(bb) - 0.02, sx: g.cx - br * g.xs1 * 0.95, sy: g.cy + g.cw * 0.1, click: true }); w.push({ t: T(-1.25) - 0.02, sx: g.cx + g.cw * 0.12, sy: g.cy + g.cw * 0.25, click: true }); }   // v19.3: browse x2, choose; v21: browse side follows the seed (+1 left card, -1 right card, 0 direct)
     else if (IB) { const g = INTRO.geom(W, H); w.push({ t: T(Math.max(1, IB - 2)) - 0.02, sx: g.cx + g.cw * 0.18, sy: g.cy + g.cw * 0.2, click: true }); }
     for (const k of ev.keysIn('camera.shot', 0, 1e6)) { const r = k.v !== 'wide' && LY[k.v]; if (!r) continue; const d = k.dur ?? 1; w.push({ t: T(k.b - d) - 0.02, wx: r[0] + 92, wy: r[1] + (port ? 28 : 26), click: true }); }
@@ -600,7 +605,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   function typeEvents() {
     const E = [], rate = T(1 / 24), len = (q) => String(q ?? '').length, P = PRE, add = (t, n, dt) => { if (n > 0 && t >= 0) E.push({ t, n, dt }); };
     if (LOOK !== 'player' || !V('social.on', true)) return E;
-    const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hk = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); if (P > 0) add(1.0, len(tag('social.title')) + len(hk), T(1 / 12));
+    const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hk = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); if (P > 0) add(0.6, len(hk), T(1 / 12));   // v26: only the hook is typed (the window title arrives with the glass)
     if (P > 0 && V('voice.captions', true)) for (const q of voiceLines()) add(q.t, q.txt.length + 2, q.rate);   // v22.5 the console lines follow the voice
     if (ev.value('intro.style', -4, 'flow') === 'sphere' && P > 0) { const n = len(tag('intro.title') || D.title) + len(tag('intro.credit') || 'prod. @uche2crazy'); { const sm3 = sphM(); add(P + T(sm3.type), n, T(sm3.typeEnd - sm3.type) / Math.max(1, n)); } }
     for (const [k, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) { const at = V(`social.${k}.at`, def); add(P + T(at) + 0.15, len(tag(`social.${k}.title`)) + len(tag(`social.${k}.body`)) + len(tag(`social.${k}.sub`)), rate); }
@@ -608,7 +613,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const w2 = outroWin(); if (w2) add(P + T(w2[0]) + 0.15, len(tag('social.outro.title')) + len(tag('social.outro.body')) + len(tag('social.outro.sub')), rate);
     return E;
   }
-  function mousePos(q, cam) { if (q.play) return INTRO_HIT.play || [W * 0.3, H * 0.8]; if (q.wx != null) { if (!cam) return [W / 2, H / 2]; return [(q.wx - cam.x) * cam.z + W / 2, (q.wy - cam.y) * cam.z + H / 2]; } return [q.sx, q.sy]; }
+  function mousePos(q, cam) { if (q.play) return INTRO_HIT.play || [W * 0.3, H * 0.8]; if (q.iw) { const f = INTRO_HIT.fall; return f && f.cx != null ? [f.px + (q.sx - f.cx) * f.z, f.py + (q.sy - f.cy) * f.z] : [q.sx, q.sy]; } if (q.wx != null) { if (!cam) return [W / 2, H / 2]; return [(q.wx - cam.x) * cam.z + W / 2, (q.wy - cam.y) * cam.z + H / 2]; } return [q.sx, q.sy]; }
   function mouse(tf, cam) {
     if (!V('cursor.on', LOOK === 'player')) return; const w = mouseWays(); let i = w.findIndex((q) => q.t > tf); if (i < 0) i = w.length - 1; if (i === 0) i = 1;
     const A = w[i - 1], B = w[i], pa = mousePos(A, cam), pb = mousePos(B, cam), gap = B.t - A.t, mv = B.drag ? gap : Math.min(0.6, Math.max(0.12, gap - 0.12)), s0 = B.drag ? A.t : B.t - mv - 0.06, u = clamp((tf - s0) / mv), e = B.drag ? u * u * (3 - 2 * u) : mj(u);   // v22: a drag moves for the whole segment, with the button held
@@ -660,7 +665,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (off) { const cv = main.canvas; if (!F0C.cv || F0C.cv.width !== cv.width || F0C.cv.height !== cv.height) F0C.cv = mkCanvas(cv.width, cv.height); const g = F0C.cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.filter = 'none'; c = g; }
     b = bI; TC = 0; const Vo = (pth, d) => (pth in OV ? OV[pth] : V(pth, d));
     try { c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1; L.view.base = scale;
-      INTRO.draw(c, tI, { S, V: Vo, ev, tag, W, H, look: LOOK, aspect, paused: true, playerIn: !!PRE, ground: introGround });
+      INTRO.draw(c, tI, { S, V: Vo, ev, tag, W, H, look: LOOK, aspect, paused: true, playerIn: !!PRE, pre: PRE, ground: introGround });
       c.setTransform(scale, 0, 0, scale, 0, 0); social(tI, true); }
     finally { b = b1; TC = tc1; c = main; }
     if (off) { F0C.ready = true; c.setTransform(scale, 0, 0, scale, 0, 0); }
@@ -888,7 +893,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     }
     if (RWB && !OUTD && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); t = T(IB) - e * (T(IB) + PRE) + 0.5 / fps * (1 - e); if (PRE) t = Math.max(-PRE + 0.5 / fps, t); else t = Math.max(0.5 / fps, t); paused = t < 0; b = t / BEAT; }   // v19.3: rewinds through the browse back to the first frame
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
-      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player', ground: introGround }); c.setTransform(scale, 0, 0, scale, 0, 0); brutalFrame(t); voiceCaptions(t + PRE); social(t, true); textCues(t); textures(t); flash(t); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player', pre: PRE, ground: introGround }); c.setTransform(scale, 0, 0, scale, 0, 0); brutalFrame(t); voiceCaptions(t + PRE); social(t, true); textCues(t); textures(t); flash(t); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
     }
     const camRef = camera(); let cam = camRef, zo = null;
