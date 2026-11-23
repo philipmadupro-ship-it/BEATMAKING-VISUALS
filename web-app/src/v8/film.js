@@ -46,14 +46,29 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // ---------------------------------------------------------------- windows: rect, open steps, content
   const rectOf = (id) => { const r = LAYOUT[LOOK][aspect][id]; return [V(`win.${id}.x`, r[0]), V(`win.${id}.y`, r[1]), V(`win.${id}.w`, r[2]), V(`win.${id}.h`, r[3])]; };
   // v11 intro: with an intro of IB beats the lab builds after it (default open beats shift by IB; -2 = open at the cut)
-  // v16.1 dashboard-load choreography (motion-design skill: lead with the hero, centre-out stagger, 50-100 ms steps, total < 500 ms): after the intro cut
-  // the player panels open in rings by distance from the hero, one 32nd note (~59 ms at 128 BPM) apart, every start on the 32nd grid
+  // v25 REVEAL (PROMPT-v25 motion rules, docs/MOTION-v25.md): after the intro cut the player panels no longer pop in counted steps. Each one is a
+  // closed-form critically damped spring (zeta = 1, no overshoot) on the container (scale 0.96 -> 1 + opacity), and one 32nd note later the same
+  // spring on its content (label + live meter). Centre-out: ring 1 (nearest the hero) starts one 16th after the cut, each further ring one 32nd
+  // (58.6 ms at 128 BPM) later, capped at 4 rings, so the whole dashboard is settled < 500 ms after the first start. Every start is on the 32nd grid.
   const ringOf = (id) => { const h = LAYOUT[LOOK][aspect].stage, r = LAYOUT[LOOK][aspect][id]; if (!h || !r) return 0; const d = Math.hypot(r[0] + r[2] / 2 - h[0] - h[2] / 2, r[1] + r[3] / 2 - h[1] - h[3] / 2); return Math.min(7, Math.round(d / (port ? 260 : 380))); };
   const winOpen = (id) => { if (IB && (id === 'now' || id === 'stage')) return 0;
-    if (IB && LOOK === 'player' && openBeat(LOOK, aspect, id) < 0) return V(`win.${id}.open`, IB + ringOf(id) * 0.25);   // v13: the cover card is already there at the cut (the intro push ends on it), it does not build in
+    if (IB && LOOK === 'player' && openBeat(LOOK, aspect, id) < 0) return V(`win.${id}.open`, IB + U.s16 + Math.min(3, Math.max(0, ringOf(id) - 1)) * U.t32);   // v13: the cover card is already there at the cut (the intro push ends on it), it does not build in
     const d = openBeat(LOOK, aspect, id); return V(`win.${id}.open`, IB ? (d < 0 ? IB : d + IB) : d); };
+  const REV_W = 30, REV_TS = 6.64 / REV_W, REV_N = 1 - (1 + REV_W * REV_TS) * Math.exp(-REV_W * REV_TS);   // omega 30 rad/s: 99 % at 0.22 s, normalised to land exactly on 1
+  const cdSpring = (tau) => (tau <= 0 ? 0 : tau >= REV_TS ? 1 : (1 - (1 + REV_W * tau) * Math.exp(-REV_W * tau)) / REV_N);
+  /** v25 player: {a: container 0..1, k: content 0..1}, a pure function of t (open beat + win.visible keys). */
+  function reveal(id, t) {
+    const lag = T(U.t32), kv = ev.lastKey(`win.${id}.visible`, t / BEAT), o = T(winOpen(id));
+    const inAt = (t0) => ({ a: cdSpring(t - t0), k: cdSpring(t - t0 - lag) });
+    if (!kv) return V(`win.${id}.visible`, true) ? inAt(o) : { a: 0, k: 0 };
+    const was = kv.prev ? !!kv.prev.v : true, on = !!kv.key.v, kt = T(kv.key.b);
+    if (on) return was ? inAt(o) : inAt(kt);
+    if (!was) return { a: 0, k: 0 };
+    return { a: 1 - cdSpring(t - kt - lag), k: 1 - cdSpring(t - kt) };   // out: content leaves first, then the container
+  }
   function openStep(id, t) {
-    const n0 = steps(t, winOpen(id), 6, LOOK === 'player' ? U.s16 : U.t32),   // v17.2 player: panels build over 6 sixteenths (smoother)
+    if (LOOK === 'player') { const r = reveal(id, t); return r.a >= 1 && r.k >= 1 ? 6 : r.a > 0 ? 3 : 0; }
+    const n0 = steps(t, winOpen(id), 6, U.t32),
       k = ev.lastKey(`win.${id}.visible`, t / BEAT);
     if (!k) return V(`win.${id}.visible`, true) ? n0 : 0;
     const was = k.prev ? !!k.prev.v : true, on = !!k.key.v;
@@ -85,8 +100,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const cam = { x: lerp(A.x, Bf.x, wq) + V('camera.x', 0), y: lerp(A.y, Bf.y, wq) + V('camera.y', 0), z: zz * zm };
     // v13 (intro agent): the lab opens ON the cover (match cut from the intro push) and dollies out; L.openFx drives the streak copies + hides the HUD
     let op = IB ? INTRO.openCam(b, ev, IB, cam, { W, H, look: LOOK, aspect }) : null;
-    // v17.1 loop: the beats before the rewind mirror the opening dolly (dolly IN onto the hero cover, same framing + streaks as the match cut)
-    if (!op && RWB) { const open = ev.value('intro.open', 0, 2), b0 = RWB - open; if (open > 0 && b >= b0 && b < RWB) op = INTRO.openCam(IB + open * (1 - (b - b0) / open) - 1e-6, ev, IB, cam, { W, H, look: LOOK, aspect }); } L.openFx = op; if (op) return { x: op.x, y: op.y, z: op.z };
+    // v17.1 loop (outro.mode rewind only; v25 dialog outro = the infinite zoom): the beats before the rewind mirror the opening dolly (dolly IN onto the hero cover, same framing + streaks as the match cut)
+    if (!op && RWB && !OUTD) { const open = ev.value('intro.open', 0, 2), b0 = RWB - open; if (open > 0 && b >= b0 && b < RWB) op = INTRO.openCam(IB + open * (1 - (b - b0) / open) - 1e-6, ev, IB, cam, { W, H, look: LOOK, aspect }); } L.openFx = op; if (op) return { x: op.x, y: op.y, z: op.z };
     if (b >= IB) { const p = V('fx.punch', LOOK === 'player' ? 0.014 : 0), calm = LOOK === 'player' ? T(IB + ev.value('intro.open', 0, 2) + 4) : 0; if (p > 0 && !(RWB && b >= RWB - ev.value('intro.open', 0, 2) - 6)) cam.z *= 1 + p * punchSpring(T(b), calm); }   // v17: closed-form spring per kick; v21: still for one bar after the arrival and through the outro
     return cam;
   }
@@ -385,7 +400,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     const ink = Sx.ink; PL.crosses(c, Sx, [[x + 30, cy], [x + w - 30, cy]], 20);
     if (V('scan.on', true) && (V('scan.always', false) || ev.shot(b).to === 'stage' || ev.shot(b).from === 'stage')) detect(x, y, w, h, t, Sx);   // v19.1: boxes only when the camera is on the hero
     if (V('hero.caption', false)) PL.heroCaption(c, Sx, port ? x + w - 24 : x + w - 24, y + h - 22 - 25 * 3, 'right', 205);
-    c.restore();
+    c.restore();    if (L.curWin === 'stage') portal(x, y, w, h);   // v25 infinite zoom: the cover becomes frame 0
   }
   const nowCover = (r) => { const [x, y, w, h] = r, cp = w > 700 && h < 220; return cp ? [x + 20, y + 20, h - 40, h - 40] : [x + 20, y + 20, w - 40, Math.round((w - 40) * 0.5)]; };
   function playerNow(cr, t, k, Sx) {
@@ -442,15 +457,35 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c.scale(s, s); c.beginPath(); [[0, 0], [0, 17], [4, 13], [7, 20], [9.5, 19], [6.5, 12], [12, 12]].forEach(([px, py], j) => (j ? c.lineTo(px, py) : c.moveTo(px, py))); c.closePath();
     c.fillStyle = '#ffffff'; c.fill(); c.lineWidth = 1.2; c.strokeStyle = '#000000'; c.stroke(); c.restore();
   }
-  function card(id, t, active) {
-    const r = LY[id], n = openStep(id, t); if (n <= 0) return;
-    const acc = V(`win.${id}.accent`, null), Sx = acc && acc !== S.hot ? Object.assign({}, S, { hot: acc }) : S;
-    const cr = chrome(id, r, n, t, Sx, active); if (!cr) return;
-    const k = n >= 6 ? 1 : n === 5 ? 0.66 : n === 4 ? 0.33 : 0;
+  function cardBody(id, r, cr, t, k, Sx) {
     c.save(); c.clip(L.rr(r[0] + 1, r[1] + 1, r[2] - 2, r[3] - 2, V('glass.radius', 22)));
     L.avoid = []; L.curWin = id; L.winRect = r; L.contentRect = cr;
     if (k > 0) (BODY[contentOf(id)] || BODY.spectrum)(cr, t, k, Sx);
     c.restore();
+  }
+  // v25 reveal layers: the container and the content are drawn into an offscreen layer each and composited with their spring opacity (the
+  // bodies set their own globalAlpha, so an outer alpha would not hold); the 0.96 -> 1 scale is applied in the world (crisp, no resampling)
+  const RL = { a: null, b: null };
+  function layered(slot, draw, alpha) {
+    const main = c, cv = main.canvas; let q = RL[slot]; if (!q || q.width !== cv.width || q.height !== cv.height) q = RL[slot] = mkCanvas(cv.width, cv.height);
+    const g = q.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, q.width, q.height); g.setTransform(main.getTransform()); g.imageSmoothingEnabled = true;
+    c = g; try { draw(); } finally { c = main; }
+    main.save(); main.setTransform(1, 0, 0, 1, 0, 0); main.globalAlpha = clamp(alpha) * main.globalAlpha; main.drawImage(q, 0, 0); main.restore();
+  }
+  function card(id, t, active) {
+    const r = LY[id], acc = V(`win.${id}.accent`, null), Sx = acc && acc !== S.hot ? Object.assign({}, S, { hot: acc }) : S;
+    if (LOOK === 'player') {
+      const rv = reveal(id, t); if (rv.a <= 0) return;
+      if (rv.a >= 1 && rv.k >= 1) { const cr = chrome(id, r, 6, t, Sx, active); if (cr) cardBody(id, r, cr, t, 1, Sx); return; }
+      const cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2, s = 0.96 + 0.04 * rv.a, cr = contentRect(id, r);
+      c.save(); c.translate(cx, cy); c.scale(s, s); c.translate(-cx, -cy);
+      layered('a', () => chrome(id, r, 4, t, Sx, active), rv.a);   // n 4 = the glass without the label
+      if (rv.k > 0) layered('b', () => { label(id, r[0], r[1], r[2], Sx, active); cardBody(id, r, cr, t, 1, Sx); }, rv.k);
+      c.restore(); return;
+    }
+    const n = openStep(id, t); if (n <= 0) return;
+    const cr = chrome(id, r, n, t, Sx, active); if (!cr) return;
+    cardBody(id, r, cr, t, n >= 6 ? 1 : n === 5 ? 0.66 : n === 4 ? 0.33 : 0, Sx);
   }
   const resultAt = () => V('result.at', Math.max(0, (NB - (NB >= 8 ? 2 : 1)) * 4));
   // ---------------------------------------------------------------- overlays: end card, HUD, text cues, textures
@@ -589,6 +624,58 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // v21 outro dialog (screen space, on the hero shot): JOIN / CREATE PROJECT pops (spring) 5 beats before the cut back, the cursor closes it with x 2 beats later
   const outroWin = () => (OUTD && (RWB || STOPB) ? [(RWB || STOPB) - 5.5, (RWB || STOPB) - 3] : null);   // v23: full beat (STOPB) counts from the clip end   // v22.1: 2.5 beats so CLOSE PROJECT? types out fully
   function outroDialog(t) { const w2 = outroWin(); if (!w2 || b < w2[0] || b >= w2[1] + 0.5) return; const uo = clamp((b - w2[1]) / 0.5), ox = b >= w2[1] ? 1 - uo * uo * (3 - 2 * uo) : 1; if (ox <= 0.01) return; dof(Math.min(clamp((b - w2[0]) / 0.6), ox), 7); c.save(); c.translate(W / 2, H * 0.5); c.scale(ox, ox); c.translate(-W / 2, -H * 0.5); dialog(W / 2, H * 0.5, port ? 900 : 760, tag('social.outro.title') || 'U2C LAB', tag('social.outro.body') || 'JOIN / CREATE PROJECT', tag('social.outro.sub') || '', T(w2[0]), t, null, t - T(w2[0]) - 0.15); c.restore(); }   // v22: CLOSE PROJECT?; after the x click it shrinks away (half a beat) as the dolly starts
+  // ---------------------------------------------------------------- v25 infinite zoom ending (docs/MOTION-v25.md)
+  // Window: from the x click (RWB - 3) to one beat before the end; then frame 0 holds for the last beat. Log-scale progress e = tukey(u): the zoom
+  // speed d(ln z)/dt rises on a half-cosine over the first 30 % of the move, cruises constant (equal ratios per frame = constant perceived speed),
+  // and falls on a half-cosine over the last 30 % (velocity and acceleration continuous, 0 at both ends; peak speed 1.43 x the mean).
+  const TK = 0.3, tkA = (x) => 0.5 * (x - TK / Math.PI * Math.sin(Math.PI * x / TK));
+  const tukey = (u) => { u = clamp(u); const s0 = u < TK ? tkA(u) : u <= 1 - TK ? TK / 2 + (u - TK) : TK / 2 + (1 - 2 * TK) + (TK / 2 - tkA(1 - u)); return s0 / (1 - TK); };
+  const tukeyV = (u) => { u = clamp(u); const v = u < TK ? 0.5 * (1 - Math.cos(Math.PI * u / TK)) : u <= 1 - TK ? 1 : 0.5 * (1 - Math.cos(Math.PI * (1 - u) / TK)); return v / (1 - TK); };
+  const outroZoom = () => (RWB && OUTD && LOOK === 'player' ? { b0: RWB - 3, b1: D.duration / BEAT - 1 } : null);
+  let PORTAL = null; const F0C = { cv: null, ready: false };
+  /** The focus transform of the clicked window (scale about its centre + the safe-band lift), measured with the camera cm. */
+  function focusGeo(cm) {
+    if (LOOK !== 'player' || !V('focus.window', true)) return null; const s2 = ev.shot(b), id2 = s2.to !== 'wide' ? s2.to : s2.from !== 'wide' ? s2.from : null; if (!id2 || !LY[id2]) return null;
+    const amt = s2.to !== 'wide' ? (s2.from === s2.to ? 1 : s2.u) : 1 - s2.u; if (!(amt > 0.01)) return null;
+    const r2 = LY[id2], cx = r2[0] + r2[2] / 2, cy = r2[1] + r2[3] / 2, sc = 1 + 0.03 * amt; let lift = 0;
+    // v19.5: a window that rests under the TikTok caption (y > 1548) or the header lifts into the safe band while focused (same spring as the camera)
+    if (port) { const z = cm.z, syC = (cy - cm.y) * z + H / 2, hh2 = r2[3] * z * sc / 2, want = Math.min(Math.max(syC, 230 + hh2), 1530 - hh2); lift = (want - syC) / z * amt; }
+    return { id: id2, amt, cx, cy, sc, lift };
+  }
+  /** The zoom camera: from the hero shot A to the portal framing B (the frame-0 rect inside the cover fills the screen), ln z eased by tukey(u),
+   *  the position following the fixed point of A and B (as the v23 one-form camera), so the cover centre stays put on screen. */
+  function zoomState(A, Z, fps) {
+    const r = LY.stage || L.coverRect || [W / 2 - 100, H / 2 - 100, 200, 200], fg = focusGeo(A), f = fg && fg.id === 'stage' ? fg : { sc: 1, lift: 0 };
+    const pw = Math.min(r[2], r[3] * W / H), ph = pw * H / W, zE = W / (pw * f.sc), Pc = { x: r[0] + r[2] / 2, y: r[1] + r[3] / 2 + f.lift };
+    const u = clamp((b - Z.b0) / (Z.b1 - Z.b0)), e = tukey(u), zz = A.z * Math.pow(zE / A.z, e);
+    const wq = Math.abs(zE - A.z) > 1e-4 ? (1 / zz - 1 / A.z) / (1 / zE - 1 / A.z) : e, cam = { x: lerp(A.x, Pc.x, wq), y: lerp(A.y, Pc.y, wq), z: zz };
+    const dl = Math.log(zE / A.z) * tukeyV(u) * (0.9 / fps) / T(Z.b1 - Z.b0), uu = clamp((u - 0.05) / 0.3);
+    return { cam, u, e, dl, d: uu * uu * (3 - 2 * uu), pw, ph, px: W / 2 + (Pc.x - cam.x) * zz, py: H / 2 + (Pc.y - cam.y) * zz };
+  }
+  /** Frame 0 (the intro sphere at frame-0 time, + the cover-frame hook) drawn into c, or offscreen (F0C.cv) when off. The sphere's yaw runs on at
+   *  its frame-0 speed up to the seam (t - end, seconds), so the picture inside the cover is already moving the way frame 1 continues. */
+  function frame0(t, fps, scale, off = false) {
+    const main = c, tI = -PRE + 0.5 / fps, bI = tI / BEAT, b1 = b, tc1 = TC, y0 = ev.value('intro.yaw', bI, 0), rate = (ev.value('intro.yaw', bI + 0.25, 0) - y0) / T(0.25);
+    const OV = { 'intro.yaw': y0 + rate * (t - (D.duration + 0.5 / fps)) };
+    if (off) { const cv = main.canvas; if (!F0C.cv || F0C.cv.width !== cv.width || F0C.cv.height !== cv.height) F0C.cv = mkCanvas(cv.width, cv.height); const g = F0C.cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.filter = 'none'; c = g; }
+    b = bI; TC = 0; const Vo = (pth, d) => (pth in OV ? OV[pth] : V(pth, d));
+    try { c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1; L.view.base = scale;
+      INTRO.draw(c, tI, { S, V: Vo, ev, tag, W, H, look: LOOK, aspect, paused: true, playerIn: !!PRE, ground: introGround });
+      c.setTransform(scale, 0, 0, scale, 0, 0); social(tI, true); }
+    finally { b = b1; TC = tc1; c = main; }
+    if (off) { F0C.ready = true; c.setTransform(scale, 0, 0, scale, 0, 0); }
+  }
+  /** The portal: the cover's picture cross-dissolves to frame 0 (contain-fit, screen aspect, centred in the card; the rest of the card goes to the ground colour). */
+  function portal(x, y, w, h) {
+    const P = PORTAL; if (!P || !F0C.ready || !(P.d > 0)) return;
+    c.save(); c.globalAlpha = P.d; c.globalCompositeOperation = 'source-over'; c.fillStyle = S.bg; c.fillRect(x, y, w, h);
+    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(F0C.cv, x + (w - P.pw) / 2, y + (h - P.ph) / 2, P.pw, P.ph);
+    // soft edge: the frame-0 rect melts into the ground colour (feather 14 % of its width, shrinking to 0 as the zoom lands, so the last frame is exact)
+    const fe = P.pw * 0.14 * (1 - P.e), px = x + (w - P.pw) / 2, py = y + (h - P.ph) / 2;
+    if (fe > 0.5) for (const [gx0, gy0, gx1, gy1, rx, ry, rw, rh] of [[px, 0, px + fe, 0, px, py, fe, P.ph], [px + P.pw, 0, px + P.pw - fe, 0, px + P.pw - fe, py, fe, P.ph], [0, py, 0, py + fe, px, py, P.pw, fe], [0, py + P.ph, 0, py + P.ph - fe, px, py + P.ph - fe, P.pw, fe]]) {
+      const g = c.createLinearGradient(gx0, gy0, gx1, gy1); g.addColorStop(0, rgba(S.bg, 1)); g.addColorStop(1, rgba(S.bg, 0)); c.fillStyle = g; c.fillRect(rx, ry, rw, rh); }
+    c.restore();
+  }
   // v21 TERMINAL WORDS (user: "words that come in and out, like on a computer"): term.line clips type in one character per 64th note, hold, then delete backwards
   // (one character per 128th) before the clip ends; a small system toast, bottom-left inside the safe zone; text is a tag string with {vars}
   function terminal(t) {
@@ -789,29 +876,22 @@ export function createFilm({ D, assets, aspect = '916' }) {
     // CLOSE PROJECT? dialog still pops (6.5 .. 4 beats before the end), the x closes it, the player plays on to the last frame and the video stops.
     { const oe = V('outro.end', 'auto'), stop = oe === 'stop' || (oe === 'auto' && NB > 32); if (stop && RWB) { RWB = 0; STOPB = D.duration / BEAT - 1; } else STOPB = 0; }
     RWB0 = RWB;
-    if (RWB && OUTD && t >= RWB * BEAT) {
-      // v21 OUTRO (user: "a JOIN / CREATE PROJECT pop-up, the cursor presses x, it goes back and it stops"; never glitchy): the dialog lived on the hero (E-11 .. E-9),
-      // the camera dollied into the hero cover (E-9 .. E-6, the match cut in reverse); here: on the intro's pushed-in card, ONE zoom out (push 1 -> 0, decelerating,
-      // 3 beats), then the cover-flow glides back to its frame-0 card and the fan closes to its frame-0 state (2 beats, ease in-out), the hook dialog springs back in,
-      // the player is paused. The intro is drawn at frame-0 time, so the last frame IS frame 0.
-      const o = (t - RWB * BEAT) / BEAT, tI = -PRE + 0.5 / fps, bI = tI / BEAT, sm = (u) => { u = clamp(u); return u * u * u * (u * (6 * u - 15) + 10); };
-      const idx0 = ev.value('intro.index', bI, 0), ent0 = ev.value('intro.enter', bI, 1), u1 = clamp(o / 3), u2 = sm((o - 3) / 2);
-      const OV = { 'intro.push': Math.pow(1 - u1, 3), 'intro.index': lerp(0, idx0, u2), 'intro.enter': lerp(1, ent0, u2), 'intro.select': false };
-      if (ev.value('intro.style', bI, 'flow') === 'sphere') { const uP = sm((o - 3) / 1.25), uR = sm((o - 3.5) / 1.5);   // v22: the card flies back into the sphere, the sphere turns back to frame 0
-        OV['intro.pick'] = lerp(1, ev.value('intro.pick', bI, 0), uP); OV['intro.type'] = 1 - clamp((o - 2.3) / 0.7); OV['intro.player.opacity'] = lerp(1, ev.value('intro.player.opacity', bI, 1), uR); OV['intro.pitch'] = lerp(ev.value('intro.pitch', 0, 0), ev.value('intro.pitch', bI, 0), uR); OV['intro.yaw'] = lerp(ev.value('intro.yaw', 0, 0), ev.value('intro.yaw', bI, 0), uR); }
-      b = bI; const Vo = (pth, d) => (pth in OV ? OV[pth] : V(pth, d));
-      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, tI, { S, V: Vo, ev, tag, W, H, look: LOOK, aspect, paused: true, playerIn: !!PRE, ground: introGround });
-      c.setTransform(scale, 0, 0, scale, 0, 0);
-      if (V('intro.coverFrame', false)) { c.save(); c.globalAlpha = sm((o - 3) / 2); social(tI, true); c.restore(); }   // v24: the cover-frame hook returns with the loop, so the last frame = frame 0
-      brutalFrame(t); textures(tI); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
-      return { look: LOOK, stage: S.name, intro: true, index: OV['intro.index'], push: OV['intro.push'], enter: OV['intro.enter'] };
+    // v25 INFINITE ZOOM ENDING (dialog outro, loop): after the x closes CLOSE PROJECT? (RWB - 3) the camera makes ONE exponential zoom into the hero
+    // cover (cover centre fixed on screen) while the cover's picture cross-dissolves into frame 0; when the zoom lands the cover fills the screen
+    // and IS frame 0. The last beat holds frame 0 (drawn directly) with the sphere already spinning at its frame-0 speed, so the loop seam is motion-continuous.
+    const ZO = outroZoom();
+    if (ZO && b >= ZO.b1) {
+      frame0(t, fps, scale); brutalFrame(t); textures(-PRE + 0.5 / fps); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+      return { look: LOOK, stage: S.name, intro: true, zoom: 1 };
     }
     if (RWB && !OUTD && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); t = T(IB) - e * (T(IB) + PRE) + 0.5 / fps * (1 - e); if (PRE) t = Math.max(-PRE + 0.5 / fps, t); else t = Math.max(0.5 / fps, t); paused = t < 0; b = t / BEAT; }   // v19.3: rewinds through the browse back to the first frame
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
       L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player', ground: introGround }); c.setTransform(scale, 0, 0, scale, 0, 0); brutalFrame(t); voiceCaptions(t + PRE); social(t, true); textCues(t); textures(t); flash(t); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
     }
-    const cam = camera(), z = cam.z; L.view.camZ = z; L.view.base = scale;
+    const camRef = camera(); let cam = camRef, zo = null;
+    if (ZO && b >= ZO.b0) { zo = zoomState(camRef, ZO, fps); cam = zo.cam; F0C.ready = false; frame0(t, fps, scale, true); }   // v25: frame 0 rendered offscreen for the portal
+    PORTAL = zo; const z = cam.z; L.view.camZ = z; L.view.base = scale;
     c.fillStyle = S.bg; c.fillRect(0, 0, W, H);
     c.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z));
     ground(); L.snap(c, 'ground', LOOK === 'exe' || LOOK === 'player' ? 3 + 4 * V('glass.back', 1) : 3);   // v12: exe glass blurs the ground more (depth)
@@ -819,21 +899,20 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (LOOK === 'player') playerShell(t);
     // v19.5: the lifted (focused) window leaves its slot: the slot copy fades out as the window rises, so it never shows twice
     let liftId = null, liftAmt = 0; if (LOOK === 'player' && port && V('focus.window', true)) { const s3 = ev.shot(b), id3 = s3.to !== 'wide' ? s3.to : s3.from !== 'wide' ? s3.from : null;
-      if (id3 && LY[id3]) { const r3 = LY[id3], syC = (r3[1] + r3[3] / 2 - cam.y) * z + H / 2, hh3 = r3[3] * z / 2; if (syC + hh3 > 1530 || syC - hh3 < 230) { liftId = id3; liftAmt = s3.to !== 'wide' ? (s3.from === s3.to ? 1 : s3.u) : 1 - s3.u; } } }
+      if (id3 && LY[id3]) { const r3 = LY[id3], syC = (r3[1] + r3[3] / 2 - camRef.y) * camRef.z + H / 2, hh3 = r3[3] * camRef.z / 2; if (syC + hh3 > 1530 || syC - hh3 < 230) { liftId = id3; liftAmt = s3.to !== 'wide' ? (s3.from === s3.to ? 1 : s3.u) : 1 - s3.u; } } }
     for (const id of IDS) { if (id === liftId && liftAmt > 0.01) { if (liftAmt < 0.99) { c.save(); c.globalAlpha = 1 - liftAmt; card(id, t, att === id); c.restore(); } continue; } card(id, t, att === id); }
     // v19.3 window focus (user): a clicked panel comes to the front: everything else sinks behind a scrim, the panel is redrawn on top, 3 % bigger
-    if (LOOK === 'player' && V('focus.window', true)) { const s2 = ev.shot(b), id2 = s2.to !== 'wide' ? s2.to : s2.from !== 'wide' ? s2.from : null;
-      if (id2 && LY[id2]) { const amt = s2.to !== 'wide' ? (s2.from === s2.to ? 1 : s2.u) : 1 - s2.u; if (amt > 0.01) { const r2 = LY[id2], cx2 = r2[0] + r2[2] / 2, cy2 = r2[1] + r2[3] / 2, sc2 = 1 + 0.03 * amt;
+    if (LOOK === 'player' && V('focus.window', true)) {
+      const fg = focusGeo(camRef); if (fg) { const id2 = fg.id, amt = fg.amt, r2 = LY[id2], cx2 = fg.cx, cy2 = fg.cy, sc2 = fg.sc, lift = fg.lift; {
         { const sv = c.getTransform(); dof(amt, 6); c.setTransform(sv); } c.fillStyle = rgba(S.bg, 0.55 * amt * V('focus.dim', 1)); c.fillRect(-W, -H, 3 * W, 3 * H);   // v22.1: the rest goes soft behind the focused window
-        // v19.5: a window that rests under the TikTok caption (y > 1548) or the header lifts into the safe band while focused (same spring as the camera)
-        let lift = 0; if (port) { const syC = (cy2 - cam.y) * z + H / 2, hh2 = r2[3] * z * sc2 / 2, want = Math.min(Math.max(syC, 230 + hh2), 1530 - hh2); lift = (want - syC) / z * amt; }
         c.save(); c.translate(cx2, cy2 + lift); c.scale(sc2, sc2); c.translate(-cx2, -cy2); card(id2, t, true); c.restore(); } } }
     if (LOOK === 'player' && V('focus.bracket', true)) focusBracket(t);
     hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
     videoDraw('full', 0, 0, W, H);   // v19 video layer, full frame (screen space, over the windows, under halation / overlays)
-    if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16));
-    if (L.openFx) INTRO.streak(c, L.openFx.px, L.openFx.py, L.openFx.dl);   // v13 intro: directional streak copies on the opening dolly-out
+    if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16) * (zo ? 1 - zo.e : 1));   // v25: the halation leaves with the zoom (frame 0 has none)
+    if (L.openFx) INTRO.streak(c, L.openFx.px, L.openFx.py, L.openFx.dl);
+    if (zo) INTRO.streak(c, zo.px, zo.py, zo.dl);   // v25: radial motion blur of the zoom, about its fixed point   // v13 intro: directional streak copies on the opening dolly-out
     result(t); hud(t, ev.shot(b)); brutalFrame(t); social(t, false); outroDialog(t); terminal(t); textCues(t); textures(t); mouse(filmT, cam);
     flash(t);
     glitch(t, scale);
@@ -846,7 +925,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     b = 0; setState(V('look', opts.look || 'exe'), V('stage', opts.stage || 'nigredo'));
     for (const t of ev.tracksOf('camera.shot')) for (const k of t.keys) { if (k.transition !== 'cut') add(k.b - (k.dur ?? 1), `camera push → ${k.v} (start)`); add(k.b, `camera ${k.transition === 'cut' ? 'cut' : 'push'} → ${k.v} (land)`); }
     for (const [bb, w] of INTRO.events(ev)) add(bb, w);   // v11 intro
-    for (const id of IDS) { const o = winOpen(id); if (o >= 0) for (let q = 0; q < 6; q++) add(o + q * U.t32, `open ${id} step ${q + 1}`); }
+    for (const id of IDS) { const o = winOpen(id); if (o < 0) continue; if (LOOK === 'player') { if (o > 0) { add(o, `reveal ${id} container (spring start)`); add(o + U.t32, `reveal ${id} content (spring start)`); } } else for (let q = 0; q < 6; q++) add(o + q * U.t32, `open ${id} step ${q + 1}`); }
     const ra = resultAt(); for (let q = 0; q < 6; q++) add(ra + q * 0.5, `result line ${q + 1}`);
     for (const [bb, w] of BR.logoEvents(0, NB * 4, Math.max(4, Math.round(V('logo.cycle', 2) * 4)), HOLD(), HOLD_OFF)) add(bb, w);
     if (LOOK === 'exe') for (let q = 0; q < NB * 16; q++) add(q / 4, 'step grid step (16th)');

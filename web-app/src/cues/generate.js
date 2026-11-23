@@ -69,7 +69,7 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
       const busy = (b2) => [sheet.base['social.cta1.at'], sheet.base['social.cta2.at']].some((a2) => a2 != null && b2 + 5 > a2 && b2 < a2 + 4);
       sheet.tracks.push(track('term.line', 'clip', 'text', T0.filter(([b2]) => b2 < (NB - 3) * 4 && !busy(b2)).map(([b2, v, d]) => key(b2, v, { dur: d })))); }
     if (ids.includes('stage') && NB >= 8) { cam.push(key((NB - 3) * 4, 'stage', { transition: 'push', dur: 2, ease: 'spring' })); sheet.tracks.push(track('intro.open', 'number', 'stage', [key(0, 3, { ease: 'step' })]));
-      }   // v17.1: the final bar is the rewind (film.js): dolly into the hero cover, cut onto the intro's pushed-in card, play the intro backwards to frame 0
+      }   // v25: the hero visit before the end = the CLOSE PROJECT? dialog, then the infinite zoom into the hero cover that becomes frame 0 (film.js outroZoom)
   } else if (preset === 'default') {
     const rot = FOCUS_PLAN[look].map(([, id, n]) => [id, n]), used = [];
     let i = 0;
