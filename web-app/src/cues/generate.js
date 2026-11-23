@@ -23,10 +23,7 @@ export const PLAYER_PRESETS = ['default', 'hero', 'calm', 'tour', 'full'];
 // so the intro (and the voice, which is placed in seconds) times the same at every BPM. PRE_S is THE pre-roll (exporter, review and render.mjs read it).
 export const PRE_S = 9.0;
 // v26: no playerIn fade any more: the paused player is in place on frame 0 (the thumbnail = the loop's last frame is a finished picture)
-// v27 mirror intro (docs/MOTION-v27.md): frame 0 is zoomed into the card's cover, the camera zooms out (0 -> ~4.2 s at 128 BPM, the outro's 9 beats
-// mirrored) onto the paused player; press = the cursor wakes and glides to the card (the Voice lab's 'drag' marker), pick = it clicks the card (the
-// selection brackets step in, intro.select), then play at PRE_S. The cover never leaves the card (no pick flight, no typing: the caption is printed).
-export const INTRO_S = { out: 4.22, press: 5.7, pick: 6.3 };
+export const INTRO_S = { press: 3.7, release: 5.9, pick: 6.3, land: 7.1, typeEnd: 7.9, select: 8.25 };
 // v21 seeded randomness: mulberry32 on a string hash, so every beat gets its own (repeatable) variation; meta.seed overrides
 const hashStr = (str) => { let h = 2166136261; for (const ch of String(str)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
 const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
@@ -133,7 +130,7 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     // v19.3 player intro logic (user): FIRST browse + choose (silent pre-roll, negative beats: the cursor clicks the cover-flow twice, 2 -> 1 -> 0,
     // then clicks the chosen card = selection brackets), THEN the cursor clicks play at beat 0 (the music starts) and the push into the project
     // runs over the first bar (intro.length 1); the lab opens on the cover and dollies out (intro.open 3). Pre-roll = 4 beats (native --preroll).
-    sheet.tracks.push(track('intro.length', 'number', 'stage', [key(0, 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.length', 'number', 'stage', [key(0, 0.25, { ease: 'step' })]));   // v27.1 (user): no push-in after the click: one beat on the card, then the lab opens on the cover and DE-ZOOMS out (intro.open)
     // v21 seeded browse (user: "sometimes left, sometimes right, sometimes it clicks directly"): +1 = the cards step in from the left (2 -> 1 -> 0, the cursor
     // clicks the left card), -1 = from the right (-2 -> -1 -> 0, clicks the right card), 0 = the beat cover is already centred and the cursor picks it directly
     const BR = rng(seed ^ 0x9e3779b9)(), browse = BR < 0.4 ? 1 : BR < 0.8 ? -1 : 0, s0 = 2 * browse; sheet.base['intro.browse'] = browse;
@@ -145,18 +142,16 @@ export function generateSheet({ bars = 16, labels = [], look = 'exe', stage = 'n
     // length (meta.spb, default 128 BPM): the sphere spins while the player fades in and the ambience breathes, the cursor presses at 3.7 s and drags
     // slowly (2.2 s), picks at 6.3 s, the card types its title, brackets at 8.25 s, play at 9 s. First keys sit at or before frame 0.
     const SB = +meta.spb > 0 ? +meta.spb : 60 / 128, sb = (sec) => Math.round(((sec - PRE_S) / SB) * 960) / 960, F0 = sb(0) - 10 / 960, M = INTRO_S;   // on the 960-tick grid (BAR.BEAT.TICK round trip)
-    // v27: the sphere orbits behind the card the whole intro (one constant spin, ~0.18 rad/s, seeded direction, flat pitch); its beat-cover tile is
-    // missing (it is on the card: pick 1 from frame 0); the caption is printed (type 1); the cursor clicks the card at INTRO_S.pick (intro.select).
-    sheet.tracks.push(track('intro.yaw', 'number', 'stage', [key(F0, SPIN * 1.1, { ease: 'linear' }), key(4, SPIN * (1.1 - 0.176 * (PRE_S + 4 * SB)), { ease: 'step' })]));
-    sheet.tracks.push(track('intro.pitch', 'number', 'stage', [key(F0, 0, { ease: 'step' })]));
-    sheet.tracks.push(track('intro.pick', 'number', 'stage', [key(F0, 1, { ease: 'step' })]));
-    sheet.tracks.push(track('intro.type', 'number', 'stage', [key(F0, 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.yaw', 'number', 'stage', [key(F0, SPIN * 1.1, { ease: 'linear' }), key(sb(M.press), SPIN * 0.45, { ease: 'standard' }), key(sb(M.release), 0, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.pitch', 'number', 'stage', [key(F0, 0, { ease: 'step' }), key(sb(M.press), 0, { ease: 'easeInOut' }), key(sb(M.release), -37 * Math.PI / 180, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.pick', 'number', 'stage', [key(F0, 0, { ease: 'step' }), key(sb(M.pick), 0, { ease: 'emphasized' }), key(sb(M.land), 1, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.type', 'number', 'stage', [key(F0, 0, { ease: 'step' }), key(sb(M.land), 0, { ease: 'linear' }), key(sb(M.typeEnd), 1, { ease: 'step' })]));
     sheet.tracks.push(track('intro.player.opacity', 'number', 'stage', [key(F0, 1, { ease: 'step' })]));   // v26: the player is there from frame 0
     sheet.tracks.push(track('intro.index', 'number', 'stage', [key(F0, 0, { ease: 'step' })]));   // v21 browse kept for intro.style 'flow' (see intro.browse)
     void browse; void s0;
     sheet.tracks.push(track('intro.enter', 'number', 'stage', [key(F0, 1, { ease: 'step' })]));   // v22: the sphere needs no fan-out
-    sheet.tracks.push(track('intro.select', 'enum', 'stage', [key(sb(M.pick), true, { ease: 'step' })]));
-    sheet.tracks.push(track('intro.push', 'number', 'stage', [key(0, 0, { ty: 'bezier', ob: [0.42, 0], ease: 'easeInOut' }), key(4, 1, { ib: [0, 0], ease: 'step' })]));
+    sheet.tracks.push(track('intro.select', 'enum', 'stage', [key(sb(M.select), true, { ease: 'step' })]));
+    sheet.tracks.push(track('intro.push', 'number', 'stage', [key(0, 0, { ease: 'step' }), key(1, 1, { ease: 'step' })]));
   } else if (NB >= 8) {
     // v17.1: the cover-flow OPENS on the beat's cover (cover 0, so frame 0 = the loop's last frame), browses to the other covers and comes back:
     // 0 -> 1 -> 2 -> 1 -> 0, one eased snap per beat, landing on beats 3, 4, 5, 6; the push still ends on cover 0 (the match cut)

@@ -13,7 +13,7 @@ import { createPlayer, TAB_OF } from './player.js';   // v14 player look
 import { DEFAULT_TAGS, VOICE_ATS, VOICE_DURS } from './tags.js';
 import { mergeDeep, createEvaluator, emptySheet } from '../cues/schema.js';
 import { buildRegistry, meterPath } from './registry.js';
-import { INTRO_HIT, createIntro, coverScrim, tukey, tukeyV } from './intro.js';   // v11 intro; v27 the outro's Tukey curve lives there (the intro mirrors it)
+import { INTRO_HIT, createIntro, coverScrim } from './intro.js';   // v11 intro
 import { userEffects } from './usereffects.js';   // v27 user effects (ufx.*)
 
 const METER_KIND = { scope: 'logo', session: 'waveform', spectro: 'spectrogram', loud: 'loudness' };
@@ -22,7 +22,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   const L = createCore(D), lab = createLab(L), M = createMeters(L), BR = createBrand(L, assets), INTRO = createIntro(L, assets && assets.intro);
   const { F, FPS, BEAT, BAR, T, U, steps, rgba, mix, text, fmt, tc, bbt, fidx, clamp, lerp, hs, hash, kickEnv, labelAt, SANS, MONO, SERIF, HAND, DISPLAY, UI } = L;
   const port = aspect === '916', W = port ? 1080 : 1920, H = port ? 1920 : 1080, NB = D.bars;
-  let PRE = 0, ZD = 0, RWB0 = 0, RWB = 0, OUTD = false, STOPB = 0, c = null, ev = createEvaluator(emptySheet()), b = 0, IB = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
+  let PRE = 0, RWB0 = 0, RWB = 0, OUTD = false, STOPB = 0, c = null, ev = createEvaluator(emptySheet()), b = 0, IB = 0, LOOK = 'exe', S = stageOf('nigredo'), LY = {}, IDS = [], tagDoc = DEFAULT_TAGS;
   const V = (path, def) => ev.value(path, b, def);
   // ---------------------------------------------------------------- tag variables (every on-screen word is editable)
   const titleCase = D.title.split(' ').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
@@ -585,9 +585,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   let MW = null;
   function mouseWays() { if (MW && MW.ev === ev) return MW.w; const w = [], P = PRE, rest = { sx: W * 0.8, sy: H * (port ? 0.84 : 0.88) };
     w.push({ t: -P, ...rest }); if (P > 0) w.push({ t: -0.06, play: true, click: true });
-    if (IB && LOOK === 'player' && P > 0 && ev.value('intro.style', -4, 'flow') === 'sphere' && !sphM().legacy) { const g = INTRO.geom(W, H), cy = INTRO.coverCyOf(g);   // v27 mirror: the cover is on the card from frame 0; the cursor clicks it (the selection brackets step in), then play
-      w.push({ t: T(sphM().pick) - 0.02, sx: g.cx + g.cw * 0.16, sy: cy + g.cw * 0.14, click: true, iw: true }); }
-    else if (IB && LOOK === 'player' && P > 0 && ev.value('intro.style', -4, 'flow') === 'sphere') { const g = INTRO.geom(W, H), R = Math.min(g.cw * 0.95, 420), cy0 = g.cy - R * 0.05;   // v22 sphere: press low on the sphere, drag up (held), click the beat cover
+    if (IB && LOOK === 'player' && P > 0 && ev.value('intro.style', -4, 'flow') === 'sphere') { const g = INTRO.geom(W, H), R = Math.min(g.cw * 0.95, 420), cy0 = g.cy - R * 0.05;   // v22 sphere: press low on the sphere, drag up (held), click the beat cover
       const sm2 = sphM(); w.push({ t: T(sm2.press) - 0.02, sx: g.cx + g.cw * 0.06, sy: cy0 + R * 0.5, click: true, iw: true }); w.push({ t: T(sm2.release), sx: g.cx + g.cw * 0.04, sy: cy0 + R * 0.04, drag: true, click: true, iw: true }); w.push({ t: T(sm2.pick) - 0.02, sx: g.cx + g.cw * 0.03, sy: cy0 - R * 0.02, click: true, iw: true }); }   // v26 iw: intro-world points, carried by the fall camera
     else if (IB && LOOK === 'player' && P > 0) { const g = INTRO.geom(W, H); const br = Math.round(ev.value('intro.browse', -4, 1)); if (br) for (const bb of [-3, -2]) w.push({ t: T(bb) - 0.02, sx: g.cx - br * g.xs1 * 0.95, sy: g.cy + g.cw * 0.1, click: true }); w.push({ t: T(-1.25) - 0.02, sx: g.cx + g.cw * 0.12, sy: g.cy + g.cw * 0.25, click: true }); }   // v19.3: browse x2, choose; v21: browse side follows the seed (+1 left card, -1 right card, 0 direct)
     else if (IB) { const g = INTRO.geom(W, H); w.push({ t: T(Math.max(1, IB - 2)) - 0.02, sx: g.cx + g.cw * 0.18, sy: g.cy + g.cw * 0.2, click: true }); }
@@ -599,11 +597,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     w.push({ t: D.duration, ...rest }); w.sort((a2, b2) => a2.t - b2.t); MW = { ev, w }; return w; }
   const mj = (u) => u * u * u * (10 - 15 * u + 6 * u * u);
   // v23: the sphere's cursor moments come from the sheet's own keys (press / release = intro.pitch keys 1-2, pick = intro.pick key 1, title = intro.type key 1)
-  // v27: a sheet whose intro.pick has no flight (one key, the cover on the card from frame 0) is the mirror intro (intro.js mirror()): pick = the
-  // cursor's click on the card = the first intro.select key, no typing
-  function sphM() { const k = (p) => ((ev.tracksOf(p)[0] || { keys: [] }).keys); const pk = k('intro.pitch'), pi = k('intro.pick'), ty = k('intro.type'), se = k('intro.select');
-    if (pi.length < 2) return { legacy: false, pick: se[0] ? se[0].b : -5.6, type: null };
-    return { legacy: true, press: pk[1] ? pk[1].b : -10.5, release: pk[2] ? pk[2].b : -7, pick: pi[1] ? pi[1].b : -6.1, type: ty[1] ? ty[1].b : -4.4, typeEnd: ty[2] ? ty[2].b : -3.4 }; }
+  function sphM() { const k = (p) => ((ev.tracksOf(p)[0] || { keys: [] }).keys); const pk = k('intro.pitch'), pi = k('intro.pick'), ty = k('intro.type'); return { press: pk[1] ? pk[1].b : -10.5, release: pk[2] ? pk[2].b : -7, pick: pi[1] ? pi[1].b : -6.1, type: ty[1] ? ty[1].b : -4.4, typeEnd: ty[2] ? ty[2].b : -3.4 }; }
   // v19.4: click times in COMPOSITION seconds (film time + pre-roll), for the export's UI click sounds; call after one render()
   const clickTimes = () => mouseWays().filter((q) => q.click).map((q) => q.t + PRE).filter((x) => x >= 0);
   // v22.4: the typing moments in COMPOSITION seconds (for the web export's keyboard taps; render.mjs builds the same list for the native render):
@@ -614,7 +608,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (LOOK !== 'player' || !V('social.on', true)) return E;
     const hi = Math.round(V('social.hookIdx', -1)), hooks = tag('social.hooks') || [], hk = hi >= 0 && hooks[hi] ? hooks[hi] : tag('social.hook'); if (P > 0) add(0.6, len(hk), T(1 / 12));   // v26: only the hook is typed (the window title arrives with the glass)
     if (P > 0 && V('voice.captions', true)) for (const q of voiceLines()) add(q.t, q.txt.length + 2, q.rate);   // v22.5 the console lines follow the voice
-    if (ev.value('intro.style', -4, 'flow') === 'sphere' && P > 0 && sphM().legacy) { const n = len(tag('intro.title') || D.title) + len(tag('intro.credit') || 'prod. @uche2crazy'); { const sm3 = sphM(); add(P + T(sm3.type), n, T(sm3.typeEnd - sm3.type) / Math.max(1, n)); } }
+    if (ev.value('intro.style', -4, 'flow') === 'sphere' && P > 0) { const n = len(tag('intro.title') || D.title) + len(tag('intro.credit') || 'prod. @uche2crazy'); { const sm3 = sphM(); add(P + T(sm3.type), n, T(sm3.typeEnd - sm3.type) / Math.max(1, n)); } }
     for (const [k, def] of [['cta1', 32], ['cta2', Math.max(36, Math.round(D.duration / BEAT) - 20)]]) { const at = V(`social.${k}.at`, def); add(P + T(at) + 0.15, len(tag(`social.${k}.title`)) + len(tag(`social.${k}.body`)) + len(tag(`social.${k}.sub`)), rate); }
     const term = tag('social.terminal') || []; for (const k of ev.keysIn('term.line', 0, 1e6)) add(P + T(k.b), len(typeof k.v === 'number' ? term[k.v] : L.sub(String(k.v ?? ''))), T(1 / 16));
     const w2 = outroWin(); if (w2) add(P + T(w2[0]) + 0.15, len(tag('social.outro.title')) + len(tag('social.outro.body')) + len(tag('social.outro.sub')), rate);
@@ -636,12 +630,14 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // v21 outro dialog (screen space, on the hero shot): JOIN / CREATE PROJECT pops (spring) 5 beats before the cut back, the cursor closes it with x 2 beats later
   const outroWin = () => (OUTD && (RWB || STOPB) ? [(RWB || STOPB) - 5.5, (RWB || STOPB) - 3] : null);   // v23: full beat (STOPB) counts from the clip end   // v22.1: 2.5 beats so CLOSE PROJECT? types out fully
   function outroDialog(t) { const w2 = outroWin(); if (!w2 || b < w2[0] || b >= w2[1] + 0.5) return; const uo = clamp((b - w2[1]) / 0.5), ox = b >= w2[1] ? 1 - uo * uo * (3 - 2 * uo) : 1; if (ox <= 0.01) return; dof(Math.min(clamp((b - w2[0]) / 0.6), ox), 7); c.save(); c.translate(W / 2, H * 0.5); c.scale(ox, ox); c.translate(-W / 2, -H * 0.5); dialog(W / 2, H * 0.5, port ? 900 : 760, tag('social.outro.title') || 'U2C LAB', tag('social.outro.body') || 'JOIN / CREATE PROJECT', tag('social.outro.sub') || '', T(w2[0]), t, null, t - T(w2[0]) - 0.15); c.restore(); }   // v22: CLOSE PROJECT?; after the x click it shrinks away (half a beat) as the dolly starts
-  // ---------------------------------------------------------------- v25 infinite zoom ending (docs/MOTION-v25.md, v27: docs/MOTION-v27.md)
-  // Window (v27): ZD seconds (9 beats = from the x click at RWB - 3, capped at half the pre-roll) ending ON the last frame, which is frame 0 drawn
-  // directly (no hold: the intro zooms back out of the same cover on the same curve, mirrored). Log-scale progress e = tukey(u) (intro.js): the zoom
+  // ---------------------------------------------------------------- v25 infinite zoom ending (docs/MOTION-v25.md)
+  // Window: from the x click (RWB - 3) to one beat before the end; then frame 0 holds for the last beat. Log-scale progress e = tukey(u): the zoom
   // speed d(ln z)/dt rises on a half-cosine over the first 30 % of the move, cruises constant (equal ratios per frame = constant perceived speed),
   // and falls on a half-cosine over the last 30 % (velocity and acceleration continuous, 0 at both ends; peak speed 1.43 x the mean).
-  const outroZoom = () => (RWB && OUTD && LOOK === 'player' ? { b0: (D.duration - ZD) / BEAT, b1: D.duration / BEAT } : null);
+  const TK = 0.3, tkA = (x) => 0.5 * (x - TK / Math.PI * Math.sin(Math.PI * x / TK));
+  const tukey = (u) => { u = clamp(u); const s0 = u < TK ? tkA(u) : u <= 1 - TK ? TK / 2 + (u - TK) : TK / 2 + (1 - 2 * TK) + (TK / 2 - tkA(1 - u)); return s0 / (1 - TK); };
+  const tukeyV = (u) => { u = clamp(u); const v = u < TK ? 0.5 * (1 - Math.cos(Math.PI * u / TK)) : u <= 1 - TK ? 1 : 0.5 * (1 - Math.cos(Math.PI * (1 - u) / TK)); return v / (1 - TK); };
+  const outroZoom = () => (RWB && OUTD && LOOK === 'player' ? { b0: RWB - 3, b1: D.duration / BEAT - 1 } : null);
   let PORTAL = null; const F0C = { cv: null, ready: false };
   /** The focus transform of the clicked window (scale about its centre + the safe-band lift), measured with the camera cm. */
   function focusGeo(cm) {
@@ -670,7 +666,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (off) { const cv = main.canvas; if (!F0C.cv || F0C.cv.width !== cv.width || F0C.cv.height !== cv.height) F0C.cv = mkCanvas(cv.width, cv.height); const g = F0C.cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.filter = 'none'; c = g; }
     b = bI; TC = 0; const Vo = (pth, d) => (pth in OV ? OV[pth] : V(pth, d));
     try { c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1; L.view.base = scale;
-      INTRO.draw(c, tI, { S, V: Vo, ev, tag, W, H, look: LOOK, aspect, paused: true, playerIn: !!PRE, pre: PRE, zoomS: ZD, ground: introGround });
+      INTRO.draw(c, tI, { S, V: Vo, ev, tag, W, H, look: LOOK, aspect, paused: true, playerIn: !!PRE, pre: PRE, ground: introGround });
       c.setTransform(scale, 0, 0, scale, 0, 0); social(tI, true); }
     finally { b = b1; TC = tc1; c = main; }
     if (off) { F0C.ready = true; c.setTransform(scale, 0, 0, scale, 0, 0); }
@@ -876,7 +872,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     c = ctx; ev = opts.ev || ev; tagDoc = opts.tags || DEFAULT_TAGS; IB = INTRO.beats(ev);
     const fps = opts.fps || FPS, scale = ctx.canvas.width / W;
     L.view.minPx = LOOK === 'player' && port ? 25 : 0;   // v19.1: phone legibility floor (player 9:16)
-    PRE = Math.max(0, opts.preroll || 0); ZD = PRE > 0 ? Math.min(T(9), 0.5 * PRE) : T(9); const filmT = t - PRE; let paused = filmT < 0; t = filmT;   // v19.3: negative t = the silent pre-roll browse (intro keys at negative beats)   // v19: click-to-play pre-roll (native passes opts.preroll); filmT < 0 = paused
+    PRE = Math.max(0, opts.preroll || 0); const filmT = t - PRE; let paused = filmT < 0; t = filmT;   // v19.3: negative t = the silent pre-roll browse (intro keys at negative beats)   // v19: click-to-play pre-roll (native passes opts.preroll); filmT < 0 = paused
     t = clamp(t, -PRE, D.duration - 1 / fps) + 0.5 / fps; b = t / BEAT;
     { const b0 = Math.max(0, b); setState(ev.value('look', b0, opts.look || 'exe'), ev.value('stage', b0, opts.stage || 'nigredo')); } pendulum();   // v20: the pre-roll (b < 0) uses the look / stage of beat 0 (the base could be stale in old sheets)
     c.setTransform(scale, 0, 0, scale, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
@@ -892,13 +888,13 @@ export function createFilm({ D, assets, aspect = '916' }) {
     // cover (cover centre fixed on screen) while the cover's picture cross-dissolves into frame 0; when the zoom lands the cover fills the screen
     // and IS frame 0. The last beat holds frame 0 (drawn directly) with the sphere already spinning at its frame-0 speed, so the loop seam is motion-continuous.
     const ZO = outroZoom();
-    if (ZO && b >= ZO.b1 - 0.75 / fps / BEAT) {   // v27: the last frame IS frame 0 (drawn directly)
-      frame0(t, fps, scale); brutalFrame(t); textures(-PRE + 0.5 / fps); userEffects(c, t, b, ev, { beat: BEAT, accent: S.hot }); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();   // v27: user effects in the intro push and the outro zoom too
+    if (ZO && b >= ZO.b1) {
+      frame0(t, fps, scale); brutalFrame(t); textures(-PRE + 0.5 / fps); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, zoom: 1 };
     }
     if (RWB && !OUTD && t >= RWB * BEAT) { const u = clamp((t - RWB * BEAT) / (2 * BAR)), e = 0.5 - 0.5 * Math.cos(Math.PI * u); t = T(IB) - e * (T(IB) + PRE) + 0.5 / fps * (1 - e); if (PRE) t = Math.max(-PRE + 0.5 / fps, t); else t = Math.max(0.5 / fps, t); paused = t < 0; b = t / BEAT; }   // v19.3: rewinds through the browse back to the first frame
     if (IB && t < T(IB)) {   // v11 intro: player + cover-flow + push-in (hard cut into the lab at beat IB); grain / vignette stay on top
-      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player', pre: PRE, zoomS: ZD, ground: introGround }); c.setTransform(scale, 0, 0, scale, 0, 0); brutalFrame(t); voiceCaptions(t + PRE); social(t, true); textCues(t); textures(t); flash(t); userEffects(c, t, b, ev, { beat: BEAT, accent: S.hot }); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
+      L.view.camZ = 1; L.view.base = scale; INTRO.draw(c, t, { S, V, ev, tag, W, H, look: LOOK, aspect, paused: paused && LOOK === 'player', playerIn: !!PRE && LOOK === 'player', pre: PRE, ground: introGround }); c.setTransform(scale, 0, 0, scale, 0, 0); brutalFrame(t); voiceCaptions(t + PRE); social(t, true); textCues(t); textures(t); flash(t); userEffects(c, t, b, ev, { beat: BEAT, accent: S.hot }); mouse(filmT, null); c.setTransform(1, 0, 0, 1, 0, 0); invertAll();
       return { look: LOOK, stage: S.name, intro: true, index: V('intro.index', 0), push: V('intro.push', 0), enter: V('intro.enter', 1) };
     }
     const camRef = camera(); let cam = camRef, zo = null;
