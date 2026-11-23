@@ -152,3 +152,9 @@ Stills (native): `/home/user/research/review-intro27/player-nigredo-9x16/` and `
 | 38.97 | identical to frame 0 |
 
 Loop seam (browser, 270 × 480, frame 0 against the last frame): **0.08** with `intro.coverFrame` off, **0.08** with it on (v26: 2.82 / 2.78; threshold 6).
+
+Render (native, `u2c.py review`, delivered to `/home/user/beatmaking-visuals/deliver-v14/`):
+- 9:16: last − first = **0.46**, against a median frame-to-frame change of 2.00 → **SEAMLESS** (v26: 2.08);
+- 16:9: last − first = **0.35**, against a median of 1.78 → **SEAMLESS** (v26: 1.10).
+
+Tests: meters 125/125, smoke 44/44, editor 43/43 (first run, no flakes). No test was changed.
