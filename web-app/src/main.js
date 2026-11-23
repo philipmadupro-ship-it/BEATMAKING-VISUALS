@@ -46,6 +46,7 @@ import { createPalette } from './ui/palette.js';
 import { createTimelineEdit } from './ui/tledit.js';
 import { createQuick } from './ui/quick.js';
 import { createStatusBar } from './ui/statusbar.js';
+import { createEffects } from './ui/effects.js';
 
 const $ = (s) => document.querySelector(s);
 const status = (html) => { $('#status').innerHTML = html; };
@@ -86,7 +87,7 @@ async function boot() {
   // v22: edit in the timeline (inline values, text clips, context menu), task controls + coach, the status strip
   app.tlEdit = createTimelineEdit(app); app.quick = createQuick(app); app.statusBar = createStatusBar(app);
   // v23: + Layer menu (grouped, described), workspaces (Edit / Motion / Audio / Export), Adobe-style rich tooltips
-  app.addLayer = createAddLayer(app); app.workspaces = createWorkspaces(app); app.tips = createTips(document); app.pip = createPip(app); app.history = createHistory(app); app.presets = createPresets(app); app.simple = createSimpleMode(app); app.tlGuide = createTimelineGuide(app);
+  app.addLayer = createAddLayer(app); app.workspaces = createWorkspaces(app); app.tips = createTips(document); app.pip = createPip(app); app.history = createHistory(app); app.presets = createPresets(app); app.simple = createSimpleMode(app); app.effects = createEffects(app); app.tlGuide = createTimelineGuide(app);
   store.subscribe(() => { const tr = store.session.track, el = document.getElementById('mediaAud'); if (el) el.textContent = tr ? `${tr.meta.name} · ${Math.round(tr.bpm)} BPM · ${tr.key || ''}` : ''; });
   motion.press(document.body);
   let userClip = false;

@@ -25,6 +25,7 @@ export function createSimpleMode(app) {
     rename('#tab-inspect', 'Edit', 'Inspect');
     const cur = $('.tabs [aria-selected="true"]'); if (!pro && cur && /text|meta|beat/.test(cur.dataset.tab)) $('#tab-inspect').click();
     const rail = $('#railTabs [aria-selected="true"]'); if (!pro && rail && rail.dataset.pane === 'markers') { const b = $('#railTabs [data-pane="layers"]'); if (b) b.click(); }
+    if (app.quick && app.quick.sync) app.quick.sync();
     if (app.cuetl) { app.cuetl.markDirty && app.cuetl.markDirty(); app.cuetl.rebuild && app.cuetl.rebuild(); }
     if (app.studio && !$('#studio').hidden) requestAnimationFrame(() => app.studio.layout());
   }

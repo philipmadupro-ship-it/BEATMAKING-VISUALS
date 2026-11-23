@@ -18,6 +18,7 @@ export function createAddLayer(app) {
       ['stop', 'Camera stop', 'The camera travels to the hero card here (change the window in the Look tab shot list).', () => { clip('camera.shot', 'shot', 'camera', { b: Math.max(4, bar()), v: 'stage', transition: 'push', dur: 2, ease: 'spring' }, 'add camera stop'); document.querySelector('.tabs [data-tab="look"]').click(); }],
       ['zoom', 'Zoom key', 'A camera zoom keyframe at the playhead (1 = framed, 1.2 = closer).', () => { app.actions.setProp('camera.zoom', 1.1); open('camera'); }]]],
     ['FX', [
+      ['fxlib', 'Effects library…', 'Negative, flash, zoom pulse, shake, blur, glow boost, colour tint, RGB offset: a clip with intensity and ease in / out.', () => setTimeout(() => app.effects && app.effects.open(btn), 0)],
       ['neg', 'Negative', 'The whole frame inverted for 1 bar (scroll-stop).', () => { clip('fx.invert', 'clip', 'fx', { b: bar(), v: true, dur: 4, ease: 'step' }, 'add negative'); open('fx'); }],
       ['flash', 'Flash', 'A one-frame invert on the beat.', () => { clip('fx.flash', 'event', 'fx', { b: Math.round(ph()), v: true, ease: 'step' }, 'add flash'); open('fx'); }]]],
     ['Cover', [

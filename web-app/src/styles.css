@@ -755,3 +755,94 @@ body:not(.simple) .tl-guide{display:none}
 .voicelab .vl-grid{grid-template-columns:minmax(0,1fr);gap:4px}
 .voicelab .vl-grid .lbl{margin-top:4px}
 .voicelab .vl-tl .vl-tt{font-size:8px}.voicelab .vl-tl .vl-et{font-size:7.5px}.voicelab .vl-tl .vl-ph text{font-size:10px}
+/* ===================================================================================================================
+   v27 PHOTOSHOP-GRADE EDITING: free transform on the preview, Layers like Photoshop, the Effects library, quick + deep Edit tab */
+/* the timeline is bigger in Simple mode (resizable, remembered: u2c.dock.h.v1; double-click the grip = default) */
+body.simple #studio:not([style*="--dock-h"]){grid-template-rows:minmax(0,1fr) clamp(300px,37vh,440px)}
+body.simple .transport .readout{display:none}
+.dock-grip{cursor:ns-resize}
+.dock-grip:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* free transform box: 8 handles (24 px hit area each), a size / position readout while dragging */
+.pick{box-sizing:border-box;border:1.5px solid var(--accent);box-shadow:0 0 0 1px rgba(0,0,0,.45);z-index:6}
+.pick .th{position:absolute;width:9px;height:9px;margin:-5px 0 0 -5px;box-sizing:border-box;background:#fff;border:1.5px solid var(--accent);box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:auto;touch-action:none}
+.pick .th::before{content:"";position:absolute;inset:-8px}
+.pick .th-nw{left:0;top:0;cursor:nwse-resize}.pick .th-n{left:50%;top:0;cursor:ns-resize}.pick .th-ne{left:100%;top:0;cursor:nesw-resize}.pick .th-e{left:100%;top:50%;cursor:ew-resize}
+.pick .th-se{left:100%;top:100%;cursor:nwse-resize}.pick .th-s{left:50%;top:100%;cursor:ns-resize}.pick .th-sw{left:0;top:100%;cursor:nesw-resize}.pick .th-w{left:0;top:50%;cursor:ew-resize}
+.pick.locked,.pick.text{border-style:dashed}.pick.locked .th,.pick.text .th{display:none}
+.pick.locked::after{content:"LOCKED";position:absolute;left:4px;top:4px;font:700 10px var(--ui);letter-spacing:.12em;color:var(--on-accent);background:var(--accent);padding:1px 5px;border-radius:3px}
+.pick .tsz{position:absolute;left:50%;top:calc(100% + 10px);transform:translateX(-50%);font:600 10.5px var(--mono);white-space:nowrap;color:#fff;background:rgba(0,0,0,.72);padding:2px 6px;border-radius:4px;pointer-events:none}
+.pick .tsz:empty{display:none}
+#view.movable{cursor:move}
+#view:focus{outline:none}#view:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pickbar{transform:translateY(16px)}
+/* smart guides (Photoshop magenta) + the Layers hover outline */
+.snapg{position:absolute;inset:0;pointer-events:none;z-index:7;overflow:hidden}
+.snapg .sg{position:absolute;background:#ff36c8;box-shadow:0 0 0 .5px rgba(0,0,0,.35)}
+.snapg .sg.v{top:0;bottom:0;width:1px;margin-left:-.5px}.snapg .sg.h{left:0;right:0;height:1px;margin-top:-.5px}
+.hovbox{position:absolute;pointer-events:none;z-index:5;box-sizing:border-box;border:1px dashed color-mix(in srgb,var(--accent) 85%,#fff);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.hovbox[hidden]{display:none}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Layers like Photoshop: eye | thumbnail | name | keys | lock */
+.layer{grid-template-columns:24px 26px minmax(0,1fr) 12px 24px;height:34px;gap:2px;padding:0 6px 0 6px;border-radius:6px;margin:0 6px;border-left:0}
+.layer.on{background:color-mix(in srgb,var(--accent) 16%,transparent);box-shadow:inset 2px 0 0 var(--accent)}
+.layer .lth{display:grid;place-items:center;width:24px;height:24px;border-radius:4px;background:color-mix(in srgb,var(--fg) 6%,transparent);color:var(--muted)}
+.layer.on .lth{color:var(--fg)}
+.layer .lname{height:34px;line-height:34px;font-size:13px}
+.layer .lname small{margin-left:6px;font:400 10.5px var(--mono);letter-spacing:0;text-transform:none;color:var(--muted)}
+.layer .lk{all:unset;box-sizing:border-box;width:24px;height:24px;display:grid;place-items:center;color:var(--muted);cursor:pointer;border-radius:4px;opacity:0}
+.layer:hover .lk,.layer .lk:focus-visible,.layer .lk.on{opacity:1}.layer .lk.on{color:var(--accent)}
+.layer .lk:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}.layer .lk.ph{cursor:default}
+.layer .kd.ph{visibility:hidden}
+.layer.locked .lname{color:var(--muted)}
+.layer .lren{height:26px;min-height:26px;padding:0 6px;font:500 12px var(--mono);text-transform:uppercase}
+.lhead{display:flex;justify-content:space-between;align-items:center}.lhead span{font:400 10px var(--mono);color:var(--faint);letter-spacing:0}
+/* the Effects library popover */
+.pop.menu.fxlib{position:fixed;right:auto;z-index:60;padding:10px;gap:8px;border-radius:12px;background:color-mix(in srgb,var(--panel) 88%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.3);backdrop-filter:blur(18px) saturate(1.3);border:1px solid var(--glass-edge,var(--line-2))}
+.pop.menu.fxlib[hidden]{display:none}
+.fxlib-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:0 4px}
+.fxlib-h b{font:400 13px var(--display);letter-spacing:.04em}.fxlib-h span{font:400 11px var(--sans);color:var(--muted)}
+.fxlib-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+.fxlib-grid button{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:28px minmax(0,1fr);grid-template-rows:auto auto;column-gap:8px;align-items:center;padding:8px;border-radius:8px;border:1px solid transparent;min-height:44px}
+.fxlib-grid button i{grid-row:1/3;display:grid;place-items:center;width:28px;height:28px;border-radius:7px;background:color-mix(in srgb,var(--fg) 7%,transparent);color:var(--fg);font-style:normal}
+.fxlib-grid button b{font:700 12px var(--ui);letter-spacing:.08em;text-transform:uppercase}
+.fxlib-grid button span{font:400 10.5px/1.3 var(--sans);color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.fxlib-grid button:hover,.fxlib-grid button:focus-visible{background:var(--tint);border-color:var(--accent);outline:none}
+.fxlib-grid button:hover i,.fxlib-grid button:focus-visible i{background:var(--accent);color:var(--on-accent)}
+/* effect controls in Edit */
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.ins-h.fx-h b{font:700 13px var(--ui);letter-spacing:.08em;text-transform:uppercase}
+.prop.flash{animation:propflash 1.2s ease-out}
+@keyframes propflash{0%{background:color-mix(in srgb,var(--accent) 35%,transparent)}100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.prop.flash{animation:none;outline:1px solid var(--accent)}}
+/* quick + deep: in Simple the selection's properties sit on top, the quick setup stays underneath */
+#pane-inspect{display:flex;flex-direction:column}
+.quick-h{display:none}
+body.simple .quick-h{display:flex;align-items:baseline;gap:8px;margin:2px 0 6px;order:1}
+body.simple .quick-h b{font:400 12px var(--display);letter-spacing:.06em}
+body.simple #quick{order:2}
+body.simple #advInsp{order:3}
+body.simple #pane-inspect.deep #quickNote{order:-3}
+body.simple #pane-inspect.deep #advInsp{order:-2;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line-2)}
+body.simple #pane-inspect.deep #advInsp>summary{display:none}
+body.simple #pane-inspect.deep .pane-help{display:none}
+body.simple #pane-inspect.deep .quick-h{padding-top:4px}
+.quick-note{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.quick-note[hidden]{display:none}
+.quick-note .qn-k{font:700 10.5px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--on-accent);background:var(--accent);padding:2px 6px;border-radius:4px}
+.quick-note .qn-name{font:700 14px var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--fg);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quick-note .qn-sub{flex-basis:100%;order:3}
+body.simple .quick-note .qn-sub{display:none}
+body.simple #pane-inspect.deep #quickNote{position:sticky;top:-1px;z-index:3;padding:8px 0;background:var(--panel)}
+/* v27 Simple: the dock's height goes to the tracks (the song overview and the shortcut strip live in Pro; Export / the quick setup pick the length) */
+body.simple #studio .song,body.simple #keysHint{display:none}
+/* the inspect pane has no padding of its own (the inspector pads itself): the quick setup, its heading and the selection header get the same 16 px */
+#pane-inspect>.quick,#pane-inspect>.quick-h,#pane-inspect>.pane-help,#pane-inspect>.adv>summary{padding-left:16px;padding-right:16px}
+#pane-inspect>.quick-note{padding:8px 16px}
+#pane-inspect>.pane-help{margin:12px 16px 0;padding:2px 0 2px 8px}
+#pane-inspect>*{min-width:0}
+.fx-vis{display:flex;align-items:center;gap:8px}
+@media (max-width:900px){.layer{grid-template-columns:32px auto;margin:0;border-radius:0}.layer .lth,.layer .lk,.layer .kd{display:none}.layer .lname small{display:none}.lhead span{display:none}}
+.layer .lname{display:flex;flex-direction:column;justify-content:center;line-height:1.15;gap:1px}
+.layer .lname small{margin-left:0;overflow:hidden;text-overflow:ellipsis}
+.layer .lname{text-overflow:ellipsis}
+.layer .ln-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

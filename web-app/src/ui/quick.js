@@ -120,12 +120,22 @@ export function createQuick(app) {
   // ---- Advanced: the full inspector; opens itself when the user picks keys, a marker, a window or a track
   const advOpen = (o = true) => { if (o && !adv.open) adv.open = true; else if (!o && adv.open) adv.open = false; syncMode(); };
   // Simple and Advanced are two views of the same pane: Advanced open = the full inspector on top, the task controls hidden
-  function syncMode() { const T = tl(), sel = T && (T.selected().length || T.state.selMarker); if (sel && !adv.open) adv.open = true; const was = root.hidden; root.hidden = adv.open; $('#quickNote').hidden = !adv.open;
-    $('#quickBack').textContent = sel ? 'Done: back to the simple controls' : 'Back to the simple controls'; if (was && !root.hidden) render(); }
+  // v27 QUICK + DEEP (Simple mode): the selected thing's full properties sit ON TOP (a "Selected" header with its name and
+  // "Back to quick setup"), the quick task controls stay underneath. Pro keeps the dense view (one or the other).
+  function selName() { const T = tl(), S = T ? T.selected() : [], R = reg();
+    if (S.length > 1) return `${S.length} keys`;
+    if (S.length === 1) { const [row, k] = S[0]; if (row.path.startsWith('ufx.')) { const f = (app.effects && app.effects.LIB || []).find((q) => 'ufx.' + q[0] === row.path); return `Effect · ${f ? f[1] : row.path}`; }
+      if (row.path === 'text.cue') return `Text · “${String(k.v || '').slice(0, 24)}”`; const p = R[row.path]; return p ? `${String(p.elementLabel || '').replace(/\s*\(.*\)$/, '')} · ${String(p.label).replace(/\s*\(.*\)$/, '')}` : row.label || row.path; }
+    if (T && T.state.selMarker) return 'Marker';
+    const id = app.inspector && app.inspector.element, e = id && app.registry().elements.find((q) => q.id === id); return e ? e.label.replace(/\s*\(.*\)$/, '') : 'Properties'; }
+  function syncMode() { const T = tl(), sel = T && (T.selected().length || T.state.selMarker); if (sel && !adv.open) adv.open = true; const simple = document.body.classList.contains('simple'), was = root.hidden;
+    root.hidden = adv.open && !simple; $('#quickNote').hidden = !adv.open; $('#pane-inspect').classList.toggle('deep', !!adv.open);
+    const n = $('#quickSel'); if (n) n.textContent = adv.open ? selName() : '';
+    $('#quickBack').textContent = simple ? '← Back to quick setup' : sel ? 'Done: back to the simple controls' : 'Back to the simple controls'; if (was && !root.hidden) render(); }
   adv.addEventListener('toggle', syncMode);
   const I = app.inspector; for (const fn of ['showElement', 'showTrack', 'focusValue']) { const f0 = I[fn]; I[fn] = (...a) => { advOpen(true); return f0(...a); }; }
   const s0 = I.show; I.show = (...a) => { const r = s0(...a); syncMode(); return r; };
-  $('#quickBack').addEventListener('click', () => { tl().clearSel(); adv.open = false; syncMode(); });
+  $('#quickBack').addEventListener('click', () => { tl().clearSel(); if (app.studio && app.studio.clearPick) app.studio.clearPick(); adv.open = false; syncMode(); const q = $('#quickH'); if (q && document.body.classList.contains('simple')) q.scrollIntoView({ block: 'nearest' }); });
   app.cues.subscribe((why) => { if (why !== 'saved' && why !== 'preview') { syncMode(); if (!root.hidden) render(); } });
   app.store.subscribe((s, keys) => { if (keys.some((k) => /project\.(stage|aspect|clipLen|look|title|export)|session\.track/.test(k))) render(); });
   let lastB = -1; setInterval(() => { const b = pb(); if (Math.abs(b - lastB) > 1e-3 && !app.clock.playing && !$('#studio').hidden && !root.hidden) { lastB = b; render(); } }, 400);
@@ -141,6 +151,6 @@ export function createQuick(app) {
   new MutationObserver(() => { if (!$('#studio').hidden) stepTo(2); }).observe($('#studio'), { attributes: true, attributeFilter: ['hidden'] });
   $('#exBtn').addEventListener('click', () => stepTo(3)); $('#qRun').addEventListener('click', () => stepTo(3));
   drawCoach(); render();
-  return { render, set, value, rows: () => G.map(([n, , cs]) => [n, cs.filter(shown).map((c) => c.id)]), advanced: advOpen,
+  return { render, set, value, sync: () => syncMode(), rows: () => G.map(([n, , cs]) => [n, cs.filter(shown).map((c) => c.id)]), advanced: advOpen,
     coach: { get step() { return coach.step; }, get done() { return coach.done; }, dismiss() { coach.done = true; saveC(); drawCoach(); }, reset() { coach = { done: false, step: 0 }; saveC(); drawCoach(); } } };
 }

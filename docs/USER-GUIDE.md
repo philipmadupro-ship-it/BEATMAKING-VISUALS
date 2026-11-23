@@ -110,3 +110,26 @@ The caption, hashtags and hook lines are in Tags (`social.caption`, `social.hash
   - double-click resets it;
   - a bubble shows the value while you drag;
   - arrow keys step.
+
+## v27: edit it like Photoshop
+
+- **Free transform (the preview).** Click a window on the preview, or its row in Layers. A box with 8 handles appears:
+  - drag inside the box to **move** it;
+  - drag a corner or an edge to **resize** it: *Shift* keeps the proportions, *Alt* resizes from the centre;
+  - **smart guides** (magenta lines) snap the edges and the centre to the frame (edges, centre, the 9:16 safe band) and to the other windows; hold *Ctrl / Cmd* while dragging to place it freely;
+  - the **arrow keys** nudge it 1 px (*Shift*: 10 px) while the preview has the focus, *Alt + arrows* resize it; *Enter* or *Esc* leaves the transform;
+  - every gesture is **one undo step** with its name in History (*Resize Spectrum*, *Move Waveform*, *Nudge …*). When the window is animated, the change is a key at the playhead.
+  - Text pop-ups can be clicked and dragged on the preview too. Double-click the empty background to edit the Background.
+  - The floating toolbar stays: *Visit*, *Edit*, *Reset*, *Hide*, *Save preset*.
+- **Layers (left), like Photoshop:**
+  - groups: **Windows**, **Text** (each pop-up, the hook + pop-ups, the terminal lines, the voice captions), **Effects** (each of your effects), **Brand**, **Scene** (background, camera, intro, colours …);
+  - each row: the **eye**, a thumbnail (where the window sits in the frame) or an icon, the name, ◆ when it has keys, the **lock** (a locked window cannot be picked or dragged on the preview);
+  - click = selected everywhere (preview box, Edit tab, timeline clip); hover a window row = it is outlined on the preview;
+  - double-click (or F2) a window name to rename the label written on the window.
+- **Your own effects (+ Effect).** The timeline's *+ Effect* button (or *+ Layer → Effects library*) opens the library:
+  Negative, Flash, Zoom pulse, Shake, Blur, Glow boost, Colour tint, RGB offset (use sparingly).
+  - The effect lands on the Effects track at the playhead (after the intro) and opens in Edit: **intensity**, **length**, **ease in**, **ease out**, **colour** (tint), **visible**.
+  - On the timeline it is a block like any other: drag it to move, drag its edges to change its length. The line on the block shows its intensity and its ease in / out.
+  - The eye in Layers hides one effect without deleting it. Effects render in the web export and in the native renderer the same way.
+- **A bigger timeline (Simple).** The dock is taller and its tracks use the height (taller lanes, labels on the blocks); the song overview and the shortcut strip live in Pro. Drag the grip above the timeline to resize it: the height is remembered; double-click the grip for the default.
+- **Quick + deep in Edit.** When something is selected, its full properties sit on top under a *Selected* header with its name and **← Back to quick setup**; the quick task controls (Intro, Camera, Text, Colours, Export) always stay underneath. Pro keeps the dense view.
