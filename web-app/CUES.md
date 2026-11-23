@@ -362,3 +362,31 @@ Tags: `voice.lines` (3 lines; the title is no longer spoken), `voice.ats` `1.4,3
 (Voice lab), `ground.matrix` (extra matrix words). Marker kinds add `cta` and `chapter` (YouTube chapters).
 Presets (`sheet.meta.preset`): `default` (Lab), `hero`, `calm`, `tour`, `full` for the player; the intro keys are generated from
 `INTRO_S` (composition seconds) and `PRE_S` = 9.0 with the beat length (`meta.spb`), so the intro times the same at every BPM.
+
+## v27 user effects (`ufx.*`, lane `fx`, `src/v8/usereffects.js`)
+
+One clip path per library effect. Nothing is on by default; the user adds them (+ Effect). The post pass runs in `film.js`
+`render()` right before the opt-in glitch, on the finished lab frame (the intro and the outro zoom are drawn by their own
+passes, so an effect added there starts at the first beat after the intro). Deterministic: a function of (time, sheet), canvas 2D
+only, so the native renderer (`--cues`) draws the same pixels.
+
+| path | kind | what (intensity `v` 0..1) |
+|---|---|---|
+| `ufx.neg` | clip | negative (difference with white, `v` = how far) |
+| `ufx.flash` | clip | a white flash on every beat inside the clip, exponential fade (110 ms) |
+| `ufx.zoom` | clip | zoom pulse: the frame punches in (up to 9 %) on every beat and settles (160 ms) |
+| `ufx.shake` | clip | hand-held shake (up to 26 px at 1080 wide, 18 positions per second, hashed: same frame = same offset) |
+| `ufx.blur` | clip | blur (up to 18 px at 1080 wide, `ctx.filter`) |
+| `ufx.glow` | clip | glow boost: a blurred, brightened copy screened on top |
+| `ufx.tint` | clip | colour tint (`color` blend + soft light); key field `col` (#hex, default #ff3b6b) |
+| `ufx.rgb` | clip | RGB offset: red left / blue right (up to 14 px), opt-in |
+
+Key fields (all optional): `dur` (beats, default 1), `ein` / `eout` (ease in / out in beats: smoothstep ramps), `col` (tint),
+`off: true` (hidden: the eye in Layers). `v: true` reads as 1.
+
+```json
+{ "path": "ufx.blur", "kind": "clip", "lane": "fx", "keys": [{ "at": "9.1.0", "v": 0.6, "dur": 4, "ein": 0, "eout": 0.5 }] }
+```
+
+Sheet meta (v27, view state saved with the sheet): `meta.locks` = `{ "win.<id>": true }` for windows locked in Layers (they cannot be
+picked or dragged on the preview). Free transform writes the existing `win.<id>.x/y/w/h` paths.
