@@ -119,7 +119,7 @@ if (ENGINE === 'v9') {
   if (look === 'player' && !args.test && !/^(off|0|false|no)$/i.test(String(args.sfx ?? 'on'))) { const { DEFAULT_TAGS } = await import('./film/v9/src/v8/tags.js');
     const BT = D.beat, T2 = (bb) => bb * BT, P = PRE, rate = BT / 24, get = (o, p) => p.split('.').reduce((q, k) => (q == null ? q : q[k]), o), tg = (p) => get(sheet.tags || {}, p) ?? get(DEFAULT_TAGS, p);
     const sub = (x) => String(x ?? '').replace(/\{[a-zA-Z]+\}/g, (m) => (m === '{title}' || m === '{titleWord}' ? String(D.title || '') : m === '{bpm}' ? String(Math.round(60 / BT)) : 'XXXX')), len = (x) => sub(x).length, E = [];
-    E.push({ t: 0, kind: 'swell' }, { t: 0.25, kind: 'bleep' }, { t: 1.0, kind: 'type', n: len(tg('social.title')) + len(tg('social.hook')), dt: BT / 12 });   // v22.5 hook at half speed
+    E.push({ t: 0, kind: 'swell' }, { t: 0.25, kind: 'bleep' }, { t: 0.6, kind: 'type', n: len(tg('social.hook')), dt: BT / 12 });   // v22.5 hook at half speed
     { const L4 = tg('voice.lines') || [], at = String(tg('voice.ats') || VOICE_ATS).split(',').map(Number), du = String(tg('voice.durs') || VOICE_DURS).split(',').map(Number);
       if (P > 0) L4.forEach((q, i) => { const n = len(q) + 2; E.push({ t: at[i], kind: 'type', n, dt: (du[i] ?? 1.4) * 0.85 / Math.max(1, n - 2) }); }); }   // v22.5 the keys follow her lines
     const kb2 = (p, i, d) => { const tr = sheet.tracks.find((q) => q.path === p); return tr && tr.keys[i] ? tr.keys[i].b : d; }, SPK = kb2('intro.pick', 1, -6.1), STY = kb2('intro.type', 1, -4.4), STE = kb2('intro.type', 2, -3.4);
