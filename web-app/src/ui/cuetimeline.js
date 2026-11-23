@@ -19,7 +19,7 @@ export const DEFAULT_ROWS = [
   ['logo.cycle', 'Logo · cycle', 'logo'], ['logo.hero', 'Logo · hero', 'logo'], ['pendant.amp', 'Pendant · amp', 'pendant'], ['text.cue', 'Text', 'text'],
   ['fx.flash', 'FX · flash', 'fx'], ['fx.glitch', 'FX · glitch', 'fx'],
 ];
-const GROUP_LABEL = { camera: 'Camera', focus: 'Meter', look: 'Look', stage: 'Stage · intro', logo: 'Logo', pendant: 'Pendant', text: 'Text', fx: 'FX' };
+const GROUP_LABEL = { camera: 'Camera', focus: 'Meter', look: 'Look', stage: 'Intro', logo: 'Logo', pendant: 'Pendant', text: 'Text', fx: 'Effects' };   // v25: plain words
 const FRAME = 1 / 30, SNAP_PX = 7, EXPANDED = 84, MIN_H = 14, MAX_H = 260, PRESET_KEY = 'u2c.keypresets';
 const tick = (b) => Math.round(b * PPQ) / PPQ;
 
@@ -41,8 +41,9 @@ export function createCueTimeline(app, cv) {
   // ---------------------------------------------------------------- rows (groups, heights, prefix-sum layout)
   function buildRows() {
     const sh = cues.sheet, R = reg().byPath, base = [], used = new Set();
-    for (const [path, label, lane] of DEFAULT_ROWS) { const t = sh.tracks.find((x) => x.path === path); base.push({ path, label, lane, group: lane, track: t || null, kind: (t && t.kind) || (R[path] && R[path].kind) || 'number' }); used.add(path); }
-    for (const t of sh.tracks) if (!used.has(t.path)) { used.add(t.path); const p = R[t.path], ln = laneOf(t.path), grp = ln !== 'custom' ? ln : (p && p.element) || t.path.split('.').slice(0, 2).join('.');
+    const simple = document.body.classList.contains('simple'), SIMPLE_HIDE = new Set(['focus', 'look', 'logo', 'pendant']);   // v25 Simple mode: only the tracks a first-time user needs (Intro, Camera, Text, Effects + what you moved)
+    for (const [path, label, lane] of DEFAULT_ROWS) { if (simple && SIMPLE_HIDE.has(lane)) continue; const t = sh.tracks.find((x) => x.path === path); base.push({ path, label, lane, group: lane, track: t || null, kind: (t && t.kind) || (R[path] && R[path].kind) || 'number' }); used.add(path); }
+    for (const t of sh.tracks) if (!used.has(t.path)) { used.add(t.path); if (simple && (SIMPLE_HIDE.has(laneOf(t.path)) || (t.auto && laneOf(t.path) === 'custom' && t.path !== 'term.line'))) continue; const p = R[t.path], ln = laneOf(t.path), grp = ln !== 'custom' ? ln : (p && p.element) || t.path.split('.').slice(0, 2).join('.');
       const row = { path: t.path, label: p ? `${p.elementLabel} · ${p.label}` : t.path, lane: 'custom', group: grp, groupLabel: p ? p.elementLabel : grp, track: t, kind: t.kind, custom: true };
       let at = -1; base.forEach((r, i) => { if (r.group === grp) at = i; }); if (at >= 0) base.splice(at + 1, 0, row); else base.push(row); }
     const size = {}; for (const r of base) size[r.group] = (size[r.group] || 0) + 1;
@@ -377,11 +378,11 @@ export function createCueTimeline(app, cv) {
     if (!drag.moved) { drag.moved = true; cues.begin(); snap = buildSnap(new Set(st.sel)); }
     const db = (x - drag.x0) / st.ppb;
     cues.preview(() => {
-      if (drag.kind === 'moveLen') { const o = drag.orig.get(drag.key.id), st0 = snapTo(drag.key.b - (o.dur ?? 1) + db, { alt: e.altKey }); drag.key.dur = Math.max(0.25, Math.min(16, Math.round((drag.key.b - st0) * 960) / 960)); const f = findKey(drag.key.id); if (f && f[0].track) f[0].track.auto = false; return; }
+      if (drag.kind === 'moveLen') { const o = drag.orig.get(drag.key.id), st0 = snapTo(drag.key.b - (o.dur ?? 1) + db, { alt: e.altKey }); st.peek = Math.max(0, st0); app.studio && app.studio.markDirty(); drag.key.dur = Math.max(0.25, Math.min(16, Math.round((drag.key.b - st0) * 960) / 960)); const f = findKey(drag.key.id); if (f && f[0].track) f[0].track.auto = false; return; }
       if (drag.kind === 'resize') { const o = drag.orig.get(drag.key.id), end = snapTo(drag.key.b + (o.dur ?? 1) + db, { alt: e.altKey }); drag.key.dur = Math.max(grid || 1 / 16, end - drag.key.b); return; }
       // v22: the clip's start edge (trim in): the end stays put
       if (drag.kind === 'resizeL') { const o = drag.orig.get(drag.key.id), endB = o.b + (o.dur ?? 1), nb = Math.max(0, Math.min(endB - (grid || 1 / 16), snapTo(o.b + db, { alt: e.altKey }))); drag.key.b = tick(nb); drag.key.dur = endB - drag.key.b; if (drag.row.track) drag.row.track.auto = false; return; }
-      const oa = drag.orig.get(drag.key.id), na = snapTo(oa.b + db, { alt: e.altKey }), d = na - oa.b;
+      const oa = drag.orig.get(drag.key.id), na = snapTo(oa.b + db, { alt: e.altKey }), d = na - oa.b; st.peek = Math.max(0, na); app.studio && app.studio.markDirty();   // v25 edit-point preview: the monitor shows the frame at the key while you drag it
       for (const [sid, o] of drag.orig) { const f = findKey(sid); if (f) { f[1].b = Math.max(0, tick(o.b + d)); if (f[0].track) f[0].track.auto = false; } }
       if (drag.row.kind === 'number' && !st.collapsed && Math.abs(y - drag.y0) > 2) { const p = reg().byPath[drag.row.path] || {}, ri = rowIdx(drag.row), rh = rowH(ri), [mn, mx] = vrange(drag.row), step = p.step || 0.01, dv = -(y - drag.y0) / (rh - (rh >= 40 ? 20 : 8)) * (mx - mn);
         drag.key.v = Math.max(p.min ?? -Infinity, Math.min(p.max ?? Infinity, Math.round((drag.orig.get(drag.key.id).v + dv) / step) * step)); }
@@ -389,7 +390,7 @@ export function createCueTimeline(app, cv) {
     sortAll(); dirty = true;
   });
   const end = (e) => {
-    if (!drag) return; const d = drag; drag = null; st.guide = null;
+    if (!drag) return; const d = drag; drag = null; st.guide = null; if (st.peek != null) { st.peek = null; app.studio && app.studio.markDirty(); }
     if (d.kind === 'marquee') { if (d.moved) { const [x0, y0, x1, y1] = d.box, bx0 = bOf(Math.min(x0, x1)), bx1 = bOf(Math.max(x0, x1)), r0 = rowAt(Math.min(y0, y1)), r1 = rowAt(Math.max(y0, y1)); if (!d.add) st.sel.clear();
         rows.forEach((r, i) => { if (!st.collapsed && (i < r0 || i > r1)) return; for (const q of r.summary ? r.members : [r]) if (q.track && !locked(q)) for (const k of q.track.keys) if (k.b >= bx0 - 1e-6 && k.b <= bx1 + 1e-6) st.sel.add(k.id); }); app.inspector && app.inspector.show(); }
       else { st.sel.clear(); const [x] = pos(e); seekBeat(bOf(x), snapGrid()); app.inspector && app.inspector.show(); } }
@@ -402,7 +403,7 @@ export function createCueTimeline(app, cv) {
     if (d.kind === 'loopA' || d.kind === 'loopB') { if (st.loop.b - st.loop.a < 1e-6) st.loop = null; app.actions.loopChanged && app.actions.loopChanged(); }
     dirty = true;
   };
-  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', () => { if (drag && (drag.moved || drag.kind === 'handle') && drag.kind !== 'marquee') cues.cancel(); drag = null; st.guide = null; dirty = true; });
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', () => { st.peek = null; app.studio && app.studio.markDirty(); if (drag && (drag.moved || drag.kind === 'handle') && drag.kind !== 'marquee') cues.cancel(); drag = null; st.guide = null; dirty = true; });
   cv.addEventListener('pointerleave', () => { if (st.hover !== -1 && !drag) { st.hover = -1; dirty = true; } });
   cv.addEventListener('dblclick', (e) => { const [x, y] = pos(e), h = hit(x, y);
     if (h.zone === 'lane' && h.row && !h.row.summary && !h.locked) addKeyAt(h.row, Math.max(0, snapBeat(bOf(x), snapGrid())));
@@ -424,7 +425,7 @@ export function createCueTimeline(app, cv) {
   const editable = (list) => list.filter(([r]) => !locked(r));
   const userPresets = () => { const p = read(PRESET_KEY); return Array.isArray(p) ? p : []; };
   const api = {
-    get state() { return st; }, rows: () => buildRows(), selected, findKey, ensureTrack, addKeyAt, hit, xOf, bOf, markers: () => markers(),
+    get state() { return st; }, get peekBeat() { return st.peek ?? null; }, rows: () => buildRows(), selected, findKey, ensureTrack, addKeyAt, hit, xOf, bOf, markers: () => markers(),
     markDirty() { dirty = true; }, recolor() { colors = null; dirty = true; },
     draw() { if (dirty) draw(); },
     setTime(tClip) { const b = tClip / BEAT(); if (Math.abs(b - st.playhead) > 1e-6) { st.playhead = b;

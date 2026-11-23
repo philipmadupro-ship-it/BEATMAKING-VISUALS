@@ -37,8 +37,22 @@ export function createStudio(app) {
     return { x: (x - W / 2) / c.z + c.x, y: (y - H / 2) / c.z + c.y, sx: x, sy: y, W, H }; }
   function rectsNow() { const e = app.clip.current(), f = e && app.clip.film(e, P().aspect); return f ? f.rects(app.cues.ev(), tl().state.playhead, info.look) : {}; }
   function hitWin(pt) { const R = rectsNow(); let best = null; for (const [id, r] of Object.entries(R)) if (pt.x >= r[0] && pt.x <= r[0] + r[2] && pt.y >= r[1] && pt.y <= r[1] + r[3]) best = [id, r]; return best; }
-  function showPick() { const box = $('#pickBox'); if (!pick) { box.hidden = true; return; } const R = rectsNow()[pick]; if (!R) { box.hidden = true; return; } const { W, H } = ASPECTS[P().aspect], c = info.cam || { x: W / 2, y: H / 2, z: 1 };
-    const sx = (R[0] - c.x) * c.z + W / 2, sy = (R[1] - c.y) * c.z + H / 2; Object.assign(box.style, { left: sx / W * 100 + '%', top: sy / H * 100 + '%', width: R[2] * c.z / W * 100 + '%', height: R[3] * c.z / H * 100 + '%' }); box.hidden = false; }
+  // v25 FLOATING TOOLBAR (CapCut / Clipchamp): under the selected window on the preview, the four things you do with it
+  let pbar = null; const WN = { stage: 'Hero card', session: 'Waveform', inserts: 'Rack', spectrum: 'Spectrum', stereo: 'Imager', loud: 'Levels', meta: 'Metadata', spectro: 'Spectrogram' };
+  function pickBar() { if (pbar) return pbar; pbar = document.createElement('div'); pbar.className = 'pickbar'; pbar.setAttribute('role', 'toolbar'); pbar.hidden = true; $('#cwrap').append(pbar);
+    pbar.addEventListener('pointerdown', (e) => e.stopPropagation());
+    pbar.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !pick) return; const id = pick, A = app.actions, bb = Math.max(4, Math.round(tl().state.playhead / 4) * 4);
+      if (b.dataset.a === 'visit') app.cues.edit((sh) => { let t = sh.tracks.find((q) => q.path === 'camera.shot'); if (!t) return; t.auto = false; t.keys = t.keys.filter((q) => Math.abs(q.b - bb) > 1e-6); t.keys.push({ id: 'k' + Math.random().toString(36).slice(2, 9), b: bb, v: id, transition: 'push', dur: 2, ease: 'spring' }); t.keys.sort((x, y) => x.b - y.b); }, 'camera visit ' + (WN[id] || id));
+      if (b.dataset.a === 'hide') A.setProp(`win.${id}.visible`, false);
+      if (b.dataset.a === 'reset') app.cues.edit((sh) => { for (const k of ['x', 'y', 'w', 'h']) { delete sh.base[`win.${id}.${k}`]; sh.tracks = sh.tracks.filter((q) => q.path !== `win.${id}.${k}`); } }, 'reset ' + (WN[id] || id) + ' position');
+      if (b.dataset.a === 'edit') { $('.tabs [data-tab="inspect"]').click(); app.inspector.showElement('win.' + id); }
+      if (b.dataset.a === 'preset') { const n = window.prompt('Name this preset', 'My layout'); if (n != null && app.presets) { app.presets.save(n.trim() || undefined); app.toast && app.toast('Preset saved: Presets tab'); } }
+      markDirty(); });
+    return pbar; }
+  function showPick() { const box = $('#pickBox'), bar = pickBar(); if (!pick) { box.hidden = true; bar.hidden = true; return; } const R = rectsNow()[pick]; if (!R) { box.hidden = true; return; } const { W, H } = ASPECTS[P().aspect], c = info.cam || { x: W / 2, y: H / 2, z: 1 };
+    const sx = (R[0] - c.x) * c.z + W / 2, sy = (R[1] - c.y) * c.z + H / 2; Object.assign(box.style, { left: sx / W * 100 + '%', top: sy / H * 100 + '%', width: R[2] * c.z / W * 100 + '%', height: R[3] * c.z / H * 100 + '%' }); box.hidden = false;
+    const by = Math.min(0.94, (sy + R[3] * c.z) / H); if (bar.dataset.for !== pick) { bar.dataset.for = pick; bar.innerHTML = `<b>${WN[pick] || pick}</b><button data-a="visit" data-tip="Camera visit here|The camera travels to this window at the playhead (snapped to the bar).|">Visit</button><button data-a="edit" data-tip="Edit|Open this window's properties.|">Edit</button><button data-a="reset" data-tip="Reset position|Back to where the look puts it.|">Reset</button><button data-a="hide" data-tip="Hide|Closes this window from the playhead on (the eye in Layers brings it back).|">Hide</button><button data-a="preset" data-tip="Save as preset|Keep this layout (and your other changes) as a preset for every video.|">Save preset</button>`; }
+    Object.assign(bar.style, { left: Math.max(1, Math.min(70, sx / W * 100)) + '%', top: by * 100 + '%' }); bar.hidden = false; }
   view.addEventListener('pointerdown', (e) => { const pt = world(e), h = hitWin(pt); if (!h) { pick = null; showPick(); return; }
     pick = h[0]; app.inspector.showElement('win.' + pick); $('.tabs [data-tab="inspect"]').click(); view.setPointerCapture(e.pointerId);
     drag = { id: pick, x0: pt.x, y0: pt.y, r0: h[1], moved: false }; showPick(); });
@@ -156,7 +170,7 @@ export function createStudio(app) {
     if (blurOn) { const fps = p.export.fps || 30, tq = p.inT + Math.round((t - p.inT) * fps) / fps; if (tq !== lastTq) { lastTq = tq; dirty = true; } }   // v20: blur previews on the export's frame grid
     if (app.clock.playing ? (!blurOn || dirty) : dirty) { dirty = false; info = {};
       if (blurOn) { let first = true; blurF((tt, s2, inf) => { const r = app.renderFrame(tt, s2, p, tr, { info: inf }); if (first) { first = false; info = inf; } return r; }, lastTq, surf, p.export.fps || 30, p.export.shutter ?? 0.5); }
-      else app.renderFrame(t, surf, p, tr, { info }); for (const fn of post) fn(t, surf, p, tr, info); $('#measuring').textContent = info.look ? '' : 'measuring the section…'; if (pick) showPick();
+      else { const pk = !app.clock.playing && tl().peekBeat != null ? p.inT + tl().peekBeat * tr.spb : null; app.renderFrame(pk ?? t, surf, p, tr, { info }); $('#stage').classList.toggle('peek', pk != null); } for (const fn of post) fn(t, surf, p, tr, info);   // v25: edit-point preview while a key is dragged $('#measuring').textContent = info.look ? '' : 'measuring the section…'; if (pick) showPick();
       app.timeline.setTime(t, !app.clock.playing); app.inspector.tick && app.inspector.tick(); }
     if (now - lastLayers > 250) { lastLayers = now; layers.update(); }
     tl().draw(); if (!app.clock.playing) app.inspector.tick && app.inspector.tick();

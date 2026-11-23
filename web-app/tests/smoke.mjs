@@ -40,7 +40,7 @@ const shot = (f) => page.screenshot({ path: path.join(SHOTS, f) });
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const t0 = Date.now();
 await page.goto(URL0);
-await ev(() => { try { localStorage.clear(); } catch (_) {} }); await page.reload();
+await ev(() => { try { localStorage.clear(); localStorage.setItem('u2c.mode.v1', 'pro'); } catch (_) {} }); await page.reload();
 await page.waitForFunction(() => document.documentElement.dataset.track === '1', null, { timeout: 120000 });
 ok('boot + demo analysis', true, ((Date.now() - t0) / 1000).toFixed(1) + ' s');
 // ---- upload the test beat

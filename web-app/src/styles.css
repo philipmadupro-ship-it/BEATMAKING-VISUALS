@@ -659,3 +659,43 @@ body:has(#studio[hidden]) #wsSeg{display:none}
 .hist-list .now button{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 22%,transparent),color-mix(in srgb,var(--accent) 10%,transparent));box-shadow:inset 2px 0 0 var(--accent)}
 .hist-list .fut button{color:var(--muted);font-style:italic}
 .hist-list i{font:400 10px var(--mono);color:var(--muted);font-style:normal}
+/* v25 Simple / Pro mode (CapCut logic: one job per region, plain words, the rest under Pro) */
+.rail:not([data-pane="presets"]) .presets-pane{display:none}
+.pane-help{margin:0 0 10px;font:400 12px/1.45 var(--sans);color:var(--muted);border-left:2px solid color-mix(in srgb,var(--accent) 60%,transparent);padding:2px 0 2px 8px}
+body:not(.simple) .pane-help{display:none}
+.modesw{margin-right:8px;font:600 11px var(--sans);letter-spacing:.08em;text-transform:uppercase}
+body:has(#studio[hidden]) .modesw{display:none}
+body.simple #tab-text,body.simple #tab-meta,body.simple #tab-beat,body.simple #railTabs [data-pane="markers"]{display:none}
+body.simple #abBtn,body.simple #abSnap,body.simple .menuwrap:has(#guidesBtn),body.simple #resSel,body.simple #zoomSeg{display:none}
+body.simple #insp code,body.simple #insp .path{display:none}   /* simple: the selected thing's properties stay, raw paths hide */
+body.simple #cueImport,body.simple #cueExport,body.simple #presetSel,body.simple #ripInBtn,body.simple #ripOutBtn,body.simple #graphBtn,body.simple #compactBtn,body.simple #densityBtn,body.simple #lanesBtn{display:none}
+body.simple #pane-look #presetList,body.simple #pane-look #regenBtn{display:none}
+/* presets pane */
+.pr-quick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.pr-q{all:unset;cursor:pointer;padding:9px 10px;border-radius:8px;border:1px solid var(--glass-edge);background:linear-gradient(180deg,var(--glass-2),var(--glass));box-shadow:var(--glass-sh);font:600 12px var(--sans);text-align:center}
+.pr-q[aria-pressed="true"]{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 100%,#fff 16%),var(--accent));color:var(--on-accent)}
+.pr-q:focus-visible,.pr-apply:focus-visible{outline:2px solid var(--accent)}
+.pr-list{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-direction:column;gap:6px}
+.pr-item{display:flex;flex-direction:column;gap:4px;padding:8px;border:1px solid var(--line);border-radius:8px}
+.pr-item.def{border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
+.pr-apply{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:2px}.pr-apply b{font:600 13px var(--sans)}.pr-apply span{font:400 11px var(--sans);color:var(--muted)}
+.pr-apply:hover b{color:var(--accent)}
+.pr-acts{display:flex;gap:4px;flex-wrap:wrap}
+/* v25 floating toolbar under the selected window */
+.cwrap{position:relative}
+.pickbar{position:absolute;z-index:8;transform:translateY(8px);display:flex;align-items:center;gap:4px;padding:4px;border-radius:10px;background:color-mix(in srgb,var(--panel) 70%,transparent);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid var(--glass-edge);box-shadow:var(--glass-sh),0 10px 24px rgba(0,0,0,.4);white-space:nowrap}
+.pickbar b{font:600 11px var(--sans);padding:0 6px;color:var(--fg)}
+.pickbar button{all:unset;cursor:pointer;font:500 11px var(--sans);padding:5px 8px;border-radius:7px;color:var(--fg);min-height:24px;box-sizing:border-box}
+.pickbar button:hover{background:var(--tint)}.pickbar button:focus-visible{outline:2px solid var(--accent)}
+.stage.peek::after{content:"EDIT POINT";position:absolute;right:14px;top:10px;font:600 10px var(--sans);letter-spacing:.12em;color:var(--on-accent);background:var(--accent);padding:2px 6px;border-radius:4px}
+/* v25 sliders: a tick at the default value, a value bubble while dragging */
+input[type=range].has-def::-webkit-slider-runnable-track{background:linear-gradient(90deg,transparent calc(var(--d) - 1px),color-mix(in srgb,var(--fg) 55%,transparent) calc(var(--d) - 1px) calc(var(--d) + 1px),transparent calc(var(--d) + 1px)),linear-gradient(90deg,var(--accent) 0 var(--v),color-mix(in srgb,var(--fg) 10%,transparent) var(--v))}
+.sl-bubble{position:fixed;z-index:70;transform:translateX(-50%);pointer-events:none;font:600 11px var(--mono);padding:2px 6px;border-radius:6px;background:var(--accent);color:var(--on-accent);box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.pickbar[hidden]{display:none}
+@media (max-width:560px){.modesw{display:none}.pickbar{max-width:calc(100vw - 32px);overflow-x:auto}}
+
+/* v25 simple: the timeline only has 4-5 tracks, so it takes less height and the monitor gets the rest; the song strip folds */
+body.simple #studio:not([style*="--dock-h"]){grid-template-rows:minmax(0,1fr) 300px}
+body.simple #studio .song .songbar{display:none}
+.presets-pane,.history{padding:12px 16px;overflow:auto;min-height:0;flex:1;display:flex;flex-direction:column;gap:10px}
+.rail:not([data-pane="presets"]) .presets-pane,.rail:not([data-pane="history"]) .history{display:none}

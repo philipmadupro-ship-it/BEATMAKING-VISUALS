@@ -41,7 +41,7 @@ const ev = (fn, arg) => page.evaluate(fn, arg);
 const wait = (ms) => page.waitForTimeout(ms);
 const t0 = Date.now();
 await page.goto(URL0);
-await ev(async () => { try { localStorage.clear(); } catch (_) {} for (const n of ['u2c-projects', 'u2c-media']) await new Promise((r) => { const q = indexedDB.deleteDatabase(n); q.onsuccess = q.onerror = q.onblocked = () => r(); }); });
+await ev(async () => { try { localStorage.clear(); localStorage.setItem('u2c.mode.v1', 'pro'); } catch (_) {} for (const n of ['u2c-projects', 'u2c-media']) await new Promise((r) => { const q = indexedDB.deleteDatabase(n); q.onsuccess = q.onerror = q.onblocked = () => r(); }); });
 await page.reload();
 await page.waitForFunction(() => document.documentElement.dataset.track === '1', null, { timeout: 120000 });
 ok('boot + demo analysis', true, ((Date.now() - t0) / 1000).toFixed(1) + ' s');
@@ -303,5 +303,10 @@ const of2 = await ev(() => document.documentElement.scrollWidth - window.innerWi
 ok('phone 390: studio and home without horizontal scroll', of1 <= 0 && of2 <= 0, `overflow ${of1} / ${of2} px`);
 const real = errors.filter((e) => !/favicon/.test(e));
 ok('no console errors', real.length === 0, real.slice(0, 5).join(' | '));
+// v25 presets: save what you changed (a moved window), change it again, apply the preset -> the saved position comes back; capture keeps only changes
+{ const r = await ev(async () => { const app = window.u2c; app.actions.setProp('win.spectrum.x', 123); const id = app.presets.save('Test layout'), d = app.presets.list().find((q) => q.id === id).data;
+    app.actions.setProp('win.spectrum.x', 456); app.presets.apply(id); const x = app.cues.ev().value('win.spectrum.x', 0, null);
+    const n = Object.keys(d.base).length; app.presets.remove(id); return { x, n, has: 'win.spectrum.x' in d.base || d.tracks.some((t) => t.path === 'win.spectrum.x'), left: app.presets.list().length }; });
+  ok('presets: save a moved window, apply it back (only changes captured), delete', r.x === 123 && r.has && r.left === 0, JSON.stringify(r)); }
 await browser.close(); if (server) server.close();
 const failed = results.filter((r) => !r.pass).length; console.log(`\n${results.length - failed}/${results.length} passed`); process.exit(failed ? 1 : 0);

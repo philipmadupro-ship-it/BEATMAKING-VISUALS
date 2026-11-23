@@ -81,3 +81,32 @@ The caption, hashtags and hook lines are in Tags (`social.caption`, `social.hash
 - **Workspaces** (top bar): Edit, Motion, Audio, Export rearrange the panels for the job.
 - **Tooltips**: hover any control for half a second to see its name, what it does and its shortcut.
 - **The preview is always visible**: when the monitor scrolls away (phone, long panels), a floating glass mini-preview follows you. Click it to jump back, drag it to a corner, × hides it.
+
+## v25: Simple and Pro, presets, direct editing
+
+- **Simple mode (default).** It works like CapCut / Clipchamp:
+  - **Left:** Presets, Layers, Media, History.
+  - **Centre:** the preview.
+  - **Bottom:** a timeline with plain tracks (Intro, Camera, Text, Effects, plus whatever you moved).
+  - **Right:** *Edit* (the thing you selected), *Look*, *Export*.
+
+  Every panel starts with one line saying what it is for. The **Pro** switch (top bar) brings back every panel: Text / Meta / Beat tabs, Markers, raw properties, graph and cue-sheet tools.
+- **Presets** (left → Presets):
+  - Quick presets: Lab, Hero, Calm / YouTube, Rack tour, Full beat.
+  - **Save as preset** keeps only what you changed: moved windows, options, words, edited tracks. Apply it on any beat: the video is rebuilt for that beat, with your changes on top.
+  - ★ = *Use for new videos*.
+  - ↻ update, ✎ rename, ⇩ export, *Import preset*.
+- **Click a window on the preview.** It is boxed and a floating toolbar appears:
+  - *Visit*: the camera goes there at the playhead.
+  - *Edit*
+  - *Reset* the position
+  - *Hide*
+  - *Save preset*
+
+  Drag the window to move it; the preview updates live.
+- **Edit-point preview:** while you drag a key or a camera move in the timeline, the monitor shows that exact frame ("EDIT POINT"). It goes back to the playhead when you let go.
+- **Sliders:**
+  - a tick marks the default value;
+  - double-click resets it;
+  - a bubble shows the value while you drag;
+  - arrow keys step.

@@ -25,7 +25,7 @@ export function createInspector(app, root) {
   function ctlParts(prop, v, attrs = '') {
     const k = prop.kind, al = esc(prop.label);
     if (k === 'number') return [`<div class="num"><input class="inp mono" type="number" step="${prop.step ?? 'any'}" ${prop.min != null ? `min="${prop.min}"` : ''} ${prop.max != null ? `max="${prop.max}"` : ''} value="${fmtNum(v, prop.step)}" ${attrs} data-type="number" aria-label="${al}">${prop.unit ? `<span class="unit">${esc(prop.unit)}</span>` : ''}</div>`,
-      prop.min != null && prop.max != null ? `<input type="range" min="${prop.min}" max="${prop.max}" step="${prop.step ?? 'any'}" value="${v}" ${attrs} data-type="number" aria-label="${al} slider">` : ''];
+      prop.min != null && prop.max != null ? `<input type="range" min="${prop.min}" max="${prop.max}" step="${prop.step ?? 'any'}" value="${v}" data-def="${prop.default ?? ''}" ${attrs} data-type="number" aria-label="${al} slider">` : ''];
     if (k === 'color') return [`<div class="num swatch"><input type="color" value="${esc(v)}" ${attrs} data-type="color" aria-label="${al}"><input class="inp mono hex" value="${esc(v)}" ${attrs} data-type="color" aria-label="${al} hex" spellcheck="false"></div>`, ''];
     if (k === 'enum' || k === 'shot') { const opts = k === 'shot' ? ['wide', ...winIds()] : prop.options || [];
       if (k === 'enum' && opts.length > 1 && opts.length <= 4 && opts.every((o) => String(o).length <= 10)) return ['', `<div class="segc" role="radiogroup" aria-label="${al}">${opts.map((o) => `<label><input type="radio" name="rg-${esc(prop.path || 'v')}" value="${esc(o)}" ${o === v ? 'checked' : ''} ${attrs} data-type="enum"><span>${esc(o)}</span></label>`).join('')}</div>`];

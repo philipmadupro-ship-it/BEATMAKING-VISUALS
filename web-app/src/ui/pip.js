@@ -20,6 +20,13 @@ export function createPip(app) {
   // glass sliders show their filled part (CSS var --v): on input, and for sliders set from code / added later (cheap periodic pass)
   const fill = (el) => { const lo = +el.min || 0, hi = el.max === '' ? 100 : +el.max, v = +el.value; el.style.setProperty('--v', ((v - lo) / Math.max(1e-9, hi - lo) * 100).toFixed(2) + '%'); };
   document.addEventListener('input', (e) => { if (e.target.matches && e.target.matches('input[type=range]')) fill(e.target); }, true);
-  const all = () => document.querySelectorAll('input[type=range]').forEach(fill); all(); setInterval(all, 700);
+  // v25 slider polish: a tick at the default value (--d), double-click = reset to the default, a value bubble while dragging
+  const defTick = (el) => { if (el.dataset.def === '' || el.dataset.def == null) return; const lo = +el.min || 0, hi = el.max === '' ? 100 : +el.max; el.style.setProperty('--d', ((+el.dataset.def - lo) / Math.max(1e-9, hi - lo) * 100).toFixed(2) + '%'); el.classList.add('has-def'); };
+  document.addEventListener('dblclick', (e) => { const el = e.target; if (!el.matches || !el.matches('input[type=range]') || el.dataset.def === '' || el.dataset.def == null) return; el.value = el.dataset.def; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); fill(el); app.toast && app.toast('Reset to the default'); }, true);
+  const bub = document.createElement('output'); bub.className = 'sl-bubble'; bub.hidden = true; document.body.append(bub);
+  const showBub = (el) => { const r = el.getBoundingClientRect(), lo = +el.min || 0, hi = el.max === '' ? 100 : +el.max, u = (+el.value - lo) / Math.max(1e-9, hi - lo); bub.textContent = (+el.value).toFixed(+el.step >= 1 ? 0 : +el.step >= 0.1 ? 1 : 2); bub.style.left = (r.left + 9 + u * (r.width - 18)) + 'px'; bub.style.top = (r.top - 26) + 'px'; bub.hidden = false; };
+  document.addEventListener('input', (e) => { if (e.target.matches && e.target.matches('input[type=range]') && document.activeElement === e.target) showBub(e.target); }, true);
+  document.addEventListener('pointerup', () => { bub.hidden = true; }, true); document.addEventListener('focusout', () => { bub.hidden = true; }, true);
+  const all = () => document.querySelectorAll('input[type=range]').forEach((el) => { fill(el); defTick(el); }); all(); setInterval(all, 700);
   return { sync, get shown() { return !box.hidden; } };
 }

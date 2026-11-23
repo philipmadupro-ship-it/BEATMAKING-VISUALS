@@ -116,7 +116,7 @@ body{background:var(--bg);color:var(--fg)}
 <section id="studio" hidden>
  <aside class="layers" id="layers" aria-label="Layers">
   <div class="rail" data-pane="layers">
-  <div class="pane-h rail-tabs" id="railTabs" role="tablist"><button role="tab" data-pane="layers" aria-selected="true">Layers</button><button role="tab" data-pane="media" aria-selected="false">Media</button><button role="tab" data-pane="markers" aria-selected="false">Markers</button><button role="tab" data-pane="history" aria-selected="false">History</button><span class="hint" id="layerCount"></span></div>
+  <div class="pane-h rail-tabs" id="railTabs" role="tablist"><button role="tab" data-pane="presets" aria-selected="false">Presets</button><button role="tab" data-pane="layers" aria-selected="true">Layers</button><button role="tab" data-pane="media" aria-selected="false">Media</button><button role="tab" data-pane="markers" aria-selected="false">Markers</button><button role="tab" data-pane="history" aria-selected="false">History</button><span class="hint" id="layerCount"></span></div>
   <div class="layer-list" id="layerList"></div>
   <div class="media" id="pane-media" aria-label="Media bin">
     <div class="group-h"><span class="lbl">Covers</span><span class="inrow"><button class="btn small" id="mediaAdd">Add images</button><button class="btn small" id="mediaReset">Reset</button></span></div>
@@ -140,6 +140,7 @@ body{background:var(--bg);color:var(--fg)}
     <input class="inp small" id="markerFilter" placeholder="filter markers" aria-label="Filter markers">
     <ul class="mk-list" id="markerItems"></ul>
   </div>
+  <div class="presets-pane" id="pane-presets" aria-label="Presets"><div id="presetPane"></div></div>
   <div class="history" id="pane-history" aria-label="History">
     <div class="group-h"><span class="hint" id="histCount"></span><span class="inrow"><button class="ib sm" id="histUndo" aria-label="Undo" data-tip="Undo|Step back one change.|Ctrl+Z">↶</button><button class="ib sm" id="histRedo" aria-label="Redo" data-tip="Redo|Step forward one change.|Shift+Ctrl+Z">↷</button></span></div>
     <ol class="hist-list" id="histItems"></ol>

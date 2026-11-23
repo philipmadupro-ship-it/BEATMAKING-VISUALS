@@ -73,7 +73,7 @@ export function createQuick(app) {
     if (c.k === 'tag' || c.k === 'proj') return `${String(v ?? '').length} chars`; return ''; }
   function ctl(c, v) { const a = `data-q="${esc(c.id)}" aria-describedby="qh-${esc(c.id)}"`;
     switch (c.k) {
-      case 'num': { const p = reg()[c.path] || {}; return `<input type="range" ${a} min="${p.min ?? 0}" max="${p.max ?? 1}" step="${p.step ?? 0.01}" value="${+v}" aria-label="${esc(c.label)}">`; }
+      case 'num': { const p = reg()[c.path] || {}; return `<input type="range" ${a} min="${p.min ?? 0}" max="${p.max ?? 1}" step="${p.step ?? 0.01}" value="${+v}" data-def="${p.default ?? ''}" aria-label="${esc(c.label)}" data-tip="${esc(c.label)}|${esc(c.hint || '')} Double-click resets to ${p.default ?? 'the default'}; arrow keys step.|">`; }
       case 'bool': case 'projbool': return `<label class="sw"><input type="checkbox" role="switch" ${a} ${v !== false && v != null ? 'checked' : ''} aria-label="${esc(c.label)}"><i aria-hidden="true"></i></label>`;
       case 'seg': return `<div class="seg full" role="group" aria-label="${esc(c.label)}">${c.opts.map(([o, l]) => `<button type="button" ${a} data-v="${esc(o)}" aria-pressed="${o === v}">${esc(l)}</button>`).join('')}</div>`;
       case 'sel': return `<select class="inp" ${a} aria-label="${esc(c.label)}">${c.opts.map(([o, l]) => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;

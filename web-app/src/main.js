@@ -26,6 +26,8 @@ import { createVoiceLab } from './ui/voicelab.js';
 import { createTips } from './ui/tips.js';
 import { createPip } from './ui/pip.js';
 import { createHistory } from './ui/history.js';
+import { createPresets } from './ui/presets.js';
+import { createSimpleMode } from './ui/simple.js';
 import { createShotList } from './ui/shotlist.js';
 import { createAddLayer, createWorkspaces, createCoverPresets } from './ui/addlayer.js';
 import { createReview } from './ui/review.js';
@@ -83,7 +85,7 @@ async function boot() {
   // v22: edit in the timeline (inline values, text clips, context menu), task controls + coach, the status strip
   app.tlEdit = createTimelineEdit(app); app.quick = createQuick(app); app.statusBar = createStatusBar(app);
   // v23: + Layer menu (grouped, described), workspaces (Edit / Motion / Audio / Export), Adobe-style rich tooltips
-  app.addLayer = createAddLayer(app); app.workspaces = createWorkspaces(app); app.tips = createTips(document); app.pip = createPip(app); app.history = createHistory(app);
+  app.addLayer = createAddLayer(app); app.workspaces = createWorkspaces(app); app.tips = createTips(document); app.pip = createPip(app); app.history = createHistory(app); app.presets = createPresets(app); app.simple = createSimpleMode(app);
   store.subscribe(() => { const tr = store.session.track, el = document.getElementById('mediaAud'); if (el) el.textContent = tr ? `${tr.meta.name} · ${Math.round(tr.bpm)} BPM · ${tr.key || ''}` : ''; });
   motion.press(document.body);
   let userClip = false;
@@ -123,7 +125,8 @@ async function boot() {
     if (!needGen) { const look = cues.ev().value('look', 0, store.project.look), stage = cues.ev().value('stage', 0, store.project.stage); store.set({ project: { look, stage } }); accent(); } }
   function syncCues() {
     const e = app.clip.current(); if (!e || !e.ready) return;
-    if (needGen) { needGen = false; const g = generateSheet({ ...genOpts(), preset: (cues.sheet.meta && cues.sheet.meta.preset) || 'default' }); cues.replace(g, 'generate', true); }
+    if (needGen) { needGen = false; const g = generateSheet({ ...genOpts(), preset: (cues.sheet.meta && cues.sheet.meta.preset) || 'default' }); cues.replace(g, 'generate', true);
+      const dp = app.presets && app.presets.default && app.presets.list().find((q) => q.id === app.presets.default); if (dp) { app.presets.applyData(dp.data, 'preset ' + dp.name + ' (default for new videos)'); app.toast && app.toast('Started with your preset “' + dp.name + '”'); } }   // v25 ★ default preset
     else { const before = JSON.stringify(cues.sheet.tracks.filter((t) => t.auto).map((t) => t.keys.map((k) => [k.b, k.v]))), s2 = JSON.parse(JSON.stringify(cues.sheet)); refreshAutoIn(s2);
       if (JSON.stringify(s2.tracks.filter((t) => t.auto).map((t) => t.keys.map((k) => [k.b, k.v]))) !== before || s2.meta.bars !== cues.sheet.meta.bars) cues.edit((s) => refreshAutoIn(s), 'analysis'); }
     app.panels.sync(); app.cuetl.markDirty(); app.inspector.show(); warmCaches();
