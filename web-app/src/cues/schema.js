@@ -11,7 +11,7 @@ export const SNAPS = { bar: 4, beat: 1, '1/8': 0.5, '1/16': 0.25, off: 0 };
 /** Track kinds. number/color interpolate with the left key's ease; enum/bool/text step; shot = camera move; clip has a
  *  duration (text cues, glitch, logo hero); event is instantaneous (1-frame flash). */
 export const KINDS = ['number', 'color', 'enum', 'bool', 'text', 'shot', 'clip', 'event'];
-export const EASE_IDS = ['step', 'linear', 'easeInOut', 'expoOut', 'backOut'];
+export const EASE_IDS = ['step', 'linear', 'easeInOut', 'expoOut', 'backOut', 'emphasized', 'standard', 'spring'];   // v23: the player's eases survive a JSON round trip (were reset to easeInOut on import)
 // v16.1 cubic-bezier easings (LottieFiles motion-design skill, timing tables: MD3 Emphasized for entrances, MD3 Standard on-screen; 0 % overshoot = glass)
 function bez(x1, y1, x2, y2) { const B = (t, a, b2) => 3 * a * t * (1 - t) * (1 - t) + 3 * b2 * t * t * (1 - t) + t * t * t;
   return (x) => { if (x <= 0) return 0; if (x >= 1) return 1; let lo = 0, hi = 1, t = x; for (let i = 0; i < 28; i++) { t = (lo + hi) / 2; if (B(t, x1, x2) < x) lo = t; else hi = t; } return B(t, y1, y2); }; }
@@ -136,14 +136,14 @@ export function serializeSheet(sheet) {
     ...(sheet.markers && sheet.markers.length ? { markers: sheet.markers.map((m) => ({ at: beatsToBbt(m.b, bpb), label: m.label, kind: m.kind })) } : {}) };
 }
 /** Optional track flags (mute is v1; lock, solo, target and the lane height h came later). Only set flags are written. */
-export const MARKER_KINDS = ['cue', 'drop', 'hit', 'note'];
+export const MARKER_KINDS = ['cue', 'drop', 'hit', 'note', 'cta', 'chapter'];
 function trackFlags(t) { const o = {}; for (const f of ['mute', 'lock', 'solo', 'target']) if (t[f]) o[f] = true; if (Number.isFinite(t.h) && t.h > 0) o.h = Math.round(t.h); return o; }
 export function cloneSheet(s) { return JSON.parse(JSON.stringify(s)); }
 export function defaultEase(kind) { return kind === 'number' || kind === 'color' ? 'linear' : kind === 'shot' ? 'easeInOut' : 'step'; }
 export function laneOf(path) {
   if (path.startsWith('intro.')) return 'stage';   // the intro shares the Stage lane group (keeps the laptop dock to the same row count)
   if (path.startsWith('camera.')) return 'camera'; if (path === 'focus.featured') return 'focus'; if (path === 'look') return 'look'; if (path === 'stage') return 'stage';
-  if (path.startsWith('logo.')) return 'logo'; if (path.startsWith('pendant.')) return 'pendant'; if (path === 'text.cue') return 'text'; if (path.startsWith('fx.')) return 'fx'; return 'custom';
+  if (path.startsWith('logo.')) return 'logo'; if (path.startsWith('pendant.')) return 'pendant'; if (path === 'text.cue') return 'text'; if (path.startsWith('fx.') || path.startsWith('ufx.')) return 'fx'; return 'custom';
 }
 /** Structural validation of a JSON document against a property registry ({path: {type, options}}); returns messages. */
 export function validateSheet(doc, registry = null) {

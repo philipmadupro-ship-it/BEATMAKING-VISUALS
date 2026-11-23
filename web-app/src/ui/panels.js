@@ -6,7 +6,7 @@ import { saveFile } from '../export/save.js';
 import { slug } from '../util/draw.js';
 import { LOOKS, LOOK_NAMES, LOOK_BLURB, ASPECTS } from '../v8/layout.js';
 import { STAGES, STAGE_IDS } from '../v8/core.js';
-import { PRESETS } from '../cues/generate.js';
+import { PRESETS, PLAYER_PRESETS, generateSheet } from '../cues/generate.js';
 import { flattenTags, mergeDeep } from '../cues/schema.js';
 import { DEFAULT_TAGS } from '../v8/tags.js';
 import { makeSurface } from '../engine/render.js';
@@ -31,14 +31,21 @@ export function createPanels(app) {
   function looks() {
     const tr = app.store.session.track, box = $('#lookGrid'), p = P(); box.innerHTML = '';
     const { W, H } = ASPECTS[p.aspect], cw = p.aspect === '916' ? 108 : 160, ch = Math.round(cw * H / W), s2 = makeSurface(cw * 2, ch * 2), t = app.clock.time();
-    for (const id of LOOKS) { const b = document.createElement('button'); b.className = 'lk'; b.setAttribute('aria-pressed', id === p.look); b.setAttribute('aria-label', `${LOOK_NAMES[id]} look`);
-      b.innerHTML = `<canvas width="${cw}" height="${ch}"></canvas><b>${LOOK_NAMES[id]}</b><span>${LOOK_BLURB[id]}</span>`; b.onclick = () => { app.actions.setLook(id); looks(); }; box.appendChild(b);
-      if (tr) { const sheet = JSON.parse(JSON.stringify(app.cues.sheet)), lk = sheet.tracks.find((x) => x.path === 'look'); if (lk) lk.keys = [{ id: 'x', b: 0, v: id, ease: 'step' }]; sheet.base.look = id;
+    // v23 (user: every look is a preset of the player, always changeable): the player presets first (live thumbnails of this beat), the legacy looks folded away
+    const isP = p.look === 'player', curP = app.cues.sheet.meta.preset || 'default', e0 = app.clip.current();
+    for (const id of PLAYER_PRESETS) { const b = document.createElement('button'); b.className = 'lk'; b.setAttribute('aria-pressed', isP && id === curP); b.setAttribute('aria-label', `${PRESETS[id].name} preset`); b.dataset.tip = `${PRESETS[id].name}|${PRESETS[id].blurb}. Switching keeps every track you edited by hand.`;
+      b.innerHTML = `<canvas width="${cw}" height="${ch}"></canvas><b>${PRESETS[id].name}</b><span>${PRESETS[id].blurb}</span>`; b.onclick = () => { if (P().look !== 'player') app.actions.setLook('player'); app.actions.applyPreset(id); looks(); }; box.appendChild(b);
+      if (tr && e0 && e0.ready) { const sheet = generateSheet({ bars: e0.bars, labels: e0.labels, look: 'player', stage: p.stage, aspect: p.aspect, preset: id, meta: { title: p.title, seed: app.cues.sheet.meta.seed, spb: tr.spb } }); sheet.tags = app.cues.sheet.tags;
+        app.renderFrame(t, s2, { ...p, look: 'player' }, tr, { sheet, target: b.querySelector('canvas').getContext('2d') }); } }
+    const lg = document.createElement('details'); lg.className = 'legacy'; lg.open = !isP; lg.innerHTML = '<summary>Legacy looks <span class="hint">EXE · LAB · SCOPE (no orbit intro)</span></summary><div class="lookgrid"></div>'; box.appendChild(lg);
+    for (const id of LOOKS.filter((q) => q !== 'player')) { const b = document.createElement('button'); b.className = 'lk'; b.setAttribute('aria-pressed', id === p.look); b.setAttribute('aria-label', `${LOOK_NAMES[id]} look`);
+      b.innerHTML = `<canvas width="${cw}" height="${ch}"></canvas><b>${LOOK_NAMES[id]}</b><span>${LOOK_BLURB[id]}</span>`; b.onclick = () => { app.actions.setLook(id); looks(); }; lg.querySelector('.lookgrid').appendChild(b);
+      if (tr && !isP) { const sheet = JSON.parse(JSON.stringify(app.cues.sheet)), lk = sheet.tracks.find((x) => x.path === 'look'); if (lk) lk.keys = [{ id: 'x', b: 0, v: id, ease: 'step' }]; sheet.base.look = id;
         app.renderFrame(t, s2, { ...p, look: id }, tr, { sheet, target: b.querySelector('canvas').getContext('2d') }); } }
     const sg = $('#stageGrid'); sg.innerHTML = STAGE_IDS.map((id) => { const S = STAGES[id]; return `<button class="stg" data-stage="${id}" aria-pressed="${id === p.stage}"><i style="background:linear-gradient(135deg,${S.inverse ? S.ink : S.bg} 0 50%,${S.inverse ? S.bg : S.grey ? S.ink : S.hot} 50%)"></i><div>${S.label || S.name}<span>${{ white: 'inverted: white, dark ink', nigredo: 'black, white, greys', albedo: 'bone + iron oxide', citrinitas: 'tobacco + ochre', rubedo: 'violet + magenta' }[id]}</span></div></button>`; }).join('');
     sg.querySelectorAll('.stg').forEach((b) => (b.onclick = () => { app.actions.setStage(b.dataset.stage); looks(); }));
     const pl = $('#presetList'), cur = app.cues.sheet.meta.preset || 'default';
-    pl.innerHTML = Object.entries(PRESETS).map(([k, v]) => `<button class="preset" data-preset="${k}" aria-pressed="${k === cur}"><b>${v.name}</b><span>${v.blurb}</span></button>`).join('');
+    pl.hidden = isP; pl.innerHTML = Object.entries(PRESETS).filter(([k]) => !isP || PLAYER_PRESETS.includes(k)).map(([k, v]) => `<button class="preset" data-preset="${k}" aria-pressed="${k === cur}"><b>${v.name}</b><span>${v.blurb}</span></button>`).join('');
     pl.querySelectorAll('.preset').forEach((b) => (b.onclick = () => { app.actions.applyPreset(b.dataset.preset); looks(); }));
   }
   $('#regenBtn').onclick = () => { app.actions.applyPreset(app.cues.sheet.meta.preset || 'default'); looks(); };

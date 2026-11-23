@@ -51,3 +51,85 @@ The caption, hashtags and hook lines are in Tags (`social.caption`, `social.hash
 - **Status strip** at the bottom: beat, BPM, key, section, format, stage, intro, export preset and the play position. Click an item to change it.
 - **Timeline:** double-click a key to type its value (camera keys: pick the window by name); click a terminal or text clip to retype it; right-click for add / delete / ease; drag either edge of a clip. Wheel = lanes, Shift+wheel = time, Ctrl/Cmd+wheel = zoom.
 - **First run:** a 3-step guide (load a beat → pick a look → export); *Got it* hides it for good.
+
+## v23–v24: presets, voice lab, Premiere-style editing
+
+- **Look presets**:
+  - Lab (default)
+  - Hero
+  - Calm / YouTube
+  - Rack tour
+  - Full beat
+
+  They are on the home screen and in the Look tab. All of them have the player, the orbit-sphere intro, the hero card and the rack. You can switch at any time, and every track you edited by hand stays. EXE, LAB and SCOPE are under *Legacy looks*.
+- **Full beat**: pick *Full* length (or the Full beat preset). The video plays in the player to the end: CLOSE PROJECT?, the cursor clicks ×, and it stops (no loop back to the intro). Long videos visit the hero card every other move.
+- **Shot order** (Look tab): drag the camera stops to reorder them. The times stay and the windows move. Or Alt-drag a camera clip onto another one in the timeline. Use *+ Stop at playhead* to add one and *Shuffle order* for a new order.
+- **Voice lab** (left rail → Media):
+  - Pick one of your ElevenLabs voices (your own voices come first; *AI 1 girl* is the default).
+  - Set the experiment number and her three lines.
+  - *Generate intro take* makes one take. It spends credits only on that click.
+  - The take is split at its pauses and placed on the intro; a breath mid-line is merged automatically.
+  - Outside claude.ai: *Copy prompt*, then *Load voice take*.
+  - Under the voice: tag `voice.sub` sets the octave-down double (dB, or `off`), and tag `sfx.stove` turns the stove ignition on or off.
+- **Cover presets** (Media): Halftone print, Night vision, Thermal, Negative, Clean, Stage colours. *Every sphere tile* puts the treatment on the whole sphere.
+- **Markers** (left rail → Markers):
+  - Each marker has a type: Note, Cue, Drop, Hit, CTA or Chapter, each with its own colour on the timeline.
+  - ‹ › jump between markers.
+  - ◎ adds a camera visit at the marker.
+  - *Chapters* copies YouTube chapter lines (from Chapter markers, or from the sections when there are none).
+- **+ Layer** (timeline): text, terminal line, CTA, camera stop, zoom key, negative, flash, cover key or marker at the playhead. Each item says what it does.
+- **Workspaces** (top bar): Edit, Motion, Audio, Export rearrange the panels for the job.
+- **Tooltips**: hover any control for half a second to see its name, what it does and its shortcut.
+- **The preview is always visible**: when the monitor scrolls away (phone, long panels), a floating glass mini-preview follows you. Click it to jump back, drag it to a corner, × hides it.
+
+## v25: Simple and Pro, presets, direct editing
+
+- **Simple mode (default).** It works like CapCut / Clipchamp:
+  - **Left:** Presets, Layers, Media, History.
+  - **Centre:** the preview.
+  - **Bottom:** a timeline with plain tracks (Intro, Camera, Text, Effects, plus whatever you moved).
+  - **Right:** *Edit* (the thing you selected), *Look*, *Export*.
+
+  Every panel starts with one line saying what it is for. The **Pro** switch (top bar) brings back every panel: Text / Meta / Beat tabs, Markers, raw properties, graph and cue-sheet tools.
+- **Presets** (left → Presets):
+  - Quick presets: Lab, Hero, Calm / YouTube, Rack tour, Full beat.
+  - **Save as preset** keeps only what you changed: moved windows, options, words, edited tracks. Apply it on any beat: the video is rebuilt for that beat, with your changes on top.
+  - ★ = *Use for new videos*.
+  - ↻ update, ✎ rename, ⇩ export, *Import preset*.
+- **Click a window on the preview.** It is boxed and a floating toolbar appears:
+  - *Visit*: the camera goes there at the playhead.
+  - *Edit*
+  - *Reset* the position
+  - *Hide*
+  - *Save preset*
+
+  Drag the window to move it; the preview updates live.
+- **Edit-point preview:** while you drag a key or a camera move in the timeline, the monitor shows that exact frame ("EDIT POINT"). It goes back to the playhead when you let go.
+- **Sliders:**
+  - a tick marks the default value;
+  - double-click resets it;
+  - a bubble shows the value while you drag;
+  - arrow keys step.
+
+## v27: edit it like Photoshop
+
+- **Free transform (the preview).** Click a window on the preview, or its row in Layers. A box with 8 handles appears:
+  - drag inside the box to **move** it;
+  - drag a corner or an edge to **resize** it: *Shift* keeps the proportions, *Alt* resizes from the centre;
+  - **smart guides** (magenta lines) snap the edges and the centre to the frame (edges, centre, the 9:16 safe band) and to the other windows; hold *Ctrl / Cmd* while dragging to place it freely;
+  - the **arrow keys** nudge it 1 px (*Shift*: 10 px) while the preview has the focus, *Alt + arrows* resize it; *Enter* or *Esc* leaves the transform;
+  - every gesture is **one undo step** with its name in History (*Resize Spectrum*, *Move Waveform*, *Nudge …*). When the window is animated, the change is a key at the playhead.
+  - Text pop-ups can be clicked and dragged on the preview too. Double-click the empty background to edit the Background.
+  - The floating toolbar stays: *Visit*, *Edit*, *Reset*, *Hide*, *Save preset*.
+- **Layers (left), like Photoshop:**
+  - groups: **Windows**, **Text** (each pop-up, the hook + pop-ups, the terminal lines, the voice captions), **Effects** (each of your effects), **Brand**, **Scene** (background, camera, intro, colours …);
+  - each row: the **eye**, a thumbnail (where the window sits in the frame) or an icon, the name, ◆ when it has keys, the **lock** (a locked window cannot be picked or dragged on the preview);
+  - click = selected everywhere (preview box, Edit tab, timeline clip); hover a window row = it is outlined on the preview;
+  - double-click (or F2) a window name to rename the label written on the window.
+- **Your own effects (+ Effect).** The timeline's *+ Effect* button (or *+ Layer → Effects library*) opens the library:
+  Negative, Flash, Zoom pulse, Shake, Blur, Glow boost, Colour tint, RGB offset (use sparingly).
+  - The effect lands on the Effects track at the playhead (after the intro) and opens in Edit: **intensity**, **length**, **ease in**, **ease out**, **colour** (tint), **visible**.
+  - On the timeline it is a block like any other: drag it to move, drag its edges to change its length. The line on the block shows its intensity and its ease in / out.
+  - The eye in Layers hides one effect without deleting it. Effects render in the web export and in the native renderer the same way.
+- **A bigger timeline (Simple).** The dock is taller and its tracks use the height (taller lanes, labels on the blocks); the song overview and the shortcut strip live in Pro. Drag the grip above the timeline to resize it: the height is remembered; double-click the grip for the default.
+- **Quick + deep in Edit.** When something is selected, its full properties sit on top under a *Selected* header with its name and **← Back to quick setup**; the quick task controls (Intro, Camera, Text, Colours, Export) always stay underneath. Pro keeps the dense view.

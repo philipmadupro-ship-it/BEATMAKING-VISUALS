@@ -18,12 +18,14 @@ const G = [
     { id: 'seed', k: 'seed', label: 'Variation', hint: 'Same variation = same video. A new one reshuffles the camera order, intro direction and hook.' },
     { id: 'export.preroll', k: 'projbool', path: 'export.preroll', label: 'Click-to-play intro', hint: 'A silent browse before the beat starts; the cursor clicks play.' },
     { id: 'cursor.on', k: 'bool', path: 'cursor.on', label: 'Mouse cursor', hint: 'A Y2K cursor clicks each window before the camera moves.' },
-    { id: 'social.on', k: 'bool', path: 'social.on', label: 'Hook and pop-ups', hint: 'The hook dialog on frame 0 and the two call-to-action pop-ups.' }]],
+    { id: 'social.on', k: 'bool', path: 'social.on', label: 'Hook and pop-ups', hint: 'The hook dialog on frame 0 and the two call-to-action pop-ups.' },
+    { id: 'intro.coverFrame', k: 'bool', path: 'intro.coverFrame', label: 'Hook on the cover frame', hint: 'Frame 0 already shows the hook card (YouTube / TikTok often use frame 0 as the thumbnail). The loop still closes.' }]],
   ['Camera', 'How the camera moves', [
     { id: 'fx.punch', k: 'num', path: 'fx.punch', label: 'Kick punch', unit: '%', scale: 100, dp: 1, hint: 'The camera pushes in on every kick. 0 = still.' },
     { id: 'camera.zoom', k: 'num', path: 'camera.zoom', label: 'Zoom on windows', unit: '×', dp: 2, hint: 'How close the camera gets when it visits a window.' },
     { id: 'focus.dim', k: 'num', path: 'focus.dim', label: 'Dim the background', unit: '%', scale: 100 / 1.6, dp: 0, hint: 'How dark the other windows get while one is in front.' },
-    { id: 'outro.rewind', k: 'bool', path: 'outro.rewind', label: 'Seamless loop', hint: 'The ending flows back into the first frame, so the video loops.' }]],
+    { id: 'outro.rewind', k: 'bool', path: 'outro.rewind', label: 'Seamless loop', hint: 'The ending flows back into the first frame, so the video loops.' },
+    { id: 'outro.end', k: 'sel', path: 'outro.end', label: 'Ending', opts: [['auto', 'Auto (stop past 32 bars)'], ['loop', 'Loop into the intro'], ['stop', 'Play to the end and stop']], hint: 'Full-beat videos stay in the player view to the end instead of rewinding into the intro.' }]],
   ['Text', 'Every word on screen', [
     { id: 'title', k: 'proj', path: 'title', label: 'Beat title', hint: 'Used in the top bar, now playing and {title}.' },
     { id: 'producer', k: 'tag', path: 'producer', label: 'Producer tag', hint: 'Shown as PROD. … on the hero and the metadata.' },
@@ -71,7 +73,7 @@ export function createQuick(app) {
     if (c.k === 'tag' || c.k === 'proj') return `${String(v ?? '').length} chars`; return ''; }
   function ctl(c, v) { const a = `data-q="${esc(c.id)}" aria-describedby="qh-${esc(c.id)}"`;
     switch (c.k) {
-      case 'num': { const p = reg()[c.path] || {}; return `<input type="range" ${a} min="${p.min ?? 0}" max="${p.max ?? 1}" step="${p.step ?? 0.01}" value="${+v}" aria-label="${esc(c.label)}">`; }
+      case 'num': { const p = reg()[c.path] || {}; return `<input type="range" ${a} min="${p.min ?? 0}" max="${p.max ?? 1}" step="${p.step ?? 0.01}" value="${+v}" data-def="${p.default ?? ''}" aria-label="${esc(c.label)}" data-tip="${esc(c.label)}|${esc(c.hint || '')} Double-click resets to ${p.default ?? 'the default'}; arrow keys step.|">`; }
       case 'bool': case 'projbool': return `<label class="sw"><input type="checkbox" role="switch" ${a} ${v !== false && v != null ? 'checked' : ''} aria-label="${esc(c.label)}"><i aria-hidden="true"></i></label>`;
       case 'seg': return `<div class="seg full" role="group" aria-label="${esc(c.label)}">${c.opts.map(([o, l]) => `<button type="button" ${a} data-v="${esc(o)}" aria-pressed="${o === v}">${esc(l)}</button>`).join('')}</div>`;
       case 'sel': return `<select class="inp" ${a} aria-label="${esc(c.label)}">${c.opts.map(([o, l]) => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
@@ -118,13 +120,22 @@ export function createQuick(app) {
   // ---- Advanced: the full inspector; opens itself when the user picks keys, a marker, a window or a track
   const advOpen = (o = true) => { if (o && !adv.open) adv.open = true; else if (!o && adv.open) adv.open = false; syncMode(); };
   // Simple and Advanced are two views of the same pane: Advanced open = the full inspector on top, the task controls hidden
-  function syncMode() { const T = tl(), sel = T && (T.selected().length || T.state.selMarker); if (sel && !adv.open) adv.open = true; const was = root.hidden; root.hidden = adv.open; $('#quickNote').hidden = !adv.open;
-    $('#quickBack').textContent = sel ? 'Done: back to the simple controls' : 'Back to the simple controls'; if (was && !root.hidden) render(); }
+  // v27 QUICK + DEEP (Simple mode): the selected thing's full properties sit ON TOP (a "Selected" header with its name and
+  // "Back to quick setup"), the quick task controls stay underneath. Pro keeps the dense view (one or the other).
+  function selName() { const T = tl(), S = T ? T.selected() : [], R = reg();
+    if (S.length > 1) return `${S.length} keys`;
+    if (S.length === 1) { const [row, k] = S[0]; if (row.path.startsWith('ufx.')) { const f = (app.effects && app.effects.LIB || []).find((q) => 'ufx.' + q[0] === row.path); return `Effect · ${f ? f[1] : row.path}`; }
+      if (row.path === 'text.cue') return `Text · “${String(k.v || '').slice(0, 24)}”`; const p = R[row.path]; return p ? `${String(p.elementLabel || '').replace(/\s*\(.*\)$/, '')} · ${String(p.label).replace(/\s*\(.*\)$/, '')}` : row.label || row.path; }
+    if (T && T.state.selMarker) return 'Marker';
+    const id = app.inspector && app.inspector.element, e = id && app.registry().elements.find((q) => q.id === id); return e ? e.label.replace(/\s*\(.*\)$/, '') : 'Properties'; }
+  function syncMode() { const T = tl(), sel = T && (T.selected().length || T.state.selMarker); if (sel && !adv.open) adv.open = true; const simple = document.body.classList.contains('simple'), was = root.hidden;
+    root.hidden = adv.open && !simple; $('#quickNote').hidden = !adv.open; $('#pane-inspect').classList.toggle('deep', !!adv.open);
+    const n = $('#quickSel'); if (n) n.textContent = adv.open ? selName() : '';
+    $('#quickBack').textContent = simple ? '← Back to quick setup' : sel ? 'Done: back to the simple controls' : 'Back to the simple controls'; if (was && !root.hidden) render(); }
   adv.addEventListener('toggle', syncMode);
   const I = app.inspector; for (const fn of ['showElement', 'showTrack', 'focusValue']) { const f0 = I[fn]; I[fn] = (...a) => { advOpen(true); return f0(...a); }; }
   const s0 = I.show; I.show = (...a) => { const r = s0(...a); syncMode(); return r; };
-  $('#addTrackBtn').addEventListener('click', () => advOpen(true), true);
-  $('#quickBack').addEventListener('click', () => { tl().clearSel(); adv.open = false; syncMode(); });
+  $('#quickBack').addEventListener('click', () => { tl().clearSel(); if (app.studio && app.studio.clearPick) app.studio.clearPick(); adv.open = false; syncMode(); const q = $('#quickH'); if (q && document.body.classList.contains('simple')) q.scrollIntoView({ block: 'nearest' }); });
   app.cues.subscribe((why) => { if (why !== 'saved' && why !== 'preview') { syncMode(); if (!root.hidden) render(); } });
   app.store.subscribe((s, keys) => { if (keys.some((k) => /project\.(stage|aspect|clipLen|look|title|export)|session\.track/.test(k))) render(); });
   let lastB = -1; setInterval(() => { const b = pb(); if (Math.abs(b - lastB) > 1e-3 && !app.clock.playing && !$('#studio').hidden && !root.hidden) { lastB = b; render(); } }, 400);
@@ -140,6 +151,6 @@ export function createQuick(app) {
   new MutationObserver(() => { if (!$('#studio').hidden) stepTo(2); }).observe($('#studio'), { attributes: true, attributeFilter: ['hidden'] });
   $('#exBtn').addEventListener('click', () => stepTo(3)); $('#qRun').addEventListener('click', () => stepTo(3));
   drawCoach(); render();
-  return { render, set, value, rows: () => G.map(([n, , cs]) => [n, cs.filter(shown).map((c) => c.id)]), advanced: advOpen,
+  return { render, set, value, sync: () => syncMode(), rows: () => G.map(([n, , cs]) => [n, cs.filter(shown).map((c) => c.id)]), advanced: advOpen,
     coach: { get step() { return coach.step; }, get done() { return coach.done; }, dismiss() { coach.done = true; saveC(); drawCoach(); }, reset() { coach = { done: false, step: 0 }; saveC(); drawCoach(); } } };
 }

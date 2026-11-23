@@ -40,7 +40,7 @@ const shot = (f) => page.screenshot({ path: path.join(SHOTS, f) });
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const t0 = Date.now();
 await page.goto(URL0);
-await ev(() => { try { localStorage.clear(); } catch (_) {} }); await page.reload();
+await ev(() => { try { localStorage.clear(); localStorage.setItem('u2c.mode.v1', 'pro'); } catch (_) {} }); await page.reload();
 await page.waitForFunction(() => document.documentElement.dataset.track === '1', null, { timeout: 120000 });
 ok('boot + demo analysis', true, ((Date.now() - t0) / 1000).toFixed(1) + ' s');
 // ---- upload the test beat
@@ -53,12 +53,12 @@ ok('analysis: tempo, downbeat, sections', ana.bpm > 60 && ana.phrases.includes('
 await page.waitForFunction(() => window.u2c.grid.entry && window.u2c.grid.entry.ready, null, { timeout: 60000 }); await page.waitForTimeout(1500); await shot('home-1440.png');
 await page.evaluate(() => { const c = document.querySelectorAll('#grid .card'); if (c.length) c[c.length - 1].scrollIntoView({ block: 'center' }); }); await page.waitForFunction(() => { const c = document.querySelectorAll('#grid .card canvas'); const l = c[c.length - 1]; if (!l) return false; const d = l.getContext('2d').getImageData(0, 0, l.width, l.height).data; let mn = 765, mx = 0; for (let i = 0; i < d.length; i += 400) { const v = d[i] + d[i + 1] + d[i + 2]; mn = Math.min(mn, v); mx = Math.max(mx, v); } return mx - mn > 60; }, null, { timeout: 45000 }).catch(() => {});   // v14: four looks, the last may sit below the fold
 const cards = await page.$$eval('#grid .card canvas', (cs) => cs.map((c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let mn = 765, mx = 0; for (let i = 0; i < d.length; i += 400) { const v = d[i] + d[i + 1] + d[i + 2]; mn = Math.min(mn, v); mx = Math.max(mx, v); } return mx - mn; }));
-ok('home: four look cards draw the beat', cards.length === 4 && cards.every((v) => v > 60), cards.join(' / '));
+ok('home: five player preset cards draw the beat', cards.length === 5 && cards.every((v) => v > 60), cards.join(' / '));
 // ---- studio + default cue sheet
 await page.click('#grid .card >> nth=0');
 await page.waitForFunction(() => !document.querySelector('#studio').hidden && window.u2c.clip.current().ready, null, { timeout: 60000 }); await page.waitForTimeout(800);
 const def = await ev(() => { const s = window.u2c.cues.sheet, cam = s.tracks.find((t) => t.path === 'camera.shot'); return { n: s.tracks.length, cam: cam.keys.map((k) => `${k.b}:${k.v}`).join(' '), bars: s.meta.bars, labels: window.u2c.clip.current().labels.join(',') }; });
-ok('default cue sheet from the analysis (v8 focus plan by section)', def.n >= 10 && /chains|eq|elephant|spectrum/.test(def.cam), `${def.n} tracks · ${def.bars} bars · camera ${def.cam} · sections ${def.labels}`);
+ok('default cue sheet from the analysis (v8 focus plan by section)', def.n >= 10 && /chains|eq|elephant|spectrum|stage|session|inserts/.test(def.cam), `${def.n} tracks · ${def.bars} bars · camera ${def.cam} · sections ${def.labels}`);
 // helpers to reach the timeline canvas
 const cvBox = await page.$eval('#cueCv', (c) => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
 const keyXY = (pathName, idx) => ev(([p, i]) => { const tl = window.u2c.cuetl, t = tl.rows().find((r) => r.path === p).track, k = t.keys[i], pt = tl.pointOf(p, k.b), r = document.querySelector('#cueCv').getBoundingClientRect();
@@ -75,7 +75,7 @@ const before = await frameAt(k0.b + 0.5);
 const target = await ev(() => { const o = [...document.querySelectorAll('#insp [data-k="v"] option')].map((x) => x.value); const cur = window.u2c.cuetl.selected()[0][1].v; return o.includes('spectrum') && cur !== 'spectrum' ? 'spectrum' : o.find((v) => v !== 'wide' && v !== cur && v !== 'chains'); });   // v9: session + chains are both full width (same framing): prefer a half-width window
 await page.selectOption('#insp [data-k="v"]', target); await page.waitForTimeout(200);
 const after = await frameAt(k0.b + 0.5), rect = await ev((id) => window.u2c.clip.film(window.u2c.clip.current(), '916').rects(window.u2c.cues.ev(), 0, window.u2c.store.project.look)[id], target);
-const camOn = after.cam && rect && Math.abs(after.cam.x - (rect[0] + rect[2] / 2)) < rect[2] && after.cam.z > 1.1;
+const camOn = after.cam && rect && Math.abs(after.cam.x - (rect[0] + rect[2] / 2)) < rect[2] && after.cam.z > 1.02;   // v23: the player frames the whole panel (zoom >= 1)
 ok('UI: retarget in the inspector -> preview pushes to that window', camOn && diff(before, after) > 1, `${k0.v} → ${target} · camera ${after.cam && after.cam.x.toFixed(0)},${after.cam && after.cam.y.toFixed(0)} z ${after.cam && after.cam.z.toFixed(2)} · frame changed ${diff(before, after).toFixed(1)} %`);
 await shot('studio-edit-1440.png');
 // 3. drag the key one bar later (snap = beat) then undo / redo with the keyboard
@@ -173,6 +173,28 @@ await page.keyboard.press('Escape'); await ev(() => window.u2c.cuetl.clearSel())
 // 0. laptop fit: every lane reachable at 1440x900 (compact rows + folded groups), no vertical scrolling needed
 const fit0 = await tlEv(() => ({ fit: window.u2c.cuetl.lanesFit(), compact: window.u2c.cuetl.compact, rows: window.u2c.cuetl.rows().map((r) => r.path + ':' + r.h).join(' ') }));
 ok('laptop: all lanes fit the dock (compact rows, folded groups)', fit0.fit, `${fit0.compact ? 'compact' : 'normal'} · ${fit0.rows}`);
+// v23.3 Alt-drag a camera shot onto another: the windows swap, the times stay (one undo step)
+{ const before = await tlEv(() => { const t = window.u2c.cues.sheet.tracks.find((q) => q.path === 'camera.shot'), K = t.keys.filter((k) => k.b > 0); const i = K.findIndex((k, j) => j < K.length - 1 && K[j + 1].v !== k.v); return i < 0 ? null : { a: K[i].id, b: K[i + 1].id, va: K[i].v, vb: K[i + 1].v, ba: K[i].b, bb: K[i + 1].b }; });
+  let swapOk = false, info = 'no two different shots';
+  if (before) { const o = await cvR(), pa = await tlEv((id) => window.u2c.cuetl.keyPoint(id), before.a), pb = await tlEv((id) => window.u2c.cuetl.keyPoint(id), before.b);
+    if (pa && pb) { await page.keyboard.down('Alt'); await page.mouse.move(o.x + pa.x, o.y + pa.y); await page.mouse.down(); await page.mouse.move(o.x + pb.x, o.y + pb.y, { steps: 6 }); await page.mouse.up(); await page.keyboard.up('Alt'); await page.waitForTimeout(150);
+      const after = await tlEv((q) => { const K = window.u2c.cues.sheet.tracks.find((t) => t.path === 'camera.shot').keys, A = K.find((k) => k.id === q.a), B = K.find((k) => k.id === q.b); return { va: A.v, vb: B.v, ba: A.b, bb: B.b }; }, before);
+      swapOk = after.va === before.vb && after.vb === before.va && Math.abs(after.ba - before.ba) < 1e-6 && Math.abs(after.bb - before.bb) < 1e-6; info = `${before.va}/${before.vb} -> ${after.va}/${after.vb} · times ${after.ba},${after.bb}`;
+      await page.focus('#cueCv'); await page.keyboard.press('ControlOrMeta+z'); await page.waitForTimeout(100); } else info = 'keys not on screen'; }
+  ok('timeline: Alt-drag a camera shot onto another swaps the windows, times stay', swapOk, info); }
+// v24 drag a push shot's start edge = its move length (dur); the History panel lists the step and jumping back restores it
+{ const k0 = await tlEv(() => { const t = window.u2c.cues.sheet.tracks.find((q) => q.path === 'camera.shot'), k = t.keys.find((q) => q.b > 4 && q.transition !== 'cut' && (q.dur ?? 1) >= 1); return k ? { id: k.id, b: k.b, dur: k.dur ?? 1 } : null; });
+  let lenOk = false, histOk = false, info2 = 'no push shot';
+  if (k0) { const o = await cvR(), kp = await tlEv((id) => window.u2c.cuetl.keyPoint(id), k0.id), ppb = await tlEv(() => window.u2c.cuetl.state.ppb), xs = o.x + kp.x - k0.dur * ppb;
+    await page.mouse.move(xs, o.y + kp.y); await page.mouse.down(); await page.mouse.move(xs - ppb, o.y + kp.y, { steps: 5 }); await page.mouse.up(); await page.waitForTimeout(150);
+    const k1 = await tlEv((id) => { const k = window.u2c.cues.sheet.tracks.find((q) => q.path === 'camera.shot').keys.find((q) => q.id === id); return { b: k.b, dur: k.dur }; }, k0.id);
+    lenOk = Math.abs(k1.b - k0.b) < 1e-6 && Math.abs(k1.dur - (k0.dur + 1)) < 0.26;
+    const h = await ev(() => window.u2c.cues.history()); await page.click('#railTabs [data-pane="history"]'); const n = await ev(() => document.querySelectorAll('#histItems li').length);
+    await page.click('#histItems li:nth-last-child(2) button'); await page.waitForTimeout(100);
+    const k2 = await tlEv((id) => (window.u2c.cues.sheet.tracks.find((q) => q.path === 'camera.shot').keys.find((q) => q.id === id) || {}).dur ?? 1, k0.id);
+    histOk = /move length/.test(h.past[h.past.length - 1] || '') && n >= 2 && Math.abs(k2 - k0.dur) < 1e-6; await ev(() => window.u2c.cues.redo()); await ev(() => window.u2c.cues.undo());
+    info2 = `dur ${k0.dur} -> ${k1.dur} (land ${k1.b}) · history "${h.past[h.past.length - 1]}" ${n} rows · jump back dur ${k2}`; await page.click('#railTabs [data-pane="layers"]'); }
+  ok('timeline: drag a camera move start edge = move length; History lists it and jumps back', lenOk && histOk, info2); }
 // 1. previous / next key: click the Pendant lane header, ] from bar 1 lands on its next key, [ comes back
 await seekB(0.5); await clickHead('pendant.amp', 'label'); await page.focus('#cueCv'); await seekB(0.5);
 const P0 = await pend(); await page.keyboard.press(']'); const n1 = await tlEv(() => ({ ph: window.u2c.cuetl.state.playhead, sel: window.u2c.cuetl.selected().map(([r, k]) => r.path + '@' + k.b) }));

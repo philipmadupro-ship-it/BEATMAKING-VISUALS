@@ -557,3 +557,292 @@ body.col-resizing{cursor:ew-resize;user-select:none}
 /* perf (software-rendered machines): nothing sits behind the side columns, so their backdrop blur only cost repaints; dialogs dim without a blur */
 .layers,.panel{backdrop-filter:none;-webkit-backdrop-filter:none;background:color-mix(in srgb,var(--panel) 94%,transparent)}
 .review::backdrop{backdrop-filter:none;background:rgba(0,0,0,.66)}
+/* v23: rich tooltips (Adobe-style), + Layer menu, workspaces, voice lab, shot list, cover presets, marker colours, legacy looks */
+.rtip{position:fixed;z-index:60;max-width:300px;background:var(--panel);border:1px solid var(--line-2);border-radius:var(--radius);box-shadow:0 10px 28px rgba(0,0,0,.4);padding:8px 10px;display:grid;grid-template-columns:1fr auto;gap:3px 10px;pointer-events:none;font:400 12px/1.4 var(--sans);color:var(--fg)}
+.rtip b{font:600 12px var(--sans)}.rtip kbd{justify-self:end;align-self:start}.rtip span{grid-column:1/-1;color:var(--muted)}
+.pop.menu.addlayer{left:0;right:auto;top:auto;bottom:calc(100% + 6px);width:min(360px,calc(100vw - 32px));max-height:min(70vh,520px);overflow:auto;gap:4px}
+.addlayer .al-g{display:flex;flex-direction:column;gap:2px;padding:4px 0;border-bottom:1px solid var(--line)}.addlayer .al-g:last-child{border-bottom:0}
+.addlayer .al-h{font:500 10px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:2px 6px}
+.addlayer button{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:var(--radius)}
+.addlayer button:hover,.addlayer button:focus-visible{background:var(--tint);outline:1px solid var(--accent)}
+.addlayer button b{font:600 12px var(--sans)}.addlayer button span{font:400 11px/1.35 var(--sans);color:var(--muted)}
+.seg.ws button{min-width:54px}
+.voicelab{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:var(--radius);padding:10px;margin:6px 0}
+.vl-grid{display:grid;grid-template-columns:88px minmax(0,1fr);gap:6px 8px;align-items:center}
+.vl-grid select,.vl-grid input{width:100%;min-width:0}
+.vl-say{font:500 12px/1.4 var(--sans);color:var(--fg);margin:0}
+.vl-status.ok{color:var(--fg)}.vl-status.warn{color:var(--accent)}
+.vl-takes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font:400 11px var(--sans)}
+.shots{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-direction:column;gap:4px}
+.shot-row{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto auto auto auto;gap:6px;align-items:center;padding:4px 6px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+.shot-row .grip{cursor:grab;color:var(--muted);letter-spacing:-2px;user-select:none}
+.shot-row.over{border-color:var(--accent);box-shadow:0 -2px 0 var(--accent)}.shot-row.dragging{opacity:.45}
+.shot-row select{min-width:0;width:100%}
+.cvp-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px}
+.cvp{all:unset;cursor:pointer;font:500 11px var(--sans);padding:5px 9px;border:1px solid var(--line-2);border-radius:999px;color:var(--fg)}
+.cvp[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.cvp:focus-visible{outline:2px solid var(--accent)}
+.mk-chip{display:inline-block;width:10px;height:10px;border-radius:2px;flex:none}
+.mk-k{max-width:96px}
+details.legacy{grid-column:1/-1;margin-top:6px}details.legacy summary{cursor:pointer;font:500 11px var(--sans);color:var(--muted);padding:4px 0}
+details.legacy .lookgrid{margin-top:8px}
+@media (max-width:760px){.vl-grid{grid-template-columns:1fr}.shot-row{grid-template-columns:auto minmax(0,1fr) auto auto auto}.shot-row .grip,.shot-row .hint{display:none}}
+.mk.marker{grid-template-columns:62px 10px minmax(0,1fr) 84px auto auto}
+.mk.section{grid-template-columns:62px minmax(0,1fr) auto}
+.markers .group-h{flex-wrap:wrap;gap:6px}
+.mk-v{all:unset;cursor:pointer;width:24px;height:24px;display:grid;place-items:center;color:var(--muted);font:600 14px var(--sans);border-radius:var(--radius)}.mk-v:hover{color:var(--accent)}.mk-v:focus-visible{outline:2px solid var(--accent)}
+/* ===================================================================================================================
+   v23.2 ADOBE-STYLE EDITOR + LIQUID GLASS CONTROLS (user: Adobe-like, always see the preview, better sliders / buttons)
+   Panels: flat graphite, 1px hairlines, small caps headers, dense 11-12px UI. Controls: liquid glass (translucent fill, blur,
+   a specular top edge, an inner shadow, a soft accent glow when active). Every control keeps its focus ring. */
+:root{--glass:color-mix(in srgb,var(--fg) 6%,transparent);--glass-2:color-mix(in srgb,var(--fg) 11%,transparent);--glass-hi:color-mix(in srgb,#fff 22%,transparent);--glass-edge:color-mix(in srgb,var(--fg) 16%,transparent);--glass-sh:0 1px 0 var(--glass-hi) inset,0 -1px 0 rgba(0,0,0,.25) inset,0 4px 14px rgba(0,0,0,.28);--r-ctl:8px}
+:root[data-theme="light"]{--glass-hi:rgba(255,255,255,.9);--glass-sh:0 1px 0 rgba(255,255,255,.9) inset,0 -1px 0 rgba(0,0,0,.06) inset,0 3px 10px rgba(0,0,0,.08)}
+#studio .layers,#studio .panel{background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 96%,var(--fg) 4%),var(--panel))}
+#studio .pane-h,#studio .tabs,#studio .rail-tabs{border-bottom:1px solid var(--line)}
+#studio .lbl{font:600 10px/1.3 var(--sans);letter-spacing:.1em}
+#studio .group{padding-bottom:10px;border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+#studio .group:last-child{border-bottom:0}
+#studio .group-h{min-height:28px}
+/* buttons, segmented controls, icon buttons: liquid glass */
+.btn,.ib,.seg{background:linear-gradient(180deg,var(--glass-2),var(--glass));border:1px solid var(--glass-edge);border-radius:var(--r-ctl);box-shadow:var(--glass-sh);-webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4)}
+.btn:hover,.ib:hover{border-color:color-mix(in srgb,var(--accent) 60%,var(--glass-edge));background:linear-gradient(180deg,color-mix(in srgb,var(--fg) 15%,transparent),var(--glass))}
+.btn:active,.ib:active{box-shadow:0 1px 3px rgba(0,0,0,.35) inset}
+.btn.primary{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 100%,#fff 18%),var(--accent));border-color:color-mix(in srgb,var(--accent) 80%,#fff 20%);box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 6px 18px color-mix(in srgb,var(--accent) 35%,transparent)}
+.btn[aria-pressed="true"],.ib[aria-pressed="true"]{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 26%,transparent),color-mix(in srgb,var(--accent) 12%,transparent));border-color:color-mix(in srgb,var(--accent) 70%,transparent);box-shadow:var(--glass-sh),0 0 14px color-mix(in srgb,var(--accent) 22%,transparent)}
+.seg{padding:2px;gap:2px;overflow:visible}
+.seg button{border:0;border-radius:6px;transition:background .18s var(--ease),color .18s var(--ease)}
+.seg button[aria-pressed="true"]{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 100%,#fff 16%),var(--accent));color:var(--on-accent);box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 2px 8px color-mix(in srgb,var(--accent) 35%,transparent)}
+.inp{background:color-mix(in srgb,var(--bg) 82%,transparent);border:1px solid var(--glass-edge);border-radius:var(--r-ctl);box-shadow:0 1px 2px rgba(0,0,0,.35) inset}
+.inp:focus{border-color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.35) inset,0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+/* sliders: a recessed glass track with the value filled, a glass bead thumb (Adobe scrub feel: bigger hit area, no jump) */
+input[type=range]{-webkit-appearance:none;appearance:none;height:22px;background:transparent;cursor:ew-resize;--v:50%}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:999px;background:linear-gradient(90deg,var(--accent) 0 var(--v),color-mix(in srgb,var(--fg) 10%,transparent) var(--v));box-shadow:0 1px 2px rgba(0,0,0,.45) inset,0 1px 0 var(--glass-hi)}
+input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:color-mix(in srgb,var(--fg) 10%,transparent);box-shadow:0 1px 2px rgba(0,0,0,.45) inset}
+input[type=range]::-moz-range-progress{height:6px;border-radius:999px;background:var(--accent)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-6px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 18%,color-mix(in srgb,#fff 70%,var(--accent)) 40%,color-mix(in srgb,var(--accent) 70%,#000) 100%);border:1px solid rgba(255,255,255,.55);box-shadow:0 2px 6px rgba(0,0,0,.45),0 0 0 4px color-mix(in srgb,var(--accent) 0%,transparent);transition:box-shadow .15s var(--ease),transform .15s var(--ease)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 18%,color-mix(in srgb,#fff 70%,var(--accent)) 40%,color-mix(in srgb,var(--accent) 70%,#000) 100%);border:1px solid rgba(255,255,255,.55);box-shadow:0 2px 6px rgba(0,0,0,.45)}
+input[type=range]:hover::-webkit-slider-thumb,input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 2px 6px rgba(0,0,0,.45),0 0 0 5px color-mix(in srgb,var(--accent) 22%,transparent);transform:scale(1.08)}
+input[type=range]:active::-webkit-slider-thumb{transform:scale(.95)}
+.ctl output{background:var(--glass);border:1px solid var(--glass-edge);border-radius:6px;padding:2px 5px}
+/* switches: glass pill */
+.sw i{background:linear-gradient(180deg,var(--glass),var(--glass-2))!important;border:1px solid var(--glass-edge)!important;box-shadow:0 1px 2px rgba(0,0,0,.4) inset!important}
+.sw input:checked+i{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 100%,#fff 15%),var(--accent))!important;box-shadow:0 0 12px color-mix(in srgb,var(--accent) 30%,transparent)!important}
+/* the monitor reads as the centre of the workspace */
+#studio .stage{border-radius:10px;box-shadow:0 0 0 1px var(--line),0 18px 40px rgba(0,0,0,.35) inset}
+/* narrow layouts: the monitor stays pinned while the panels scroll underneath */
+@media (max-width:900px){#studio .stage{position:sticky;top:0;z-index:6;height:38vh;min-height:220px}}
+/* floating glass mini-monitor (when the monitor is out of view) */
+.pip{position:fixed;right:16px;bottom:16px;z-index:55;padding:6px;border-radius:12px;background:color-mix(in srgb,var(--panel) 55%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);border:1px solid var(--glass-edge);box-shadow:var(--glass-sh),0 18px 40px rgba(0,0,0,.45);cursor:grab;touch-action:none}
+.pip canvas{display:block;border-radius:8px;background:var(--stage)}
+.pip-l{position:absolute;left:12px;top:10px;font:600 9px var(--sans);letter-spacing:.12em;color:#fff;text-shadow:0 1px 2px #000;pointer-events:none}
+.pip-x{all:unset;cursor:pointer;position:absolute;right:10px;top:8px;width:20px;height:20px;display:grid;place-items:center;border-radius:50%;background:rgba(0,0,0,.45);color:#fff;font:600 13px var(--sans)}
+.pip:focus-visible,.pip-x:focus-visible{outline:2px solid var(--accent)}
+@media (prefers-reduced-transparency:reduce){.btn,.ib,.seg,.pip{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--panel)}}
+/* v23.2: workspaces live in the top bar (studio only); the viewer toolbar stays ONE row so the monitor keeps its height */
+body:has(#studio[hidden]) #wsSeg{display:none}
+#wsSeg{margin-right:auto;margin-left:12px}
+#studio .stage-bar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:6px}#studio .stage-bar::-webkit-scrollbar{display:none}
+#studio .stage-bar>*{flex:none}#studio .stage-bar .inrow{flex-wrap:nowrap}
+
+@media (max-width:900px){#wsSeg{display:none}}
+/* dock toolbars stay as dense as before (the lanes must fit a 900 px laptop screen) */
+#dock .seg{padding:0;gap:0}#dock .seg button{border-radius:0}#dock .seg button:first-child{border-radius:7px 0 0 7px}#dock .seg button:last-child{border-radius:0 7px 7px 0}
+#dock .btn.small,#dock .ib.sm,#dock .inp.small{min-height:26px}
+/* v24 (audit W3): every visible button is at least 24 x 24 px (WCAG 2.5.8) */
+.btn.tiny{min-height:24px;min-width:24px}
+.chip{min-height:24px}
+/* v24 History panel (Premiere: Window > History) */
+.rail:not([data-pane="history"]) .history{display:none}
+.hist-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;overflow:auto}
+.hist-list button{all:unset;cursor:pointer;display:grid;grid-template-columns:22px minmax(0,1fr);gap:6px;width:100%;box-sizing:border-box;padding:5px 6px;border-radius:6px;font:500 12px var(--sans);color:var(--fg)}
+.hist-list button:hover{background:var(--tint)}.hist-list button:focus-visible{outline:2px solid var(--accent)}
+.hist-list .now button{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 22%,transparent),color-mix(in srgb,var(--accent) 10%,transparent));box-shadow:inset 2px 0 0 var(--accent)}
+.hist-list .fut button{color:var(--muted);font-style:italic}
+.hist-list i{font:400 10px var(--mono);color:var(--muted);font-style:normal}
+/* v25 Simple / Pro mode (CapCut logic: one job per region, plain words, the rest under Pro) */
+.rail:not([data-pane="presets"]) .presets-pane{display:none}
+.pane-help{margin:0 0 10px;font:400 12px/1.45 var(--sans);color:var(--muted);border-left:2px solid color-mix(in srgb,var(--accent) 60%,transparent);padding:2px 0 2px 8px}
+body:not(.simple) .pane-help{display:none}
+.modesw{margin-right:8px;font:600 11px var(--sans);letter-spacing:.08em;text-transform:uppercase}
+body:has(#studio[hidden]) .modesw{display:none}
+body.simple #tab-text,body.simple #tab-meta,body.simple #tab-beat,body.simple #railTabs [data-pane="markers"]{display:none}
+body.simple #abBtn,body.simple #abSnap,body.simple .menuwrap:has(#guidesBtn),body.simple #resSel,body.simple #zoomSeg{display:none}
+body.simple #insp code,body.simple #insp .path{display:none}   /* simple: the selected thing's properties stay, raw paths hide */
+body.simple #cueImport,body.simple #cueExport,body.simple #presetSel,body.simple #ripInBtn,body.simple #ripOutBtn,body.simple #graphBtn,body.simple #compactBtn,body.simple #densityBtn,body.simple #lanesBtn{display:none}
+body.simple #pane-look #presetList,body.simple #pane-look #regenBtn{display:none}
+/* presets pane */
+.pr-quick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.pr-q{all:unset;cursor:pointer;padding:9px 10px;border-radius:8px;border:1px solid var(--glass-edge);background:linear-gradient(180deg,var(--glass-2),var(--glass));box-shadow:var(--glass-sh);font:600 12px var(--sans);text-align:center}
+.pr-q[aria-pressed="true"]{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 100%,#fff 16%),var(--accent));color:var(--on-accent)}
+.pr-q:focus-visible,.pr-apply:focus-visible{outline:2px solid var(--accent)}
+.pr-list{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-direction:column;gap:6px}
+.pr-item{display:flex;flex-direction:column;gap:4px;padding:8px;border:1px solid var(--line);border-radius:8px}
+.pr-item.def{border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
+.pr-apply{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:2px}.pr-apply b{font:600 13px var(--sans)}.pr-apply span{font:400 11px var(--sans);color:var(--muted)}
+.pr-apply:hover b{color:var(--accent)}
+.pr-acts{display:flex;gap:4px;flex-wrap:wrap}
+/* v25 floating toolbar under the selected window */
+.cwrap{position:relative}
+.pickbar{position:absolute;z-index:8;transform:translateY(8px);display:flex;align-items:center;gap:4px;padding:4px;border-radius:10px;background:color-mix(in srgb,var(--panel) 70%,transparent);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid var(--glass-edge);box-shadow:var(--glass-sh),0 10px 24px rgba(0,0,0,.4);white-space:nowrap}
+.pickbar b{font:600 11px var(--sans);padding:0 6px;color:var(--fg)}
+.pickbar button{all:unset;cursor:pointer;font:500 11px var(--sans);padding:5px 8px;border-radius:7px;color:var(--fg);min-height:24px;box-sizing:border-box}
+.pickbar button:hover{background:var(--tint)}.pickbar button:focus-visible{outline:2px solid var(--accent)}
+.stage.peek::after{content:"EDIT POINT";position:absolute;right:14px;top:10px;font:600 10px var(--sans);letter-spacing:.12em;color:var(--on-accent);background:var(--accent);padding:2px 6px;border-radius:4px}
+/* v25 sliders: a tick at the default value, a value bubble while dragging */
+input[type=range].has-def::-webkit-slider-runnable-track{background:linear-gradient(90deg,transparent calc(var(--d) - 1px),color-mix(in srgb,var(--fg) 55%,transparent) calc(var(--d) - 1px) calc(var(--d) + 1px),transparent calc(var(--d) + 1px)),linear-gradient(90deg,var(--accent) 0 var(--v),color-mix(in srgb,var(--fg) 10%,transparent) var(--v))}
+.sl-bubble{position:fixed;z-index:70;transform:translateX(-50%);pointer-events:none;font:600 11px var(--mono);padding:2px 6px;border-radius:6px;background:var(--accent);color:var(--on-accent);box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.pickbar[hidden]{display:none}
+@media (max-width:560px){.modesw{display:none}.pickbar{max-width:calc(100vw - 32px);overflow-x:auto}}
+
+/* v25 simple: the timeline only has 4-5 tracks, so it takes less height and the monitor gets the rest; the song strip folds */
+body.simple #studio:not([style*="--dock-h"]){grid-template-rows:minmax(0,1fr) 300px}
+body.simple #studio .song .songbar{display:none}
+.presets-pane,.history{padding:12px 16px;overflow:auto;min-height:0;flex:1;display:flex;flex-direction:column;gap:10px}
+.rail:not([data-pane="presets"]) .presets-pane,.rail:not([data-pane="history"]) .history{display:none}
+/* ===================================================================================================================
+   v26 TYPE SYSTEM (user: "Akira only for the big things; small ones not"; brand utility type = condensed grotesque, caps, tracked)
+   Akira Expanded (--display): brand, page titles, the big echo words, section headings, primary buttons (Load, Save as preset, Export).
+   Barlow Condensed (--ui), caps, tracked: every small button, tab, label, preset name, chip.  JetBrains Mono (--mono): values, timecode.
+   Instrument Sans (--sans): sentences (help lines, hints, inputs).  */
+.btn,.seg button,.ib,.tabs button,.rail-tabs button,.lbl,details.sec>summary,details.fx.sec>summary,.chip,.pr-q,.cvp,.pickbar button,.pickbar b,.ins-h b,.cv-cap b,.coach li i,.tog,.lname,.lhead,.al-h,.addlayer button b,.pr-apply b,.mk-t,.modesw,.qc-l,.q-h b{font-family:var(--ui);letter-spacing:.06em}
+.btn,.seg button,.tabs button,.rail-tabs button,.pr-q,.cvp,.pickbar button,.chip,details.sec>summary,.lhead,.al-h{text-transform:uppercase}
+.btn{font-weight:600;font-size:13px}.btn.small{font-size:12.5px}.btn.tiny{font-size:12px;font-family:var(--ui)}
+.seg button{font-weight:600;font-size:12px}
+.tabs button,.rail-tabs button{font-weight:600;font-size:12.5px;letter-spacing:.1em}
+.lbl{font-weight:600;font-size:11.5px;letter-spacing:.12em}
+.lname{font-weight:500;font-size:14px;letter-spacing:.03em}
+.pr-q{font-weight:700;font-size:13px;letter-spacing:.1em}
+.ttl{font-family:var(--ui);font-weight:600;font-size:11px;letter-spacing:.12em}
+.tc,.sb-pos b,#fBpm,#sBpm{font-family:var(--mono)}
+.sb-i.big b{font-family:var(--ui);font-weight:700;font-size:13px;letter-spacing:.06em}
+.pane-help,.hint,.note,.inp,.rtip span,.pr-apply span,.addlayer button span{font-family:var(--sans)}
+/* the big things keep the signature face */
+.btn.primary,#prSave,#exBtn,#exportTop,#qRun,#vlGen,.drop .btn,#demoBtn{font-family:var(--display);font-weight:400;letter-spacing:.04em;text-transform:none}
+.presets-pane .group:first-child .lbl{font-family:var(--display);font-weight:400;font-size:12px;letter-spacing:.06em}
+/* v26 timeline guide strip + "How it works" card */
+.tl-guide{display:flex;align-items:center;gap:10px;min-height:30px;padding:3px 8px;border:1px solid var(--line);border-bottom:0;border-radius:8px 8px 0 0;background:color-mix(in srgb,var(--panel) 85%,transparent)}
+.tg-msg{flex:1;min-width:0;font:400 12px/1.35 var(--sans);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tg-msg b{color:var(--fg);font-weight:600}
+.tg-add{display:flex;gap:4px}
+.tg-add button,.tg-how{all:unset;cursor:pointer;font:600 12px var(--ui);letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:6px;border:1px solid var(--glass-edge);background:linear-gradient(180deg,var(--glass-2),var(--glass));min-height:24px;box-sizing:border-box}
+.tg-add button:hover,.tg-how:hover{border-color:var(--accent)}.tg-add button:focus-visible,.tg-how:focus-visible{outline:2px solid var(--accent)}
+.tg-card{position:absolute;right:12px;bottom:calc(100% - 40px);z-index:40;width:min(420px,calc(100vw - 32px));padding:14px;border-radius:12px;background:color-mix(in srgb,var(--panel) 90%,transparent);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border:1px solid var(--glass-edge);box-shadow:var(--glass-sh),0 20px 44px rgba(0,0,0,.5)}
+.tg-card[hidden]{display:none}
+.tg-card-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.tg-card-h b{font:400 13px var(--display)}
+.tg-lead{font:400 12.5px/1.45 var(--sans);color:var(--muted);margin:6px 0}
+.tg-card ul{list-style:none;margin:8px 0;padding:0;display:grid;gap:8px}
+.tg-card li{display:grid;grid-template-columns:26px 64px minmax(0,1fr);gap:8px;align-items:center;font:400 12.5px/1.35 var(--sans)}
+.tg-card li b{font:700 12px var(--ui);letter-spacing:.08em;text-transform:uppercase}
+.dock{position:relative}
+@media (max-width:900px){.tg-add{display:none}.tg-msg{white-space:normal}}
+/* v26 Voice lab timing strip */
+.vl-time{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:8px}
+.vl-tl{width:100%;height:auto;touch-action:none;user-select:none}
+.vl-tl .vl-bg{fill:color-mix(in srgb,var(--fg) 6%,transparent);stroke:var(--line-2)}
+.vl-tl .vl-tick{stroke:var(--muted)}.vl-tl .vl-tt{fill:var(--muted);font:500 9px var(--mono);text-anchor:middle}
+.vl-tl .vl-ev{stroke:color-mix(in srgb,var(--fg) 35%,transparent);stroke-dasharray:3 3}.vl-tl .vl-ev.play{stroke:var(--accent);stroke-dasharray:none;stroke-width:2}
+.vl-tl .vl-et{fill:var(--muted);font:600 9px var(--ui);text-transform:uppercase;letter-spacing:.08em}
+.vl-tl .vl-ph{cursor:ew-resize}.vl-tl .vl-ph rect{fill:color-mix(in srgb,var(--accent) 75%,transparent);stroke:var(--accent)}
+.vl-tl .vl-ph text{fill:var(--on-accent);font:700 11px var(--ui)}
+.vl-tl .vl-ph:focus{outline:none}.vl-tl .vl-ph:focus rect{stroke:var(--fg);stroke-width:2}
+.vl-ats{display:flex;gap:8px;flex-wrap:wrap}
+.vl-at{display:flex;align-items:center;gap:4px;font:600 11px var(--ui);letter-spacing:.06em;text-transform:uppercase}
+.vl-at input{width:68px}.vl-at i{font:400 11px var(--mono);font-style:normal;color:var(--muted)}
+body:not(.simple) .tl-guide{display:none}
+#dock .cuebar .btn,#dock .cuebar .seg button,#dock .cuebar .ib{font-size:11.5px;letter-spacing:.02em;padding-left:7px;padding-right:7px}
+#dock .cuebar .lbl{letter-spacing:.06em}
+/* the Voice lab lives in the narrow left rail: labels above fields */
+.voicelab .vl-grid{grid-template-columns:minmax(0,1fr);gap:4px}
+.voicelab .vl-grid .lbl{margin-top:4px}
+.voicelab .vl-tl .vl-tt{font-size:8px}.voicelab .vl-tl .vl-et{font-size:7.5px}.voicelab .vl-tl .vl-ph text{font-size:10px}
+/* ===================================================================================================================
+   v27 PHOTOSHOP-GRADE EDITING: free transform on the preview, Layers like Photoshop, the Effects library, quick + deep Edit tab */
+/* the timeline is bigger in Simple mode (resizable, remembered: u2c.dock.h.v1; double-click the grip = default) */
+body.simple #studio:not([style*="--dock-h"]){grid-template-rows:minmax(0,1fr) clamp(300px,37vh,440px)}
+body.simple .transport .readout{display:none}
+.dock-grip{cursor:ns-resize}
+.dock-grip:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* free transform box: 8 handles (24 px hit area each), a size / position readout while dragging */
+.pick{box-sizing:border-box;border:1.5px solid var(--accent);box-shadow:0 0 0 1px rgba(0,0,0,.45);z-index:6}
+.pick .th{position:absolute;width:9px;height:9px;margin:-5px 0 0 -5px;box-sizing:border-box;background:#fff;border:1.5px solid var(--accent);box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:auto;touch-action:none}
+.pick .th::before{content:"";position:absolute;inset:-8px}
+.pick .th-nw{left:0;top:0;cursor:nwse-resize}.pick .th-n{left:50%;top:0;cursor:ns-resize}.pick .th-ne{left:100%;top:0;cursor:nesw-resize}.pick .th-e{left:100%;top:50%;cursor:ew-resize}
+.pick .th-se{left:100%;top:100%;cursor:nwse-resize}.pick .th-s{left:50%;top:100%;cursor:ns-resize}.pick .th-sw{left:0;top:100%;cursor:nesw-resize}.pick .th-w{left:0;top:50%;cursor:ew-resize}
+.pick.locked,.pick.text{border-style:dashed}.pick.locked .th,.pick.text .th{display:none}
+.pick.locked::after{content:"LOCKED";position:absolute;left:4px;top:4px;font:700 10px var(--ui);letter-spacing:.12em;color:var(--on-accent);background:var(--accent);padding:1px 5px;border-radius:3px}
+.pick .tsz{position:absolute;left:50%;top:calc(100% + 10px);transform:translateX(-50%);font:600 10.5px var(--mono);white-space:nowrap;color:#fff;background:rgba(0,0,0,.72);padding:2px 6px;border-radius:4px;pointer-events:none}
+.pick .tsz:empty{display:none}
+#view.movable{cursor:move}
+#view:focus{outline:none}#view:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pickbar{transform:translateY(16px)}
+/* smart guides (Photoshop magenta) + the Layers hover outline */
+.snapg{position:absolute;inset:0;pointer-events:none;z-index:7;overflow:hidden}
+.snapg .sg{position:absolute;background:#ff36c8;box-shadow:0 0 0 .5px rgba(0,0,0,.35)}
+.snapg .sg.v{top:0;bottom:0;width:1px;margin-left:-.5px}.snapg .sg.h{left:0;right:0;height:1px;margin-top:-.5px}
+.hovbox{position:absolute;pointer-events:none;z-index:5;box-sizing:border-box;border:1px dashed color-mix(in srgb,var(--accent) 85%,#fff);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.hovbox[hidden]{display:none}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Layers like Photoshop: eye | thumbnail | name | keys | lock */
+.layer{grid-template-columns:24px 26px minmax(0,1fr) 12px 24px;height:34px;gap:2px;padding:0 6px 0 6px;border-radius:6px;margin:0 6px;border-left:0}
+.layer.on{background:color-mix(in srgb,var(--accent) 16%,transparent);box-shadow:inset 2px 0 0 var(--accent)}
+.layer .lth{display:grid;place-items:center;width:24px;height:24px;border-radius:4px;background:color-mix(in srgb,var(--fg) 6%,transparent);color:var(--muted)}
+.layer.on .lth{color:var(--fg)}
+.layer .lname{height:34px;line-height:34px;font-size:13px}
+.layer .lname small{margin-left:6px;font:400 10.5px var(--mono);letter-spacing:0;text-transform:none;color:var(--muted)}
+.layer .lk{all:unset;box-sizing:border-box;width:24px;height:24px;display:grid;place-items:center;color:var(--muted);cursor:pointer;border-radius:4px;opacity:0}
+.layer:hover .lk,.layer .lk:focus-visible,.layer .lk.on{opacity:1}.layer .lk.on{color:var(--accent)}
+.layer .lk:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}.layer .lk.ph{cursor:default}
+.layer .kd.ph{visibility:hidden}
+.layer.locked .lname{color:var(--muted)}
+.layer .lren{height:26px;min-height:26px;padding:0 6px;font:500 12px var(--mono);text-transform:uppercase}
+.lhead{display:flex;justify-content:space-between;align-items:center}.lhead span{font:400 10px var(--mono);color:var(--faint);letter-spacing:0}
+/* the Effects library popover */
+.pop.menu.fxlib{position:fixed;right:auto;z-index:60;padding:10px;gap:8px;border-radius:12px;background:color-mix(in srgb,var(--panel) 88%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.3);backdrop-filter:blur(18px) saturate(1.3);border:1px solid var(--glass-edge,var(--line-2))}
+.pop.menu.fxlib[hidden]{display:none}
+.fxlib-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:0 4px}
+.fxlib-h b{font:400 13px var(--display);letter-spacing:.04em}.fxlib-h span{font:400 11px var(--sans);color:var(--muted)}
+.fxlib-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+.fxlib-grid button{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:28px minmax(0,1fr);grid-template-rows:auto auto;column-gap:8px;align-items:center;padding:8px;border-radius:8px;border:1px solid transparent;min-height:44px}
+.fxlib-grid button i{grid-row:1/3;display:grid;place-items:center;width:28px;height:28px;border-radius:7px;background:color-mix(in srgb,var(--fg) 7%,transparent);color:var(--fg);font-style:normal}
+.fxlib-grid button b{font:700 12px var(--ui);letter-spacing:.08em;text-transform:uppercase}
+.fxlib-grid button span{font:400 10.5px/1.3 var(--sans);color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.fxlib-grid button:hover,.fxlib-grid button:focus-visible{background:var(--tint);border-color:var(--accent);outline:none}
+.fxlib-grid button:hover i,.fxlib-grid button:focus-visible i{background:var(--accent);color:var(--on-accent)}
+/* effect controls in Edit */
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.ins-h.fx-h b{font:700 13px var(--ui);letter-spacing:.08em;text-transform:uppercase}
+.prop.flash{animation:propflash 1.2s ease-out}
+@keyframes propflash{0%{background:color-mix(in srgb,var(--accent) 35%,transparent)}100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.prop.flash{animation:none;outline:1px solid var(--accent)}}
+/* quick + deep: in Simple the selection's properties sit on top, the quick setup stays underneath */
+#pane-inspect{display:flex;flex-direction:column}
+.quick-h{display:none}
+body.simple .quick-h{display:flex;align-items:baseline;gap:8px;margin:2px 0 6px;order:1}
+body.simple .quick-h b{font:400 12px var(--display);letter-spacing:.06em}
+body.simple #quick{order:2}
+body.simple #advInsp{order:3}
+body.simple #pane-inspect.deep #quickNote{order:-3}
+body.simple #pane-inspect.deep #advInsp{order:-2;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line-2)}
+body.simple #pane-inspect.deep #advInsp>summary{display:none}
+body.simple #pane-inspect.deep .pane-help{display:none}
+body.simple #pane-inspect.deep .quick-h{padding-top:4px}
+.quick-note{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.quick-note[hidden]{display:none}
+.quick-note .qn-k{font:700 10.5px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--on-accent);background:var(--accent);padding:2px 6px;border-radius:4px}
+.quick-note .qn-name{font:700 14px var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--fg);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quick-note .qn-sub{flex-basis:100%;order:3}
+body.simple .quick-note .qn-sub{display:none}
+body.simple #pane-inspect.deep #quickNote{position:sticky;top:-1px;z-index:3;padding:8px 0;background:var(--panel)}
+/* v27 Simple: the dock's height goes to the tracks (the song overview and the shortcut strip live in Pro; Export / the quick setup pick the length) */
+body.simple #studio .song,body.simple #keysHint{display:none}
+/* the inspect pane has no padding of its own (the inspector pads itself): the quick setup, its heading and the selection header get the same 16 px */
+#pane-inspect>.quick,#pane-inspect>.quick-h,#pane-inspect>.pane-help,#pane-inspect>.adv>summary{padding-left:16px;padding-right:16px}
+#pane-inspect>.quick-note{padding:8px 16px}
+#pane-inspect>.pane-help{margin:12px 16px 0;padding:2px 0 2px 8px}
+#pane-inspect>*{min-width:0}
+.fx-vis{display:flex;align-items:center;gap:8px}
+@media (max-width:900px){.layer{grid-template-columns:32px auto;margin:0;border-radius:0}.layer .lth,.layer .lk,.layer .kd{display:none}.layer .lname small{display:none}.lhead span{display:none}}
+.layer .lname{display:flex;flex-direction:column;justify-content:center;line-height:1.15;gap:1px}
+.layer .lname small{margin-left:0;overflow:hidden;text-overflow:ellipsis}
+.layer .lname{text-overflow:ellipsis}
+.layer .ln-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

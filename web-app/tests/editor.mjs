@@ -41,7 +41,7 @@ const ev = (fn, arg) => page.evaluate(fn, arg);
 const wait = (ms) => page.waitForTimeout(ms);
 const t0 = Date.now();
 await page.goto(URL0);
-await ev(async () => { try { localStorage.clear(); } catch (_) {} for (const n of ['u2c-projects', 'u2c-media']) await new Promise((r) => { const q = indexedDB.deleteDatabase(n); q.onsuccess = q.onerror = q.onblocked = () => r(); }); });
+await ev(async () => { try { localStorage.clear(); localStorage.setItem('u2c.mode.v1', 'pro'); } catch (_) {} for (const n of ['u2c-projects', 'u2c-media']) await new Promise((r) => { const q = indexedDB.deleteDatabase(n); q.onsuccess = q.onerror = q.onblocked = () => r(); }); });
 await page.reload();
 await page.waitForFunction(() => document.documentElement.dataset.track === '1', null, { timeout: 120000 });
 ok('boot + demo analysis', true, ((Date.now() - t0) / 1000).toFixed(1) + ' s');
@@ -59,7 +59,8 @@ await page.waitForFunction(() => !document.querySelector('#studio').hidden && wi
 ok('studio open (player look)', await ev(() => window.u2c.store.project.look === 'player'));
 
 // ---------------------------------------------------------------- v22 status strip, task controls, advanced, coach
-await ev(() => window.u2c.actions.seek(window.u2c.store.project.inT + 9 * window.u2c.store.session.track.spb)); await wait(300);
+await ev(() => window.u2c.actions.seek(window.u2c.store.project.inT + 9 * window.u2c.store.session.track.spb));
+await page.waitForFunction(() => /Position 3\.2\./i.test(document.querySelector('#statusBar').innerText), null, { timeout: 15000 }).catch(() => {});   // v27: wait on the state, not a fixed 300 ms
 const sb = await ev(() => ({ t: document.querySelector('#statusBar').innerText.replace(/\s+/g, ' '), vis: document.querySelector('#statusBar').getBoundingClientRect().bottom <= innerHeight + 1 }));
 ok('status strip: beat, BPM, key, section, format, stage, intro, export preset, position', sb.vis && /atelmansion/i.test(sb.t) && /BPM 1\d\d/i.test(sb.t) && /Key \S/i.test(sb.t) && /Section \d+ bars/i.test(sb.t) && /Format 9:16/i.test(sb.t) && /Stage \S/i.test(sb.t) && /Intro (sphere|flow)/i.test(sb.t) && /Export \S+/i.test(sb.t) && /Position 3\.2\./i.test(sb.t), sb.t);
 const coach2 = await ev(() => ({ step: window.u2c.quick.coach.step, slim: !document.querySelector('#coachStudio').hidden }));
@@ -132,6 +133,97 @@ await ev(() => window.u2c.cuetl.select([window.u2c.cues.sheet.tracks.find((x) =>
 const advA = await ev(() => ({ adv: document.querySelector('#advInsp').open, quickHidden: document.querySelector('#quick').hidden })); await page.click('#quickBack'); await wait(150);
 const advB = await ev(() => ({ adv: document.querySelector('#advInsp').open, quick: !document.querySelector('#quick').hidden, sel: window.u2c.cuetl.selected().length }));
 ok('Advanced opens itself while keys are selected; "back" returns to the simple controls', advA.adv && advA.quickHidden && !advB.adv && advB.quick && !advB.sel, JSON.stringify({ advA, advB }));
+
+// ---------------------------------------------------------------- v27 free transform, smart guides, Layers lock, user effects, Simple quick + deep
+// a beat after the intro where the camera holds wide (no move), the player paused there
+const ftBeat = await ev(() => { const a = window.u2c, e = a.cues.ev(), ib = Math.round(e.value('intro.length', 0, 2) * 4) + 1, end = (a.store.project.outT - a.store.project.inT) / a.store.session.track.spb - 8;
+  for (let b = ib; b < end; b += 0.5) { const s = e.shot(b); if (s.from === 'wide' && s.to === 'wide' && !s.moving) return b; } return ib + 4; });
+await ev((b) => { const a = window.u2c; a.clock.pause(); a.actions.seek(a.store.project.inT + Math.round(b * a.store.session.track.spb * 30) / 30); }, ftBeat);
+await page.waitForFunction((b) => { const a = window.u2c; return Math.abs(a.cuetl.state.playhead - b) < 0.05 && a.studio.info && a.studio.info.look === 'player'; }, ftBeat, { timeout: 20000 });
+const FT = 'spectrum';
+await page.click('#railTabs [data-pane="layers"]');
+await page.click(`#layerList [data-sel="win.${FT}"]`);
+await page.waitForFunction((id) => window.u2c.studio.pick === id && !document.querySelector('#pickBox').hidden && document.querySelectorAll('#pickBox .th').length === 8, FT, { timeout: 10000 });
+const rectOf = () => ev((id) => window.u2c.studio.rects()[id].map((v) => Math.round(v * 100) / 100), FT);
+const hist = () => ev(() => window.u2c.cues.history().past);
+const ftR0 = await rectOf(), ftH0 = (await hist()).length;
+const se = await page.$eval('#pickBox .th-se', (e) => { const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+await page.mouse.move(se.x, se.y); await page.mouse.down(); await page.mouse.move(se.x - 18, se.y + 14, { steps: 6 }); await page.mouse.up();
+await page.waitForFunction((n) => window.u2c.cues.history().past.length === n + 1, ftH0, { timeout: 5000 }).catch(() => {});
+const ftR1 = await rectOf(), ftH1 = await hist();
+await ev(() => window.u2c.cues.undo()); await page.waitForFunction(() => window.u2c.cues.history().future.length >= 1, null, { timeout: 5000 }).catch(() => {});
+const ftR2 = await rectOf();
+ok('free transform: drag a corner handle resizes the window (x / y stay), one undo step + History entry', ftR1[2] < ftR0[2] && ftR1[3] > ftR0[3] && ftR1[0] === ftR0[0] && ftR1[1] === ftR0[1] && ftH1.length === ftH0 + 1 && /^resize /.test(ftH1[ftH1.length - 1]) && JSON.stringify(ftR2) === JSON.stringify(ftR0),
+  `${ftR0.slice(2).join('×')} → ${ftR1.slice(2).join('×')} · "${ftH1[ftH1.length - 1]}" · undo → ${ftR2.slice(2).join('×')}`);
+// arrow nudge (the preview has focus): 1 px, Shift = 10 px, one step each
+await page.focus('#view'); const nz0 = await rectOf(), nh0 = (await hist()).length;
+await page.keyboard.press('ArrowRight'); await page.waitForFunction((x) => Math.round(window.u2c.studio.rects().spectrum[0]) === x + 1, nz0[0], { timeout: 5000 }).catch(() => {});
+await page.keyboard.press('Shift+ArrowDown'); await page.waitForFunction((y) => Math.round(window.u2c.studio.rects().spectrum[1]) === y + 10, nz0[1], { timeout: 5000 }).catch(() => {});
+const nz1 = await rectOf(), nh1 = await hist();
+await ev(() => { window.u2c.cues.undo(); window.u2c.cues.undo(); });
+ok('free transform: arrow keys nudge 1 px, Shift 10 px (one History step each)', nz1[0] === nz0[0] + 1 && nz1[1] === nz0[1] + 10 && nh1.length === nh0 + 2 && /^nudge /.test(nh1[nh1.length - 1]), `${nz0[0]},${nz0[1]} → ${nz1[0]},${nz1[1]} · ${nh1.slice(-2).join(' / ')}`);
+// smart guides: drag the window so its centre lands 1.5 px off the frame centre -> it snaps onto it, a guide line shows while dragging
+await page.waitForFunction((r) => JSON.stringify(window.u2c.studio.rects().spectrum.map((v) => Math.round(v * 100) / 100)) === JSON.stringify(r), nz0, { timeout: 5000 }).catch(() => {});
+const sg = await ev((id) => { const a = window.u2c, r = a.studio.rects()[id], c = a.studio.info.cam || { z: 1 }, W = a.store.project.aspect === '916' ? 1080 : 1920, vr = document.querySelector('#view').getBoundingClientRect(), bb = document.querySelector('#pickBox').getBoundingClientRect();
+  const dxw = (W / 2 + 1.5) - (r[0] + r[2] / 2); return { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2, dx: dxw * c.z * vr.width / W, W }; }, FT);
+await page.mouse.move(sg.x, sg.y); await page.mouse.down(); await page.mouse.move(sg.x + sg.dx * 0.5, sg.y + 1, { steps: 4 }); await page.mouse.move(sg.x + sg.dx, sg.y, { steps: 4 });
+const sgLines = await ev(() => document.querySelectorAll('.snapg .sg.v').length); await page.mouse.up();
+await page.waitForFunction(() => !document.querySelector('.snapg .sg'), null, { timeout: 5000 }).catch(() => {});
+const sgR = await rectOf(), sgC = sgR[0] + sgR[2] / 2;
+await ev(() => window.u2c.cues.undo());
+ok('smart guides: the moving window snaps to the frame centre with a visible guide line', sgLines >= 1 && Math.abs(sgC - sg.W / 2) <= 0.5, `${sgLines} vertical guide(s) while dragging · centre x ${sgC} (frame centre ${sg.W / 2})`);
+// Layers lock: a locked window cannot be picked on the preview; unlocked it can
+await page.waitForFunction((r) => JSON.stringify(window.u2c.studio.rects().spectrum.map((v) => Math.round(v * 100) / 100)) === JSON.stringify(r), nz0, { timeout: 5000 }).catch(() => {});
+await page.click(`#layerList [data-lock="win.${FT}"]`);
+await page.waitForFunction((id) => (window.u2c.cues.sheet.meta.locks || {})['win.' + id] === true, FT, { timeout: 5000 }).catch(() => {});
+const lockedRow = await ev((id) => !!document.querySelector(`#layerList .layer.locked[data-id="win.${id}"]`), FT);
+await ev(() => window.u2c.studio.clearPick());
+const lp = await ev((id) => { const a = window.u2c, r = a.studio.rects()[id], p = a.studio.toScreen([r[0] + r[2] * 0.3, r[1] + r[3] * 0.5, 1, 1]), vr = document.querySelector('#view').getBoundingClientRect(); return { x: vr.x + p.l / 100 * vr.width, y: vr.y + p.t / 100 * vr.height }; }, FT);
+await page.mouse.click(lp.x, lp.y); await page.waitForFunction(() => window.u2c.cues.history().past.length > 0, null, { timeout: 2000 }).catch(() => {});
+const pickLocked = await ev(() => window.u2c.studio.pick);
+await page.click(`#layerList [data-lock="win.${FT}"]`);
+await page.waitForFunction((id) => !(window.u2c.cues.sheet.meta.locks || {})['win.' + id], FT, { timeout: 5000 }).catch(() => {});
+await ev(() => window.u2c.studio.clearPick()); await page.mouse.click(lp.x, lp.y);
+await page.waitForFunction((id) => window.u2c.studio.pick === id, FT, { timeout: 5000 }).catch(() => {});
+const pickFree = await ev(() => window.u2c.studio.pick), lockHist = await hist();
+ok('Layers: lock blocks picking the window on the preview (unlock brings it back)', lockedRow && pickLocked !== FT && pickFree === FT && lockHist.some((l) => /^lock /.test(l)) && lockHist.some((l) => /^unlock /.test(l)), `locked → picked ${pickLocked} · unlocked → picked ${pickFree}`);
+await ev(() => window.u2c.studio.clearPick());
+// user effects: + Layer → Effects library → Negative at the playhead, intensity from the inspector slider, the frame changes
+const sumPx = () => ev(async () => { const app = window.u2c, p = app.store.project, tr = app.store.session.track, { makeSurface } = await import('/src/engine/render.js'), s = makeSurface(108, 192, { read: true });
+  app.renderFrame(p.inT + app.cuetl.state.playhead * tr.spb, s, p, tr, {}); const d = s.ctx.getImageData(0, 0, s.w, s.h).data; let sum = 0; for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2]; return sum / (d.length / 4) / 3; });
+const px0 = await sumPx();
+await page.click('#addTrackBtn'); await page.click('.addlayer [data-al="fxlib"]');
+await page.waitForFunction(() => window.u2c.effects.isOpen, null, { timeout: 5000 });
+const libN = await ev(() => document.querySelectorAll('.fxlib [data-fx]').length);
+await page.click('.fxlib [data-fx="neg"]');
+await page.waitForFunction(() => { const t = window.u2c.cues.sheet.tracks.find((q) => q.path === 'ufx.neg'); return t && t.keys.length === 1 && document.querySelector('#insp .fx-int input[type=range]'); }, null, { timeout: 5000 });
+const fxk = await ev(() => { const k = window.u2c.cues.sheet.tracks.find((q) => q.path === 'ufx.neg').keys[0]; return { id: k.id, b: k.b, v: k.v, dur: k.dur }; });
+const px1 = await sumPx();
+await ev(() => { const r = document.querySelector('#insp .fx-int input[type=range]'); r.value = '0.5'; r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); });
+await page.waitForFunction(() => window.u2c.cues.sheet.tracks.find((q) => q.path === 'ufx.neg').keys[0].v === 0.5, null, { timeout: 5000 }).catch(() => {});
+const px2 = await sumPx(), fxH = await hist(), fxV = await ev(() => window.u2c.cues.sheet.tracks.find((q) => q.path === 'ufx.neg').keys[0].v);
+ok('effects: library (8) → Negative clip at the playhead, intensity slider = one step, the rendered frame changes', libN === 8 && Math.abs(fxk.b - Math.round(ftBeat)) < 1e-6 && fxk.dur === 4 && fxV === 0.5 && fxH.slice(-2).join('|') === 'add effect Negative|edit key' && Math.abs(px1 - px0) > 20 && Math.abs(px2 - px1) > 10 && Math.abs(px2 - 127) < Math.abs(px0 - 127) + 1,
+  `mean luma ${px0.toFixed(1)} → ${px1.toFixed(1)} (100 %) → ${px2.toFixed(1)} (50 %) · ${fxH.slice(-2).join(' / ')}`);
+// stretch the effect clip on the timeline (drag its end edge one beat)
+const fe = await ev((id) => { const T = window.u2c.cuetl, f = T.findKey(id), k = f[1], p = T.keyPoint(id), r = document.querySelector('#cueCv').getBoundingClientRect(); return { x: r.x + T.xOf(k.b + k.dur) - 2, y: r.y + p.y, ppb: T.xOf(1) - T.xOf(0) }; }, fxk.id);
+await page.mouse.move(fe.x, fe.y); await page.mouse.down(); await page.mouse.move(fe.x + fe.ppb, fe.y, { steps: 5 }); await page.mouse.up();
+await page.waitForFunction((id) => window.u2c.cuetl.findKey(id)[1].dur > 4.4, fxk.id, { timeout: 5000 }).catch(() => {});
+const fxDur = await ev((id) => window.u2c.cuetl.findKey(id)[1].dur, fxk.id);
+ok('effects: the clip stretches on the Effects track (drag its end)', fxDur > 4.4, `length 4 → ${fxDur} beats`);
+await ev(() => { window.u2c.cuetl.clearSel(); window.u2c.cues.edit((s) => { s.tracks = s.tracks.filter((t) => !t.path.startsWith('ufx.')); }, 'clear test effects'); });
+// Simple mode: the guide strip, the bigger timeline, quick setup always underneath the selection's properties
+await ev(() => window.u2c.simple.set(false));
+await page.waitForFunction(() => document.body.classList.contains('simple'), null, { timeout: 5000 });
+await ev(() => { window.u2c.studio.select('spectrum'); });
+await page.waitForFunction(() => document.querySelector('#advInsp').open && !document.querySelector('#quickNote').hidden, null, { timeout: 5000 }).catch(() => {});
+const sm = await ev(() => { const q = (s) => document.querySelector(s), vis = (s) => { const e = q(s); return !!e && !e.hidden && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0; };
+  return { guide: vis('.tl-guide'), quick: vis('#quick'), quickRows: document.querySelectorAll('#quick .qc').length, head: vis('#quickNote'), name: q('#quickSel').textContent, back: q('#quickBack').textContent,
+    order: +getComputedStyle(q('#quickNote')).order < +getComputedStyle(q('#advInsp')).order && q('#advInsp').getBoundingClientRect().top < q('#quick').getBoundingClientRect().top && q('#advInsp').getBoundingClientRect().bottom <= q('#quickH').getBoundingClientRect().top + 1, dock: Math.round(q('#dock').getBoundingClientRect().height) }; });
+await shot('simple-quick-deep-1440.png');
+await page.click('#quickBack'); await page.waitForFunction(() => !window.u2c.studio.pick && !document.querySelector('#advInsp').open, null, { timeout: 5000 }).catch(() => {});
+const smBack = await ev(() => ({ pick: window.u2c.studio.pick, adv: document.querySelector('#advInsp').open, quick: !document.querySelector('#quick').hidden }));
+await ev(() => window.u2c.simple.set(true)); await page.waitForFunction(() => !document.body.classList.contains('simple'), null, { timeout: 5000 });
+ok('Simple mode: guide strip, a taller timeline, the selection on top with "Back to quick setup", quick controls underneath', sm.guide && sm.quick && sm.quickRows >= 20 && sm.head && /spectrum/i.test(sm.name) && /quick setup/i.test(sm.back) && sm.order && sm.dock >= 300 && !smBack.pick && !smBack.adv && smBack.quick, JSON.stringify({ ...sm, back: smBack }));
 
 // ---------------------------------------------------------------- command palette
 await page.click('#cueCv', { position: { x: 400, y: 5 } }).catch(() => {});
@@ -303,5 +395,10 @@ const of2 = await ev(() => document.documentElement.scrollWidth - window.innerWi
 ok('phone 390: studio and home without horizontal scroll', of1 <= 0 && of2 <= 0, `overflow ${of1} / ${of2} px`);
 const real = errors.filter((e) => !/favicon/.test(e));
 ok('no console errors', real.length === 0, real.slice(0, 5).join(' | '));
+// v25 presets: save what you changed (a moved window), change it again, apply the preset -> the saved position comes back; capture keeps only changes
+{ const r = await ev(async () => { const app = window.u2c; app.actions.setProp('win.spectrum.x', 123); const id = app.presets.save('Test layout'), d = app.presets.list().find((q) => q.id === id).data;
+    app.actions.setProp('win.spectrum.x', 456); app.presets.apply(id); const x = app.cues.ev().value('win.spectrum.x', 0, null);
+    const n = Object.keys(d.base).length; app.presets.remove(id); return { x, n, has: 'win.spectrum.x' in d.base || d.tracks.some((t) => t.path === 'win.spectrum.x'), left: app.presets.list().length }; });
+  ok('presets: save a moved window, apply it back (only changes captured), delete', r.x === 123 && r.has && r.left === 0, JSON.stringify(r)); }
 await browser.close(); if (server) server.close();
 const failed = results.filter((r) => !r.pass).length; console.log(`\n${results.length - failed}/${results.length} passed`); process.exit(failed ? 1 : 0);

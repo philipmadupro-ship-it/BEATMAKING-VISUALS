@@ -1,6 +1,7 @@
 // v20 REVIEW (the last step before export / upload): renders the video's key moments exactly as the MP4 will have them (same
 // renderFrame, same pre-roll, same motion blur), runs the checks (covers, loop seam, text fit, length, blur / intro / clicks / video
 // layer) and lists every word in the video as editable fields (tags; edits are live and undoable). Click a frame = playhead there.
+import { PRE_S } from '../cues/generate.js';
 import { makeSurface, createBlur } from '../engine/render.js';
 import { DEFAULT_TAGS } from '../v8/tags.js';
 import { mergeDeep } from '../cues/schema.js';
@@ -32,7 +33,7 @@ export function createReview(app) {
   }
   const diff = (a, b) => { const A = a.ctx.getImageData(0, 0, a.w, a.h).data, B = b.ctx.getImageData(0, 0, b.w, b.h).data; let s = 0; for (let i = 0; i < A.length; i += 4) s += Math.abs(A[i] - B[i]) + Math.abs(A[i + 1] - B[i + 1]) + Math.abs(A[i + 2] - B[i + 2]); return s / (A.length / 4) / 3; };
   async function frames() {
-    const p = P(), tr = app.store.session.track; if (!tr) return; const ex = p.export, PRE = ex.preroll !== false && p.look === 'player' ? 7.0 : 0, port = p.aspect === '916';
+    const p = P(), tr = app.store.session.track; if (!tr) return; const ex = p.export, PRE = ex.preroll !== false && p.look === 'player' ? PRE_S : 0, port = p.aspect === '916';
     const W = port ? 216 : 320, H = port ? 384 : 180, entry = await app.clip.ensure(p.inT, p.outT), list = moments(p, tr, PRE), root = $('#revFrames'); root.innerHTML = '';
     const one = (t, s, info) => app.renderFrame(t, s, p, tr, { entry, fps: ex.fps, info, preroll: PRE });
     for (const m of list) {
@@ -44,7 +45,7 @@ export function createReview(app) {
     }
     // checks
     const c = []; const ok = (t, lvl = '') => c.push([t, lvl]);
-    const a0 = makeSurface(108, 192), a1 = makeSurface(108, 192); one(p.inT - PRE, a0, {}); one(p.outT - 1 / ex.fps, a1, {}); const seam = diff(a0, a1);
+    const a0 = makeSurface(108, 192, { read: true }), a1 = makeSurface(108, 192, { read: true });   // v24: read back by the seam diff one(p.inT - PRE, a0, {}); one(p.outT - 1 / ex.fps, a1, {}); const seam = diff(a0, a1);
     ok(p.look === 'player' ? (seam < 6 ? `Loop seam clean (difference ${seam.toFixed(1)})` : `Loop seam jumps (difference ${seam.toFixed(1)}): the last frame does not match frame 0`) : `Loop seam difference ${seam.toFixed(1)}`, p.look === 'player' && seam >= 6 ? 'bad' : '');
     const cv = app.media ? app.media.list() : []; const mine = cv.filter((x) => x.user).length;
     ok(cv[0] && cv[0].user ? `Beat cover: ${cv[0].name}${cv[0].w < 1000 ? ' (low resolution: under 1000 px)' : ''}` : 'Beat cover is the built-in one: drop yours in Media', cv[0] && cv[0].user ? (cv[0].w < 1000 ? 'warn' : '') : 'warn');

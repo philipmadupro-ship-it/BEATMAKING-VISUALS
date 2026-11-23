@@ -3,7 +3,7 @@
 // (t, clip data, cue sheet, project), so every frame is deterministic.
 import { createEvaluator } from '../cues/schema.js';
 import { stageOf } from '../v8/core.js';
-export function makeSurface(w, h) { const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(w)); canvas.height = Math.max(1, Math.round(h)); return { canvas, ctx: canvas.getContext('2d'), w: canvas.width, h: canvas.height }; }
+export function makeSurface(w, h, opts = {}) { const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(w)); canvas.height = Math.max(1, Math.round(h)); return { canvas, ctx: canvas.getContext('2d', opts.read ? { willReadFrequently: true } : undefined), w: canvas.width, h: canvas.height }; }   // v24: opts.read = a surface that is read back (getImageData)
 const today = () => new Date().toUTCString().split(' ').slice(1, 4).join(' ').toUpperCase();
 
 export function createRenderer(app) {
