@@ -210,7 +210,13 @@ fn client(stream: TcpStream, sh: Arc<Shared>) -> Result<(), Box<dyn std::error::
         }
         match ws.read() {
             Ok(Message::Text(t)) => {
-                if t.contains("\"pull\"") {
+                if t.contains("\"open_browser\"") {
+                    // Embedded webviews block screen capture: open the same app in the system browser, where Record works.
+                    let url = "http://127.0.0.1:17870/?daw=ws://127.0.0.1:17871&record=1";
+                    #[cfg(target_os = "macos")] let _ = std::process::Command::new("open").arg(url).spawn();
+                    #[cfg(target_os = "windows")] let _ = std::process::Command::new("cmd").args(["/C", "start", "", url]).spawn();
+                    #[cfg(target_os = "linux")] let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+                } else if t.contains("\"pull\"") {
                     let w = sh.widx.load(Relaxed);
                     let mut c = cursor.unwrap_or(w);
                     if w.saturating_sub(c) > (RING as u64) / 2 {

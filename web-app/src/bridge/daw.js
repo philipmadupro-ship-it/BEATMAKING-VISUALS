@@ -30,11 +30,15 @@ export async function initDaw(app) {
   }
   connect();
 
+  const inBrowser = /[?&]record=1/.test(location.search);
+  function openBrowser() { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'open_browser' })); ui.msg('Opened U2C Studio in your browser: press Record DAW there (screen capture is blocked inside the plugin window).'); }
+  if (inBrowser) setTimeout(() => ui.msg('Press Record DAW, then pick the FL Studio window (tick "share audio" not needed: the plugin sends the audio).'), 500);
   async function startRecord() {
     if (st.rec) return;
     let screen;
-    try { screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false }); }
-    catch (err) { ui.msg('Screen capture refused or unavailable here. Open this page in a browser tab (same URL) and record there. ' + err.name); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { openBrowser(); return; }
+    try { screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 60 } }, audio: false }); }
+    catch (err) { if (err && err.name === 'NotAllowedError' && !inBrowser) { openBrowser(); return; } ui.msg('Screen capture refused: ' + (err && err.name) + '. On macOS allow your browser in System Settings → Privacy → Screen Recording.'); return; }
     const ac = new AudioContext(), dest = ac.createMediaStreamDestination(); let next = 0;
     const onPcm = (buf) => {
       if (buf.byteLength < 8) return; const dv = new DataView(buf), sr = dv.getUint32(0, true), n = dv.getUint32(4, true); if (!n) return;
@@ -43,14 +47,14 @@ export async function initDaw(app) {
       const now = ac.currentTime + 0.05; if (next < now) next = now; s.start(next); next += n / sr;
     };
     const stream = new MediaStream([...screen.getVideoTracks(), ...dest.stream.getAudioTracks()]);
-    const mime = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m)) || '';
+    const mime = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m)) || '';
     const mr = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 12e6 } : {}), chunks = [];
     mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     const timer = setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'pull' })); }, 50);
     mr.onstop = () => {
       clearInterval(timer); screen.getTracks().forEach(t => t.stop()); ac.close(); st.rec = null; ui.update(st);
-      const a = document.createElement('a'), blob = new Blob(chunks, { type: 'video/webm' });
-      a.href = URL.createObjectURL(blob); a.download = `u2c-daw-${new Date().toISOString().replace(/[:.]/g, '-')}.webm`; document.body.appendChild(a); a.click(); a.remove();
+      const a = document.createElement('a'), blob = new Blob(chunks, { type: mr.mimeType || 'video/webm' }), ext = /mp4/.test(mr.mimeType) ? 'mp4' : 'webm';
+      a.href = URL.createObjectURL(blob); a.download = `u2c-daw-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 60000); ui.msg('Saved ' + a.download);
     };
     screen.getVideoTracks()[0].addEventListener('ended', () => { if (mr.state !== 'inactive') mr.stop(); });
