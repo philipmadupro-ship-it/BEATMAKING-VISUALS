@@ -71,6 +71,7 @@ async function boot() {
   const app = { store, clock, libs, assets, cues, motion, hook, actions: {} };
   app.clip = createClipManager(app); app.renderFrame = createRenderer(app);
   const A = app.actions; window.u2c = app;
+  import('./bridge/daw.js').then(m => m.initDaw(app)).catch(() => {});   // DAW plugin bridge: inert without ?daw= or the plugin's /__daw.json
   // the property registry of the look at the playhead (cached per look / stage / aspect / bars / tags)
   let regKey = '', regVal = null;
   app.registry = () => { const p = store.project, tr = store.session.track, bars = tr ? Math.max(1, Math.round((p.outT - p.inT) / tr.barDur)) : 16, b = app.cuetl ? app.cuetl.state.playhead : 0, ev = cues.ev();
