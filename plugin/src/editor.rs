@@ -22,7 +22,7 @@ fn raw(parent: ParentWindowHandle) -> RawWindowHandle {
         #[cfg(target_os = "linux")]
         ParentWindowHandle::X11Window(id) => RawWindowHandle::Xlib(raw_window_handle::XlibWindowHandle::new(id as std::ffi::c_ulong)),
         #[cfg(target_os = "macos")]
-        ParentWindowHandle::AppKitHandle(p) => RawWindowHandle::AppKit(raw_window_handle::AppKitWindowHandle::new(std::ptr::NonNull::new(p).expect("nsview"))),
+        ParentWindowHandle::AppKitNsView(p) => RawWindowHandle::AppKit(raw_window_handle::AppKitWindowHandle::new(std::ptr::NonNull::new(p).expect("nsview"))),
         #[cfg(target_os = "windows")]
         ParentWindowHandle::Win32Hwnd(p) => RawWindowHandle::Win32(raw_window_handle::Win32WindowHandle::new(std::num::NonZeroIsize::new(p as isize).expect("hwnd"))),
         #[allow(unreachable_patterns)]
