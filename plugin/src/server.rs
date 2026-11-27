@@ -169,6 +169,11 @@ fn respond(rq: tiny_http::Request, ws_port: u16) {
     }
     match lookup(&path) {
         Some(b) => {
+            let b: Vec<u8> = if std::ptr::eq(b, INDEX) {
+                String::from_utf8_lossy(b).replacen("</head>", &format!("<meta name=\"u2c-daw-ws\" content=\"{ws_port}\"></head>"), 1).into_bytes()
+            } else {
+                b.to_vec()
+            };
             let _ = rq.respond(tiny_http::Response::from_data(b).with_header(hdr("Content-Type", mime(&path))).with_header(hdr("Cache-Control", "no-store")));
         }
         None => {

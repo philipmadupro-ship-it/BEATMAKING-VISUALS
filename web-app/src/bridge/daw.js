@@ -1,11 +1,11 @@
-// DAW bridge. Active only with ?daw=ws://127.0.0.1:PORT, or when the page is served by the U2C plugin (/__daw.json).
+// DAW bridge. Active only with ?daw=ws://127.0.0.1:PORT, or when the page is served by the U2C plugin (meta u2c-daw-ws).
 // Receives host transport {bpm, playing, beats, rms, peak, sr} over a localhost WebSocket, drives the preview
 // playhead from it, and offers "Record DAW" (screen via getDisplayMedia + plugin audio pulled as PCM) saved as a file.
 // Wire format: text JSON {t:"transport",...}; client {t:"pull"} -> binary [u32 sampleRate][u32 n][f32 mono * n] (LE).
 export async function initDaw(app) {
   let url = null;
   try { url = new URLSearchParams(location.search).get('daw'); } catch (_) {}
-  if (!url) { try { const r = await fetch('/__daw.json', { cache: 'no-store' }); if (r.ok) url = `ws://${location.hostname}:${(await r.json()).ws}`; } catch (_) {} }
+  if (!url) { const m = document.querySelector('meta[name=u2c-daw-ws]'); if (m) url = `ws://${location.hostname}:${m.content}`; }   // injected by the plugin's HTTP server
   if (!url) return null;
   const st = { url, connected: false, host: null, follow: true, rec: null };
   const ui = mountUi(st);

@@ -2,7 +2,7 @@
 
 Rust plugin (nih-plug). Audio passes through untouched. The editor is the U2C Studio web app inside a webview.
 The plugin runs two servers on 127.0.0.1 only: HTTP `17870` (the embedded web app, bundled into the binary) and WebSocket `17871`
-(next free port if taken; the page finds it through `/__daw.json`).
+(next free port if taken; the served page carries it in a `u2c-daw-ws` meta tag).
 
 - Transport (BPM, play state, position in beats, RMS, peak) is pushed about 30 times per second.
 - A ring buffer of the mono mix (about 2.7 s) is pulled by the web app as PCM: client sends `{"t":"pull"}`, server replies binary `[u32 sampleRate][u32 n][f32 mono x n]`, little endian.
