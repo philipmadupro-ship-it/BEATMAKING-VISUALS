@@ -125,12 +125,13 @@ export async function initDaw(app) {
   requestAnimationFrame(tick);
   function connect() {
     ws = new WebSocket(url); ws.binaryType = 'arraybuffer';
-    ws.onopen = () => { st.connected = true; retry = 0; ui.update(st); if (st.cap) send({ t: 'cap', on: true, fps: 20, w: 960 }); };
+    ws.onopen = () => { st.connected = true; retry = 0; ui.update(st); if (st.cap) send({ t: 'cap', on: true, fps: 20, w: 960 }); send({ t: 'windows' }); try { const w = +localStorage.getItem('u2c.daw.win'); if (w) send({ t: 'pick_window', id: w }); } catch (_) {} };
     ws.onclose = () => { st.connected = false; ui.update(st); release(); setTimeout(connect, Math.min(5000, 500 * ++retry)); };
     ws.onerror = () => { try { ws.close(); } catch (_) {} };
     ws.onmessage = (e) => {
       if (typeof e.data === 'string') { let m; try { m = JSON.parse(e.data); } catch (_) { return; }
         if (m.t === 'transport') onTransport(m);
+        else if (m.t === 'windows') ui.setWindows(m.list || []);
         else if (m.t === 'cap_status') { st.capMsg = m.msg; if (m.msg !== 'ok') ui.msg('DAW image: ' + m.msg.replace(/^(permission|error): /, '')); }
         else if (m.t === 'saved') { if (saveDone) saveDone(m.path); } }
       else if (e.data.byteLength > 4) { const tg = tagOf(e.data); if (tg === 'JPG0') capFrame(e.data); else if (tg === 'PCM0') onPcm(e.data); }
@@ -179,6 +180,8 @@ export async function initDaw(app) {
   ui.onFollow = (v) => { st.follow = v; if (!v) release(); };
   ui.onLive = () => startLive();
   ui.onCap = (v) => setCap(v);
+  ui.onWindows = () => send({ t: 'windows' });
+  ui.onPickWindow = (id) => { send({ t: 'pick_window', id: +id || 0 }); try { localStorage.setItem('u2c.daw.win', String(id)); } catch (_) {} };
   ui.onLayer = (op, bl, commit) => { A().setProp('video.opacity', op, !commit); A().setProp('video.blend', bl, !commit); dirty(); };
   ui.onLat = (v) => { st.lat = v; };
   ui.onBrowser = () => { send({ t: 'open_browser' }); ui.msg('Opened U2C Studio in your browser.'); };
@@ -195,19 +198,23 @@ function mountUi(st) {
   el.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:99999;font:12px/1.3 ui-monospace,monospace;background:#111d;color:#eee;border:1px solid #555;border-radius:8px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;max-width:min(560px,92vw);backdrop-filter:blur(6px)';
   el.innerHTML = '<b data-mode style="letter-spacing:.06em"></b><span data-s>DAW: connecting</span><label title="Follow the DAW transport while it plays"><input type="checkbox" data-f checked> follow</label>' +
     '<button data-l style="cursor:pointer">Master live</button><label title="Show the DAW window on the hero card"><input type="checkbox" data-c> DAW image</label>' +
-    '<label>opacity <input type="range" data-o min="0" max="100" value="60" style="width:70px;vertical-align:middle"></label><select data-b><option>normal</option><option>screen</option><option>multiply</option></select>' +
+    '<label>opacity <input type="range" data-o min="0" max="100" value="60" style="width:70px;vertical-align:middle"></label><select data-b><option>normal</option><option>screen</option><option>multiply</option></select><select data-w title="Which window to show" style="max-width:170px"><option value="0">window: DAW (auto)</option></select><button data-wr title="Refresh the window list">↻</button>' +
     '<label title="Shift the visuals against the DAW (ms)">sync <input type="number" data-t value="0" step="10" style="width:52px"></label><button data-r style="cursor:pointer">Record DAW</button><span data-m style="flex-basis:100%;opacity:.8"></span>';
   document.body.appendChild(el);
   const q = (s) => el.querySelector(s);
   const ui = {
-    onRecord() {}, onFollow() {}, onLive() {}, onCap() {}, onLayer() {}, onLat() {}, onBrowser() {},
+    onRecord() {}, onFollow() {}, onLive() {}, onCap() {}, onLayer() {}, onWindows() {}, onPickWindow() {}, onLat() {}, onBrowser() {},
     update(s) { const h = s.host, ts = h && h.ts ? h.ts.join('/') : '4/4', bar = h ? Math.floor(h.beats / 4) + 1 : 0, lp = h && h.loop ? ` loop ${(h.loop[0] / 4 + 1).toFixed(0)}-${(h.loop[1] / 4 + 1).toFixed(0)}` : '';
       q('[data-mode]').textContent = s.live ? 'LIVE' : s.connected ? 'DAW' : 'OFFLINE'; q('[data-mode]').style.color = s.live ? '#ff5d5d' : '#9ad';
       q('[data-s]').textContent = s.connected ? (h ? `${h.playing ? 'play' : 'stop'} ${h.bpm.toFixed(1)} BPM ${ts} bar ${bar}.${(Math.floor(h.beats % 4) + 1)}${lp}` : 'connected') : 'connecting';
       q('[data-r]').textContent = s.rec ? 'Stop + save' : 'Record DAW'; q('[data-l]').disabled = s.live; q('[data-l]').textContent = s.live ? 'Master: on' : 'Master live'; if (big) { big.disabled = s.live; big.textContent = s.live ? 'Receiving: Master' : 'Receive audio from: Master'; } },
     msg(t) { q('[data-m]').textContent = t; if (typeof document !== 'undefined') { const s = document.getElementById('status'); if (s && big) s.textContent = t; } },
+    setWindows(list) { const sel = q('[data-w]'), cur = sel.value; sel.innerHTML = '<option value="0">window: DAW (auto)</option>' + list.filter((w) => !w.ours || !/U2C/.test(w.title)).map((w) => `<option value="${w.id}">${String(w.app || '').replace(/</g, '')}${w.title ? ' · ' + String(w.title).replace(/</g, '').slice(0, 40) : ''}</option>`).join(''); sel.value = [...sel.options].some((o) => o.value === cur) ? cur : '0'; },
     setLayer(op, bl) { q('[data-o]').value = Math.round(op * 100); q('[data-b]').value = bl; q('[data-c]').checked = true; },
   };
+  q('[data-w]').addEventListener('change', (e) => ui.onPickWindow(e.target.value));
+  q('[data-w]').addEventListener('focus', () => ui.onWindows());
+  q('[data-wr]').addEventListener('click', () => ui.onWindows());
   const layer = (commit) => () => ui.onLayer(q('[data-o]').value / 100, q('[data-b]').value, commit);
   q('[data-r]').onclick = () => ui.onRecord(); q('[data-f]').onchange = (e) => ui.onFollow(e.target.checked); q('[data-l]').onclick = () => ui.onLive();
   q('[data-c]').onchange = (e) => ui.onCap(e.target.checked); q('[data-o]').oninput = layer(false); q('[data-o]').onchange = layer(true); q('[data-b]').onchange = layer(true);

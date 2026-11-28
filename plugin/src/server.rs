@@ -321,6 +321,13 @@ fn client(stream: TcpStream, sh: Arc<Shared>, cap: Arc<Capture>) -> Result<(), B
                         ws.send(Message::Binary(sh.pcm_since(c, to)))?;
                         cursor = Some(to);
                     }
+                    "windows" => {
+                        ws.send(Message::Text(format!("{{\"t\":\"windows\",\"list\":{}}}", crate::capture::list_windows_json()).into()))?;
+                    }
+                    "pick_window" => {
+                        let id = v["id"].as_u64().map(|x| x as u32).filter(|x| *x != 0);
+                        if let Ok(mut p) = cap.pick.lock() { *p = id; }
+                    }
                     "cap" => {
                         if v["on"].as_bool().unwrap_or(false) {
                             cap.configure(v["fps"].as_u64().unwrap_or(20) as u32, v["w"].as_u64().unwrap_or(960) as u32);

@@ -12,11 +12,12 @@ pub struct Capture {
     width: AtomicU32,
     frame: Mutex<(u64, Vec<u8>)>,
     status: Mutex<(u64, String)>,
+    pub pick: Mutex<Option<u32>>,
 }
 
 impl Capture {
     pub fn new() -> Self {
-        Self { want: AtomicUsize::new(0), running: AtomicBool::new(false), fps: AtomicU32::new(20), width: AtomicU32::new(960), frame: Mutex::new((0, Vec::new())), status: Mutex::new((0, String::new())) }
+        Self { want: AtomicUsize::new(0), running: AtomicBool::new(false), fps: AtomicU32::new(20), width: AtomicU32::new(960), frame: Mutex::new((0, Vec::new())), status: Mutex::new((0, String::new())), pick: Mutex::new(None) }
     }
     pub fn configure(&self, fps: u32, width: u32) {
         self.fps.store(fps.clamp(5, 30), Relaxed);
@@ -49,9 +50,12 @@ impl Capture {
     }
     fn run(&self) {
         let mut win = imp::Finder::default();
+        let mut last_pick: Option<u32> = None;
         let mut asked = false;
         while self.want.load(Relaxed) > 0 {
             let t0 = std::time::Instant::now();
+            let pk = self.pick.lock().ok().and_then(|p| *p);
+            if pk != last_pick { last_pick = pk; win.set_pick(pk); }
             match win.grab(self.width.load(Relaxed)) {
                 Ok(jpg) => {
                     self.set_status("ok");
@@ -92,13 +96,35 @@ mod imp {
     pub struct Finder {
         win: Option<Window>,
         at: Option<Instant>,
+        pick: Option<u32>,
+    }
+
+    /// Every visible window of a useful size, for the picker: JSON [{id, app, title, w, h, ours}].
+    pub fn list_json() -> String {
+        let pid = std::process::id();
+        let mut v = Vec::new();
+        if let Ok(all) = Window::all() {
+            for w in all {
+                let (ww, hh) = (w.width().unwrap_or(0), w.height().unwrap_or(0));
+                if ww < 200 || hh < 150 || w.is_minimized().unwrap_or(false) { continue; }
+                v.push(serde_json::json!({ "id": w.id().unwrap_or(0), "app": w.app_name().unwrap_or_default(), "title": w.title().unwrap_or_default(), "w": ww, "h": hh, "ours": w.pid().unwrap_or(0) == pid }));
+            }
+        }
+        serde_json::Value::Array(v).to_string()
     }
 
     impl Finder {
+        pub fn set_pick(&mut self, id: Option<u32>) { self.pick = id; self.win = None; self.at = None; }
         /// The biggest visible window of this process (the DAW's main window), preferring not to pick our own plugin window.
         fn find(&mut self) -> Result<(), String> {
             if self.win.is_some() && self.at.map_or(false, |t| t.elapsed() < Duration::from_secs(2)) {
                 return Ok(());
+            }
+            if let Some(id) = self.pick {
+                for w in Window::all().map_err(|e| e.to_string())? {
+                    if w.id().unwrap_or(0) == id { self.win = Some(w); self.at = Some(Instant::now()); return Ok(()); }
+                }
+                return Err("the picked window is closed: pick another".into());
             }
             let pid = std::process::id();
             let mut best: Option<(u64, Window)> = None;
@@ -172,7 +198,9 @@ mod imp {
 mod imp {
     #[derive(Default)]
     pub struct Finder;
+    pub fn list_json() -> String { "[]".into() }
     impl Finder {
+        pub fn set_pick(&mut self, _id: Option<u32>) {}
         pub fn grab(&mut self, _max_w: u32) -> Result<Vec<u8>, String> {
             Err("window capture is available on macOS and Windows".into())
         }
@@ -182,3 +210,5 @@ mod imp {
     }
     pub fn request_permission() {}
 }
+
+pub fn list_windows_json() -> String { imp::list_json() }
