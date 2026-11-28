@@ -900,6 +900,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     }
     const camRef = camera(); let cam = camRef, zo = null;
     if (ZO && b >= ZO.b0) { zo = zoomState(camRef, ZO, fps); cam = zo.cam; F0C.ready = false; frame0(t, fps, scale, true); }   // v25: frame 0 rendered offscreen for the portal
+    { const sk = LIVEFX.shake(V); if (sk) cam = { ...cam, x: cam.x + sk[0], y: cam.y + sk[1] }; }   // live: a U2C Send assigned to "shake"
     PORTAL = zo; const z = cam.z; L.view.camZ = z; L.view.base = scale;
     c.fillStyle = S.bg; c.fillRect(0, 0, W, H);
     c.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z));

@@ -18,6 +18,7 @@ pub const HTTP_PORT: u16 = 17870;
 pub const WS_PORT: u16 = 17871;
 const RING: usize = 1 << 17;
 const MAX_PULL: usize = 32768;
+const MIDI_RING: usize = 1024;
 
 use crate::analysis::Bus;
 use crate::capture::Capture;
@@ -45,6 +46,12 @@ pub struct Shared {
     ring_r: Vec<AtomicU32>,
     /// Events for the web clients (hits, ...): filled by the analysis worker.
     pub bus: Bus,
+    /// Latest packet per U2C Send instance (id -> (received, packet, has new data)); the worker publishes them as one `sends` list.
+    /// MIDI note ring (audio thread writes, the worker reads): two words per event, see `midi_push`.
+    midi: Vec<AtomicU64>,
+    midi_w: AtomicU64,
+    midi_host: Vec<std::sync::atomic::AtomicI64>,
+    pub sends: std::sync::Mutex<std::collections::HashMap<String, (Instant, serde_json::Value, bool)>>,
 }
 
 impl Shared {
@@ -68,7 +75,39 @@ impl Shared {
             ring_l: ring(),
             ring_r: ring(),
             bus: Bus::new(),
+            sends: Default::default(),
+            midi: (0..MIDI_RING * 2).map(|_| AtomicU64::new(0)).collect(),
+            midi_w: AtomicU64::new(0),
+            midi_host: (0..MIDI_RING).map(|_| std::sync::atomic::AtomicI64::new(-1)).collect(),
         }
+    }
+    /// Audio thread: record a note event. `pos` = ring index of the event's sample (blk_widx + timing), `host` = host sample position or -1.
+    pub fn midi_push(&self, on: bool, channel: u8, note: u8, vel: f32, pos: u64, host: i64) {
+        let w = self.midi_w.load(Relaxed);
+        let i = (w as usize % MIDI_RING) * 2;
+        let meta = ((on as u64) << 40) | ((channel as u64) << 32) | ((note as u64) << 24) | (((vel.clamp(0.0, 1.0) * 1000.0) as u64) << 8);
+        self.midi[i].store(meta, Relaxed);
+        self.midi[i + 1].store(pos, Relaxed);
+        self.midi_host[(w as usize) % MIDI_RING].store(host, Relaxed);
+        self.midi_w.store(w + 1, std::sync::atomic::Ordering::Release);
+    }
+    /// Worker: events after `cursor` (cursor moves to the head). Events overwritten while the worker was away are skipped.
+    pub fn midi_drain(&self, cursor: &mut u64) -> Vec<(bool, u8, u8, f32, u64, i64)> {
+        let w = self.midi_w.load(std::sync::atomic::Ordering::Acquire);
+        if w.saturating_sub(*cursor) > MIDI_RING as u64 {
+            *cursor = w - MIDI_RING as u64 / 2;
+        }
+        let mut out = Vec::new();
+        while *cursor < w {
+            let i = (*cursor as usize % MIDI_RING) * 2;
+            let (meta, pos) = (self.midi[i].load(Relaxed), self.midi[i + 1].load(Relaxed));
+            out.push((meta >> 40 & 1 == 1, (meta >> 32) as u8, (meta >> 24) as u8, ((meta >> 8) & 0xffff) as f32 / 1000.0, pos, self.midi_host[*cursor as usize % MIDI_RING].load(Relaxed)));
+            *cursor += 1;
+        }
+        out
+    }
+    pub fn midi_head(&self) -> u64 {
+        self.midi_w.load(std::sync::atomic::Ordering::Acquire)
     }
     pub fn ring_len(&self) -> usize {
         RING
@@ -331,13 +370,14 @@ fn client(stream: TcpStream, sh: Arc<Shared>, cap: Arc<Capture>) -> Result<(), B
     let (mut frame_seq, mut status_seq) = (0u64, 0u64);
     let mut guard = CapGuard(None);
     let mut bus_cursor = sh.bus.head();
+    let mut is_send = false;   // a U2C Send plugin talking to us: it only gets what it sends, no transport / event stream
     let mut save: Option<(std::fs::File, std::path::PathBuf)> = None;
     loop {
-        if last.elapsed() >= Duration::from_millis(16) {
+        if !is_send && last.elapsed() >= Duration::from_millis(16) {
             last = Instant::now();
             ws.send(Message::Text(sh.transport_json()))?;
         }
-        {
+        if !is_send {
             let (c, evs) = sh.bus.since(bus_cursor);
             bus_cursor = c;
             for e in evs {
@@ -358,6 +398,29 @@ fn client(stream: TcpStream, sh: Arc<Shared>, cap: Arc<Capture>) -> Result<(), B
             Ok(Message::Text(t)) => {
                 let v: serde_json::Value = serde_json::from_str(&t).unwrap_or(serde_json::Value::Null);
                 match v["t"].as_str().unwrap_or("") {
+                    "send" => {
+                        is_send = true;
+                        let id = v["id"].as_str().unwrap_or("").chars().filter(|c| c.is_ascii_alphanumeric()).take(32).collect::<String>();
+                        if !id.is_empty() && t.len() < 2048 {
+                            let mut pk = v.clone();
+                            pk["id"] = id.clone().into();
+                            pk["rx"] = sh.widx.load(Relaxed).into();   // our own ring index when it arrived: the web app places it like a hit
+                            if let Ok(mut m) = sh.sends.lock() {
+                                // hit flags accumulate until the next `sends` publication, so none is lost between two of them
+                                if let Some((_, old, fresh)) = m.get(&id) {
+                                    if *fresh {
+                                        for k in ["kick", "snare", "hat"] {
+                                            let a = old[k].as_f64().unwrap_or(0.0).max(pk[k].as_f64().unwrap_or(0.0));
+                                            pk[k] = a.into();
+                                        }
+                                    }
+                                }
+                                if m.len() < 32 || m.contains_key(&id) {
+                                    m.insert(id, (Instant::now(), pk, true));
+                                }
+                            }
+                        }
+                    }
                     "open_browser" => {
                         // Embedded webviews are sandboxed in places: open the same app in the system browser.
                         let url = "http://127.0.0.1:17870/?daw=ws://127.0.0.1:17871&record=1";
@@ -430,6 +493,8 @@ fn client(stream: TcpStream, sh: Arc<Shared>, cap: Arc<Capture>) -> Result<(), B
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// The tests share one process-wide server and audio ring: run the ones that write audio one at a time.
+    static AUDIO: std::sync::Mutex<()> = std::sync::Mutex::new(());
     #[test]
     fn origins() {
         assert!(origin_ok("http://127.0.0.1:17870"));
@@ -443,6 +508,7 @@ mod tests {
     }
     #[test]
     fn serves_app_and_ws_streams() {
+        let _g = AUDIO.lock().unwrap_or_else(|e| e.into_inner());
         let s = servers();
         s.shared.bpm.store(133f64.to_bits(), Relaxed);
         s.shared.begin_block(Some(8.0), true, 1000);
@@ -478,6 +544,7 @@ mod tests {
     }
     #[test]
     fn worker_streams_hits_over_the_websocket() {
+        let _g = AUDIO.lock().unwrap_or_else(|e| e.into_inner());
         let s = servers();
         let (mut ws, _) = tungstenite::connect(format!("ws://127.0.0.1:{}", s.ws_port)).unwrap();
         // feed a synthetic kick (sweep 135 -> 45 Hz) after half a second of near-silence, as the audio thread would
@@ -504,5 +571,79 @@ mod tests {
         let t = got.expect("a hits event");
         let v: serde_json::Value = serde_json::from_str(&t).unwrap();
         assert!(v["kick"].as_f64().unwrap() > 0.0 && v["pos"].as_u64().is_some() && v["beats"].is_number(), "{t}");
+    }
+
+    #[test]
+    fn worker_streams_meters_over_the_websocket() {
+        let _g = AUDIO.lock().unwrap_or_else(|e| e.into_inner());
+        let s = servers();
+        let (mut ws, _) = tungstenite::connect(format!("ws://127.0.0.1:{}", s.ws_port)).unwrap();
+        if let tungstenite::stream::MaybeTlsStream::Plain(st) = ws.get_ref() { st.set_read_timeout(Some(Duration::from_secs(10))).ok(); }
+        let sr = s.shared.sr.load(Relaxed) as f32;
+        s.shared.begin_block(Some(0.0), true, 1000);
+        let t0 = std::time::Instant::now();
+        let mut got = None;
+        std::thread::scope(|sc| {
+            sc.spawn(|| {
+                let mut n = 0usize;
+                while t0.elapsed() < Duration::from_secs(9) && n < 20 {
+                    for i in 0..(0.25 * sr) as usize { let v = 0.1 * (2.0 * std::f32::consts::PI * 1000.0 * (n * (0.25 * sr) as usize + i) as f32 / sr).sin(); s.shared.push(v, v); }
+                    n += 1;
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            });
+            while t0.elapsed() < Duration::from_secs(9) {
+                if let Ok(Message::Text(t)) = ws.read() {
+                    if t.contains("\"t\":\"meters\"") {
+                        let v: serde_json::Value = serde_json::from_str(&t).unwrap();
+                        if (v["momentary"].as_f64().unwrap() + 20.0).abs() < 1.0 { got = Some(v); break; }
+                    }
+                }
+            }
+        });
+        let v = got.expect("a meters event near -20 LUFS");
+        assert!((v["peakL"].as_f64().unwrap() + 20.0).abs() < 1.0 && v["spec"].as_array().unwrap().len() == 61 && v["corr"].as_f64().unwrap() > 0.99);
+    }
+
+    #[test]
+    fn sends_are_listed_and_forwarded() {
+        let _g = AUDIO.lock().unwrap_or_else(|e| e.into_inner());
+        let s = servers();
+        let (mut web, _) = tungstenite::connect(format!("ws://127.0.0.1:{}", s.ws_port)).unwrap();
+        if let tungstenite::stream::MaybeTlsStream::Plain(st) = web.get_ref() { st.set_read_timeout(Some(Duration::from_secs(5))).ok(); }
+        let (mut snd, _) = tungstenite::connect(format!("ws://127.0.0.1:{}", s.ws_port)).unwrap();
+        let pk = serde_json::json!({"t": "send", "id": "ab12cd34", "name": "Send ab12", "rms": 0.2, "peak": 0.5, "bands": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8], "kick": 0.9, "snare": 0, "hat": 0, "pos": 12345});
+        snd.send(Message::Text(pk.to_string())).unwrap();
+        let t0 = std::time::Instant::now();
+        let mut got = None;
+        while t0.elapsed() < Duration::from_secs(5) {
+            if let Ok(Message::Text(t)) = web.read() {
+                if t.contains("\"t\":\"sends\"") && t.contains("ab12cd34") { got = Some(t); break; }
+            }
+        }
+        let v: serde_json::Value = serde_json::from_str(&got.expect("a sends list")).unwrap();
+        let e = &v["list"][0];
+        assert!(e["id"] == "ab12cd34" && e["kick"].as_f64().unwrap() > 0.8 && e["bands"].as_array().unwrap().len() == 8 && e["rx"].is_number(), "{e}");
+    }
+
+    #[test]
+    fn midi_notes_reach_the_websocket() {
+        let _g = AUDIO.lock().unwrap_or_else(|e| e.into_inner());
+        let s = servers();
+        let (mut ws, _) = tungstenite::connect(format!("ws://127.0.0.1:{}", s.ws_port)).unwrap();
+        if let tungstenite::stream::MaybeTlsStream::Plain(st) = ws.get_ref() { st.set_read_timeout(Some(Duration::from_secs(5))).ok(); }
+        std::thread::sleep(Duration::from_millis(100));
+        s.shared.midi_push(true, 2, 60, 0.8, s.shared.widx.load(Relaxed), 48000);
+        s.shared.midi_push(false, 2, 60, 0.0, s.shared.widx.load(Relaxed) + 100, -1);
+        let t0 = std::time::Instant::now();
+        let mut got = Vec::new();
+        while t0.elapsed() < Duration::from_secs(5) && got.len() < 2 {
+            if let Ok(Message::Text(t)) = ws.read() {
+                if t.contains("\"t\":\"midi\"") { got.push(serde_json::from_str::<serde_json::Value>(&t).unwrap()); }
+            }
+        }
+        assert_eq!(got.len(), 2);
+        assert!(got[0]["on"] == true && got[0]["note"] == 60 && got[0]["ch"] == 2 && (got[0]["vel"].as_f64().unwrap() - 0.8).abs() < 0.01 && got[0]["host"] == 48000);
+        assert!(got[1]["on"] == false && got[1]["host"].is_null());
     }
 }

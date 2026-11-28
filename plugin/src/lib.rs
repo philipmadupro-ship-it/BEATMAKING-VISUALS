@@ -35,7 +35,7 @@ impl Plugin for U2cStudio {
         main_output_channels: NonZeroU32::new(2),
         ..AudioIOLayout::const_default()
     }];
-    const MIDI_INPUT: MidiConfig = MidiConfig::None;
+    const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
     const SAMPLE_ACCURATE_AUTOMATION: bool = false;
 
     type SysExMessage = ();
@@ -61,6 +61,8 @@ impl Plugin for U2cStudio {
             sh.bpm.store(b.to_bits(), Relaxed);
         }
         sh.begin_block(t.pos_beats(), t.playing, buffer.samples());
+        let host0 = t.pos_samples();
+        let blk = sh.blk_widx.load(Relaxed);
         sh.tsn.store(t.time_sig_numerator.unwrap_or(4).max(1) as u32, Relaxed);
         sh.tsd.store(t.time_sig_denominator.unwrap_or(4).max(1) as u32, Relaxed);
         let (la, lb) = t.loop_range_beats().unwrap_or((f64::NAN, f64::NAN));
@@ -79,6 +81,15 @@ impl Plugin for U2cStudio {
         if n > 0 {
             sh.rms.store((sum / n as f32).sqrt().to_bits(), Relaxed);
             sh.peak.store(peak.to_bits(), Relaxed);
+        }
+        // MIDI notes: stamped with the ring index of their sample (same space as the audio / transport) and the host sample position when known;
+        // the ring index is also the running-counter fallback for hosts that give no position. Lock-free hand-off to the worker.
+        while let Some(ev) = ctx.next_event() {
+            match ev {
+                NoteEvent::NoteOn { timing, channel, note, velocity, .. } => sh.midi_push(true, channel, note, velocity, blk + timing as u64, host0.map(|p| p + timing as i64).unwrap_or(-1)),
+                NoteEvent::NoteOff { timing, channel, note, .. } => sh.midi_push(false, channel, note, 0.0, blk + timing as u64, host0.map(|p| p + timing as i64).unwrap_or(-1)),
+                _ => {}
+            }
         }
         ProcessStatus::Normal
     }

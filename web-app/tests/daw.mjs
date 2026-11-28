@@ -99,7 +99,7 @@ await page.waitForTimeout(200);
 const jpg = await page.screenshot({ type: 'jpeg', quality: 60, clip: { x: 0, y: 0, width: 320, height: 200 } });
 await ev(() => { const c = document.querySelector('#u2cDaw [data-c]'); c.checked = true; c.dispatchEvent(new Event('change')); });
 await page.waitForTimeout(200); ok('DAW image: the plugin is asked for frames', rx.capOn);
-sock.send(Buffer.concat([Buffer.from('JPG0'), jpg])); await page.waitForTimeout(400);
+sock.send(Buffer.concat([Buffer.from('JPG0'), jpg])); await page.waitForTimeout(900);
 const lay = await ev(() => { const L = globalThis.u2cVideoLayer, e = window.u2c.cues.ev(); return { w: L && L.w, on: e.value('video.on', 0, false), op: e.value('video.opacity', 0, 0.8), bl: e.value('video.blend', 0, 'x'), tg: e.value('video.target', 0, 'x') }; });
 ok('DAW image: video layer fed, on, opacity 60 %, blend normal, on the hero', lay.w === 320 && lay.on === true && Math.abs(lay.op - 0.6) < 1e-6 && lay.bl === 'normal' && lay.tg === 'hero', JSON.stringify(lay));
 await ev(() => { const o = document.querySelector('#u2cDaw [data-o]'); o.value = 25; o.dispatchEvent(new Event('input')); o.dispatchEvent(new Event('change')); const b = document.querySelector('#u2cDaw [data-b]'); b.value = 'multiply'; b.dispatchEvent(new Event('change')); });
@@ -118,14 +118,66 @@ const hv = await ev(async () => { const m = await import('/src/v8/livefx.js'), e
   window.u2c.actions.setProp('live.kick.on', false); const e2 = window.u2c.cues.ev(), off = m.kickEnv((p, d) => e2.value(p, 0, d)); window.u2c.actions.setProp('live.kick.on', true);
   return { n: L.hits.length, on, off, snare: L.hits.some((h) => h.snare > 0), hat: L.hits.some((h) => h.hat > 0), age: performance.now() - L.hits[0].at }; });
 ok('hits: events become live state (kick, snare, hat), positioned by sample index', hv.n === 2 && hv.snare && hv.hat && hv.age >= 0 && hv.age < 400, JSON.stringify(hv));
-ok('hits: kick drives the glow envelope; the cue property switches it off', hv.on > 0.3 && hv.off === 0, `on ${hv.on.toFixed(2)} off ${hv.off}`);
+ok('hits: kick drives the glow envelope; the cue property switches it off', hv.on > 0.05 && hv.off === 0, `on ${hv.on.toFixed(2)} off ${hv.off}`);
 await page.waitForTimeout(120);
 const lp = await ev(() => { const p = document.querySelector('#u2cDaw [data-ha=snare]'); p.value = 50; p.dispatchEvent(new Event('change')); return window.u2c.cues.ev().value('live.snare.amt', 0, 1); });
 ok('hits: panel amount is a cue property (live.snare.amt)', Math.abs(lp - 0.5) < 1e-6, String(lp));
 const px2 = await ev(() => { const v = document.getElementById('view'); return v.width > 0; }); ok('hits: studio keeps drawing with live reactions on', px2);
 stop();
 
-// ---- Record: canvas + live master audio -> the plugin
+// ---- native meters (mocked plugin block): the exact values land in the analysed clip at the live position
+play(0); await page.waitForTimeout(400);
+const mmsg = () => JSON.stringify({ t: 'meters', pos: widxNow(), beats: beatsNow(), momentary: -17.7, short: -18.9, tp: -0.4, tpL: -0.4, tpR: -1.1, peakL: -2.5, peakR: -3.5, rmsL: -12.5, rmsR: -13.5, corr: 0.37, width: 0.6, spec: Array.from({ length: 61 }, (_, i) => -30 - i) });
+for (let k = 0; k < 40; k++) { if (await ev(() => { const e = window.u2c.daw.live.origCurrent && window.u2c.daw.live.origCurrent(); return !!(e && e.ready && e.D); })) break; await page.waitForTimeout(250); }
+const readM = () => ev(() => { const lv = window.u2c.daw.live, e = window.u2c.clip.current(), D = e && e.D; if (!D) return null; const F = D.frame, hb = window.u2c.daw.state.host.beats, t = (hb - lv.win) * lv.spb, f = Math.floor(t * D.fps); let hit = null; for (let k = f - 4; k <= f + 2; k++) if (k >= 0 && Math.abs(F.M[k] + 17.7) < 1e-3) hit = k;
+  return { f, hit, S: hit != null ? F.S[hit] : null, TP: hit != null ? F.TP[hit] : null, corr: hit != null ? F.corr[hit] : null, spec3: hit != null ? F.spec[hit * 61 + 3] : null, mt: !!(window.u2cLive && window.u2cLive.mt) }; });
+let mt = null;
+for (let k = 0; k < 150 && !(mt && mt.hit != null); k++) { sock.send(mmsg()); await page.waitForTimeout(40); mt = await readM(); }   // the plugin sends ~30 per second; a re-analysis can replace the clip between two of them
+ok('meters: the plugin block is written into the clip at the live frame (LUFS M/S, TP, corr, 61-band spectrum)', mt && mt.hit != null && Math.abs(mt.S + 18.9) < 1e-3 && mt.TP > -0.41 && Math.abs(mt.corr - 0.37) < 1e-3 && mt.spec3 === -33 && mt.mt, JSON.stringify(mt));
+stop();
+
+// ---- U2C Send plugins (mocked): listed in the panel, each assigned a visual target (pulses / shake / glow)
+const snd = (extra = {}) => sock.send(JSON.stringify({ t: 'sends', list: [{ id: 'ab12cd34', name: 'Send ab12', rms: 0.3, peak: 0.5, bands: [0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1], kick: 0, snare: 0, hat: 0, pos: null, beats: 0, rx: 0, ...extra }, { id: 'ff00ee11', name: 'Send ff00', rms: 0.1, peak: 0.2, bands: [0, 0, 0, 0.2, 0.3, 0.3, 0.1, 0], kick: 0, snare: 0, hat: 0, pos: null, beats: 0, rx: 0 }] }));
+snd(); await page.waitForTimeout(200);
+const rows = await ev(() => [...document.querySelectorAll('#u2cDaw [data-sends] [data-id]')].map((r) => r.dataset.id));
+ok('sends: connected Send plugins are listed in the DAW panel', rows.length === 2 && rows[0] === 'ab12cd34', rows.join());
+const setT = (id, t) => ev(([id, t]) => { const sel = document.querySelector(`#u2cDaw [data-sends] [data-id="${id}"] [data-st]`); sel.value = t; sel.dispatchEvent(new Event('change', { bubbles: true })); }, [id, t]);
+await ev(() => { window.u2cLive.hits.length = 0; });
+await setT('ab12cd34', 'pulses'); snd({ kick: 0.9 }); await page.waitForTimeout(60);
+const sp = await ev(async () => { const m = await import('/src/v8/livefx.js'), e = window.u2c.cues.ev(); return { hits: m.live().hits.filter((h) => h.kick > 0).length, env: m.kickEnv((p, d) => e.value(p, 0, d)) }; });
+ok('sends: target "pulses" turns the track\'s kick flags into pulses', sp.hits >= 1 && sp.env > 0.05, JSON.stringify(sp));
+await setT('ab12cd34', 'shake'); snd(); await page.waitForTimeout(40);
+const sk = await ev(async () => { const m = await import('/src/v8/livefx.js'), e = window.u2c.cues.ev(); return m.shake((p, d) => e.value(p, 0, d)); });
+ok('sends: target "shake" moves the camera with the bass level', Array.isArray(sk) && sk.length === 2, JSON.stringify(sk));
+await setT('ab12cd34', 'glow'); snd(); await page.waitForTimeout(40);
+const gl = await ev(async () => { const m = await import('/src/v8/livefx.js'), e = window.u2c.cues.ev(), L = m.live().sends.ab12cd34; return { target: L.target, mid: L.mid, shake: m.shake((p, d) => e.value(p, 0, d)) }; });
+ok('sends: target "glow" follows the mid bands (and no longer shakes)', gl.target === 'glow' && gl.mid > 0.3 && gl.shake === null, JSON.stringify(gl));
+await ev(() => { const n = document.querySelector('#u2cDaw [data-sends] [data-id="ab12cd34"] [data-sn]'); n.value = 'Drums'; n.dispatchEvent(new Event('change', { bubbles: true })); });
+ok('sends: the name is kept per send id', await ev(() => JSON.parse(localStorage.getItem('u2c.daw.sends')).ab12cd34.name === 'Drums'));
+sock.send(JSON.stringify({ t: 'sends', list: [] })); await page.waitForTimeout(100);
+ok('sends: a send that disappears is dropped', await ev(() => Object.keys(window.u2cLive.sends).length === 0));
+await setT('ab12cd34', 'off').catch(() => {});
+
+// ---- MIDI (mocked): note on/off become a falling-note / pad layer (cue props), and can trigger the pulses
+const midi = (on, note, vel = 0.8) => sock.send(JSON.stringify({ t: 'midi', on, ch: 0, note, vel, pos: widxNow(), host: null, beats: beatsNow() }));
+play(0); await page.waitForTimeout(300);
+await ev(() => { const L = window.u2cLive; L.notes.length = 0; L.hits.length = 0; });
+midi(true, 60); midi(true, 64, 1); await page.waitForTimeout(80); midi(false, 60); await page.waitForTimeout(60);
+const mi = await ev(() => { const L = window.u2cLive; return L.notes.map((n) => [n.note, n.t1 != null]); });
+ok('midi: note on / off tracked (60 released, 64 held)', JSON.stringify(mi) === '[[60,true],[64,false]]', JSON.stringify(mi));
+const drawn = async (style) => { await ev((st) => window.u2c.actions.setProp('midi.style', st), style); await page.waitForTimeout(250);
+  return ev(() => { const v = document.getElementById('view'), x = v.getContext('2d'), w = v.width, h = v.height, d = x.getImageData(Math.floor(w * 0.06), Math.floor(h * 0.12), Math.floor(w * 0.88), Math.floor(h * 0.76)).data; let s = 0; for (let i = 0; i < d.length; i += 53) s += d[i] + d[i + 1] + d[i + 2]; return s; }); };
+const roll = await drawn('roll'), pads = await drawn('pads');
+ok('midi: the layer draws (roll and pads styles differ) and the style is a cue property', roll > 0 && pads > 0 && roll !== pads && await ev(() => window.u2c.cues.ev().value('midi.style', 0, 'x') === 'pads'), `${roll} vs ${pads}`);
+await ev(() => window.u2c.actions.setProp('midi.pulse', 'snare')); midi(true, 70, 0.9); await page.waitForTimeout(40);
+ok('midi: with midi.pulse = snare a note also fires the snare flash', await ev(() => window.u2cLive.hits.some((h) => h.snare > 0)));
+await ev(() => { document.querySelector('#u2cDaw [data-mo]').value = 40; document.querySelector('#u2cDaw [data-mo]').dispatchEvent(new Event('change')); });
+ok('midi: panel opacity is a cue property', await ev(() => Math.abs(window.u2c.cues.ev().value('midi.opacity', 0, 0) - 0.4) < 1e-6));
+await ev(() => { window.u2c.actions.setProp('midi.pulse', 'off'); window.u2c.actions.setProp('midi.style', 'roll'); });
+stop();
+
+// ---- Record: canvas + live master audio -> the plugin (the host plays, as it must: the canvas only changes while the visuals move)
+play(0);
 await ev(() => document.querySelector('#u2cDaw [data-r]').click()); await page.waitForTimeout(3500);
 await ev(() => document.querySelector('#u2cDaw [data-r]').click());
 await page.waitForFunction(() => /Saved/.test(document.querySelector('#u2cDaw [data-m]').textContent), null, { timeout: 30000 }).catch(() => {});

@@ -53,3 +53,43 @@ Limits:
 - Bars are 4 beats in the app; the host time signature is shown but does not change the grid.
 - Plugin audio is whatever reaches the plugin; place it after the instruments you want in the video.
 - Window capture is compiled for macOS/Windows only by CI; it needs a check in a real host (which window is picked, permission flow).
+
+## Live analysis (hits, meters)
+
+All analysis runs on a worker thread (`src/analysis.rs`, DSP in `dsp/`): the audio thread only copies samples into a lock-free ring.
+Events go to every WebSocket client (the web app):
+
+- `{t:'hits', kick, snare, hat, pos, beats}`: drum hits from band-split spectral flux (kick < 150 Hz, snare 150 Hz-4 kHz, hat > 6 kHz,
+  adaptive mean + 1.5 sigma thresholds, per-band refractory time). Strength 0..1 (0 = no hit in that band), `pos` = the onset's sample index
+  in the same space as `transport.widx`, `beats` = its host PPQ.
+- `{t:'meters', ...}` about 30 times a second: momentary / short-term LUFS (BS.1770 K-weighting), true peak (4x oversampled), peak and RMS
+  (300 ms) per channel in dBFS, correlation, width (side/mid) and a 61-band 1/6-octave spectrum (dBFS, a full-scale sine = 0 dB; the web
+  app's own bins). The loudness windows restart when the transport starts. In the web app, with "Master live", these values are written into
+  the clip at the live position, so the meters show the plugin's exact numbers in real time.
+
+`cargo test --release --workspace --exclude xtask` covers the DSP: 1 kHz at -20 dBFS reads -20 LUFS (44.1, 48 and 96 kHz), an inter-sample
+peak (fs/4 sine at 45 degrees) reads 0 dBTP while the sample peak is -3 dB, correlation / width, spectrum calibration, and drum hits found,
+classified and timed (within 12 ms) on a synthetic kit.
+
+## U2C Send (one per track)
+
+A second, light plugin (`send/`, "U2C Send", VST3 + CLAP; no editor) for any track. Per block it computes RMS / peak, 8 band levels and
+drum-hit flags and streams them to the U2C Studio instance as a WebSocket client (`{t:'send', id, name, pos, beats, ...}`, `pos` = host
+sample position). The instance on the master lists the connected sends in its DAW panel (a send that goes quiet for 1.5 s drops off); each
+send gets a name, a colour and a target: `pulses` (its hits act like master hits), `shake` (bass level shakes the camera) or `glow`
+(mid level lights the frame), plus a manual ms offset. The id is stored in the plugin state, so assignments survive reloading the project.
+Put U2C Studio on the master first; sends find it on ports 17871-17886 and reconnect by themselves.
+
+## MIDI in FL Studio
+
+U2C Studio takes MIDI notes (VST3 / CLAP MIDI input) and shows them as a falling-note roll or 4x4 pads (cue properties `midi.*`: layer
+on, style, opacity, x / y / w / h, fall time), and a note can also fire the same pulses (`midi.pulse` = kick, snare or hat).
+Routing in FL Studio:
+
+1. Put U2C Studio on the master as before. In its plugin wrapper (the gear icon, Plugin settings) set **Input port** to e.g. 1
+   (MIDI ports show only for plugins that accept MIDI).
+2. Open the *Channel settings* of the instrument whose notes you want to see, go to the **Output** tab (the MIDI icon / "MIDI" section)
+   and set **Port** to the same number (1). The channel now sends its notes to that port as well as playing them.
+3. Play the pattern: notes arrive with their sample position; notes still held when the transport stops end at the stop.
+
+For one drum kit, route each Channel to the same port (a Channel's MIDI out channel/note stays as written in the piano roll).

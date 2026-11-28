@@ -2,12 +2,17 @@
 // Wire (localhost WebSocket): text {t:"transport", bpm, beats, widx, playing, ts:[n,d], loop:[a,b]|null, rms, peak, sr} (beats = host PPQ
 // of the newest audio sample); client {t:"pull"} -> binary "PCM0" [u32 sr][u32 n][f64 first sample index][f32 L*n][f32 R*n];
 // text {t:"hits", kick, snare, hat (strength 0..1, 0 = none), pos (sample index, same space as transport.widx), beats}: drum hits found by the plugin;
+// text {t:"meters", pos, beats, momentary, short, tp, tpL, tpR, peakL, peakR, rmsL, rmsR (dB), corr, width, spec[61] (dBFS, 1/6 octave)}: ~30 per second,
+// measured natively in the plugin (BS.1770 K-weighting, 4x true peak); with Master live they overwrite the analysed clip's values at the live position;
+// text {t:"sends", list:[{id, name, rms, peak, bands[8], kick, snare, hat, pos (host sample or null), beats, rx}]}: the connected U2C Send plugins (one per DAW track),
+// republished ~30 per second, stale ones dropped after 1.5 s; each is assigned a visual target in the panel (off / pulses / shake / glow);
+// text {t:"midi", on, ch, note, vel (0..1), pos (ring index, like hits), host (host sample position or null), beats}: note on / off from the plugin's MIDI input;
 // client {t:"cap", on, fps, w} -> binary "JPG0"+jpeg frames of the DAW window; client {t:"save_begin", name} + binary chunks + {t:"save_end"}.
 // Clock: while the host PLAYS, the app follows the host PPQ, interpolated every animation frame from the last transport message.
 // While it is STOPPED the app runs its own clock (intro, sphere pick, scrub: exactly as in the web app).
 // "Receive audio from: Master": the live stereo master is written into a bar-aligned window (4 bars), analysed like a file in the
 // worker, and shown by the unchanged film; a looping DAW is exact from the second pass, a linear one trails by the analysis time.
-import { live as liveState, addHit } from '../v8/livefx.js';
+import { live as liveState, addHit, addMidi, releaseNotes, updateSends, SEND_TARGETS } from '../v8/livefx.js';
 const LIVE_BARS = 4;
 const tagOf = (buf) => String.fromCharCode(...new Uint8Array(buf, 0, 4));
 
@@ -109,7 +114,7 @@ export async function initDaw(app) {
     const was = an.playing; st.host = h; anchor(h); ui.update(st);
     if (h.bpm) { if (lv.on) { if (Math.abs(h.bpm - lv.bpm) > 0.05 && !lv.busy) startLive(); }
       else if (trk() && A().setBpm && h.bpm >= 40 && h.bpm <= 250 && Math.abs(h.bpm - trk().bpm) > 0.01 && !app.store.session.exporting) { try { A().setBpm(Math.round(h.bpm * 1000) / 1000); } catch (_) {} } }   // also after a re-analysis replaced the track
-    if (was && !h.playing) release();
+    if (was && !h.playing) { release(); releaseNotes(); }
   }
   // host stopped: hand the clock back, at the position we were at, so the intro / sphere / scrubbing work as in the web app
   let following = false;
@@ -134,6 +139,9 @@ export async function initDaw(app) {
       if (typeof e.data === 'string') { let m; try { m = JSON.parse(e.data); } catch (_) { return; }
         if (m.t === 'transport') onTransport(m);
         else if (m.t === 'hits') onHits(m);
+        else if (m.t === 'meters') onMeters(m);
+        else if (m.t === 'midi') onMidi(m);
+        else if (m.t === 'sends') onSends(m.list || []);
         else if (m.t === 'windows') ui.setWindows(m.list || []);
         else if (m.t === 'cap_status') { st.capMsg = m.msg; if (m.msg !== 'ok') ui.msg('DAW image: ' + m.msg.replace(/^(permission|error): /, '')); }
         else if (m.t === 'saved') { if (saveDone) saveDone(m.path); } }
@@ -146,6 +154,40 @@ export async function initDaw(app) {
     const newest = h ? h.widx + (an.playing ? (now - h.rx) / 1000 * sr : 0) : m.pos, age = Math.max(0, Math.min(500, (newest - m.pos) / sr * 1000));
     liveState().on = !app.store.session.exporting; addHit(m, now - age - st.lat); if (!an.playing) dirty();
   }
+  // ---- native meters: the plugin's exact values are written into the analysed clip at the live position (frame M / S / TP / corr / width / spec,
+  // and the 1 ms level blocks), so every meter view reads real-time values at the playhead; the 4-bar analysis only supplies the history.
+  const wr = { f: -1, b: -1 };
+  function onMeters(m) {
+    liveState().mt = m; liveState().mtAt = performance.now();
+    if (!lv.on || lv.win == null) return;
+    const e = app.clip.current(), D = e && e.D; if (!D || !D.frame) return;   // current() keeps showing the last analysed window while the next one is measured
+    const t = (m.beats - lv.win) * lv.spb; if (!(t >= 0) || t >= winBeats() * lv.spb) return;
+    const F = D.frame, f = Math.min(D.frames - 1, Math.floor(t * D.fps)), f0 = wr.f >= 0 && f - wr.f > 0 && f - wr.f <= 4 ? wr.f + 1 : f;
+    for (let g = f0; g <= f; g++) {
+      F.M[g] = m.momentary; F.S[g] = m.short; F.TP[g] = Math.max(g ? F.TP[g - 1] : -99, m.tp); F.corr[g] = m.corr; F.width[g] = m.width;
+      for (let i = 0; i < 61; i++) { const v = Math.max(-99, Math.min(0, m.spec[i])); F.spec[g * 61 + i] = Math.round(v); F.hold[g * 61 + i] = Math.round(Math.max(v, g ? F.hold[(g - 1) * 61 + i] - 24 / D.fps : v)); } }
+    wr.f = f; const L = D.lv;
+    if (L) { const b1 = Math.min(L.n - 1, Math.floor(t * L.rate)), b0 = wr.b >= 0 && b1 - wr.b > 0 && b1 - wr.b <= 200 ? wr.b + 1 : b1, lin = (d) => Math.pow(10, d / 20);
+      for (let b = b0; b <= b1; b++) { L.pkL[b] = lin(m.peakL); L.pkR[b] = lin(m.peakR); L.msL[b] = lin(m.rmsL) ** 2; L.msR[b] = lin(m.rmsR) ** 2; L.clipL[b] = m.peakL >= -0.01 ? 1 : 0; L.clipR[b] = m.peakR >= -0.01 ? 1 : 0; } wr.b = b1; }
+    if (!an.playing) dirty();
+  }
+  // ---- MIDI notes: placed by sample index like hits; held notes end when the host stops (a note-off after stop still lands)
+  function onMidi(m) {
+    const h = st.host, now = performance.now(), sr = an.sr || 44100;
+    const newest = h ? h.widx + (an.playing ? (now - h.rx) / 1000 * sr : 0) : m.pos, age = Math.max(0, Math.min(500, (newest - m.pos) / sr * 1000)), at = now - age - st.lat;
+    liveState().on = !app.store.session.exporting; addMidi(m, at);
+    if (m.on) { let tg = 'off'; try { tg = app.cues.ev().value('midi.pulse', 0, 'off'); } catch (_) {} if (tg === 'kick' || tg === 'snare' || tg === 'hat') addHit({ [tg]: Math.max(0.5, m.vel) }, at); }
+    if (!an.playing) dirty();
+  }
+  // ---- U2C Send plugins: one entry per DAW track, with a target assigned here (kept per browser profile)
+  let sendCfg = {}; try { sendCfg = JSON.parse(localStorage.getItem('u2c.daw.sends') || '{}') || {}; } catch (_) {}
+  let lastIds = '';
+  function onSends(list) {
+    liveState().on = !app.store.session.exporting; updateSends(list, sendCfg); st.sends = list;
+    const ids = list.map((e) => e.id).sort().join(); if (ids !== lastIds) { lastIds = ids; ui.setSends(list, sendCfg); }
+    ui.sendLevels(list); if (!an.playing) dirty();
+  }
+  ui.onSend = (id, patch) => { sendCfg[id] = { ...(sendCfg[id] || {}), ...patch }; try { localStorage.setItem('u2c.daw.sends', JSON.stringify(sendCfg)); } catch (_) {} if (st.sends) { updateSends(st.sends, sendCfg); ui.sendLevels(st.sends); } dirty(); };
   const send = (m) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
   function onPcm(buf) {
     const dv = new DataView(buf), sr = dv.getUint32(4, true), n = dv.getUint32(8, true), w0 = dv.getFloat64(12, true); if (!n || buf.byteLength < 20 + n * 8) return;
@@ -209,17 +251,20 @@ function mountUi(st) {
   el.innerHTML = '<b data-mode style="letter-spacing:.06em"></b><span data-s>DAW: connecting</span><label title="Follow the DAW transport while it plays"><input type="checkbox" data-f checked> follow</label>' +
     '<button data-l style="cursor:pointer">Master live</button><label title="Show the DAW window on the hero card"><input type="checkbox" data-c> DAW image</label>' +
     '<label>opacity <input type="range" data-o min="0" max="100" value="60" style="width:70px;vertical-align:middle"></label><select data-b><option>normal</option><option>screen</option><option>multiply</option></select><select data-w title="Which window to show" style="max-width:170px"><option value="0">window: DAW (auto)</option></select><button data-wr title="Refresh the window list">↻</button>' +
-    '<span data-hits style="flex-basis:100%">hits: ' + ['kick', 'snare', 'hat'].map((k) => `<label><input type="checkbox" data-hk="${k}" checked> ${k}</label> <input type="range" data-ha="${k}" min="0" max="200" value="100" style="width:52px;vertical-align:middle" title="${k} amount">`).join(' ') + '</span><label title="Shift the visuals against the DAW (ms)">sync <input type="number" data-t value="0" step="10" style="width:52px"></label><button data-r style="cursor:pointer">Record DAW</button><span data-m style="flex-basis:100%;opacity:.8"></span>';
+    '<span data-hits style="flex-basis:100%">hits: ' + ['kick', 'snare', 'hat'].map((k) => `<label><input type="checkbox" data-hk="${k}" checked> ${k}</label> <input type="range" data-ha="${k}" min="0" max="200" value="100" style="width:52px;vertical-align:middle" title="${k} amount">`).join(' ') + '</span><span data-midi style="flex-basis:100%">midi: <label><input type="checkbox" data-mk checked> layer</label> <select data-ms><option>roll</option><option>pads</option></select> <label>opacity <input type="range" data-mo min="0" max="100" value="85" style="width:52px;vertical-align:middle"></label> <label>pulse <select data-mp><option>off</option><option>kick</option><option>snare</option><option>hat</option></select></label></span><span data-sends style="flex-basis:100%;display:none"></span><label title="Shift the visuals against the DAW (ms)">sync <input type="number" data-t value="0" step="10" style="width:52px"></label><button data-r style="cursor:pointer">Record DAW</button><span data-m style="flex-basis:100%;opacity:.8"></span>';
   document.body.appendChild(el);
   const q = (s) => el.querySelector(s);
   const ui = {
-    onProp() {}, onRecord() {}, onFollow() {}, onLive() {}, onCap() {}, onLayer() {}, onWindows() {}, onPickWindow() {}, onLat() {}, onBrowser() {},
+    onProp() {}, onSend() {}, onRecord() {}, onFollow() {}, onLive() {}, onCap() {}, onLayer() {}, onWindows() {}, onPickWindow() {}, onLat() {}, onBrowser() {},
     update(s) { const h = s.host, ts = h && h.ts ? h.ts.join('/') : '4/4', bar = h ? Math.floor(h.beats / 4) + 1 : 0, lp = h && h.loop ? ` loop ${(h.loop[0] / 4 + 1).toFixed(0)}-${(h.loop[1] / 4 + 1).toFixed(0)}` : '';
       q('[data-mode]').textContent = s.live ? 'LIVE' : s.connected ? 'DAW' : 'OFFLINE'; q('[data-mode]').style.color = s.live ? '#ff5d5d' : '#9ad';
       q('[data-s]').textContent = s.connected ? (h ? `${h.playing ? 'play' : 'stop'} ${h.bpm.toFixed(1)} BPM ${ts} bar ${bar}.${(Math.floor(h.beats % 4) + 1)}${lp}` : 'connected') : 'connecting';
       q('[data-r]').textContent = s.rec ? 'Stop + save' : 'Record DAW'; q('[data-l]').disabled = s.live; q('[data-l]').textContent = s.live ? 'Master: on' : 'Master live'; if (big) { big.disabled = s.live; big.textContent = s.live ? 'Receiving: Master' : 'Receive audio from: Master'; } },
     msg(t) { q('[data-m]').textContent = t; if (typeof document !== 'undefined') { const s = document.getElementById('status'); if (s && big) s.textContent = t; } },
     setWindows(list) { const sel = q('[data-w]'), cur = sel.value; sel.innerHTML = '<option value="0">window: DAW (auto)</option>' + list.filter((w) => !w.ours || !/U2C/.test(w.title)).map((w) => `<option value="${w.id}">${String(w.app || '').replace(/</g, '')}${w.title ? ' · ' + String(w.title).replace(/</g, '').slice(0, 40) : ''}</option>`).join(''); sel.value = [...sel.options].some((o) => o.value === cur) ? cur : '0'; },
+    setSends(list, cfg) { const box = q('[data-sends]'); box.style.display = list.length ? '' : 'none'; const esc = (x) => String(x == null ? '' : x).replace(/[<>&"]/g, '');
+      box.innerHTML = 'sends: ' + list.map((e) => { const c = cfg[e.id] || {}; return `<span data-id="${esc(e.id)}" style="display:inline-flex;gap:4px;align-items:center;margin-right:8px"><input type="color" data-sc value="${/^#[0-9a-f]{6}$/i.test(c.color || '') ? c.color : '#9ad9ff'}" style="width:18px;height:18px;padding:0;border:0"><input data-sn value="${esc(c.name || e.name)}" size="9" title="Name this send"><select data-st>${SEND_TARGETS.map((t) => `<option${t === (c.target || 'off') ? ' selected' : ''}>${t}</option>`).join('')}</select><input type="number" data-so value="${+c.off || 0}" step="10" style="width:46px" title="Offset (ms)"><i data-sl style="display:inline-block;width:34px;height:6px;background:#555;vertical-align:middle"><b style="display:block;height:6px;width:0;background:#9ad"></b></i></span>`; }).join(''); },
+    sendLevels(list) { for (const e of list) { const r = q(`[data-sends] [data-id="${String(e.id).replace(/[^a-z0-9]/gi, '')}"] [data-sl] b`); if (r) r.style.width = Math.round(Math.min(1, (e.rms || 0) * 3) * 100) + '%'; } },
     setLayer(op, bl) { q('[data-o]').value = Math.round(op * 100); q('[data-b]').value = bl; q('[data-c]').checked = true; },
   };
   q('[data-w]').addEventListener('change', (e) => ui.onPickWindow(e.target.value));
@@ -229,6 +274,10 @@ function mountUi(st) {
   q('[data-r]').onclick = () => ui.onRecord(); q('[data-f]').onchange = (e) => ui.onFollow(e.target.checked); q('[data-l]').onclick = () => ui.onLive();
   q('[data-c]').onchange = (e) => ui.onCap(e.target.checked); q('[data-o]').oninput = layer(false); q('[data-o]').onchange = layer(true); q('[data-b]').onchange = layer(true);
   for (const k of ['kick', 'snare', 'hat']) { q(`[data-hk=${k}]`).onchange = (e) => ui.onProp(`live.${k}.on`, e.target.checked); q(`[data-ha=${k}]`).onchange = (e) => ui.onProp(`live.${k}.amt`, e.target.value / 100); }
+  q('[data-mk]').onchange = (e) => ui.onProp('midi.on', e.target.checked); q('[data-ms]').onchange = (e) => ui.onProp('midi.style', e.target.value); q('[data-mo]').onchange = (e) => ui.onProp('midi.opacity', e.target.value / 100); q('[data-mp]').onchange = (e) => ui.onProp('midi.pulse', e.target.value);
+  const sendRow = (e) => { const row = e.target.closest('[data-id]'); return row ? row.dataset.id : null; };
+  q('[data-sends]').addEventListener('change', (e) => { const id = sendRow(e); if (!id) return; const t = e.target;
+    if (t.matches('[data-st]')) ui.onSend(id, { target: t.value }); else if (t.matches('[data-sn]')) ui.onSend(id, { name: t.value.slice(0, 24) }); else if (t.matches('[data-so]')) ui.onSend(id, { off: +t.value || 0 }); else if (t.matches('[data-sc]')) ui.onSend(id, { color: t.value }); });
   q('[data-t]').onchange = (e) => ui.onLat(+e.target.value || 0);
   if (big) big.onclick = () => ui.onLive();
   return ui;
