@@ -48,12 +48,13 @@ fn dbv(v: f32) -> f64 {
 /// 61-band 1/6-octave spectrum (dBFS). `pos` is the ring index of the newest sample the block covers.
 pub fn meters_json(sh: &Shared, f: &MeterFrame, pos: u64) -> String {
     let r1 = |v: f32| (v as f64 * 10.0).round() / 10.0;
+    let fl: Vec<serde_json::Value> = (0..2).map(|c| serde_json::json!({"pk": dbv(f.fl[c][0]), "rms": dbv(f.fl[c][1]), "hold": dbv(f.fl[c][2]), "clip": f.clip[c]})).collect();
     serde_json::json!({
         "t": "meters", "pos": pos, "beats": sh.beats_at(pos),
         "momentary": r1(f.momentary), "short": r1(f.short), "tp": r1(f.tp_db()), "tpL": dbv(f.tp_l), "tpR": dbv(f.tp_r),
         "peakL": dbv(f.peak_l), "peakR": dbv(f.peak_r), "rmsL": dbv(f.rms_l), "rmsR": dbv(f.rms_r),
         "corr": (f.corr as f64 * 1000.0).round() / 1000.0, "width": (f.width as f64 * 1000.0).round() / 1000.0,
-        "fl": [0, 1].map(|c| serde_json::json!({"pk": dbv(f.fl[c][0]), "rms": dbv(f.fl[c][1]), "hold": dbv(f.fl[c][2]), "clip": f.clip[c]})).collect::<Vec<_>>(),
+        "fl": fl,
         "spec": f.spec.iter().map(|v| r1(*v)).collect::<Vec<_>>(),
     })
     .to_string()
