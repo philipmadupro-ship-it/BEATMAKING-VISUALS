@@ -182,3 +182,75 @@ fn dump() {
     println!("truth {:?}", truth);
     for h in &hits { println!("{:?} -> {:.1} ms", h, h.pos as f32 / sr * 1000.0); }
 }
+
+#[test]
+fn peak_map_matches_brute_force_max() {
+    for len in [1usize, 5, 16, 17, 100, 241] {
+        let mut m = PeakMap::new(len);
+        let mut hist: Vec<f32> = vec![0.0; len];
+        let mut s = 12345u32;
+        for n in 0..2000 {
+            s = s.wrapping_mul(1664525).wrapping_add(1013904223);
+            let v = ((s >> 8) as f32 / 16777216.0) * if n % 97 < 5 { 4.0 } else { 1.0 };
+            m.input(v);
+            hist.remove(0);
+            hist.push(v);
+            let want = hist.iter().cloned().fold(0.0, f32::max);
+            assert_eq!(m.peak(), want, "len {len} n {n}");
+        }
+    }
+}
+
+#[test]
+fn smooth3_settles_without_overshoot_and_starts_round() {
+    let mut s = Smooth3::new(100.0, 0.99);
+    s.reset(0.0);
+    let y: Vec<f32> = (0..400).map(|_| s.process(1.0)).collect();
+    assert!(y[0] < 0.05, "first {}", y[0]);
+    assert!(y.windows(2).all(|w| w[1] >= w[0] - 1e-6), "monotone");
+    assert!(y.iter().all(|v| *v <= 1.02), "overshoot");
+    assert!((y[399] - 1.0).abs() < 0.02, "settled {}", y[399]);
+    let mut c = Smooth3::new(100.0, 0.99);
+    c.reset(0.5);
+    for _ in 0..50 {
+        assert!((c.process(0.5) - 0.5).abs() < 1e-6);
+    }
+}
+
+#[test]
+fn fl_meter_attacks_at_once_falls_smoothly_holds_and_latches_clip() {
+    let mut m = FlMeter::new(45);
+    m.frame(0.0, 0.0);
+    m.frame(0.8, 0.3);
+    assert!((m.peak - 0.8).abs() < 1e-6, "instant attack {}", m.peak);
+    assert!(m.body <= m.peak && m.body > 0.0);
+    let mut prev = m.peak;
+    for _ in 0..30 {
+        m.frame(0.0, 0.0);
+        assert!(m.peak <= prev + 1e-6 && m.peak >= 0.0, "monotone fall");
+        prev = m.peak;
+    }
+    assert!(m.peak < 0.8 && m.peak > 0.0, "smooth tail, not a cliff: {}", m.peak);
+    assert!((m.tick - 0.8).abs() < 1e-6, "tick still held: {}", m.tick);
+    for _ in 0..60 {
+        m.frame(0.0, 0.0);
+    }
+    assert!(m.tick < 0.1, "tick released after the hold: {}", m.tick);
+    assert!(!m.clip);
+    m.frame(1.2, 0.5);
+    assert!(m.clip && m.tick >= 1.2);
+}
+
+#[test]
+fn meters_report_fl_levels_for_a_loud_sine() {
+    let sr = 48000.0;
+    let mut m = Meters::new(sr);
+    let x = sine(sr, 220.0, 1.2, 0.5, 0.0);
+    let mut f = MeterFrame::default();
+    for c in x.chunks(1600) {
+        m.push(c, c);
+        f = m.frame();
+    }
+    assert!(f.clip[0] && f.clip[1]);
+    assert!(f.fl[0][0] > 1.0 && f.fl[0][1] > 0.5 && f.fl[0][1] <= f.fl[0][0]);
+}

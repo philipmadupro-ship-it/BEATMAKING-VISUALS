@@ -281,6 +281,9 @@ pub struct MeterFrame {
     pub corr: f32,
     pub width: f32,
     pub spec: Vec<f32>,
+    /// FL-style display levels (linear): smoothed peak, RMS body, held peak tick, clip latch, per channel.
+    pub fl: [[f32; 3]; 2],
+    pub clip: [bool; 2],
 }
 
 #[derive(Clone, Copy, Default)]
@@ -309,6 +312,7 @@ pub struct Meters {
     mono: Vec<f32>,
     fft: Fft,
     scratch: (Vec<f32>, Vec<f32>, Vec<f32>),
+    fl: [FlMeter; 2],
 }
 
 pub const LU_FLOOR: f32 = -120.0;
@@ -337,6 +341,7 @@ impl Meters {
             mono: Vec::with_capacity(SPEC_N * 3),
             fft: Fft::new(SPEC_N),
             scratch: (Vec::new(), Vec::new(), Vec::new()),
+            fl: [FlMeter::new(45), FlMeter::new(45)],
         }
     }
     pub fn sample_rate(&self) -> f32 {
@@ -423,6 +428,10 @@ impl Meters {
         let corr = if e < 1e-10 || c2.ll.min(c2.rr) < e * 1e-6 { 0.0 } else { (c2.lr / (c2.ll * c2.rr).sqrt()).clamp(-1.0, 1.0) as f32 };
         let (mid, side) = (c2.mm.sqrt(), c2.ss.sqrt());
         let width = if side < 1e-9 { 0.0 } else { (side / mid.max(side * 0.25)).min(4.0) as f32 }; // side/mid RMS ratio, as the app (capped at 4)
+        self.fl[0].frame(self.peak[0], r3.ll.sqrt() as f32);
+        self.fl[1].frame(self.peak[1], r3.rr.sqrt() as f32);
+        let fl = [[self.fl[0].peak, self.fl[0].body, self.fl[0].tick], [self.fl[1].peak, self.fl[1].body, self.fl[1].tick]];
+        let clip = [self.fl[0].clip, self.fl[1].clip];
         let f = MeterFrame {
             momentary: lk(m.kl + m.kr),
             short: lk(s.kl + s.kr),
@@ -435,6 +444,8 @@ impl Meters {
             corr,
             width,
             spec: self.spectrum(),
+            fl,
+            clip,
         };
         self.peak = [0.0; 2];
         self.tp = [0.0; 2];
@@ -469,6 +480,113 @@ impl Meters {
 impl MeterFrame {
     pub fn tp_db(&self) -> f32 {
         db(self.tp_l.max(self.tp_r))
+    }
+}
+
+
+// ------------------------------------------------------------------------------------------------ lookahead peak map + smoothing
+/// Running maximum over the last `len` values in O(len / 16) per query: a ring of values plus one maximum per 16-value block
+/// (the "peak map"), so a lookahead limiter or a peak-hold does not rescan the whole window for every sample.
+pub struct PeakMap {
+    vals: Vec<f32>,
+    blocks: Vec<f32>,
+    t: usize,
+}
+const PM_SHIFT: usize = 4;
+const PM_BLOCK: usize = 1 << PM_SHIFT;
+impl PeakMap {
+    pub fn new(len: usize) -> Self {
+        let len = len.max(1);
+        Self { vals: vec![0.0; len], blocks: vec![0.0; (len + PM_BLOCK - 1) >> PM_SHIFT], t: 0 }
+    }
+    pub fn len(&self) -> usize {
+        self.vals.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        false
+    }
+    pub fn input(&mut self, v: f32) {
+        self.t += 1;
+        if self.t >= self.vals.len() {
+            self.t = 0;
+        }
+        self.vals[self.t] = v;
+        let b = self.t >> PM_SHIFT;
+        if self.t & (PM_BLOCK - 1) == 0 || v > self.blocks[b] {
+            self.blocks[b] = v; // a new block starts from this value; inside a block the map only grows
+        }
+    }
+    /// Maximum of the last `len` inputs.
+    pub fn peak(&self) -> f32 {
+        let mut m = self.blocks.iter().fold(0.0f32, |a, &b| a.max(b));
+        // the active block was restarted when it began; the older values still in the window sit after the write position in that block
+        let (a, z) = (self.t + 1, ((self.t | (PM_BLOCK - 1)) + 1).min(self.vals.len()));
+        for &v in &self.vals[a.min(z)..z] {
+            m = m.max(v);
+        }
+        m
+    }
+}
+
+/// Three cascaded one-pole filters with matched gains (Olli Niemitalo's "lowpass filter for parameter edge filtering"): a step
+/// settles in about `scale` samples with a rounded start and no overshoot to speak of. `smoothness` (0..1) shapes the poles.
+pub struct Smooth3 {
+    mem: [f64; 3],
+    coef: [f64; 3],
+    gain: [f64; 3],
+    base: f64,
+}
+impl Smooth3 {
+    pub fn new(scale: f32, smoothness: f32) -> Self {
+        let a = 1.0 - 4.8 / (scale as f64).max(10.0);
+        let b = smoothness as f64;
+        let (la, lb) = (a.ln(), b.ln());
+        let lab = la + lb;
+        let lab2 = la + 2.0 * lb;
+        let master = 1.0 / (-1.0 / lab2 + 2.0 / lab - 1.0 / la);
+        let g1 = master * (lab2 * (la - lab) / ((lab2 - lab) * lab) - la / lab);
+        let g2 = master * (-(la - lab) / (lab2 - lab));
+        Self { mem: [0.0; 3], coef: [a, a * b, a * b * b], gain: [master, g1, g2], base: 0.0 }
+    }
+    /// Start from `v` with the filter at rest.
+    pub fn reset(&mut self, v: f32) {
+        self.base = v as f64;
+        self.mem = [0.0; 3];
+    }
+    pub fn process(&mut self, v: f32) -> f32 {
+        let d = v as f64 - self.base;
+        let mut y = self.base;
+        for i in 0..3 {
+            self.mem[i] = self.coef[i] * self.mem[i] + d;
+            y += self.gain[i] * self.mem[i];
+        }
+        y as f32
+    }
+}
+
+/// FL Studio mixer-style level reading of one channel, once per meter frame: instant attack, a smooth fall, a 3-pole smoothed RMS body,
+/// a held peak tick (peak map over ~1.5 s) and a clip latch at 0 dBFS. Values are linear (1.0 = 0 dBFS).
+pub struct FlMeter {
+    rms: Smooth3,
+    hold: PeakMap,
+    pub peak: f32,
+    pub body: f32,
+    pub tick: f32,
+    pub clip: bool,
+}
+impl FlMeter {
+    pub fn new(frames_hold: usize) -> Self {
+        let mut rms = Smooth3::new(10.0, 0.9);
+        rms.reset(0.0);
+        Self { rms, hold: PeakMap::new(frames_hold), peak: 0.0, body: 0.0, tick: 0.0, clip: false }
+    }
+    /// `pk`: peak since the last call, `rms`: the running RMS.
+    pub fn frame(&mut self, pk: f32, rms: f32) {
+        self.peak = pk.max(self.peak * 0.92); // attack is immediate, the fall is a smooth exponential tail (about 25 dB/s at 30 frames/s)
+        self.body = rms.max(self.rms.process(rms)).min(self.peak);
+        self.hold.input(pk);
+        self.tick = self.hold.peak().max(self.peak);
+        self.clip = self.tick >= 0.9999;
     }
 }
 
