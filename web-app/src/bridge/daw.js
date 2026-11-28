@@ -88,14 +88,16 @@ export async function initDaw(app) {
   }
 
   // ---- key from what the session plays (DAWs don't send it)
-  const KEY_S = 20; let kb = null, kn = 0, ksr = 0, keyBusy = false;
+  const KEY_S = 24; let kb = null, kn = 0, ksr = 0, keyBusy = false;   // at least 20 s of the session's PCM, then a Krumhansl profile match (minor preferred when close)
+  const keyLocked = () => { try { return !!localStorage.getItem('u2c.daw.keylock'); } catch (_) { return false; } };
   function keyFeed(L, R, sr) {
-    if (keyBusy || !an.playing) return; if (!kb || sr !== ksr) { ksr = sr; kb = new Float32Array(sr * KEY_S); kn = 0; }
+    if (keyBusy || !an.playing || keyLocked()) return; if (!kb || sr !== ksr) { ksr = sr; kb = new Float32Array(sr * KEY_S); kn = 0; }
     const m = Math.min(L.length, kb.length - kn); for (let i = 0; i < m; i++) kb[kn + i] = 0.5 * (L[i] + R[i]); kn += m;
-    if (kn >= kb.length) { keyBusy = true; setTimeout(async () => { try { const { analyzeMono } = await import('../analysis/dsp.js'); const a = analyzeMono(kb, ksr, KEY_S); const k = a && a.key; const sel = document.getElementById('sKey');
-      if (k && sel && sel.value !== k) { sel.value = k; sel.dispatchEvent(new Event('change', { bubbles: true })); ui.msg('Key from the session: ' + k); } } catch (_) {} kn = 0; keyBusy = false; }, 0); }
+    if (kn >= kb.length) { keyBusy = true; setTimeout(async () => { try { const { analyzeMono } = await import('../analysis/dsp.js'); const a = analyzeMono(kb, ksr, KEY_S); const ki = a && a.keyInfo, k = ki && ki.key; const sel = document.getElementById('sKey');
+      if (k && !keyLocked()) { st.key = ki; ui.setKey(ki); if (sel && sel.value !== k) { sel.value = k; sel.dispatchEvent(new Event('change', { bubbles: true })); } ui.msg(`Key from the session: ${k} (${Math.round(ki.conf * 100)}% sure; next best ${ki.alts[0]}). Wrong? Pick it in the key list.`); } } catch (_) {} kn = 0; keyBusy = false; }, 0); }
   }
-
+  ui.onKey = (k) => { try { if (k) localStorage.setItem('u2c.daw.keylock', k); else localStorage.removeItem('u2c.daw.keylock'); } catch (_) {} const sel = document.getElementById('sKey'); if (k && sel) { sel.value = k; sel.dispatchEvent(new Event('change', { bubbles: true })); } ui.msg(k ? 'Key set to ' + k + ' (kept; choose "auto" to detect again).' : 'Key: detecting from the session again.'); };
+  { let lk = ''; try { lk = localStorage.getItem('u2c.daw.keylock') || ''; } catch (_) {} if (lk) ui.setKey({ key: lk, conf: 1, locked: true }); }
   // ---- the DAW window as a layer (cue props video.on / video.opacity / video.blend / video.target, so it is keyable and saved in presets)
   let capCv = null, capBusy = false, capFirst = true;
   function capFrame(buf) {
@@ -105,8 +107,10 @@ export async function initDaw(app) {
       capCv.getContext('2d').drawImage(bm, 0, 0); bm.close(); globalThis.u2cVideoLayer = { src: capCv, w: capCv.width, h: capCv.height }; if (!an.playing) dirty();
     }).catch(() => {}).finally(() => { capBusy = false; });
   }
+  // the DAW image is only focal when it is the background; as a card or corner it needs much less: 10 fps at 640 px
+  const capParams = () => { let tg = 'hero'; try { tg = app.cues.ev().value('video.target', 0, 'hero'); } catch (_) {} return tg === 'full' ? { fps: 20, w: 960 } : { fps: 10, w: 640 }; };
   function setCap(on) {
-    st.cap = on; send({ t: 'cap', on, fps: 20, w: 960 });
+    st.cap = on; send({ t: 'cap', on, ...capParams() });
     if (on) { if (capFirst) { capFirst = false; const S = A(); S.setProp('video.opacity', 0.6); S.setProp('video.blend', 'normal'); S.setProp('video.target', 'hero'); ui.setLayer(0.6, 'normal'); }
       A().setProp('video.on', true); ui.msg('Showing the DAW window on the hero card.'); }
     else { A().setProp('video.on', false); globalThis.u2cVideoLayer = null; ui.msg('DAW image off.'); }
@@ -125,25 +129,38 @@ export async function initDaw(app) {
   // host stopped: hand the clock back, at the position we were at, so the intro / sphere / scrubbing work as in the web app
   let following = false;
   function release() { if (!following) return; following = false; const t = clk().time(); clk().setManual(null); clk().seek(t); dirty(); }
+  let lastDirty = 0;
+  const dbg = { on: false, n: 0, ms: 0, last: 0, el: null };
+  try { dbg.on = /[?&]debug\b/.test(location.search) || localStorage.getItem('u2c.debug') === '1'; } catch (_) {}
   function tick(now) {
-    requestAnimationFrame(tick);
+    requestAnimationFrame(tick); if (dbg.on) performance.mark('u2c-tick-a');
+    try { tick0(now); } finally { if (dbg.on) { performance.mark('u2c-tick-b'); const me = performance.measure('u2c-tick', 'u2c-tick-a', 'u2c-tick-b'); dbg.ms += me.duration; dbg.n++; performance.clearMarks(); performance.clearMeasures();
+      if (now - dbg.last > 500) { if (!dbg.el) { dbg.el = document.createElement('div'); dbg.el.style.cssText = 'position:fixed;left:6px;top:4px;z-index:100001;font:11px ui-monospace,monospace;color:#9f9;background:#000a;padding:2px 6px;border-radius:4px;pointer-events:none'; document.body.appendChild(dbg.el); }
+        dbg.el.textContent = `${(dbg.n * 1000 / Math.max(1, now - dbg.last)).toFixed(0)} fps · tick ${(dbg.ms / Math.max(1, dbg.n)).toFixed(2)} ms`; dbg.last = now; dbg.n = 0; dbg.ms = 0; } } }
+  }
+  function tick0(now) {
     if (pending) { const h = pending; pending = null; apply(h); }
+    if (pendingM) { const m = pendingM; pendingM = null; applyMeters(m); }
     if (app.store.session.exporting) { liveState().on = false; return; }
     if (st.follow && an.playing && trk()) {
       const b = beatsAt(now) + st.lat / 1000 * an.bps;
-      clk().setManual(Math.max(0, lv.on ? liveT(b) : beatsToT(b))); following = true; dirty();
+      clk().setManual(Math.max(0, lv.on ? liveT(b) : beatsToT(b))); following = true; if (!st.reader || now - lastDirty > 100) { lastDirty = now; dirty(); }   // Reader: the readings refresh at 10 fps, nothing animates
     } else release();
     liveRebuild(now);
     if (pv.blanked && an.playing) pv.blank(false);
   }
   requestAnimationFrame(tick);
   const pv = createPreview(app);
+  ui.active = () => an.playing || pv.open || !!st.rec;
   // a new track / re-analysis replaces the cue sheet and drops the layer's props: while the DAW image is on, put them back from the panel's values
+  { let busyP = false; app.cues.subscribe(() => { if (!st.plan || busyP) return; let cur; try { cur = app.cues.ev().value('intro.on', 0, true); } catch (_) { return; }   // Reader / Animated survive a re-analysis
+    if (cur !== st.plan.props['intro.on']) { busyP = true; try { applyPlan(st.plan.cfg || { presentation: st.plan.pres, camera: st.plan.props['camera.dip'] !== 0, follow: st.plan.follow, start: 'none' }); } finally { busyP = false; } } }); }
   { let busy = false; app.cues.subscribe(() => { if (!st.cap || busy) return; let on = true; try { on = app.cues.ev().value('video.on', 0, false) === true; } catch (_) {} if (on) return;
     busy = true; try { const o = ui.layerVals(); A().setProp('video.on', true); A().setProp('video.opacity', o.op); A().setProp('video.blend', o.bl); A().setProp('video.target', o.tg); } catch (_) {} finally { busy = false; } }); }
   function connect() {
     ws = new WebSocket(url); ws.binaryType = 'arraybuffer';
-    ws.onopen = () => { st.connected = true; retry = 0; ui.update(st); send({ t: 'recordings' }); if (!st.layerAsked) { st.layerAsked = true; let seen = false; try { seen = localStorage.getItem('u2c.daw.layer') === '1'; localStorage.setItem('u2c.daw.layer', '1'); } catch (_) {} if (!seen) { let stable = 0; const iv = setInterval(() => { if (st.cap) clearInterval(iv); else if (trk() && app.cues && st.host && (!st.host.bpm || Math.abs(trk().bpm - st.host.bpm) < 0.05) && ++stable >= 5) { clearInterval(iv); try { setCap(true); ui.setLayerShown(true); } catch (_) {} } else if (!trk() || !st.host) stable = 0; }, 400); } } if (st.cap) send({ t: 'cap', on: true, fps: 20, w: 960 }); send({ t: 'windows' }); try { const w = +localStorage.getItem('u2c.daw.win'); if (w) send({ t: 'pick_window', id: w }); } catch (_) {} };
+    ws.onopen = () => { st.connected = true; retry = 0; ui.update(st); send({ t: 'recordings' }); if (!st.layerAsked) { st.layerAsked = true; let seen = false; try { seen = localStorage.getItem('u2c.daw.layer') === '1'; localStorage.setItem('u2c.daw.layer', '1'); } catch (_) {} const plug = !!document.querySelector('meta[name=u2c-daw-ws]');
+      if (!seen) { let stable = 0; const iv = setInterval(() => { if (st.cap) clearInterval(iv); else if (trk() && app.cues && st.host && (!st.host.bpm || Math.abs(trk().bpm - st.host.bpm) < 0.05) && ++stable >= 5) { clearInterval(iv); if (plug) { if (!st.carded) applyPlan({ presentation: 'reader', camera: false, follow: true, start: 'none' }); } else { try { setCap(true); ui.setLayerShown(true); } catch (_) {} } } else if (!trk() || !st.host) stable = 0; }, 400); } } if (st.cap) send({ t: 'cap', on: true, ...capParams() }); send({ t: 'windows' }); try { const w = +localStorage.getItem('u2c.daw.win'); if (w) send({ t: 'pick_window', id: w }); } catch (_) {} };
     ws.onclose = () => { st.connected = false; ui.update(st); release(); setTimeout(connect, Math.min(5000, 500 * ++retry)); };
     ws.onerror = () => { try { ws.close(); } catch (_) {} };
     ws.onmessage = (e) => {
@@ -169,9 +186,12 @@ export async function initDaw(app) {
   // ---- native meters: the plugin's exact values are written into the analysed clip at the live position (frame M / S / TP / corr / width / spec,
   // and the 1 ms level blocks), so every meter view reads real-time values at the playhead; the 4-bar analysis only supplies the history.
   const wr = { f: -1, b: -1 };
-  function onMeters(m) {
+  const specShown = () => { try { return app.cues.ev().value('win.spectrum.visible', app.cuetl ? app.cuetl.state.playhead : 0, true) !== false; } catch (_) { return true; } };
+  let pendingM = null;   // the newest meters message, applied once per animation frame (not per message)
+  function onMeters(m) { pendingM = m; }
+  function applyMeters(m) {
     liveState().mt = m; liveState().mtAt = performance.now();
-    if (REF.cur && m.spec) { refUpdate(OCT6, m.spec); ui.refLevels(); }
+    if (REF.cur && m.spec && specShown()) { refUpdate(OCT6, m.spec); ui.refLevels(); }
     ui.flMeter(m.fl);
     if (!lv.on || lv.win == null) return;
     const e = app.clip.current(), D = e && e.D; if (!D || !D.frame) return;   // current() keeps showing the last analysed window while the next one is measured
@@ -231,7 +251,7 @@ export async function initDaw(app) {
     const mr = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: spec.mbps * 1e6, audioBitsPerSecond: 256e3 } : { videoBitsPerSecond: spec.mbps * 1e6 }), chunks = [];
     mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     mr.onstop = async () => {
-      ac.close(); off.stop(); const fin = st.rec ? st.rec.fps : 0; st.rec = null; ui.update(st);
+      document.body.classList.remove('u2c-clean'); ac.close(); off.stop(); const fin = st.rec ? st.rec.fps : 0; st.rec = null; ui.update(st);
       const type = mr.mimeType || 'video/webm', blob = new Blob(chunks, { type }), ext = /mp4/.test(type) ? 'mp4' : 'webm', name = `u2c-daw-${spec.W}x${spec.H}-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`;
       if (ws && ws.readyState === 1) {   // the plugin writes the file (a webview cannot download): ~/Movies/U2C Studio
         send({ t: 'save_begin', name }); const CH = 1 << 20; for (let i = 0; i < blob.size; i += CH) ws.send(await blob.slice(i, i + CH).arrayBuffer());
@@ -239,7 +259,7 @@ export async function initDaw(app) {
         if (p) { ui.msg(`Saved ${spec.W}x${spec.H} ${fin ? fin.toFixed(0) + ' fps ' : ''}${p}`); ui.setRecs(st.recs || [], name); return; } }
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); ui.msg('Saved ' + name);
     };
-    st.rec = { mr, onPcm: onPcm2, spec, fps: 0 }; mr.start(1000); ui.update(st); ui.msg(`Recording ${spec.W}x${spec.H} at ${spec.fps} fps with the master audio. Press play in the DAW.`);
+    document.body.classList.add('u2c-clean'); st.rec = { mr, onPcm: onPcm2, spec, fps: 0 }; mr.start(1000); ui.update(st); ui.msg(`Recording ${spec.W}x${spec.H} at ${spec.fps} fps with the master audio. Press play in the DAW.`);
   }
   const stopRecord = () => { if (st.rec && st.rec.mr.state !== 'inactive') st.rec.mr.stop(); };
 
@@ -250,7 +270,7 @@ export async function initDaw(app) {
   ui.onWindows = () => send({ t: 'windows' });
   ui.onPickWindow = (id) => { send({ t: 'pick_window', id: +id || 0 }); try { localStorage.setItem('u2c.daw.win', String(id)); } catch (_) {} };
   ui.onLayer = (op, bl, commit) => { A().setProp('video.opacity', op, !commit); A().setProp('video.blend', bl, !commit); dirty(); };
-  ui.onProp = (p, v) => { A().setProp(p, v); dirty(); };
+  ui.onProp = (p, v) => { A().setProp(p, v); if (p === 'video.target' && st.cap) send({ t: 'cap', on: true, ...capParams() }); dirty(); };
   ui.onLat = (v) => { st.lat = v; };
   ui.onRefFile = async (file) => { try { const list = await importReferences(await file.text()); ui.renderRefs(); ui.msg(`Reference: ${list.length} genres imported (kept in this browser only).`); } catch (e) { ui.msg('Reference: ' + (e && e.message || e)); } };
   ui.onRefAdd = (name) => { addShow(name); saveRefs(); ui.renderRefs(); dirty(); };
@@ -259,13 +279,16 @@ export async function initDaw(app) {
   initReferences().then(() => ui.renderRefs()); window.addEventListener('u2c-refs', () => { ui.renderRefs(); ui.msg('Reference added from your audio.'); dirty(); });
   function applyPlan(c) {
     if (!c) return; try { localStorage.setItem('u2c.live.setup', JSON.stringify(c)); } catch (_) {}
-    const plan = planFor(c); for (const [k, v] of Object.entries(plan.props)) { try { A().setProp(k, v); } catch (_) {} }
-    st.follow = plan.follow; ui.setFollow(plan.follow); if (plan.pres === 'daw') { try { setCap(true); ui.setLayerShown(true); } catch (_) {} } dirty();
-    pv.blank(plan.blank && !an.playing); if (plan.preview) pv.start();
+    const plan = planFor(c); st.reader = plan.reader; st.plan = plan; st.carded = true;
+    if (plan.reader) { try { app.cues.edit((sh) => { sh.tracks = sh.tracks.filter((t) => t.path !== 'camera.shot'); }, 'reader: camera still'); } catch (_) {} }   // no camera moves in Reader
+    for (const [k, v] of Object.entries(plan.props)) { try { A().setProp(k, v); } catch (_) {} }
+    st.follow = plan.follow; ui.setFollow(plan.follow); if (plan.pres === 'daw') { try { setCap(true); ui.setLayerShown(true); } catch (_) {} } else if (plan.reader && st.cap) { try { setCap(false); ui.setLayerShown(false); } catch (_) {} } dirty();
+    pv.blank(plan.blank && !an.playing && !plan.reader); if (plan.preview) pv.start();
   }
   ui.onLayerPreview = () => { if (app.layerPreview) app.layerPreview.toggle(); };
   ui.onPreview = () => { if (!pv.start()) ui.msg('Load a beat first (Receive audio from: Master).'); };
-  ui.onLiveSetup = () => { let saved = {}; try { saved = JSON.parse(localStorage.getItem('u2c.live.setup') || '{}') || {}; } catch (_) {} showCard(app, applyPlan, saved); };
+  ui.onLiveSetup = () => { let saved = {}; try { saved = JSON.parse(localStorage.getItem('u2c.live.setup') || '{}') || {}; } catch (_) {} showCard(app, (c) => applyPlan(c || { presentation: 'reader', camera: false, follow: true, start: 'preview-none' }), saved); };
+  { let sv = null; try { sv = JSON.parse(localStorage.getItem('u2c.live.setup') || 'null'); } catch (_) {} st.reader = !!sv && sv.presentation === 'reader'; }
   { let seen = true; try { seen = localStorage.getItem('u2c.live.setup') != null; } catch (_) {} if (!seen && document.querySelector('meta[name=u2c-daw-ws]')) setTimeout(() => ui.onLiveSetup(), 600); }
   ui.onNudge = (d) => { st.lat += d; ui.setLat(st.lat); };
   ui.onReveal = (name) => send({ t: 'reveal', name });
@@ -282,9 +305,9 @@ function mountUi(st) {
   if (lab) { big = document.createElement('button'); big.className = 'btn primary'; big.id = 'liveBtn'; big.textContent = 'Receive audio from: Master'; lab.after(big); lab.hidden = true; if (hint) hint.textContent = 'U2C Studio sits on your master: press play in the DAW and every visual follows it live.'; }
   const el = document.createElement('div'); el.id = 'u2cDaw';
   el.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:99999;font:12px/1.3 ui-monospace,monospace;background:#111d;color:#eee;border:1px solid #555;border-radius:8px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;max-width:min(560px,92vw);backdrop-filter:blur(6px)';
-  el.innerHTML = '<style>#u2cDaw{font-size:13px!important;max-width:min(720px,94vw)!important;max-height:78vh;overflow:auto}#u2cDaw select,#u2cDaw input[type=number],#u2cDaw input:not([type]){background:#262626;color:#eee;border:1px solid #666;border-radius:4px;padding:3px 5px;font:inherit}#u2cDaw button{background:#2c2c2c;color:#eee;border:1px solid #777;border-radius:5px;padding:4px 10px;font:inherit}#u2cDaw button:hover{background:#3a3a3a}#u2cDaw .g{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;border-top:1px solid #444;padding-top:6px}#u2cDaw .g>h4{flex-basis:100%;margin:0;font:600 11px/1 ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;opacity:.65}</style>' +
-    '<div class="g" style="border:0;padding:0"><b data-mode style="letter-spacing:.06em"></b><span data-s>DAW: connecting</span><button data-lp title="Layer preview: a small panel with each layer on its own">Layers</button><button data-pv title="Play the current setup, intro included, without the DAW (click or Esc to stop)">Preview</button><button data-lc title="Presentation, motion and start">Live setup</button></div>' +
-    '<div class="g"><h4>Source</h4><label title="Follow the DAW transport while it plays"><input type="checkbox" data-f checked> follow</label><button data-l>Master live</button><canvas data-fl width="150" height="22" title="Master peak / RMS / held peak (FL mixer style)" style="width:150px;height:22px"></canvas>' +
+  el.innerHTML = '<style>#u2cDaw{font-size:13px!important;max-width:min(720px,94vw)!important;max-height:78vh;overflow:auto}#u2cDaw select,#u2cDaw input[type=number],#u2cDaw input:not([type]){background:#262626;color:#eee;border:1px solid #666;border-radius:4px;padding:3px 5px;font:inherit}#u2cDaw button{background:#2c2c2c;color:#eee;border:1px solid #777;border-radius:5px;padding:4px 10px;font:inherit}#u2cDaw button:hover{background:#3a3a3a}#u2cDaw .g{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;border-top:1px solid #444;padding-top:6px}#u2cDaw.hid{opacity:0;pointer-events:none}#u2cDaw{transition:opacity .25s}#u2cDaw.pill{max-width:none!important;padding:4px 8px!important}#u2cDaw.pill>.g:not(.top),#u2cDaw.pill>span[data-m],#u2cDaw.pill .top>:not([data-chev]):not([data-mode]){display:none!important}.u2c-clean #u2cMpc,.u2c-clean #u2cLayerPreview{display:none!important}#u2cDaw .g>h4{flex-basis:100%;margin:0;font:600 11px/1 ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;opacity:.65}</style>' +
+    '<div class="g top" style="border:0;padding:0"><button data-chev title="Collapse to a pill (H hides the panel)">▾</button><b data-mode style="letter-spacing:.06em"></b><span data-s>DAW: connecting</span><button data-lp title="Layer preview: a small panel with each layer on its own">Layers</button><button data-pv title="Play the current setup, intro included, without the DAW (click or Esc to stop)">Preview</button><button data-lc title="Presentation, motion and start">Live setup</button></div>' +
+    '<div class="g"><h4>Source</h4><label title="Follow the DAW transport while it plays"><input type="checkbox" data-f checked> follow</label><button data-l>Master live</button><label title="The key shown on screen. Auto detects it from the session; pick one to keep it.">key <select data-key><option value="">auto</option>'+['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'].flatMap((k) => [k + ' maj', k + ' min']).map((k) => `<option>${k}</option>`).join('')+'</select> <span data-kc style="opacity:.7"></span></label><canvas data-fl width="150" height="22" title="Master peak / RMS / held peak (FL mixer style)" style="width:150px;height:22px"></canvas>' +
     '<span data-sends style="flex-basis:100%;display:none"></span></div>' +
     '<div class="g"><h4>Picture</h4><label title="Show the DAW window as a layer (also + Layer, DAW window)"><input type="checkbox" data-c> DAW image</label><select data-vt title="Where the DAW window goes"><option value="hero">hero card</option><option value="full">full background</option><option value="pip">corner picture</option></select>' +
     '<label>opacity <input type="range" data-o min="0" max="100" value="60" style="width:80px;vertical-align:middle"></label><select data-b><option>normal</option><option>screen</option><option>multiply</option></select><select data-w title="Which window to show" style="max-width:180px"><option value="0">window: DAW (auto)</option></select><button data-wr title="Refresh the window list">↻</button>' +
@@ -296,27 +319,30 @@ function mountUi(st) {
     '<span data-m style="flex-basis:100%;opacity:.85"></span>';
   document.body.appendChild(el);
   const q = (s) => el.querySelector(s);
+  const put = (n, t) => { if (n._t !== t) { n._t = t; n.textContent = t; } };   // DOM text only when the value changed
+  const every = (ms) => { let last = 0; return () => { const n = performance.now(); if (n - last < ms) return false; last = n; return true; }; }, tFl = every(100), tRef = every(150), tSend = every(150);
   const ui = {
-    onProp() {}, onLayerPreview() {}, onPreview() {}, onLiveSetup() {}, onNudge() {}, onReveal() {}, onRq() {}, onSend() {}, onRefFile() {}, onRefAdd() {}, onRefRemove() {}, onRefColor() {}, onRecord() {}, onFollow() {}, onLive() {}, onCap() {}, onLayer() {}, onWindows() {}, onPickWindow() {}, onLat() {}, onBrowser() {},
+    onProp() {}, onKey() {}, active() { return false; }, onLayerPreview() {}, onPreview() {}, onLiveSetup() {}, onNudge() {}, onReveal() {}, onRq() {}, onSend() {}, onRefFile() {}, onRefAdd() {}, onRefRemove() {}, onRefColor() {}, onRecord() {}, onFollow() {}, onLive() {}, onCap() {}, onLayer() {}, onWindows() {}, onPickWindow() {}, onLat() {}, onBrowser() {},
     update(s) { const h = s.host, ts = h && h.ts ? h.ts.join('/') : '4/4', bar = h ? Math.floor(h.beats / 4) + 1 : 0, lp = h && h.loop ? ` loop ${(h.loop[0] / 4 + 1).toFixed(0)}-${(h.loop[1] / 4 + 1).toFixed(0)}` : '';
-      q('[data-mode]').textContent = s.live ? 'LIVE' : s.connected ? 'DAW' : 'OFFLINE'; q('[data-mode]').style.color = s.live ? '#ff5d5d' : '#9ad';
-      q('[data-s]').textContent = s.connected ? (h ? `${h.playing ? 'play' : 'stop'} ${h.bpm.toFixed(1)} BPM ${ts} bar ${bar}.${(Math.floor(h.beats % 4) + 1)}${lp}` : 'connected') : 'connecting';
-      q('[data-r]').textContent = s.rec ? 'Stop + save' : 'Record DAW'; q('[data-l]').disabled = s.live; q('[data-l]').textContent = s.live ? 'Master: on' : 'Master live'; if (big) { big.disabled = s.live; big.textContent = s.live ? 'Receiving: Master' : 'Receive audio from: Master'; } },
+      put(q('[data-mode]'), s.live ? 'LIVE' : s.connected ? 'DAW' : 'OFFLINE'); q('[data-mode]').style.color = s.live ? '#ff5d5d' : '#9ad';
+      put(q('[data-s]'), s.connected ? (h ? `${h.playing ? 'play' : 'stop'} ${h.bpm.toFixed(1)} BPM ${ts} bar ${bar}.${(Math.floor(h.beats % 4) + 1)}${lp}` : 'connected') : 'connecting');
+      put(q('[data-r]'), s.rec ? 'Stop + save' : 'Record DAW'); q('[data-l]').disabled = s.live; put(q('[data-l]'), s.live ? 'Master: on' : 'Master live'); if (big) { big.disabled = s.live; put(big, s.live ? 'Receiving: Master' : 'Receive audio from: Master'); } },
     msg(t) { q('[data-m]').textContent = t; if (typeof document !== 'undefined') { const s = document.getElementById('status'); if (s && big) s.textContent = t; } },
     setWindows(list) { const sel = q('[data-w]'), cur = sel.value; sel.innerHTML = '<option value="0">window: DAW (auto)</option>' + list.filter((w) => !w.ours || !/U2C/.test(w.title)).map((w) => `<option value="${w.id}">${String(w.app || '').replace(/</g, '')}${w.title ? ' · ' + String(w.title).replace(/</g, '').slice(0, 40) : ''}</option>`).join(''); sel.value = [...sel.options].some((o) => o.value === cur) ? cur : '0'; },
     setSends(list, cfg) { const box = q('[data-sends]'); box.style.display = list.length ? '' : 'none'; const esc = (x) => String(x == null ? '' : x).replace(/[<>&"]/g, '');
       box.innerHTML = 'sends: ' + list.map((e) => { const c = cfg[e.id] || {}; return `<span data-id="${esc(e.id)}" style="display:inline-flex;gap:4px;align-items:center;margin-right:8px"><input type="color" data-sc value="${/^#[0-9a-f]{6}$/i.test(c.color || '') ? c.color : '#9ad9ff'}" style="width:18px;height:18px;padding:0;border:0"><input data-sn value="${esc(c.name || e.name)}" size="9" title="Name this send"><select data-st>${SEND_TARGETS.map((t) => `<option${t === (c.target || 'off') ? ' selected' : ''}>${t}</option>`).join('')}</select><input type="number" data-so value="${+c.off || 0}" step="10" style="width:46px" title="Offset (ms)"><i data-sl style="display:inline-block;width:34px;height:6px;background:#555;vertical-align:middle"><b style="display:block;height:6px;width:0;background:#9ad"></b></i></span>`; }).join(''); },
-    sendLevels(list) { for (const e of list) { const r = q(`[data-sends] [data-id="${String(e.id).replace(/[^a-z0-9]/gi, '')}"] [data-sl] b`); if (r) r.style.width = Math.round(Math.min(1, (e.rms || 0) * 3) * 100) + '%'; } },
+    sendLevels(list) { if (!tSend()) return; for (const e of list) { const r = q(`[data-sends] [data-id="${String(e.id).replace(/[^a-z0-9]/gi, '')}"] [data-sl] b`); if (r) r.style.width = Math.round(Math.min(1, (e.rms || 0) * 3) * 100) + '%'; } },
     renderRefs() { const sel = q('[data-rg]'), g = REF.list.map((r) => r.name), u = REF.user.map((r) => r.name), e = (x) => String(x).replace(/[<>&"]/g, '');
       sel.innerHTML = '<option value="">add reference…</option>' + (g.length ? '<optgroup label="Genres">' + g.map((n) => `<option>${e(n)}</option>`).join('') + '</optgroup>' : '') + (u.length ? '<optgroup label="Yours">' + u.map((n) => `<option>${e(n)}</option>`).join('') + '</optgroup>' : '');
       q('[data-rs]').innerHTML = shown().map((x) => `<span data-rn="${e(x.name)}" style="white-space:nowrap"><input type="color" data-rc value="${/^#[0-9a-f]{6}$/i.test(x.color) ? x.color : '#ffffff'}" style="width:18px;height:18px;padding:0;border:0"> ${e(x.name)} <button data-rx style="cursor:pointer">×</button></span>`).join(' '); },
-    flMeter(fl) { const cv = q('[data-fl]'); if (!cv || !fl) return; const g = cv.getContext('2d'), W = cv.width, H = cv.height; g.clearRect(0, 0, W, H);
+    flMeter(fl) { if (!tFl()) return; const cv = q('[data-fl]'); if (!cv || !fl) return; const g = cv.getContext('2d'), W = cv.width, H = cv.height; g.clearRect(0, 0, W, H);
       const pos = (db) => Math.max(0, Math.min(1, (db + 60) / 60)); fl.slice(0, 2).forEach((c, i) => { const y = 2 + i * (H / 2), h = H / 2 - 4;
         g.fillStyle = '#ffffff18'; g.fillRect(0, y, W, h); const grad = g.createLinearGradient(0, 0, W, 0); grad.addColorStop(0, '#2f8f4f'); grad.addColorStop(0.75, '#9fd24a'); grad.addColorStop(0.92, '#ffd23f'); grad.addColorStop(1, '#ff4d4d');
         g.fillStyle = grad; g.globalAlpha = 0.55; g.fillRect(0, y, W * pos(c.pk), h); g.globalAlpha = 1; g.fillRect(0, y + h * 0.25, W * pos(c.rms), h * 0.5);   // peak behind, RMS body in front
         g.fillStyle = c.clip ? '#ff4d4d' : '#fff'; g.fillRect(Math.min(W - 2, W * pos(c.hold)), y, 2, h); if (c.clip) g.fillRect(W - 5, y, 5, h); }); },
-    refLevels() { const d = REF.deltas, el = q('[data-rd]'); el.innerHTML = d ? d.map((b) => `${b.name} <b style="color:${Math.abs(b.db) < 1.5 ? '#8f8' : '#fc8'}">${b.db > 0 ? '+' : ''}${b.db.toFixed(1)}</b>`).join(' · ') + ' dB' : ''; },
+    refLevels() { if (!tRef()) return; const d = REF.deltas, el = q('[data-rd]'); const html = d ? d.map((b) => `${b.name} ${b.db > 0 ? '+' : ''}${b.db.toFixed(1)}`).join(' · ') : ''; if (el._h === html) return; el._h = html; el.innerHTML = d ? d.map((b) => `${b.name} <b style="color:${Math.abs(b.db) < 1.5 ? '#8f8' : '#fc8'}">${b.db > 0 ? '+' : ''}${b.db.toFixed(1)}</b>`).join(' · ') + ' dB' : ''; },
     layerVals() { return { op: q('[data-o]').value / 100, bl: q('[data-b]').value, tg: q('[data-vt]').value }; },
+    setKey(k) { const sel = q('[data-key]'), locked = !!k.locked; if (sel) sel.value = locked ? k.key : ''; put(q('[data-kc]'), locked ? 'kept' : `${k.key} ${Math.round(k.conf * 100)}%`); },
     setFollow(v) { q('[data-f]').checked = !!v; },
     setLat(v) { q('[data-t]').value = v; },
     setLayerShown(on) { q('[data-c]').checked = !!on; },
@@ -341,6 +367,16 @@ function mountUi(st) {
   q('[data-recs]').addEventListener('click', (e) => { const r = e.target.closest('[data-rec]'); if (r && e.target.matches('[data-show]')) ui.onReveal(r.dataset.rec); });
   q('[data-rq]').onchange = q('[data-rfp]').onchange = () => ui.onRq(q('[data-rq]').value, +q('[data-rfp]').value);
   q('[data-vt]').onchange = (e) => ui.onProp('video.target', e.target.value);
+  q('[data-key]').onchange = (e) => { ui.onKey(e.target.value); if (!e.target.value) put(q('[data-kc]'), 'detecting'); else ui.setKey({ key: e.target.value, conf: 1, locked: true }); };
+  // the panel gets out of the way: a pill (chevron), H hides / shows it, and while playing / previewing / recording it fades after 2.5 s without mouse movement
+  let ps = { pill: false, hid: false }; try { ps = { ...ps, ...JSON.parse(localStorage.getItem('u2c.daw.ui') || '{}') }; } catch (_) {}
+  let idle = false, lastMove = performance.now(); const saveUi = () => { try { localStorage.setItem('u2c.daw.ui', JSON.stringify(ps)); } catch (_) {} };
+  const paintUi = () => { el.classList.toggle('pill', ps.pill); el.classList.toggle('hid', ps.hid || idle); q('[data-chev]').textContent = ps.pill ? 'DAW ▸' : '▾'; };
+  q('[data-chev]').onclick = () => { ps.pill = !ps.pill; saveUi(); paintUi(); };
+  addEventListener('mousemove', () => { lastMove = performance.now(); if (idle) { idle = false; paintUi(); } }, { passive: true });
+  addEventListener('keydown', (e) => { if (e.key !== 'h' && e.key !== 'H') return; if (e.metaKey || e.ctrlKey || e.altKey) return; const t = e.target; if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return; ps.hid = !ps.hid; saveUi(); paintUi(); });
+  setInterval(() => { const want = ui.active() && performance.now() - lastMove > 2500; if (want !== idle) { idle = want; paintUi(); } }, 400);
+  paintUi(); ui.uiState = () => ({ ...ps, idle });
   q('[data-lp]').onclick = () => ui.onLayerPreview(); q('[data-pv]').onclick = () => ui.onPreview(); q('[data-lc]').onclick = () => ui.onLiveSetup(); q('[data-tm]').onclick = () => ui.onNudge(-10); q('[data-tp]').onclick = () => ui.onNudge(10);
   q('[data-t]').onchange = (e) => ui.onLat(+e.target.value || 0);
   if (big) big.onclick = () => ui.onLive();

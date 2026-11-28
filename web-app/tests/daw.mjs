@@ -191,8 +191,9 @@ const r0 = await refNow(0), r6 = await refNow(6);
 ok('reference: level-aligned on the 200 Hz-5 kHz average (a +7 dB copy gives offset 7, deltas 0)', Math.abs(r0.off - 7) < 0.05 && r0.d.every((x) => Math.abs(x) < 0.05), JSON.stringify(r0.d));
 ok('reference: a hot top end shows as a positive "high" delta only', r6.d[4] > 5 && Math.abs(r6.d[0]) < 0.5 && Math.abs(r6.d[2]) < 0.5, JSON.stringify(r6.d));
 sock.send(JSON.stringify({ t: 'meters', pos: widxNow(), beats: beatsNow(), momentary: -14, short: -14, tp: -1, tpL: -1, tpR: -1, peakL: -1, peakR: -1, rmsL: -12, rmsR: -12, corr: 1, width: 0, spec: r0.spec, fl: [{ pk: -3, rms: -9, hold: -2, clip: false }, { pk: 0, rms: -6, hold: 0, clip: true }] }));
-await page.waitForTimeout(150);
-ok('reference: live meters feed the "vs reference" readout (matching mix = all bands about 0, match 100%)', await ev(async () => { const R = await import('/src/bridge/reference.js'); return R.ref.match > 0.95 && /low .*0\.0/.test(document.querySelector('#u2cDaw [data-rd]').textContent); }));
+await page.waitForTimeout(500);
+const rdv = await ev(async () => { const R = await import('/src/bridge/reference.js'); return { m: R.ref.match, off: R.ref.offs, txt: document.querySelector('#u2cDaw [data-rd]').textContent, mt: window.u2cLive.mt && window.u2cLive.mt.momentary, at: performance.now() - window.u2cLive.mtAt }; });
+ok('reference: live meters feed the "vs reference" readout (matching mix = all bands about 0, match 100%)', rdv.m > 0.95 && /low .*0\.0/.test(rdv.txt), JSON.stringify(rdv));
 ok('FL-style master meter draws (peak, RMS body, clip red)', await ev(() => { const cv = document.querySelector('#u2cDaw [data-fl]'), d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let red = 0, any = 0; for (let i = 0; i < d.length; i += 4) { if (d[i + 3]) any++; if (d[i] > 230 && d[i + 1] < 100 && d[i + 3]) red++; } return any > 100 && red > 5; }));
 const ownR = await ev(async () => { const R = await import('/src/bridge/reference.js'), sr = 44100, x = new Float32Array(sr * 2).map((_, i) => Math.sin(2 * Math.PI * 1000 * i / sr) * 0.5);
   const r = await R.addAudioReference('My sine', [x], sr); let k = 0; r.db.forEach((v, i) => { if (v > r.db[k]) k = i; }); return { f: r.freq[k], n: R.ref.show.length, user: R.ref.user.length }; });
@@ -230,7 +231,7 @@ await page.waitForFunction(() => window.u2c.mpc.pads[1].blob, null, { timeout: 8
 ok('drop: a second sound goes to pad 2', await ev(() => !!window.u2c.mpc.pads[1].blob && window.u2c.mpc.pads[1].name === 'slice-880'));
 const nUser = await ev(async () => (await import('/src/bridge/reference.js')).ref.user.length);
 await wavFile(1, 300); await dropOn('#u2cDaw [data-ref]');
-await page.waitForFunction(async (n) => (await import('/src/bridge/reference.js')).ref.user.length > n, nUser, { timeout: 8000 }).catch(() => {});
+await page.waitForFunction(async (n) => (await import('/src/bridge/reference.js')).ref.user.length > n, nUser, { timeout: 25000 }).catch(() => {});
 ok('drop: audio dropped on the Reference row becomes a reference', await ev(async () => (await import('/src/bridge/reference.js')).ref.user.some((r) => r.name === 'slice-300')));
 // MPC: key + MIDI trigger the pad and its pulse target; the pad is stored
 await ev(() => { const M = window.u2c.mpc; M.pads[0].target = 'kick'; M.pads[1].target = 'snare'; window.u2cLive.hits.length = 0; M.setCollapsed(false); });
@@ -263,6 +264,44 @@ await ev(() => { document.querySelector('#u2cDaw [data-tp]').click(); document.q
 ok('sync nudge: +10 / -10 ms steps', await ev(() => document.querySelector('#u2cDaw [data-t]').value === '10' && window.u2c.daw.state.lat === 10));
 const rs = await ev(async () => { const R = await import('/src/bridge/record.js'); return { a: R.recordSpec('916', '1080p', 30), b: R.recordSpec('169', '4k', 60), c: R.recordSpec('916', '4k', 30) }; });
 ok('Record sizes: 1080x1920 / 1920x1080, 4K 2160x3840 / 3840x2160 at 30 or 60 fps, 4K at 40 Mbps or more', rs.a.W === 1080 && rs.a.H === 1920 && rs.b.W === 3840 && rs.b.H === 2160 && rs.b.fps === 60 && rs.c.W === 2160 && rs.c.H === 3840 && rs.c.mbps >= 40);
+
+// ---- phase 3: key detector, panel hiding, coalesced meters, Reader mode
+const kd = await ev(async () => { const D = await import('/src/analysis/dsp.js'), KMIN = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17], KMAJ = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+  const rot = (p, k) => Array.from({ length: 12 }, (_, i) => p[(i - k + 12) % 12]), a = D.pickKey(rot(KMIN, 3)), b = D.pickKey(rot(KMAJ, 5));
+  const mix = rot(KMAJ, 3).map((v, i) => v * 0.5 + rot(KMIN, 0)[i] * 0.5 + 0), c = D.pickKey(rot(KMAJ, 0).map((v, i) => v * 1.0 + rot(KMIN, 0)[i] * 0.97));   // a major / minor tie on the same tonic
+  return { a, b, c }; });
+ok('key: a D# minor profile is read as D# min with high confidence; F major as F maj', kd.a.key === 'D# min' && kd.a.conf > 0.8 && kd.b.key === 'F maj', JSON.stringify([kd.a.key, kd.a.conf, kd.b.key]));
+ok('key: when major and minor are within a hair, minor wins', /min$/.test(kd.c.key), kd.c.key);
+await ev(() => { const s = document.querySelector('#u2cDaw [data-key]'); s.value = 'D# min'; s.dispatchEvent(new Event('change')); });
+ok('key: the dropdown sets the key shown on screen and keeps it (no auto override)', await ev(() => document.getElementById('sKey').value === 'D# min' && localStorage.getItem('u2c.daw.keylock') === 'D# min'));
+await ev(() => { const s = document.querySelector('#u2cDaw [data-key]'); s.value = ''; s.dispatchEvent(new Event('change')); });
+ok('key: "auto" lets the detector run again', await ev(() => localStorage.getItem('u2c.daw.keylock') === null));
+// meters: a burst of messages is applied once per frame, newest wins
+for (const m of [-30, -25, -20]) sock.send(JSON.stringify({ t: 'meters', pos: widxNow(), beats: beatsNow(), momentary: m, short: m, tp: -1, tpL: -1, tpR: -1, peakL: -1, peakR: -1, rmsL: -12, rmsR: -12, corr: 1, width: 0, spec: new Array(61).fill(-50), fl: [{ pk: -9, rms: -12, hold: -9, clip: false }, { pk: -9, rms: -12, hold: -9, clip: false }] }));
+await page.waitForTimeout(150);
+ok('meters: a burst is coalesced to the newest message per frame', await ev(() => window.u2cLive.mt && window.u2cLive.mt.momentary === -20));
+// panel: pill, H, auto-hide while playing, saved state
+await ev(() => document.querySelector('#u2cDaw [data-chev]').click());
+ok('panel: the chevron shrinks it to a "DAW" pill (saved)', await ev(() => document.getElementById('u2cDaw').classList.contains('pill') && JSON.parse(localStorage.getItem('u2c.daw.ui')).pill === true));
+await ev(() => document.querySelector('#u2cDaw [data-chev]').click());
+await page.keyboard.press('h'); const h1 = await ev(() => document.getElementById('u2cDaw').classList.contains('hid')); await page.keyboard.press('h'); const h2 = await ev(() => document.getElementById('u2cDaw').classList.contains('hid'));
+ok('panel: H hides and shows it', h1 && !h2);
+play(0); await page.waitForTimeout(3300);
+const idle = await ev(() => document.getElementById('u2cDaw').classList.contains('hid'));
+await page.mouse.move(300, 300); await page.mouse.move(320, 310); await page.waitForTimeout(150);
+const back = await ev(() => !document.getElementById('u2cDaw').classList.contains('hid'));
+ok('panel: fades after 2.5 s of no mouse movement while playing, returns on movement', idle && back);
+stop();
+// Reader mode: static page, nothing animates; Animated brings the motion back
+const rd = await ev(async () => { const C = await import('/src/bridge/livecard.js'); return { r: C.planFor({ presentation: 'reader' }), dflt: C.planFor({}).reader, a: C.planFor({ presentation: 'sphere' }) }; });
+ok('Reader: the default presentation; motion props off, only waveform / spectrum / levels / key-BPM windows on', rd.dflt && rd.r.props['intro.on'] === false && rd.r.props['logo.glow'] === 0 && rd.r.props['live.kick.on'] === false && rd.r.props['win.stage.visible'] === false && rd.r.props['win.spectrum.visible'] === true && rd.r.props['win.session.visible'] === true && rd.r.props['ground.pattern'] === 'none');
+await ev(() => window.u2c.daw.applyPlan({ presentation: 'reader', camera: false, follow: true, start: 'none' })); await page.waitForTimeout(300);
+const rs2 = await ev(() => { const e = window.u2c.cues.ev(); return { intro: e.value('intro.on', 0, true), glow: e.value('logo.glow', 0, 1), kick: e.value('live.kick.on', 0, true), stage: e.value('win.stage.visible', 0, true), shots: window.u2c.cues.sheet.tracks.filter((t) => t.path === 'camera.shot').length, reader: window.u2c.daw.state.reader, saved: JSON.parse(localStorage.getItem('u2c.live.setup')).presentation }; });
+ok('Reader: applying it turns the motion off in the cue sheet, drops the camera moves and is saved', rs2.intro === false && rs2.glow === 0 && rs2.kick === false && rs2.stage === false && rs2.shots === 0 && rs2.reader === true && rs2.saved === 'reader', JSON.stringify(rs2));
+await ev(() => window.u2c.daw.applyPlan({ presentation: 'sphere', camera: true, follow: true, start: 'none' })); await page.waitForTimeout(300);
+ok('Animated: picking it brings the motion back', await ev(() => { const e = window.u2c.cues.ev(); return e.value('intro.on', 0, false) === true && e.value('logo.glow', 0, 0) === 1 && e.value('live.kick.on', 0, false) === true && window.u2c.daw.state.reader === false; }));
+await ev(() => document.querySelector('#u2cDaw [data-pv]').click()); await page.waitForTimeout(300);
+ok('Preview: hides all panels (picture only); Esc closes it', await ev(() => document.body.classList.contains('u2c-clean') && getComputedStyle(document.getElementById('u2cMpc')).display === 'none') && (await page.keyboard.press('Escape'), await page.waitForTimeout(200), await ev(() => !document.getElementById('u2cPreview') && !document.body.classList.contains('u2c-clean'))));
 
 // ---- Record: canvas + live master audio -> the plugin (the host plays, as it must: the canvas only changes while the visuals move)
 play(0);

@@ -29,6 +29,17 @@ const KMAJ = [6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88], KMIN
 function corr(a, b) { const ma = a.reduce((x, y) => x + y) / 12, mb = b.reduce((x, y) => x + y) / 12; let n = 0, da = 0, db = 0; for (let i = 0; i < 12; i++) { n += (a[i]-ma)*(b[i]-mb); da += (a[i]-ma)**2; db += (b[i]-mb)**2; } return n / Math.sqrt(da * db || 1); }
 
 /** Analyse a mono signal. opts: {N, hop, progress(fraction)}. Returns a plain object of typed arrays (no grid yet). */
+/** Key from a 12-bin chroma (C..B): Krumhansl-Kessler profile correlation. Returns {key, conf (0..1: how far the winner is above the runner-up of another key), alts}.
+ *  A major winner is replaced by the best minor when that is within `MINOR_BIAS` (dance / trap music is far more often minor, and the two profiles overlap a lot). */
+export const MINOR_BIAS = 0.04;
+export function pickKey(chroma) {
+  const all = [];
+  for (let r = 0; r < 12; r++) { const rot = [...Array(12)].map((_, i) => chroma[(i + r) % 12]); all.push({ key: KEYS[r] + ' maj', c: corr(rot, KMAJ), minor: false }, { key: KEYS[r] + ' min', c: corr(rot, KMIN), minor: true }); }
+  all.sort((a, b) => b.c - a.c); let w = all[0];
+  if (!w.minor) { const m = all.find((q) => q.minor); if (m && w.c - m.c < MINOR_BIAS) w = m; }
+  const rest = all.filter((q) => q.key !== w.key), conf = Math.max(0, Math.min(1, (w.c - rest[0].c) / 0.12 * 0.5 + (w.c - 0.3) * 0.7));
+  return { key: w.key, conf, c: w.c, alts: rest.slice(0, 2).map((q) => q.key) };
+}
 export function analyzeMono(mono, sr, duration, opts = {}) {
   const N = opts.N || 2048, HOP = opts.hop || 512, fr = sr / HOP, len = mono.length;
   const nF = Math.max(2, Math.floor((len - N) / HOP) + 1), nb = N / 2, binHz = sr / N;
@@ -89,7 +100,7 @@ export function analyzeMono(mono, sr, duration, opts = {}) {
   const env = new Float32Array(nF); for (let i = 0; i < nF; i++) env[i] = K.norm[i] + .7 * Sn.norm[i] + .3 * Hh.norm[i];
   { const W = Math.round(fr * .5), ps = new Float64Array(nF + 1); for (let i = 0; i < nF; i++) ps[i + 1] = ps[i] + env[i]; const tmp = env.slice(); for (let i = 0; i < nF; i++) { const a = Math.max(0, i - W), b = Math.min(nF, i + W + 1); env[i] = Math.max(0, tmp[i] - (ps[b] - ps[a]) / (b - a)); } }
   const bpm = refineBpm(env, fr, detectBpm(env, fr)), beatPhase = attackPhase(mono, sr, env, fr, bpm);
-  let best = -2, key = 'C maj'; for (let r = 0; r < 12; r++) { const rot = [...Array(12)].map((_, i) => chroma[(i + r) % 12]); const cM = corr(rot, KMAJ), cm = corr(rot, KMIN); if (cM > best) { best = cM; key = KEYS[r] + ' maj'; } if (cm > best) { best = cm; key = KEYS[r] + ' min'; } }
+  const keyInfo = pickKey(chroma), key = keyInfo.key;
   // overview peaks + a 4 kHz scope signal for oscilloscope templates
   const cols = 2400, pkMin = new Float32Array(cols), pkMax = new Float32Array(cols); let gm = 1e-6;
   for (let c = 0; c < cols; c++) { const a = Math.floor(c * len / cols), b = Math.floor((c + 1) * len / cols); let mn = 0, mx = 0; for (let i = a; i < b; i += 2) { const v = mono[i]; if (v < mn) mn = v; if (v > mx) mx = v; } pkMin[c] = mn; pkMax[c] = mx; gm = Math.max(gm, mx, -mn); }
@@ -97,7 +108,7 @@ export function analyzeMono(mono, sr, duration, opts = {}) {
   const dec = Math.max(1, Math.round(sr / 4000)), scopeRate = sr / dec, scope = new Float32Array(Math.floor(len / dec));
   for (let i = 0; i < scope.length; i++) scope[i] = mono[i * dec] / gm;
   return { duration, sampleRate: sr, fps: fr, frames: nF, bandCount: NB, bandNames: BAND_NAMES, bands, specBins: NS, spec, rms: rmsN, rmsRaw: rms, rmsRef: rp, lowSlow, centroid,
-    kicks: K.list, snares: Sn.list, hats: Hh.list, kickEnv: K.norm, onsetEnv: env, bpmDetected: bpm, beatPhase, key, peaks: { cols, min: pkMin, max: pkMax }, scope, scopeRate, specP, specStereo: stereo };
+    kicks: K.list, snares: Sn.list, hats: Hh.list, kickEnv: K.norm, onsetEnv: env, bpmDetected: bpm, beatPhase, key, keyInfo, peaks: { cols, min: pkMin, max: pkMax }, scope, scopeRate, specP, specStereo: stereo };
 }
 /**
  * Tempo by grid scoring (ported from the v8 native analysis, tools/beatgrid.py): the autocorrelation estimate and its

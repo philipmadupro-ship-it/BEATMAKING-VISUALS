@@ -143,7 +143,7 @@ export function draw(ctx, rect, frame, opts = {}) {
   path(dbv); ctx.strokeStyle = eg; ctx.lineWidth = 2; ctx.stroke(); ctx.lineWidth = 1;
   // reference overlay: the imported genre curve, level-aligned on the 200 Hz - 5 kHz average of what is shown
   if (REF.cur && opts.ref !== false) {
-    refUpdate(oct, dB, 0.08);
+    { const lv = globalThis.u2cLive; if (!(lv && lv.mt && performance.now() - lv.mtAt < 600)) refUpdate(oct, dB, 0.08, 'clip'); }   // live: the plugin's own spectrum feeds it (daw.js)
     ctx.save(); ctx.setLineDash([6, 4]); ctx.lineWidth = 1.6;
     for (const sh of shown()) { const off = REF.offs[sh.name] || 0; ctx.strokeStyle = rgba(sh.color, 0.85); ctx.beginPath();
       for (let i = 0; i < n; i++) { const X = px + pw * (i + 0.5) / n, Yy = Y(refAt(sh.r, 20 * Math.pow(1000, (i + 0.5) / n)) + off); i ? ctx.lineTo(X, Yy) : ctx.moveTo(X, Yy); }

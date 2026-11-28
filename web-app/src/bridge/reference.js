@@ -74,7 +74,8 @@ export function removeShow(name) { ref.show = ref.show.filter((s) => s.name !== 
 export function setColor(name, color) { const s = ref.show.find((q) => q.name === name); if (s) s.color = color; }
 export function addUser(r) { ref.user = [...ref.user.filter((q) => q.name !== r.name), r]; addShow(r.name); sync(); }
 /** Feed a spectrum (dB at centres). The offsets are smoothed so the overlay does not jump with every transient. */
-export function refUpdate(centres, spec, k = 0.12) {
+export function refUpdate(centres, spec, k = 0.12, src = 'live') {
+  if (ref.src !== src) { ref.src = src; ref.offs = {}; }   // a different source (live meters vs the clip's spectrum) re-seeds the smoothing
   for (const s of shown()) { const raw = alignOffset(s.r, centres, spec); ref.offs[s.name] = ref.offs[s.name] == null ? raw : ref.offs[s.name] + (raw - ref.offs[s.name]) * k; }
   if (!ref.cur) return; const off = ref.offs[ref.cur.name]; ref.off = off; ref.seen = true; ref.deltas = bandDeltas(ref.cur, centres, spec, off); ref.match = matchScore(ref.deltas);
 }
