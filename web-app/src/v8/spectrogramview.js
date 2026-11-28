@@ -5,10 +5,12 @@
 //    of the clip dimmed (the real upcoming audio); log frequency axis; stage ramp (greys in Nigredo);
 //  - a thin ruler with bar numbers and beat ticks; the S spectrogram as a thin lane under the plot (mode 'ms') or hidden ('m').
 import { hexRgb, clamp, lerp, rgba } from './core.js';
+import { flLUT } from '../lib/flcolors.js';
 
 export const N_BANDS = 128, PLAYHEAD = 0.8, UP = 4;   // UP: the 128 stored bands are interpolated (in dB) to 128 x UP rows so the map is not blocky
 /** 256-entry RGBA ramp for one stage (v = normalised dB), alpha = v^gamma; greys in Nigredo (S.grey). */
-export function specLUT(S, gam = 0.56) {
+export function specLUT(S, gam = 0.56, cmap = 'stage') {
+  if (cmap === 'FL') return flLUT(gam);
   const A = hexRgb(S.spec[1]), B = hexRgb(S.spec[2]), C = hexRgb(S.spec[3]), I = hexRgb(S.ink), P0 = hexRgb(S.card), mid = 0.52, LUT = [];
   for (let i = 0; i < 256; i++) {
     const v = i / 255; let col;
@@ -41,9 +43,9 @@ export function upRows(src, nf, n, up) {
 export function poolMax(src, nf, n, g) { const m = n / g, out = new Uint8Array(nf * m); for (let f = 0; f < nf; f++) for (let j = 0; j < m; j++) { let v = 0; for (let i = 0; i < g; i++) v = Math.max(v, src[f * n + j * g + i]); out[f * m + j] = v; } return out; }
 
 const CACHE = new WeakMap();
-function images(ms, nf, S, gam, floor) {
-  const key = [S.spec.join(), S.ink, S.card, S.grey, gam, floor].join('|'); let o = CACHE.get(ms); if (!o) CACHE.set(ms, o = {});
-  if (!o[key]) { const ks = Object.keys(o); if (ks.length > 6) delete o[ks[0]]; const LUT = specLUT(S, gam);
+function images(ms, nf, S, gam, floor, cmap) {
+  const key = [S.spec.join(), S.ink, S.card, S.grey, gam, floor, cmap].join('|'); let o = CACHE.get(ms); if (!o) CACHE.set(ms, o = {});
+  if (!o[key]) { const ks = Object.keys(o); if (ks.length > 6) delete o[ks[0]]; const LUT = specLUT(S, gam, cmap);
     o[key] = { M: toCanvas(heatPixels(upRows(ms.spectroM, nf, N_BANDS, UP), nf, N_BANDS * UP, LUT, floor), nf, N_BANDS * UP), S: toCanvas(heatPixels(poolMax(ms.spectroS, nf, N_BANDS, 8), nf, N_BANDS / 8, LUT, floor), nf, N_BANDS / 8) }; }
   return o[key];
 }
@@ -55,7 +57,7 @@ export function draw(ctx, rect, frame, o) {
   const [x, y, w, h] = rect, S = o.S, text = o.text, fps = o.fps, nf = o.nf, win = o.win || 8, floor = o.floor || 90, mode = o.mode || 'ms';
   const fz = o.floorSize ? (s) => o.floorSize(ctx, s) : (s) => s, LH = fz(22), ink = (a) => rgba(S.ink, a), lbl = (s, X, Y, op = {}) => text(ctx, s, X, Y, { size: op.size || 22, col: ink(op.a == null ? 0.7 : op.a), align: op.align, w: 500, maxW: op.maxW });
   const gl = Math.round(LH * 2.2), rh = Math.round(LH + 8), laneH = mode === 'ms' && h > 150 ? Math.round(clamp(h * 0.12, 20, 30)) : 0, gap = laneH ? 3 : 0;
-  const px0 = x + gl, pw = w - gl - 4, ph = h - rh - laneH - gap, py = y, img = images(o.ms, nf, S, o.gamma || 0.56, floor);
+  const px0 = x + gl, pw = w - gl - 4, ph = h - rh - laneH - gap, py = y, img = images(o.ms, nf, S, o.gamma || 0.56, floor, o.cmap || 'stage');
   const t = frame / fps, tl = t - win * PLAYHEAD, Xt = (tt) => px0 + pw * (tt - tl) / win, span = win * fps, f0 = frame - span * PLAYHEAD;
   const plane = (im, ny, yy, hh, smooth) => {
     ctx.fillStyle = S.card; ctx.fillRect(px0, yy, pw, hh);

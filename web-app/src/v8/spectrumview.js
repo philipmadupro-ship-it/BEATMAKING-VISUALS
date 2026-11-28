@@ -16,6 +16,8 @@
 //   top edge, a thin peak-hold line, a dB scale in the left gutter and frequency labels along the bottom (text() from core.js).
 
 import { hexRgb } from './core.js';
+import { ref as REF, refUpdate, refAt, shown } from '../bridge/reference.js';
+import { flAt } from '../lib/flcolors.js';
 const clampv = (v, a, b) => (v < a ? a : v > b ? b : v);
 const smooth = (a, b, v) => { const u = clampv((v - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
 export const BALLISTICS = { attack: 0.010, release: 22, holdTime: 0.7, holdFall: 14, liftDb: 5, liftSens: 10, liftDecay: 0.09, slowMs: 90 };   // seconds, dB/s, dB
@@ -77,7 +79,8 @@ const layerCtx = (w, h) => { if (!LAYER) LAYER = document.createElement('canvas'
 const fmtHzR = (f) => (f >= 1000 ? (f / 1000).toFixed(f >= 10000 ? 1 : 2).replace(/\.?0+$/, '') + ' kHz' : Math.round(f) + ' Hz');
 
 /** Three tone colours low / mid / high: the same as waveview.js bandCols (greys in Nigredo, the stage ramp elsewhere). */
-export const toneCols = (S) => (S.grey ? ['#7d7d7d', '#b9b9b9', '#ffffff'] : [S.sig1, S.sig2 === S.sig1 ? S.ink : S.sig2, S.waveHi === S.sig1 || S.waveHi == null ? S.ink : S.waveHi]);
+const hex = (c) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+export const toneCols = (S, cmap) => (cmap === 'FL' ? [hex(flAt(0.42)), hex(flAt(0.7)), hex(flAt(0.95))] : S.grey ? ['#7d7d7d', '#b9b9b9', '#ffffff'] : [S.sig1, S.sig2 === S.sig1 ? S.ink : S.sig2, S.waveHi === S.sig1 || S.waveHi == null ? S.ink : S.waveHi]);
 
 export function draw(ctx, rect, frame, opts = {}) {
   const { L, S } = opts; if (!L || !S) return;
@@ -88,7 +91,7 @@ export function draw(ctx, rect, frame, opts = {}) {
   const lblPx = small ? 18 : 20, gl = Math.round(small ? 46 : 54), gb = Math.round(small ? 32 : 36), pt = 12, pr = 12;
   const px = x0 + gl, py = y0 + pt, pw = w0 - gl - pr, ph = h0 - pt - gb; if (pw < 40 || ph < 30) return;
   const Y = (db) => py + ph * clampv((top - db) / (top - bot), 0, 1), fx = (hz) => px + pw * Math.log(hz / 20) / Math.log(1000);
-  const ink = S.ink, bright = light ? hexRgb(ink) : [255, 255, 255], tone = toneCols(S), hi = light ? ink : '#ffffff';
+  const ink = S.ink, bright = light ? hexRgb(ink) : [255, 255, 255], tone = toneCols(S, opts.cmap), hi = light ? ink : '#ffffff';
   const tcol = (u) => { const lo = 1 - smooth(0.22, 0.46, u), hg = smooth(0.58, 0.84, u), md = 1 - lo - hg, A = hexRgb(tone[0]), B = hexRgb(tone[1]), C = hexRgb(tone[2]); return [0, 1, 2].map((i) => A[i] * lo + B[i] * md + C[i] * hg); };   // u = log position 0..1 (20 Hz .. 20 kHz)
   const lab = (s, X, Yy, o = {}) => text(ctx, s, X, Yy, { size: lblPx, col: rgba(ink, o.a ?? 0.62), align: o.align, w: 500, base: o.base });
 
@@ -138,6 +141,15 @@ export function draw(ctx, rect, frame, opts = {}) {
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   path(dbv); ctx.strokeStyle = eg; ctx.globalAlpha = 0.2 + 0.2 * lift; ctx.lineWidth = 7; ctx.stroke(); ctx.globalAlpha = 1;
   path(dbv); ctx.strokeStyle = eg; ctx.lineWidth = 2; ctx.stroke(); ctx.lineWidth = 1;
+  // reference overlay: the imported genre curve, level-aligned on the 200 Hz - 5 kHz average of what is shown
+  if (REF.cur && opts.ref !== false) {
+    refUpdate(oct, dB, 0.08);
+    ctx.save(); ctx.setLineDash([6, 4]); ctx.lineWidth = 1.6;
+    for (const sh of shown()) { const off = REF.offs[sh.name] || 0; ctx.strokeStyle = rgba(sh.color, 0.85); ctx.beginPath();
+      for (let i = 0; i < n; i++) { const X = px + pw * (i + 0.5) / n, Yy = Y(refAt(sh.r, 20 * Math.pow(1000, (i + 0.5) / n)) + off); i ? ctx.lineTo(X, Yy) : ctx.moveTo(X, Yy); }
+      ctx.stroke(); }
+    ctx.restore();
+  }
   // peak marker + readout (real: the highest point of the displayed curve)
   let pk = 0; for (let i = 1; i < n; i++) if (dbv[i] > dbv[pk]) pk = i;
   const pkHz = 20 * Math.pow(1000, (pk + 0.5) / n), pkX = px + pw * (pk + 0.5) / n, pkY = Y(dbv[pk]);
@@ -149,5 +161,6 @@ export function draw(ctx, rect, frame, opts = {}) {
   lab('dB', px - 8, py + ph + gb * 0.56, { align: 'right', a: 0.5 });
   for (const [hz, s] of labF) { const X = fx(hz), a = major.has(hz) ? 0.72 : 0.5; lab(s, hz === 20 ? Math.max(px, X) : hz === 20000 ? Math.min(px + pw, X) : X, py + ph + gb * 0.56, { align: hz === 20 ? 'left' : hz === 20000 ? 'right' : 'center', a }); }
   if (pw >= 420) lab(`${fmtHzR(pkHz)}  ${(dbv[pk]).toFixed(1).replace('-', '−')} dB`, px + pw - 8, py + 15, { align: 'right', a: 0.72 });
+  if (REF.cur && opts.ref !== false && pw >= 300) lab(`ref ${shown().map((q) => q.name).join(' + ')} · ${Math.round(REF.match * 100)}%`, px + 8, py + 15, { align: 'left', a: 0.72 });
   ctx.restore();
 }

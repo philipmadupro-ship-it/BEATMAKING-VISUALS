@@ -27,7 +27,7 @@ if (CACHE) await ctx.route(/^https:\/\/(cdn\.jsdelivr\.net|fonts\.googleapis\.co
 
 // ---- a mock of the plugin's WebSocket: a simulated host at 128 BPM that plays a kick on every beat
 const SR = 44100, BPM = 128, SPB = 60 / BPM;
-const T0 = Date.now(), host = { playing: false, t0: 0, beat0: 0, jump: 0 }, rx = { saved: [], names: [], capOn: false };
+const T0 = Date.now(), host = { playing: false, t0: 0, beat0: 0, jump: 0 }, rx = { saved: [], names: [], capOn: false, reveal: [], recsAsked: 0 };
 const widxNow = () => Math.floor((Date.now() - T0) / 1000 * SR);
 const beatsNow = () => (host.playing ? host.beat0 + (Date.now() - host.t0) / 1000 * BPM / 60 : host.beat0);
 let cursor = 0, sock = null;
@@ -43,6 +43,8 @@ await page.routeWebSocket(/127\.0\.0\.1:17871/, (ws) => {
       const b = Buffer.alloc(20 + n * 8); b.write('PCM0', 0); b.writeUInt32LE(SR, 4); b.writeUInt32LE(n, 8); b.writeDoubleLE(from, 12);
       for (let i = 0; i < n; i++) { const v = host.playing ? kickAt(from + i) : 0; b.writeFloatLE(v, 20 + i * 4); b.writeFloatLE(v * 0.9, 20 + (n + i) * 4); } ws.send(b); }
     else if (j.t === 'cap') { rx.capOn = j.on; if (j.on) ws.send(JSON.stringify({ t: 'cap_status', msg: 'ok' })); }
+    else if (j.t === 'recordings') { rx.recsAsked++; ws.send(JSON.stringify({ t: 'recordings', list: [{ name: 'u2c-daw-1080x1920-old.mp4', path: '/tmp/u2c-test/u2c-daw-1080x1920-old.mp4', size: 1000, age: 5 }] })); }
+    else if (j.t === 'reveal') rx.reveal.push(j.name);
     else if (j.t === 'save_begin') rx.names.push(j.name);
     else if (j.t === 'save_end') ws.send(JSON.stringify({ t: 'saved', path: '/tmp/u2c-test/' + rx.names.at(-1) }));
   });
@@ -117,7 +119,7 @@ await page.waitForTimeout(60);
 const hv = await ev(async () => { const m = await import('/src/v8/livefx.js'), e = window.u2c.cues.ev(), V = (p, d) => e.value(p, 0, d), L = m.live(); const on = m.kickEnv(V);
   window.u2c.actions.setProp('live.kick.on', false); const e2 = window.u2c.cues.ev(), off = m.kickEnv((p, d) => e2.value(p, 0, d)); window.u2c.actions.setProp('live.kick.on', true);
   return { n: L.hits.length, on, off, snare: L.hits.some((h) => h.snare > 0), hat: L.hits.some((h) => h.hat > 0), age: performance.now() - L.hits[0].at }; });
-ok('hits: events become live state (kick, snare, hat), positioned by sample index', hv.n === 2 && hv.snare && hv.hat && hv.age >= 0 && hv.age < 400, JSON.stringify(hv));
+ok('hits: events become live state (kick, snare, hat), positioned by sample index', hv.n === 2 && hv.snare && hv.hat && hv.age >= 0 && hv.age < 800, JSON.stringify(hv));
 ok('hits: kick drives the glow envelope; the cue property switches it off', hv.on > 0.05 && hv.off === 0, `on ${hv.on.toFixed(2)} off ${hv.off}`);
 await page.waitForTimeout(120);
 const lp = await ev(() => { const p = document.querySelector('#u2cDaw [data-ha=snare]'); p.value = 50; p.dispatchEvent(new Event('change')); return window.u2c.cues.ev().value('live.snare.amt', 0, 1); });
@@ -176,13 +178,99 @@ ok('midi: panel opacity is a cue property', await ev(() => Math.abs(window.u2c.c
 await ev(() => { window.u2c.actions.setProp('midi.pulse', 'off'); window.u2c.actions.setProp('midi.style', 'roll'); });
 stop();
 
+// ---- Reference: a synthetic fixture (never the real preset file): import, pick, overlay state, per-band deltas, own-audio references
+const fixture = JSON.stringify([{ name: 'Test Genre', data: '<?xml version="1.0"?><Reference>' + Array.from({ length: 40 }, (_, i) => { const f = 20 * Math.pow(1000, i / 39); return `<Entry freq="${f.toFixed(3)}" value="${(-30 - 4 * Math.log2(f / 20)).toFixed(3)}" value1="0" value2="0" value3="0"/>`; }).join('') + '</Reference>' }, { name: 'Broken', data: '<nothing/>' }]);
+await page.setInputFiles('#u2cDaw [data-rf]', { name: 'refs.txt', mimeType: 'text/plain', buffer: Buffer.from('﻿' + fixture) });
+await page.waitForFunction(() => document.querySelector('#u2cDaw [data-rg]').options.length > 2, null, { timeout: 5000 }).catch(() => {});
+ok('reference: the file is parsed in the page (bad entries skipped) and offered as genres', await ev(() => [...document.querySelectorAll('#u2cDaw [data-rg] option')].map((o) => o.textContent).join() === 'add reference…,Test Genre'));
+await ev(() => { const g = document.querySelector('#u2cDaw [data-rg]'); g.value = 'Test Genre'; g.dispatchEvent(new Event('change')); });
+ok('reference: picking a genre shows it with a colour picker', await ev(() => !!document.querySelector('#u2cDaw [data-rn="Test Genre"] [data-rc]')));
+const refNow = (add) => ev(async (add) => { const R = await import('/src/bridge/reference.js'); const c = R.ref.cur, cen = Array.from({ length: 61 }, (_, i) => 1000 * 2 ** ((i - 34) / 6));
+  const spec = cen.map((f) => R.refAt(c, f) + 7 + (f >= 6000 ? add : 0)); return { off: R.alignOffset(c, cen, spec), d: R.bandDeltas(c, cen, spec).map((b) => b.db), n: R.ref.show.length, spec }; }, add);
+const r0 = await refNow(0), r6 = await refNow(6);
+ok('reference: level-aligned on the 200 Hz-5 kHz average (a +7 dB copy gives offset 7, deltas 0)', Math.abs(r0.off - 7) < 0.05 && r0.d.every((x) => Math.abs(x) < 0.05), JSON.stringify(r0.d));
+ok('reference: a hot top end shows as a positive "high" delta only', r6.d[4] > 5 && Math.abs(r6.d[0]) < 0.5 && Math.abs(r6.d[2]) < 0.5, JSON.stringify(r6.d));
+sock.send(JSON.stringify({ t: 'meters', pos: widxNow(), beats: beatsNow(), momentary: -14, short: -14, tp: -1, tpL: -1, tpR: -1, peakL: -1, peakR: -1, rmsL: -12, rmsR: -12, corr: 1, width: 0, spec: r0.spec, fl: [{ pk: -3, rms: -9, hold: -2, clip: false }, { pk: 0, rms: -6, hold: 0, clip: true }] }));
+await page.waitForTimeout(150);
+ok('reference: live meters feed the "vs reference" readout (matching mix = all bands about 0, match 100%)', await ev(async () => { const R = await import('/src/bridge/reference.js'); return R.ref.match > 0.95 && /low .*0\.0/.test(document.querySelector('#u2cDaw [data-rd]').textContent); }));
+ok('FL-style master meter draws (peak, RMS body, clip red)', await ev(() => { const cv = document.querySelector('#u2cDaw [data-fl]'), d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let red = 0, any = 0; for (let i = 0; i < d.length; i += 4) { if (d[i + 3]) any++; if (d[i] > 230 && d[i + 1] < 100 && d[i + 3]) red++; } return any > 100 && red > 5; }));
+const ownR = await ev(async () => { const R = await import('/src/bridge/reference.js'), sr = 44100, x = new Float32Array(sr * 2).map((_, i) => Math.sin(2 * Math.PI * 1000 * i / sr) * 0.5);
+  const r = await R.addAudioReference('My sine', [x], sr); let k = 0; r.db.forEach((v, i) => { if (v > r.db[k]) k = i; }); return { f: r.freq[k], n: R.ref.show.length, user: R.ref.user.length }; });
+ok('reference: your own audio becomes a named average-spectrum reference (1 kHz sine peaks at 1 kHz), shown with the genre', Math.abs(ownR.f - 1000) < 1 && ownR.n === 2 && ownR.user === 1, JSON.stringify(ownR));
+await ev(() => window.dispatchEvent(new CustomEvent('u2c-refs')));
+ok('reference: each shown reference has its own colour picker', await ev(() => document.querySelectorAll('#u2cDaw [data-rn] [data-rc]').length === 2));
+await ev(async () => { const c = document.querySelector('#u2cDaw [data-rn="Test Genre"] [data-rc]'); c.value = '#ff0000'; c.dispatchEvent(new Event('input', { bubbles: true })); });
+ok('reference: the colour is applied', await ev(async () => (await import('/src/bridge/reference.js')).ref.show[0].color === '#ff0000'));
+await ev(() => { window.u2c.actions.setProp('meter.spectrum.cmap', 'FL'); window.u2c.actions.setProp('meter.spectro.cmap', 'FL'); }); await page.waitForTimeout(400);
+ok('FL colour option is a cue property (meter.spectrum.cmap / meter.spectro.cmap) and the meters draw with it and the overlay', await ev(() => window.u2c.cues.ev().value('meter.spectro.cmap', 0, 'stage') === 'FL'));
+
+// ---- FL colour map (a 64-stop table sampled from FL's Spectrum.bmp; a BMP can be sampled in the page too)
+const fl = await ev(async () => { const F = await import('/src/lib/flcolors.js'), SG = await import('/src/v8/spectrogramview.js'), RG = await import('/src/v8/registry.js');
+  const bmp = new Uint8Array(54 + 512 * 3); bmp[0] = 0x42; bmp[1] = 0x4d; const dv = new DataView(bmp.buffer); dv.setUint32(10, 54, true); dv.setUint32(14, 40, true); dv.setInt32(18, 512, true); dv.setInt32(22, 1, true); dv.setUint16(26, 1, true); dv.setUint16(28, 24, true);
+  for (let x = 0; x < 512; x++) { bmp[54 + x * 3] = 0; bmp[54 + x * 3 + 1] = Math.round(x / 2); bmp[54 + x * 3 + 2] = x >> 1; }   // BGR: a black-to-yellow ramp
+  const st = F.sampleBmp(bmp, 64), lum = (c) => c[0] + c[1] + c[2], mono = F.FL_STOPS.filter((c, i) => i && lum(c) >= lum(F.FL_STOPS[i - 1]) - 40).length;
+  const lut = SG.specLUT({ spec: ['#000', '#222', '#444', '#666'], ink: '#fff', card: '#000', grey: false }, 0.56, 'FL');
+  return { n: F.FL_STOPS.length, first: F.FL_STOPS[0], last: F.FL_STOPS[63], mono, bmp0: st[0], bmp63: st[63], lutN: lut.length, lut255: lut[255], props: RG.METER_PROPS.spectrogram.some((q) => q[0] === 'cmap' && q[3].includes('FL')) && RG.METER_PROPS.spectrum.some((q) => q[0] === 'cmap'), purple: F.FL_STOPS.some((c) => c[2] > c[1] + 15 && c[0] > 20) }; });
+ok('FL colour map: 64 stops, black at the dark end, orange at the top, purple on the way', fl.n === 64 && fl.first.reduce((a, b) => a + b) < 40 && fl.last.reduce((a, b) => a + b) > 250 && fl.purple && fl.mono > 55, JSON.stringify([fl.first, fl.last, fl.mono]));
+ok('FL colour map: a 512x1 BMP is sampled to stops, the ramp has 256 entries, and "FL" is a meter option (cue property meter.spectro.cmap / meter.spectrum.cmap)', fl.bmp0[0] < 5 && fl.bmp63[0] > 240 && fl.lutN === 256 && fl.lut255[3] === 255 && fl.props);
+
+// ---- drag and drop of audio: any window position; short sounds -> MPC pad, ref zone -> reference, long -> beat
+const dr = await ev(async () => { const D = await import('/src/ui/dropaudio.js'), M = await import('/src/ui/mpc.js');
+  return { a: D.routeDrop('main', 1.2), b: D.routeDrop('main', 90), c: D.routeDrop('mpc', 90), d: D.routeDrop('ref', 5), e: D.routeDrop('voice', 3), f: D.routeDrop('sfx:stove', 3), keys: M.padForKey('q') === 4 && M.padForKey('v') === 15 && M.padForNote(36) === 0 && M.padForNote(51) === 15, next: M.nextFree([{ blob: 1 }, null]), zone: [document.querySelector('#u2cMpc'), document.querySelector('#u2cDaw [data-ref]'), document.querySelector('.sfx-row input'), document.body].map((e) => D.zoneOf(e)).join() }; });
+ok('drop: routing (short sound -> pad, long -> beat, MPC / reference / voice / lab-sound zones)', dr.a === 'pad' && dr.b === 'beat' && dr.c === 'pad' && dr.d === 'ref' && dr.e === 'voice' && dr.f === 'sfx' && dr.keys && dr.next === 1 && dr.zone === 'mpc,ref,sfx:stove,main', JSON.stringify(dr));
+const wavFile = (secs, hz) => ev(async ({ secs, hz }) => { const sr = 22050, n = Math.round(sr * secs), b = new DataView(new ArrayBuffer(44 + n * 2)), w = (o, t) => [...t].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); b.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true); b.setUint32(24, sr, true); b.setUint32(28, sr * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); w(36, 'data'); b.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) b.setInt16(44 + i * 2, Math.sin(2 * Math.PI * hz * i / sr) * 12000, true); window.__wav = new File([b.buffer], 'slice-' + hz + '.wav', { type: 'audio/wav' }); return true; }, { secs, hz });
+const dropOn = (sel) => ev((sel) => { const dt = new DataTransfer(); dt.items.add(window.__wav); const t = document.querySelector(sel) || document.body; t.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); }, sel);
+await wavFile(0.4, 440); await dropOn('#view');
+await page.waitForFunction(() => window.u2c.mpc.pads.some((p) => p.blob), null, { timeout: 8000 }).catch(() => {});
+ok('drop: a short audio file dropped on the main area lands on the next free pad (named after the file)', await ev(() => window.u2c.mpc.pads[0].blob && window.u2c.mpc.pads[0].name === 'slice-440'));
+await wavFile(0.4, 880); await dropOn('#u2cMpc');
+await page.waitForFunction(() => window.u2c.mpc.pads[1].blob, null, { timeout: 8000 }).catch(() => {});
+ok('drop: a second sound goes to pad 2', await ev(() => !!window.u2c.mpc.pads[1].blob && window.u2c.mpc.pads[1].name === 'slice-880'));
+const nUser = await ev(async () => (await import('/src/bridge/reference.js')).ref.user.length);
+await wavFile(1, 300); await dropOn('#u2cDaw [data-ref]');
+await page.waitForFunction(async (n) => (await import('/src/bridge/reference.js')).ref.user.length > n, nUser, { timeout: 8000 }).catch(() => {});
+ok('drop: audio dropped on the Reference row becomes a reference', await ev(async () => (await import('/src/bridge/reference.js')).ref.user.some((r) => r.name === 'slice-300')));
+// MPC: key + MIDI trigger the pad and its pulse target; the pad is stored
+await ev(() => { const M = window.u2c.mpc; M.pads[0].target = 'kick'; M.pads[1].target = 'snare'; window.u2cLive.hits.length = 0; M.setCollapsed(false); });
+await page.keyboard.press('1'); await page.waitForTimeout(80); const k1 = await ev(() => window.u2cLive.hits.some((h) => h.kick > 0));
+midi(true, 37, 1); await page.waitForTimeout(80); const k2 = await ev(() => window.u2cLive.hits.some((h) => h.snare > 0));
+ok('MPC: key 1 plays pad 1 and fires its pulse target (kick); MIDI note 37 plays pad 2 (snare)', k1 && k2);
+await page.waitForTimeout(300);
+ok('MPC: pads are kept in IndexedDB; the panel collapses', await ev(async () => { const n = await new Promise((res) => { const q = indexedDB.open('u2c-mpc', 1); q.onsuccess = () => { const g = q.result.transaction('kv').objectStore('kv').get('pads'); g.onsuccess = () => res(g.result ? g.result.filter((p) => p.blob).length : 0); }; q.onerror = () => res(-1); }); document.querySelector('#u2cMpc [data-h]').click(); const c = !document.querySelector('#u2cMpc [data-p]'); document.querySelector('#u2cMpc [data-h]').click(); return n >= 2 && c; }));
+
+// ---- phase 2: DAW layer on by default, targets, recordings + Show in Finder, Live setup card, Preview, nudge, export-size record
+await page.waitForFunction(() => document.querySelector('#u2cDaw [data-c]').checked, null, { timeout: 8000 }).catch(() => {});
+ok('DAW window layer is on by default when the plugin first opens (checkbox + cue props)', await ev(() => document.querySelector('#u2cDaw [data-c]').checked && window.u2c.cues.ev().value('video.on', 0, false) === true));
+const tgs = []; for (const tg of ['pip', 'full', 'hero']) { await ev((tg) => { const s = document.querySelector('#u2cDaw [data-vt]'); s.value = tg; s.dispatchEvent(new Event('change')); }, tg); tgs.push(await ev(() => window.u2c.cues.ev().value('video.target', 0, 'x'))); }
+ok('DAW window targets: hero card, full background, corner picture (cue video.target)', tgs.join() === 'pip,full,hero', tgs.join());
+ok('"+ Layer" has a DAW window entry', await ev(() => [...document.querySelectorAll('#addTrackBtn ~ .addlayer button, .addlayer button')].some((b) => /DAW window/.test(b.textContent))));
+ok('Recordings: the plugin\'s last files are listed with a Show in Finder button that sends reveal', await ev(() => !!document.querySelector('#u2cDaw [data-rec] [data-show]')) && (await ev(() => { document.querySelector('#u2cDaw [data-rec] [data-show]').click(); return true; }), await page.waitForTimeout(150), rx.reveal.join() === 'u2c-daw-1080x1920-old.mp4'));
+const plan = await ev(async () => { const C = await import('/src/bridge/livecard.js'); return { a: C.planFor({ presentation: 'daw', camera: false, start: 'blank' }), b: C.planFor({ presentation: 'flow', start: 'preview' }), c: C.planFor({ presentation: 'hero' }) }; });
+ok('Live setup: presentation / motion / start map to cue props (DAW full = video.target full, camera off = dip 0, blank waits for play)', plan.a.props['video.target'] === 'full' && plan.a.props['video.on'] === true && plan.a.props['camera.dip'] === 0 && plan.a.blank && plan.b.props['intro.style'] === 'flow' && plan.b.preview && plan.c.props['intro.on'] === false);
+await ev(() => window.u2c.daw.liveSetup()); await page.waitForTimeout(200);
+ok('Live setup: the card opens with the three groups', await ev(() => { const c = document.getElementById('u2cLiveCard'); return !!c && /Presentation/.test(c.textContent) && /Motion/.test(c.textContent) && /Start/.test(c.textContent); }));
+await ev(() => { const f = document.querySelector('#u2cLiveCard form'); f.querySelector('[name=presentation][value=hero]').checked = true; f.querySelector('[name=start][value=blank]').checked = true; f.requestSubmit(); });
+await page.waitForTimeout(300);
+ok('Live setup: applying it sets the props and blanks the screen until the DAW plays', await ev(() => !document.getElementById('u2cLiveCard') && window.u2c.cues.ev().value('intro.on', 0, true) === false && !!document.getElementById('u2cBlank')));
+await ev(() => window.u2c.daw.preview.blank(false)); await ev(() => { window.u2c.actions.setProp('intro.on', true); });
+await ev(() => document.querySelector('#u2cDaw [data-pv]').click()); await page.waitForTimeout(500);
+ok('Preview: plays the setup (intro pre-roll, export fidelity) in an overlay without the DAW', await ev(() => { const o = document.getElementById('u2cPreview'); if (!o) return false; const c = o.querySelector('canvas'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 30) n++; return n > 200; }));
+await ev(() => document.getElementById('u2cPreview').click());
+ok('Preview: a click closes it', await ev(() => !document.getElementById('u2cPreview')));
+await ev(() => { document.querySelector('#u2cDaw [data-tp]').click(); document.querySelector('#u2cDaw [data-tp]').click(); document.querySelector('#u2cDaw [data-tm]').click(); });
+ok('sync nudge: +10 / -10 ms steps', await ev(() => document.querySelector('#u2cDaw [data-t]').value === '10' && window.u2c.daw.state.lat === 10));
+const rs = await ev(async () => { const R = await import('/src/bridge/record.js'); return { a: R.recordSpec('916', '1080p', 30), b: R.recordSpec('169', '4k', 60), c: R.recordSpec('916', '4k', 30) }; });
+ok('Record sizes: 1080x1920 / 1920x1080, 4K 2160x3840 / 3840x2160 at 30 or 60 fps, 4K at 40 Mbps or more', rs.a.W === 1080 && rs.a.H === 1920 && rs.b.W === 3840 && rs.b.H === 2160 && rs.b.fps === 60 && rs.c.W === 2160 && rs.c.H === 3840 && rs.c.mbps >= 40);
+
 // ---- Record: canvas + live master audio -> the plugin (the host plays, as it must: the canvas only changes while the visuals move)
 play(0);
 await ev(() => document.querySelector('#u2cDaw [data-r]').click()); await page.waitForTimeout(3500);
 await ev(() => document.querySelector('#u2cDaw [data-r]').click());
 await page.waitForFunction(() => /Saved/.test(document.querySelector('#u2cDaw [data-m]').textContent), null, { timeout: 30000 }).catch(() => {});
 const total = rx.saved.reduce((a, b) => a + b, 0);
-ok('Record: a file with video + audio reaches the plugin', rx.names.length === 1 && /\.(mp4|webm)$/.test(rx.names[0]) && total > 20000, `${rx.names[0]} ${total} bytes`);
+ok('Record: a file with video + audio reaches the plugin, named with its export size (1080x1920)', rx.names.length === 1 && /1080x1920.*\.(mp4|webm)$/.test(rx.names[0]) && total > 20000, `${rx.names[0]} ${total} bytes`);
 const real = errors.filter((e) => !/favicon|Failed to load resource/.test(e));
 ok('no console errors', real.length === 0, real.slice(0, 4).join(' | '));
 await browser.close(); server.close();

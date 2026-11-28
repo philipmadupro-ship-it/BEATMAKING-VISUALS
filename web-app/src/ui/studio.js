@@ -17,7 +17,8 @@ export function createStudio(app) {
   const P = () => app.store.project, track = () => app.store.session.track, tl = () => app.cuetl;
   const markDirty = () => { dirty = true; };
   const phone = () => matchMedia('(max-width: 900px)').matches;
-  function layout() { const { W, H } = ASPECTS[P().aspect], bw = stage.clientWidth - 24, bh = stage.clientHeight - 24, dpr = Math.max(1, Math.min(2, devicePixelRatio || 1));
+  const PLUGIN = /[?&]daw=/.test(location.search) || !!document.querySelector('meta[name=u2c-daw-ws]');
+  function layout() { const { W, H } = ASPECTS[P().aspect], bw = stage.clientWidth - 24, bh = stage.clientHeight - 24, dpr = Math.max(1, Math.min(PLUGIN ? 1 : 2, devicePixelRatio || 1));   // in the plugin the preview is drawn at 1x (the recorder renders offscreen at export size)
     const cssW = zoom === 'fit' ? W * Math.max(.05, Math.min(bw / W, bh / H)) : W, cssH = cssW * H / W; view.style.width = cssW + 'px'; view.style.height = cssH + 'px';
     // the preview renders at the displayed size x dpr (capped at the delivery size), export always at full size
     // v21 playback resolution (Full / 1/2 / 1/4, Premiere's "Playback Resolution"): fewer pixels per preview frame, export untouched

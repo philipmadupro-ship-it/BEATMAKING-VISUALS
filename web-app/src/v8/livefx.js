@@ -8,6 +8,7 @@
 //   MIDI notes (from the plugin's MIDI input): a layer with cue props midi.* - roll (falling notes) or pads (4x4 hit pads), and optionally the same pulses
 //   sends (U2C Send instances, one per DAW track), each assigned a target in the DAW panel: pulses (its hits act like master hits),
 //   shake (bass level shakes the camera), glow (mid level lights the frame)
+import { ref as REF } from '../bridge/reference.js';
 const G = globalThis;
 export const live = () => (G.u2cLive = G.u2cLive || { on: false, hits: [], notes: [], midi: [], sends: {}, meters: null, lat: 0 });
 const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
@@ -84,5 +85,7 @@ export function draw(c, W, H, V, S, rgba, now = performance.now()) {
         c.strokeStyle = rgba(S.grey ? '#ffffff' : S.hot || S.ink, Math.min(1, a)); c.lineWidth = 2; c.beginPath(); c.moveTo(x - r, y); c.lineTo(x + r, y); c.moveTo(x, y - r); c.lineTo(x, y + r); c.stroke(); } } }
   if (V('live.send.on', true) !== false) { const g = sendEnv('mid', 'glow', now) * V('live.send.amt', 1);
     if (g > 0.02) { const r = Math.max(W, H) * 0.7, gr = c.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, r); gr.addColorStop(0, rgba(S.grey ? '#ffffff' : S.hot || S.ink, Math.min(0.6, 0.4 * g))); gr.addColorStop(1, rgba(S.hot || S.ink, 0)); c.fillStyle = gr; c.fillRect(0, 0, W, H); } }
+  { const gl = V('live.ref.glow', 0) * Math.max(0, (REF.match - 0.7) / 0.3);   // the mix sits on the chosen reference: a soft glow, brighter the closer it is
+    if (REF.cur && gl > 0.02) { const r = Math.max(W, H) * 0.75, gr = c.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, r); gr.addColorStop(0, rgba(S.grey ? '#ffffff' : S.hot || S.ink, Math.min(0.5, 0.35 * gl))); gr.addColorStop(1, rgba(S.hot || S.ink, 0)); c.fillStyle = gr; c.fillRect(0, 0, W, H); } }
   c.restore();
 }

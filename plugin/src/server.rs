@@ -340,6 +340,19 @@ fn out_dir() -> std::path::PathBuf {
     home.join(if cfg!(target_os = "macos") { "Movies" } else { "Videos" }).join("U2C Studio")
 }
 
+/// `{t:"recordings", list:[{name, path, size, age}]}`: the 10 newest files in the recordings folder.
+fn recordings_json() -> String {
+    let mut v: Vec<(std::time::SystemTime, String, u64)> = std::fs::read_dir(out_dir())
+        .map(|d| d.flatten().filter_map(|e| { let m = e.metadata().ok()?; if !m.is_file() { return None; } Some((m.modified().ok()?, e.file_name().to_string_lossy().into_owned(), m.len())) }).collect())
+        .unwrap_or_default();
+    v.sort_by(|a, b| b.0.cmp(&a.0));
+    let now = std::time::SystemTime::now();
+    let list: Vec<serde_json::Value> = v.into_iter().take(10).map(|(t, n, sz)| {
+        serde_json::json!({"name": n, "path": out_dir().join(&n).to_string_lossy(), "size": sz, "age": now.duration_since(t).map(|d| d.as_secs()).unwrap_or(0)})
+    }).collect();
+    serde_json::json!({"t": "recordings", "list": list}).to_string()
+}
+
 fn safe_name(n: &str) -> String {
     let n: String = n.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')).take(80).collect();
     if n.is_empty() || n.starts_with('.') { "u2c-recording.webm".into() } else { n }
@@ -458,6 +471,18 @@ fn client(stream: TcpStream, sh: Arc<Shared>, cap: Arc<Capture>) -> Result<(), B
                             c.release();
                         }
                     }
+                    "reveal" => {
+                        // Show a recording in Finder / Explorer. Only files inside the recordings folder (by name) can be revealed.
+                        let p = out_dir().join(safe_name(v["name"].as_str().unwrap_or("")));
+                        if p.is_file() {
+                            #[cfg(target_os = "macos")] let _ = std::process::Command::new("open").arg("-R").arg(&p).spawn();
+                            #[cfg(target_os = "windows")] let _ = std::process::Command::new("explorer").arg(format!("/select,{}", p.display())).spawn();
+                            #[cfg(target_os = "linux")] let _ = std::process::Command::new("xdg-open").arg(out_dir()).spawn();
+                        }
+                    }
+                    "recordings" => {
+                        ws.send(Message::Text(recordings_json().into()))?;
+                    }
                     "save_begin" => {
                         let dir = out_dir();
                         let _ = std::fs::create_dir_all(&dir);
@@ -473,6 +498,7 @@ fn client(stream: TcpStream, sh: Arc<Shared>, cap: Arc<Capture>) -> Result<(), B
                             None => serde_json::json!({"t": "saved", "path": null}),
                         };
                         ws.send(Message::Text(msg.to_string()))?;
+                        ws.send(Message::Text(recordings_json().into()))?;
                     }
                     _ => {}
                 }

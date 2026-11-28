@@ -920,6 +920,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
     LIVEFX.draw(c, W, H, V, S, rgba);   // live DAW hits (kick lift, snare flash, hat sparkles): only while the plugin feeds it
+    { const vl = L.videoLayer; if (vl && vl.w) { const pw = W * (port ? 0.46 : 0.30), ph = pw * vl.h / vl.w, pm = W * 0.03; videoDraw('pip', W - pw - pm, pm * 1.6, pw, ph); } }   // picture-in-picture corner
     videoDraw('full', 0, 0, W, H);   // v19 video layer, full frame (screen space, over the windows, under halation / overlays)
     if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16) * (zo ? 1 - zo.e : 1));   // v25: the halation leaves with the zoom (frame 0 has none)
     if (L.openFx) INTRO.streak(c, L.openFx.px, L.openFx.py, L.openFx.dl);
