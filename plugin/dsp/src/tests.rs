@@ -61,12 +61,12 @@ fn correlation_and_width() {
         m.frame()
     };
     let mono = run(&x, &x);
-    assert!(mono.corr > 0.99 && mono.width < 0.01);
+    assert!(mono.corr > 0.99 && mono.width < 0.01);   // side/mid ratio: 0 for mono
     let anti = run(&x, &neg);
-    assert!(anti.corr < -0.99 && anti.width > 0.99);
+    assert!(anti.corr < -0.99 && anti.width > 3.0);
     let one = run(&x, &zero);
     assert_eq!(one.corr, 0.0);
-    assert!((one.width - 0.5).abs() < 0.01);
+    assert!((one.width - 1.0).abs() < 0.01);
 }
 
 #[test]
@@ -79,8 +79,8 @@ fn spectrum_is_calibrated_to_dbfs() {
     let total = db10(f.spec.iter().map(|d| 10f32.powf(d / 10.0)).sum::<f32>());
     assert!((total + 6.0).abs() < 0.5, "total {total}");
     let (pk, v) = f.spec.iter().enumerate().fold((0, -999.0), |a, (i, &d)| if d > a.1 { (i, d) } else { a });
-    let hz = SPEC_LO * (SPEC_HI / SPEC_LO).powf((pk as f32 + 0.5) / SPEC_BINS as f32);
-    assert!((hz - 1000.0).abs() < 150.0 && v > -9.5, "peak bin {pk} {hz} Hz {v} dB");
+    let hz = spec_center(pk);
+    assert!((hz - 1000.0).abs() < 100.0 && v > -9.5, "peak bin {pk} {hz} Hz {v} dB");
 }
 
 // ---- drum hits

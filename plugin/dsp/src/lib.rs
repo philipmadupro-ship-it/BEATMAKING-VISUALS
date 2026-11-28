@@ -1,7 +1,7 @@
 //! Pure DSP for the U2C plugins (no audio-thread or I/O code here, so it is unit-testable offline).
 //!  - `HitDetector`: band-split spectral flux (kick < 150 Hz, snare 150 Hz-4 kHz, hat > 6 kHz), adaptive thresholds.
 //!  - `Meters`: BS.1770 K-weighted momentary / short-term LUFS, 4x oversampled true peak, RMS / peak L/R, correlation, width,
-//!    calibrated 48-bin log spectrum (30 Hz-14 kHz, the same bins as the web app: a full-scale sine = 0 dB).
+//!    calibrated 1/6-octave spectrum (61 bands, the web app's own bins: a full-scale sine = 0 dB).
 //!  - `bands8`: 8 octave-ish band levels for U2C Send.
 use std::f32::consts::PI;
 
@@ -260,10 +260,12 @@ fn tp_coefs() -> [[f32; TP_TAPS]; 4] {
     c
 }
 
-pub const SPEC_BINS: usize = 48;
-pub const SPEC_LO: f32 = 30.0;
-pub const SPEC_HI: f32 = 14000.0;
-const SPEC_N: usize = 4096;
+/// 61 one-sixth-octave bands centred on 1000 * 2^((i - 34) / 6) Hz (19.7 Hz .. 20.2 kHz): the web app's own spectrum bins.
+pub const SPEC_BINS: usize = 61;
+pub fn spec_center(i: usize) -> f32 {
+    1000.0 * 2f32.powf((i as f32 - 34.0) / 6.0)
+}
+const SPEC_N: usize = 8192;
 const SUB_HZ: usize = 100; // 10 ms sub-blocks
 
 #[derive(Clone, Debug, Default)]
@@ -420,7 +422,7 @@ impl Meters {
         let e = c2.ll.max(c2.rr);
         let corr = if e < 1e-10 || c2.ll.min(c2.rr) < e * 1e-6 { 0.0 } else { (c2.lr / (c2.ll * c2.rr).sqrt()).clamp(-1.0, 1.0) as f32 };
         let (mid, side) = (c2.mm.sqrt(), c2.ss.sqrt());
-        let width = if mid + side < 1e-9 { 0.0 } else { (side / (mid + side)) as f32 };
+        let width = if side < 1e-9 { 0.0 } else { (side / mid.max(side * 0.25)).min(4.0) as f32 }; // side/mid RMS ratio, as the app (capped at 4)
         let f = MeterFrame {
             momentary: lk(m.kl + m.kr),
             short: lk(s.kl + s.kr),
@@ -438,7 +440,7 @@ impl Meters {
         self.tp = [0.0; 2];
         f
     }
-    /// Calibrated dBFS per log bin (full-scale sine = 0 dB), 30 Hz-14 kHz.
+    /// Calibrated dBFS per 1/6-octave band (full-scale sine = 0 dB).
     fn spectrum(&mut self) -> Vec<f32> {
         if self.mono.len() < SPEC_N {
             return vec![-120.0; SPEC_BINS];
@@ -446,10 +448,10 @@ impl Meters {
         let (re, im, amp) = &mut self.scratch;
         self.fft.amp(&self.mono, re, im, amp);
         let hz = SPEC_N as f32 / self.sr; // bins per Hz
-        let edge = |i: usize| SPEC_LO * (SPEC_HI / SPEC_LO).powf(i as f32 / SPEC_BINS as f32);
+        let r = 2f32.powf(1.0 / 12.0);
         (0..SPEC_BINS)
             .map(|i| {
-                let (lo, hi) = (edge(i) * hz, edge(i + 1) * hz);
+                let (lo, hi) = (spec_center(i) / r * hz, spec_center(i) * r * hz);
                 let (a, b) = (lo.ceil() as usize, (hi.ceil() as usize).min(amp.len()));
                 let p = if b > a {
                     amp[a..b].iter().map(|v| v * v).sum::<f32>()
