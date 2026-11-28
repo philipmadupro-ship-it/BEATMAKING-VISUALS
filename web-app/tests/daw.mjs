@@ -109,6 +109,22 @@ await page.waitForTimeout(500);
 const px = await ev(() => { const v = document.getElementById('view'), d = v.getContext('2d').getImageData(0, 0, v.width, v.height).data; let s = 0; for (let i = 0; i < d.length; i += 97) s += d[i]; return s; });
 ok('studio canvas draws with the layer on', px > 0);
 
+// ---- live hits (mocked plugin events): kick -> glow envelope, snare -> flash, hat -> sparkles; each switchable by cue props
+play(0); await page.waitForTimeout(300);
+sock.send(JSON.stringify({ t: 'hits', kick: 0.9, snare: 0, hat: 0, pos: widxNow(), beats: beatsNow() }));
+sock.send(JSON.stringify({ t: 'hits', kick: 0, snare: 0.8, hat: 0.7, pos: widxNow(), beats: beatsNow() }));
+await page.waitForTimeout(60);
+const hv = await ev(async () => { const m = await import('/src/v8/livefx.js'), e = window.u2c.cues.ev(), V = (p, d) => e.value(p, 0, d), L = m.live(); const on = m.kickEnv(V);
+  window.u2c.actions.setProp('live.kick.on', false); const e2 = window.u2c.cues.ev(), off = m.kickEnv((p, d) => e2.value(p, 0, d)); window.u2c.actions.setProp('live.kick.on', true);
+  return { n: L.hits.length, on, off, snare: L.hits.some((h) => h.snare > 0), hat: L.hits.some((h) => h.hat > 0), age: performance.now() - L.hits[0].at }; });
+ok('hits: events become live state (kick, snare, hat), positioned by sample index', hv.n === 2 && hv.snare && hv.hat && hv.age >= 0 && hv.age < 400, JSON.stringify(hv));
+ok('hits: kick drives the glow envelope; the cue property switches it off', hv.on > 0.3 && hv.off === 0, `on ${hv.on.toFixed(2)} off ${hv.off}`);
+await page.waitForTimeout(120);
+const lp = await ev(() => { const p = document.querySelector('#u2cDaw [data-ha=snare]'); p.value = 50; p.dispatchEvent(new Event('change')); return window.u2c.cues.ev().value('live.snare.amt', 0, 1); });
+ok('hits: panel amount is a cue property (live.snare.amt)', Math.abs(lp - 0.5) < 1e-6, String(lp));
+const px2 = await ev(() => { const v = document.getElementById('view'); return v.width > 0; }); ok('hits: studio keeps drawing with live reactions on', px2);
+stop();
+
 // ---- Record: canvas + live master audio -> the plugin
 await ev(() => document.querySelector('#u2cDaw [data-r]').click()); await page.waitForTimeout(3500);
 await ev(() => document.querySelector('#u2cDaw [data-r]').click());

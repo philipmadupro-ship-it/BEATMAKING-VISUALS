@@ -14,7 +14,8 @@ import { DEFAULT_TAGS, VOICE_ATS, VOICE_DURS } from './tags.js';
 import { mergeDeep, createEvaluator, emptySheet } from '../cues/schema.js';
 import { buildRegistry, meterPath } from './registry.js';
 import { INTRO_HIT, createIntro, coverScrim } from './intro.js';   // v11 intro
-import { userEffects } from './usereffects.js';   // v27 user effects (ufx.*)
+import { userEffects } from './usereffects.js';
+import * as LIVEFX from './livefx.js';   // live DAW reactions (hits / MIDI / sends)   // v27 user effects (ufx.*)
 
 const METER_KIND = { scope: 'logo', session: 'waveform', spectro: 'spectrogram', loud: 'loudness' };
 
@@ -40,7 +41,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // then a smooth exponential decay (cue logo.decay, default 0.17 s), never a hard off (the tail is carried to 1.6 s).
   const KICKS = L.kickHits.map(([tk, st]) => [Math.max(0.55, Math.min(1, st)), L.kickF(tk)]);   // on-grid kicks only (L.kickT timing), the same frame as kickEnv
   function glowAt(f, tau = V('logo.decay', 0.17)) {
-    let m = 0; for (let i = KICKS.length - 1; i >= 0; i--) { const d = (f - KICKS[i][1]) / FPS; if (d < 0) continue; if (d > 1.6) break; m = Math.max(m, KICKS[i][0] * Math.exp(-d / tau)); } return m;
+    let m = 0; for (let i = KICKS.length - 1; i >= 0; i--) { const d = (f - KICKS[i][1]) / FPS; if (d < 0) continue; if (d > 1.6) break; m = Math.max(m, KICKS[i][0] * Math.exp(-d / tau)); } return Math.max(m, LIVEFX.kickEnv(V));
   }
   const WIN = (id) => tag('windows.' + (id === 'chains' ? 'logo' : id === 'session' ? 'wave' : id === 'stereo' ? 'gonio' : id)) || id;
 
@@ -917,6 +918,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (LOOK === 'player' && V('focus.bracket', true)) focusBracket(t);
     hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
+    LIVEFX.draw(c, W, H, V, S, rgba);   // live DAW hits (kick lift, snare flash, hat sparkles): only while the plugin feeds it
     videoDraw('full', 0, 0, W, H);   // v19 video layer, full frame (screen space, over the windows, under halation / overlays)
     if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16) * (zo ? 1 - zo.e : 1));   // v25: the halation leaves with the zoom (frame 0 has none)
     if (L.openFx) INTRO.streak(c, L.openFx.px, L.openFx.py, L.openFx.dl);

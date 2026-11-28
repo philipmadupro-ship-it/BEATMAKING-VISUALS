@@ -1,11 +1,13 @@
 // DAW bridge. Active only with ?daw=ws://127.0.0.1:PORT, or when the page is served by the U2C plugin (meta u2c-daw-ws).
 // Wire (localhost WebSocket): text {t:"transport", bpm, beats, widx, playing, ts:[n,d], loop:[a,b]|null, rms, peak, sr} (beats = host PPQ
 // of the newest audio sample); client {t:"pull"} -> binary "PCM0" [u32 sr][u32 n][f64 first sample index][f32 L*n][f32 R*n];
+// text {t:"hits", kick, snare, hat (strength 0..1, 0 = none), pos (sample index, same space as transport.widx), beats}: drum hits found by the plugin;
 // client {t:"cap", on, fps, w} -> binary "JPG0"+jpeg frames of the DAW window; client {t:"save_begin", name} + binary chunks + {t:"save_end"}.
 // Clock: while the host PLAYS, the app follows the host PPQ, interpolated every animation frame from the last transport message.
 // While it is STOPPED the app runs its own clock (intro, sphere pick, scrub: exactly as in the web app).
 // "Receive audio from: Master": the live stereo master is written into a bar-aligned window (4 bars), analysed like a file in the
 // worker, and shown by the unchanged film; a looping DAW is exact from the second pass, a linear one trails by the analysis time.
+import { live as liveState, addHit } from '../v8/livefx.js';
 const LIVE_BARS = 4;
 const tagOf = (buf) => String.fromCharCode(...new Uint8Array(buf, 0, 4));
 
@@ -115,7 +117,7 @@ export async function initDaw(app) {
   function tick(now) {
     requestAnimationFrame(tick);
     if (pending) { const h = pending; pending = null; apply(h); }
-    if (app.store.session.exporting) { return; }
+    if (app.store.session.exporting) { liveState().on = false; return; }
     if (st.follow && an.playing && trk()) {
       const b = beatsAt(now) + st.lat / 1000 * an.bps;
       clk().setManual(Math.max(0, lv.on ? liveT(b) : beatsToT(b))); following = true; dirty();
@@ -131,11 +133,18 @@ export async function initDaw(app) {
     ws.onmessage = (e) => {
       if (typeof e.data === 'string') { let m; try { m = JSON.parse(e.data); } catch (_) { return; }
         if (m.t === 'transport') onTransport(m);
+        else if (m.t === 'hits') onHits(m);
         else if (m.t === 'windows') ui.setWindows(m.list || []);
         else if (m.t === 'cap_status') { st.capMsg = m.msg; if (m.msg !== 'ok') ui.msg('DAW image: ' + m.msg.replace(/^(permission|error): /, '')); }
         else if (m.t === 'saved') { if (saveDone) saveDone(m.path); } }
       else if (e.data.byteLength > 4) { const tg = tagOf(e.data); if (tg === 'JPG0') capFrame(e.data); else if (tg === 'PCM0') onPcm(e.data); }
     };
+  }
+  // ---- live hits: the plugin stamps each with the sample index of the onset; its age is (newest sample - pos) / sr
+  function onHits(m) {
+    const h = st.host, now = performance.now(), sr = an.sr || 44100;
+    const newest = h ? h.widx + (an.playing ? (now - h.rx) / 1000 * sr : 0) : m.pos, age = Math.max(0, Math.min(500, (newest - m.pos) / sr * 1000));
+    liveState().on = !app.store.session.exporting; addHit(m, now - age - st.lat); if (!an.playing) dirty();
   }
   const send = (m) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
   function onPcm(buf) {
@@ -183,6 +192,7 @@ export async function initDaw(app) {
   ui.onWindows = () => send({ t: 'windows' });
   ui.onPickWindow = (id) => { send({ t: 'pick_window', id: +id || 0 }); try { localStorage.setItem('u2c.daw.win', String(id)); } catch (_) {} };
   ui.onLayer = (op, bl, commit) => { A().setProp('video.opacity', op, !commit); A().setProp('video.blend', bl, !commit); dirty(); };
+  ui.onProp = (p, v) => { A().setProp(p, v); dirty(); };
   ui.onLat = (v) => { st.lat = v; };
   ui.onBrowser = () => { send({ t: 'open_browser' }); ui.msg('Opened U2C Studio in your browser.'); };
   const api = { state: st, startRecord, stopRecord, startLive, send, live: lv };
@@ -199,11 +209,11 @@ function mountUi(st) {
   el.innerHTML = '<b data-mode style="letter-spacing:.06em"></b><span data-s>DAW: connecting</span><label title="Follow the DAW transport while it plays"><input type="checkbox" data-f checked> follow</label>' +
     '<button data-l style="cursor:pointer">Master live</button><label title="Show the DAW window on the hero card"><input type="checkbox" data-c> DAW image</label>' +
     '<label>opacity <input type="range" data-o min="0" max="100" value="60" style="width:70px;vertical-align:middle"></label><select data-b><option>normal</option><option>screen</option><option>multiply</option></select><select data-w title="Which window to show" style="max-width:170px"><option value="0">window: DAW (auto)</option></select><button data-wr title="Refresh the window list">↻</button>' +
-    '<label title="Shift the visuals against the DAW (ms)">sync <input type="number" data-t value="0" step="10" style="width:52px"></label><button data-r style="cursor:pointer">Record DAW</button><span data-m style="flex-basis:100%;opacity:.8"></span>';
+    '<span data-hits style="flex-basis:100%">hits: ' + ['kick', 'snare', 'hat'].map((k) => `<label><input type="checkbox" data-hk="${k}" checked> ${k}</label> <input type="range" data-ha="${k}" min="0" max="200" value="100" style="width:52px;vertical-align:middle" title="${k} amount">`).join(' ') + '</span><label title="Shift the visuals against the DAW (ms)">sync <input type="number" data-t value="0" step="10" style="width:52px"></label><button data-r style="cursor:pointer">Record DAW</button><span data-m style="flex-basis:100%;opacity:.8"></span>';
   document.body.appendChild(el);
   const q = (s) => el.querySelector(s);
   const ui = {
-    onRecord() {}, onFollow() {}, onLive() {}, onCap() {}, onLayer() {}, onWindows() {}, onPickWindow() {}, onLat() {}, onBrowser() {},
+    onProp() {}, onRecord() {}, onFollow() {}, onLive() {}, onCap() {}, onLayer() {}, onWindows() {}, onPickWindow() {}, onLat() {}, onBrowser() {},
     update(s) { const h = s.host, ts = h && h.ts ? h.ts.join('/') : '4/4', bar = h ? Math.floor(h.beats / 4) + 1 : 0, lp = h && h.loop ? ` loop ${(h.loop[0] / 4 + 1).toFixed(0)}-${(h.loop[1] / 4 + 1).toFixed(0)}` : '';
       q('[data-mode]').textContent = s.live ? 'LIVE' : s.connected ? 'DAW' : 'OFFLINE'; q('[data-mode]').style.color = s.live ? '#ff5d5d' : '#9ad';
       q('[data-s]').textContent = s.connected ? (h ? `${h.playing ? 'play' : 'stop'} ${h.bpm.toFixed(1)} BPM ${ts} bar ${bar}.${(Math.floor(h.beats % 4) + 1)}${lp}` : 'connected') : 'connecting';
@@ -218,6 +228,7 @@ function mountUi(st) {
   const layer = (commit) => () => ui.onLayer(q('[data-o]').value / 100, q('[data-b]').value, commit);
   q('[data-r]').onclick = () => ui.onRecord(); q('[data-f]').onchange = (e) => ui.onFollow(e.target.checked); q('[data-l]').onclick = () => ui.onLive();
   q('[data-c]').onchange = (e) => ui.onCap(e.target.checked); q('[data-o]').oninput = layer(false); q('[data-o]').onchange = layer(true); q('[data-b]').onchange = layer(true);
+  for (const k of ['kick', 'snare', 'hat']) { q(`[data-hk=${k}]`).onchange = (e) => ui.onProp(`live.${k}.on`, e.target.checked); q(`[data-ha=${k}]`).onchange = (e) => ui.onProp(`live.${k}.amt`, e.target.value / 100); }
   q('[data-t]').onchange = (e) => ui.onLat(+e.target.value || 0);
   if (big) big.onclick = () => ui.onLive();
   return ui;
