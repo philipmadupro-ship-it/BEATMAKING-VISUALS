@@ -12,8 +12,19 @@ export async function initDaw(app) {
   let ws, retry = 0;
   const clk = () => app.clock, trk = () => app.store.session.track;
   const beatsToT = (b, bpm) => { const tr = trk(); return tr ? tr.t0 + b * tr.spb : b * 60 / (bpm || 120); };
+  // Session sync: the DAW tempo becomes the project tempo; the key is detected from what the session plays (DAWs don't send it).
+  let lastBpm = 0; const KEY_S = 20; let kb = null, kn = 0, ksr = 0, keyBusy = false;
+  function keyFeed(buf) {
+    if (buf.byteLength < 8 || keyBusy) return; const dv = new DataView(buf), sr = dv.getUint32(0, true), n = dv.getUint32(4, true); if (!n) return;
+    if (!kb || sr !== ksr) { ksr = sr; kb = new Float32Array(sr * KEY_S); kn = 0; }
+    const x = new Float32Array(buf, 8, n), m = Math.min(n, kb.length - kn); kb.set(x.subarray(0, m), kn); kn += m;
+    if (kn >= kb.length) { keyBusy = true; setTimeout(async () => { try { const { analyzeMono } = await import('../analysis/dsp.js'); const a = analyzeMono(kb, ksr, KEY_S); const k = a && a.key; const sel = document.getElementById('sKey');
+      if (k && sel && sel.value !== k) { sel.value = k; sel.dispatchEvent(new Event('change', { bubbles: true })); ui.msg('Key from the session: ' + k); } } catch (_) {} kn = 0; keyBusy = false; }, 0); }
+  }
+  setInterval(() => { if (ws && ws.readyState === 1 && !st.rec && st.host && st.host.playing) ws.send(JSON.stringify({ t: 'pull' })); }, 100);
   function onTransport(h) {
     st.host = h; ui.update(st);
+    if (h.bpm && Math.abs(h.bpm - lastBpm) > 0.01 && app.actions && app.actions.setBpm) { lastBpm = h.bpm; try { app.actions.setBpm(Math.round(h.bpm * 1000) / 1000); } catch (_) {} }
     if (!st.follow || app.store.session.exporting) return;
     const t = Math.max(0, beatsToT(h.beats, h.bpm));
     clk().setManual(t); if (app.studio && app.studio.markDirty) app.studio.markDirty();
@@ -25,7 +36,7 @@ export async function initDaw(app) {
     ws.onerror = () => { try { ws.close(); } catch (_) {} };
     ws.onmessage = (e) => {
       if (typeof e.data === 'string') { let m; try { m = JSON.parse(e.data); } catch (_) { return; } if (m.t === 'transport') onTransport(m); }
-      else if (st.rec) st.rec.onPcm(e.data);
+      else { if (st.rec) st.rec.onPcm(e.data); keyFeed(e.data); }
     };
   }
   connect();
