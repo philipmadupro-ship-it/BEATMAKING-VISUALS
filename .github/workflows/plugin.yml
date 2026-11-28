@@ -36,12 +36,12 @@ jobs:
         run: cargo test --release --workspace --exclude xtask
       - name: Bundle U2C Studio + U2C Send (VST3 + CLAP)
         if: runner.os != 'macOS'
-        run: cargo xtask bundle u2c_studio u2c_send --release
+        run: cargo xtask bundle -p u2c_studio -p u2c_send --release
       - name: Bundle VST3 + CLAP (macOS universal arm64 + Intel, so FL Studio under Rosetta loads it too)
         if: runner.os == 'macOS'
         run: |
           rustup target add x86_64-apple-darwin aarch64-apple-darwin
-          cargo xtask bundle-universal u2c_studio u2c_send --release
+          cargo xtask bundle-universal -p u2c_studio -p u2c_send --release
       - name: AU via clap-wrapper (macOS)
         if: runner.os == 'macOS'
         continue-on-error: true   # clap-wrapper API drifts; see plugin/README.md
