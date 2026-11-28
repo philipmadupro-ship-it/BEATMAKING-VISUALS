@@ -163,6 +163,7 @@ pub fn servers() -> &'static Servers {
                 respond(rq, ws_port);
             }
         });
+        crate::update::start();
         Servers { shared, http_port, ws_port }
     })
 }
@@ -200,21 +201,30 @@ fn mime(path: &str) -> &'static str {
     }
 }
 
-fn lookup(path: &str) -> Option<&'static [u8]> {
+/// Files the app may load: index.html, src/..., assets/... Served from the downloaded web app when one is
+/// installed (and has the file), otherwise from the copy embedded in this build.
+fn lookup(path: &str) -> Option<Vec<u8>> {
     let p = path.trim_start_matches('/');
-    if p.is_empty() || p == "index.html" {
-        return Some(INDEX);
-    }
-    if p.contains("..") {
+    let rel = if p.is_empty() { "index.html" } else { p };
+    if rel.contains("..") || rel.contains('\\') || rel.starts_with('/') {
         return None;
     }
-    if let Some(r) = p.strip_prefix("src/") {
-        return SRC.get_file(r).map(|f| f.contents());
+    let ok = rel == "index.html" || rel.starts_with("src/") || rel.starts_with("assets/");
+    if !ok {
+        return None;
     }
-    if let Some(r) = p.strip_prefix("assets/") {
-        return ASSETS.get_file(r).map(|f| f.contents());
+    if let Some(root) = crate::update::webroot() {
+        if let Ok(b) = std::fs::read(root.join(rel)) {
+            return Some(b);
+        }
     }
-    None
+    if rel == "index.html" {
+        return Some(INDEX.to_vec());
+    }
+    if let Some(r) = rel.strip_prefix("src/") {
+        return SRC.get_file(r).map(|f| f.contents().to_vec());
+    }
+    rel.strip_prefix("assets/").and_then(|r| ASSETS.get_file(r)).map(|f| f.contents().to_vec())
 }
 
 fn respond(rq: tiny_http::Request, ws_port: u16) {
@@ -225,12 +235,22 @@ fn respond(rq: tiny_http::Request, ws_port: u16) {
         let _ = rq.respond(tiny_http::Response::from_string(body).with_header(hdr("Content-Type", "application/json")).with_header(hdr("Cache-Control", "no-store")));
         return;
     }
+    if path.starts_with("/__update") {
+        // State-changing calls need our custom header (a cross-site page cannot send it without a preflight, which we never grant)
+        // and a local Origin.
+        let h = |name: &str| rq.headers().iter().find(|h| h.field.as_str().as_str().eq_ignore_ascii_case(name)).map(|h| h.value.to_string());
+        let guarded = h("x-u2c-update").is_some() && h("origin").map(|o| o != "null" && origin_ok(&o)).unwrap_or(true);
+        let (code, body) = crate::update::http(*rq.method() == tiny_http::Method::Post, &path, guarded);
+        let _ = rq.respond(tiny_http::Response::from_string(body).with_status_code(code).with_header(hdr("Content-Type", "application/json")).with_header(hdr("Cache-Control", "no-store")));
+        return;
+    }
     match lookup(&path) {
         Some(b) => {
-            let b: Vec<u8> = if std::ptr::eq(b, INDEX) {
-                String::from_utf8_lossy(b).replacen("</head>", &format!("<meta name=\"u2c-daw-ws\" content=\"{ws_port}\"></head>"), 1).into_bytes()
+            let is_index = matches!(path.trim_start_matches('/'), "" | "index.html");
+            let b = if is_index {
+                String::from_utf8_lossy(&b).replacen("</head>", &format!("<meta name=\"u2c-daw-ws\" content=\"{ws_port}\">{}</head>", crate::update::BANNER), 1).into_bytes()
             } else {
-                b.to_vec()
+                b
             };
             let _ = rq.respond(tiny_http::Response::from_data(b).with_header(hdr("Content-Type", mime(&path))).with_header(hdr("Cache-Control", "no-store")));
         }

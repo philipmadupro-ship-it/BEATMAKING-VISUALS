@@ -1,6 +1,10 @@
 name: plugin
+permissions:
+  contents: write
+
 on:
   push:
+    branches: ['**']
     paths: ['plugin/**', 'web-app/src/**', 'web-app/index.html', 'web-app/assets/**', '.github/workflows/plugin.yml']
   pull_request:
     paths: ['plugin/**', 'web-app/src/**', 'web-app/index.html', 'web-app/assets/**']
@@ -12,6 +16,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, macos-15, windows-latest]
+        include:
+          - { os: ubuntu-22.04, zip: linux }
+          - { os: macos-15, zip: mac }
+          - { os: windows-latest, zip: windows }
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -25,7 +33,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libxcb-icccm4-dev libxcb-dri2-0-dev libxcb-randr0-dev libxcb-shape0-dev libgl-dev libx11-xcb-dev libxcursor-dev libasound2-dev libxdo-dev
       - name: Test
-        run: cargo test --release
+        run: cargo test --release --workspace --exclude xtask
       - name: Bundle VST3 + CLAP
         if: runner.os != 'macOS'
         run: cargo xtask bundle u2c_studio --release
@@ -50,8 +58,81 @@ jobs:
       - name: Ad-hoc sign (macOS refuses unsigned plugins)
         if: runner.os == 'macOS'
         run: for b in target/bundled/*.vst3 target/bundled/*.clap target/bundled/*.component; do [ -e "$b" ] && codesign --force --deep -s - "$b"; done; ls target/bundled; lipo -info "target/bundled/U2C Studio.vst3/Contents/MacOS/U2C Studio"
+      - name: u2c-update CLI
+        if: runner.os != 'macOS'
+        shell: bash
+        run: |
+          cargo build --release -p u2c_updater
+          cp target/release/u2c-update target/bundled/ || cp target/release/u2c-update.exe target/bundled/
+      - name: u2c-update CLI (macOS universal)
+        if: runner.os == 'macOS'
+        run: |
+          cargo build --release -p u2c_updater --target aarch64-apple-darwin
+          cargo build --release -p u2c_updater --target x86_64-apple-darwin
+          lipo -create -output target/bundled/u2c-update target/aarch64-apple-darwin/release/u2c-update target/x86_64-apple-darwin/release/u2c-update
       - uses: actions/upload-artifact@v4
         with:
           name: u2c-studio-${{ runner.os }}
           path: plugin/target/bundled/*
           if-no-files-found: error
+      - name: Release zip
+        shell: bash
+        run: |
+          N=U2C-Studio-${{ matrix.zip }}
+          rm -rf pkg && mkdir -p pkg/$N
+          cp -R target/bundled/. pkg/$N/
+          if [ "$RUNNER_OS" = macOS ]; then cp install-mac.command pkg/$N/; chmod +x pkg/$N/install-mac.command pkg/$N/u2c-update "pkg/$N/U2C Studio.vst3/Contents/MacOS/U2C Studio" "pkg/$N/U2C Studio.clap/Contents/MacOS/U2C Studio"; fi
+          if [ "$RUNNER_OS" = Windows ]; then (cd pkg && 7z a -tzip -r "../$N.zip" "$N" >/dev/null); else (cd pkg && zip -qry "../$N.zip" "$N"); fi
+          ls -l $N.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zip-${{ matrix.zip }}
+          path: plugin/U2C-Studio-${{ matrix.zip }}.zip
+          if-no-files-found: error
+
+  # Rolling releases the plugin polls: `webapp-latest` (web app zip + manifest) and `plugin-latest` (plugin zips + manifest).
+  publish:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/vst-plugin'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: zip-*
+          path: rel
+          merge-multiple: true
+      - name: Web app zip + manifests
+        run: |
+          (cd web-app && zip -qr ../rel/webapp.zip index.html src assets)
+          cd rel
+          sha() { sha256sum "$1" | cut -d' ' -f1; }
+          jq -n --arg v "$GITHUB_SHA" --arg h "$(sha webapp.zip)" '{version:$v,file:"webapp.zip",sha256:$h}' > manifest.json
+          jq -n --arg v "$GITHUB_SHA" \
+            --arg m "$(sha U2C-Studio-mac.zip)" --arg w "$(sha U2C-Studio-windows.zip)" --arg l "$(sha U2C-Studio-linux.zip)" \
+            '{version:$v,assets:{macos:{file:"U2C-Studio-mac.zip",sha256:$m},windows:{file:"U2C-Studio-windows.zip",sha256:$w},linux:{file:"U2C-Studio-linux.zip",sha256:$l}}}' > plugin-manifest.json
+          cat manifest.json plugin-manifest.json; ls -l
+      - name: Move rolling tags to this commit
+        run: |
+          git tag -f webapp-latest && git tag -f plugin-latest
+          git push -f origin webapp-latest plugin-latest
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: webapp-latest
+          name: Web app (rolling)
+          body: Latest U2C Studio web app, fetched by the plugin at startup.
+          files: |
+            rel/webapp.zip
+            rel/manifest.json
+          make_latest: false
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: plugin-latest
+          name: Plugin (rolling)
+          body: Latest U2C Studio plugin builds (macOS universal, Windows, Linux). The plugin offers these in its UI; `u2c-update` installs them.
+          files: |
+            rel/U2C-Studio-mac.zip
+            rel/U2C-Studio-windows.zip
+            rel/U2C-Studio-linux.zip
+            rel/plugin-manifest.json
+          make_latest: false

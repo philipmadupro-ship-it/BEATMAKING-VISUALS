@@ -6,6 +6,7 @@ use std::sync::Arc;
 mod capture;
 mod editor;
 mod server;
+mod update;
 
 #[derive(Default, Params)]
 struct U2cParams {}

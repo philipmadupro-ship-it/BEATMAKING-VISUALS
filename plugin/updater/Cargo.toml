@@ -1,0 +1,19 @@
+[package]
+name = "u2c_updater"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "U2C Studio updater: release manifest check, sha256-verified download, web-app unpack, plugin install"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "u2c-update"
+path = "src/main.rs"
+
+[dependencies]
+ureq = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+sha2 = "0.10"
+serde_json = "1"
