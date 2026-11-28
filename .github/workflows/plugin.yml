@@ -55,9 +55,18 @@ jobs:
         run: |
           D="U2C Studio shows your DAW window as a layer in the visuals. The image never leaves this computer."
           for b in "target/bundled/U2C Studio.vst3" "target/bundled/U2C Studio.clap" "target/bundled/U2C Studio.component"; do [ -e "$b/Contents/Info.plist" ] && { plutil -replace NSScreenCaptureUsageDescription -string "$D" "$b/Contents/Info.plist" || plutil -insert NSScreenCaptureUsageDescription -string "$D" "$b/Contents/Info.plist"; plutil -p "$b/Contents/Info.plist" | grep -c NSScreenCapture; }; done; true
+      - name: Icon + module info (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p assets/I.iconset
+          for n in 16 32 64 128 256 512; do sips -z $n $n ../web-app/assets/elephant.png --out assets/I.iconset/icon_${n}x${n}.png >/dev/null 2>&1 || true; done
+          iconutil -c icns assets/I.iconset -o assets/Icon.icns || rm -f assets/Icon.icns
+          rm -rf assets/I.iconset
+          python3 tools/bundle_mac.py target/bundled
       - name: Ad-hoc sign (macOS refuses unsigned plugins)
         if: runner.os == 'macOS'
-        run: for b in target/bundled/*.vst3 target/bundled/*.clap target/bundled/*.component; do [ -e "$b" ] && codesign --force --deep -s - "$b"; done; ls target/bundled; lipo -info "target/bundled/U2C Studio.vst3/Contents/MacOS/U2C Studio" "target/bundled/U2C Send.vst3/Contents/MacOS/U2C Send"
+        run: |
+          for b in target/bundled/*.vst3 target/bundled/*.clap target/bundled/*.component; do if [ -e "$b" ]; then codesign --force --deep -s - "$b" && codesign --verify --deep --strict "$b" || { echo "codesign verify failed for $b"; exit 1; }; fi; done; ls target/bundled; lipo -info "target/bundled/U2C Studio.vst3/Contents/MacOS/U2C Studio" "target/bundled/U2C Send.vst3/Contents/MacOS/U2C Send"
       - name: u2c-update CLI
         if: runner.os != 'macOS'
         shell: bash
