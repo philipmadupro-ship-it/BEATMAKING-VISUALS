@@ -19,6 +19,7 @@ pub const WS_PORT: u16 = 17871;
 const RING: usize = 1 << 17;
 const MAX_PULL: usize = 32768;
 
+use crate::analysis::Bus;
 use crate::capture::Capture;
 
 /// Audio-thread to server-thread state. Lock-free; f32/f64 travel as bits in atomics.
@@ -42,6 +43,8 @@ pub struct Shared {
     pub loop_b: AtomicU64,
     ring_l: Vec<AtomicU32>,
     ring_r: Vec<AtomicU32>,
+    /// Events for the web clients (hits, ...): filled by the analysis worker.
+    pub bus: Bus,
 }
 
 impl Shared {
@@ -64,7 +67,29 @@ impl Shared {
             loop_b: AtomicU64::new(f64::NAN.to_bits()),
             ring_l: ring(),
             ring_r: ring(),
+            bus: Bus::new(),
         }
+    }
+    pub fn ring_len(&self) -> usize {
+        RING
+    }
+    /// Copy samples [from, to) out of the ring.
+    pub fn read_range(&self, from: u64, to: u64, l: &mut Vec<f32>, r: &mut Vec<f32>) {
+        l.clear();
+        r.clear();
+        for i in from..to {
+            l.push(f32::from_bits(self.ring_l[(i as usize) & (RING - 1)].load(Relaxed)));
+            r.push(f32::from_bits(self.ring_r[(i as usize) & (RING - 1)].load(Relaxed)));
+        }
+    }
+    /// Host PPQ of ring sample `idx` (valid for recent samples).
+    pub fn beats_at(&self, idx: u64) -> f64 {
+        let blk = f64::from_bits(self.beats.load(Relaxed));
+        if !self.playing.load(Relaxed) {
+            return blk;
+        }
+        let d = idx as f64 - self.blk_widx.load(Relaxed) as f64;
+        blk + d / self.sr.load(Relaxed).max(1) as f64 * f64::from_bits(self.bpm.load(Relaxed)) / 60.0
     }
     /// Mark the start of an audio block of `n` samples: host PPQ of its first sample, play state (audio thread).
     #[inline]
@@ -163,6 +188,7 @@ pub fn servers() -> &'static Servers {
                 respond(rq, ws_port);
             }
         });
+        crate::analysis::start(shared.clone());
         crate::update::start();
         Servers { shared, http_port, ws_port }
     })
@@ -304,11 +330,19 @@ fn client(stream: TcpStream, sh: Arc<Shared>, cap: Arc<Capture>) -> Result<(), B
     let mut last = Instant::now() - Duration::from_secs(1);
     let (mut frame_seq, mut status_seq) = (0u64, 0u64);
     let mut guard = CapGuard(None);
+    let mut bus_cursor = sh.bus.head();
     let mut save: Option<(std::fs::File, std::path::PathBuf)> = None;
     loop {
         if last.elapsed() >= Duration::from_millis(16) {
             last = Instant::now();
             ws.send(Message::Text(sh.transport_json()))?;
+        }
+        {
+            let (c, evs) = sh.bus.since(bus_cursor);
+            bus_cursor = c;
+            for e in evs {
+                ws.send(Message::Text(e.to_string()))?;
+            }
         }
         if guard.0.is_some() {
             if let Some((seq, f)) = cap.frame_if_newer(frame_seq) {
@@ -441,5 +475,34 @@ mod tests {
                 break;
             }
         }
+    }
+    #[test]
+    fn worker_streams_hits_over_the_websocket() {
+        let s = servers();
+        let (mut ws, _) = tungstenite::connect(format!("ws://127.0.0.1:{}", s.ws_port)).unwrap();
+        // feed a synthetic kick (sweep 135 -> 45 Hz) after half a second of near-silence, as the audio thread would
+        let sr = s.shared.sr.load(Relaxed) as f32;
+        let feed = |n: usize, f: &dyn Fn(usize) -> f32| for i in 0..n { let v = f(i); s.shared.push(v, v); };
+        let t0 = std::time::Instant::now();
+        let mut got = None;
+        std::thread::scope(|sc| {
+            sc.spawn(|| {
+                for round in 0..40 {
+                    feed((0.5 * sr) as usize, &|i| 1e-4 * ((i * 7919 % 97) as f32 / 48.0 - 1.0));
+                                        feed((0.3 * sr) as usize, &|i| { let t = i as f32 / sr; let ph = 2.0 * std::f32::consts::PI * (45.0 * t + 3.0 * (1.0 - (-t * 30.0).exp())); 0.9 * ph.sin() * (-t / 0.12).exp() });
+                    std::thread::sleep(Duration::from_millis(150));
+                    if round > 0 && t0.elapsed() > Duration::from_secs(8) { break; }
+                }
+            });
+            if let tungstenite::stream::MaybeTlsStream::Plain(st) = ws.get_ref() { st.set_read_timeout(Some(Duration::from_secs(10))).ok(); }
+            while t0.elapsed() < Duration::from_secs(9) {
+                if let Ok(Message::Text(t)) = ws.read() {
+                    if t.contains("\"t\":\"hits\"") { got = Some(t); break; }
+                }
+            }
+        });
+        let t = got.expect("a hits event");
+        let v: serde_json::Value = serde_json::from_str(&t).unwrap();
+        assert!(v["kick"].as_f64().unwrap() > 0.0 && v["pos"].as_u64().is_some() && v["beats"].is_number(), "{t}");
     }
 }

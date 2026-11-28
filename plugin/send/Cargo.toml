@@ -1,0 +1,16 @@
+[package]
+name = "u2c_send"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "U2C Send: a light per-track plugin that streams level, band and hit data to the U2C Studio instance on the master"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug", default-features = false, features = ["vst3"] }
+tungstenite = "0.24"
+serde_json = "1"
+u2c_dsp = { path = "../dsp" }
+

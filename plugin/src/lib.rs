@@ -3,6 +3,7 @@ use nih_plug::prelude::*;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 
+mod analysis;
 mod capture;
 mod editor;
 mod server;
