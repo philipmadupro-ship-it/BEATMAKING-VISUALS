@@ -14,7 +14,8 @@ import { DEFAULT_TAGS, VOICE_ATS, VOICE_DURS } from './tags.js';
 import { mergeDeep, createEvaluator, emptySheet } from '../cues/schema.js';
 import { buildRegistry, meterPath } from './registry.js';
 import { INTRO_HIT, createIntro, coverScrim } from './intro.js';   // v11 intro
-import { userEffects } from './usereffects.js';   // v27 user effects (ufx.*)
+import { userEffects } from './usereffects.js';
+import * as LIVEFX from './livefx.js';   // live DAW reactions (hits / MIDI / sends)   // v27 user effects (ufx.*)
 
 const METER_KIND = { scope: 'logo', session: 'waveform', spectro: 'spectrogram', loud: 'loudness' };
 
@@ -40,7 +41,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // then a smooth exponential decay (cue logo.decay, default 0.17 s), never a hard off (the tail is carried to 1.6 s).
   const KICKS = L.kickHits.map(([tk, st]) => [Math.max(0.55, Math.min(1, st)), L.kickF(tk)]);   // on-grid kicks only (L.kickT timing), the same frame as kickEnv
   function glowAt(f, tau = V('logo.decay', 0.17)) {
-    let m = 0; for (let i = KICKS.length - 1; i >= 0; i--) { const d = (f - KICKS[i][1]) / FPS; if (d < 0) continue; if (d > 1.6) break; m = Math.max(m, KICKS[i][0] * Math.exp(-d / tau)); } return m;
+    let m = 0; for (let i = KICKS.length - 1; i >= 0; i--) { const d = (f - KICKS[i][1]) / FPS; if (d < 0) continue; if (d > 1.6) break; m = Math.max(m, KICKS[i][0] * Math.exp(-d / tau)); } return Math.max(m, LIVEFX.kickEnv(V));
   }
   const WIN = (id) => tag('windows.' + (id === 'chains' ? 'logo' : id === 'session' ? 'wave' : id === 'stereo' ? 'gonio' : id)) || id;
 
@@ -375,13 +376,13 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // Cue props: video.on / .target (hero | full | waveform) / .blend / .opacity / .fit / .desat (offset is read by the UI, which seeks the source).
   // Every draw is wrapped in save()/restore(): the blend op, alpha and filter must never leak (a leaked op broke the invert pass once).
   Object.defineProperty(L, 'videoLayer', { get: () => (assets && assets.videoLayer) || globalThis.u2cVideoLayer || null, configurable: true });
-  const VBLEND = ['screen', 'multiply', 'overlay', 'difference', 'lighten', 'darken', 'luminosity', 'soft-light'];
+  const VBLEND = ['normal', 'screen', 'multiply', 'overlay', 'difference', 'lighten', 'darken', 'luminosity', 'soft-light'];
   function videoDraw(target, rx, ry, rw, rh) {
     const vl = L.videoLayer; if (!vl || !vl.w || !vl.h || (vl.src.readyState != null && vl.src.readyState < 2) || !V('video.on', false)) return;
     const tg = V('video.target', 'hero'); if (tg !== target && !(target === 'full' && tg === 'hero' && LOOK !== 'player')) return;
     const bl = V('video.blend', 'screen'), fit = V('video.fit', 'cover'), ds = clamp(V('video.desat', S.grey ? 1 : 0), 0, 1), sc = (fit === 'cover' ? Math.max : Math.min)(rw / vl.w, rh / vl.h), dw = vl.w * sc, dh = vl.h * sc;
     c.save(); c.beginPath(); c.rect(rx, ry, rw, rh); c.clip();
-    c.globalAlpha = clamp(V('video.opacity', 0.8), 0, 1); c.globalCompositeOperation = VBLEND.includes(bl) ? bl : 'screen';
+    c.globalAlpha = clamp(V('video.opacity', 0.8), 0, 1); c.globalCompositeOperation = bl === 'normal' ? 'source-over' : VBLEND.includes(bl) ? bl : 'screen';
     if (ds > 0 && 'filter' in c) c.filter = `grayscale(${ds})`;
     try { c.drawImage(vl.src, rx + (rw - dw) / 2, ry + (rh - dh) / 2, dw, dh); } catch (_) { /* source not decodable yet */ }
     c.restore();
@@ -899,6 +900,7 @@ export function createFilm({ D, assets, aspect = '916' }) {
     }
     const camRef = camera(); let cam = camRef, zo = null;
     if (ZO && b >= ZO.b0) { zo = zoomState(camRef, ZO, fps); cam = zo.cam; F0C.ready = false; frame0(t, fps, scale, true); }   // v25: frame 0 rendered offscreen for the portal
+    { const sk = LIVEFX.shake(V); if (sk) cam = { ...cam, x: cam.x + sk[0], y: cam.y + sk[1] }; }   // live: a U2C Send assigned to "shake"
     PORTAL = zo; const z = cam.z; L.view.camZ = z; L.view.base = scale;
     c.fillStyle = S.bg; c.fillRect(0, 0, W, H);
     c.setTransform(scale * z, 0, 0, scale * z, scale * (W / 2 - cam.x * z), scale * (H / 2 - cam.y * z));
@@ -917,6 +919,8 @@ export function createFilm({ D, assets, aspect = '916' }) {
     if (LOOK === 'player' && V('focus.bracket', true)) focusBracket(t);
     hero(t, cam, scale, ev.shot(b));   // v12: logo + pendant over the windows (front layer, soft shadow)
     c.setTransform(scale, 0, 0, scale, 0, 0); L.view.camZ = 1;
+    LIVEFX.draw(c, W, H, V, S, rgba);   // live DAW hits (kick lift, snare flash, hat sparkles): only while the plugin feeds it
+    { const vl = L.videoLayer; if (vl && vl.w) { const pw = W * (port ? 0.46 : 0.30), ph = pw * vl.h / vl.w, pm = W * 0.03; videoDraw('pip', W - pw - pm, pm * 1.6, pw, ph); } }   // picture-in-picture corner
     videoDraw('full', 0, 0, W, H);   // v19 video layer, full frame (screen space, over the windows, under halation / overlays)
     if (!L.isLight(S)) L.halation(c, V('fx.halation', 0.16) * (zo ? 1 - zo.e : 1));   // v25: the halation leaves with the zoom (frame 0 has none)
     if (L.openFx) INTRO.streak(c, L.openFx.px, L.openFx.py, L.openFx.dl);

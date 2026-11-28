@@ -23,6 +23,8 @@ export function createAddLayer(app) {
       ['flash', 'Flash', 'A one-frame invert on the beat.', () => { clip('fx.flash', 'event', 'fx', { b: Math.round(ph()), v: true, ease: 'step' }, 'add flash'); open('fx'); }]]],
     ['Cover', [
       ['fry', 'Cover look key', 'Change the cover treatment from here on (Media → Cover presets for the base).', () => { app.actions.setProp('hero.fry', 'night'); open('hero'); }]]],
+    ['DAW', [
+      ['daw', 'DAW window', 'The DAW window as a layer: the hero card, the full background or a corner picture, with opacity and blend (plugin: Screen Recording permission).', () => { if (app.daw) app.daw.layer(true); open('video'); }]]],
     ['Marker', [
       ['mark', 'Marker', 'A named, coloured marker at the playhead (M). Chapter markers become YouTube chapters.', () => { app.cuetl.addMarker(); const b = document.querySelector('#railTabs [data-pane="markers"]'); if (b) b.click(); }]]],
   ];

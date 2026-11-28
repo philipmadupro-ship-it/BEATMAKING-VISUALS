@@ -23,6 +23,9 @@ import { createPanels } from './ui/panels.js';
 import { createMedia } from './ui/media.js';
 import { makeSurface } from './engine/render.js';
 import { createVoiceLab } from './ui/voicelab.js';
+import { createMpc } from './ui/mpc.js';
+import { installDrop } from './ui/dropaudio.js';
+import { createLayerPreview } from './ui/layerpreview.js';
 import { createTips } from './ui/tips.js';
 import { createPip } from './ui/pip.js';
 import { createHistory } from './ui/history.js';
@@ -71,6 +74,7 @@ async function boot() {
   const app = { store, clock, libs, assets, cues, motion, hook, actions: {} };
   app.clip = createClipManager(app); app.renderFrame = createRenderer(app);
   const A = app.actions; window.u2c = app;
+  import('./bridge/daw.js').then(m => m.initDaw(app)).catch(() => {});   // DAW plugin bridge: inert without ?daw= or the plugin's meta tag
   // the property registry of the look at the playhead (cached per look / stage / aspect / bars / tags)
   let regKey = '', regVal = null;
   app.registry = () => { const p = store.project, tr = store.session.track, bars = tr ? Math.max(1, Math.round((p.outT - p.inT) / tr.barDur)) : 16, b = app.cuetl ? app.cuetl.state.playhead : 0, ev = cues.ev();
@@ -79,7 +83,7 @@ async function boot() {
   app.timeline = createTimeline(app); app.grid = createGrid(app); app.studio = createStudio(app);
   app.cuetl = createCueTimeline(app, $('#cueCv')); app.inspector = createInspector(app, $('#insp'));
   app.panels = createPanels(app); app.exporter = createExporter(app);
-  app.media = createMedia(app); app.review = createReview(app); app.voiceLab = createVoiceLab(app); app.shotList = createShotList(app); app.coverPresets = createCoverPresets(app);   // v20: media bin (covers / video / audio) + review before export
+  app.media = createMedia(app); app.review = createReview(app); app.voiceLab = createVoiceLab(app); app.mpc = createMpc(app); installDrop(app); app.layerPreview = createLayerPreview(app); app.shotList = createShotList(app); app.coverPresets = createCoverPresets(app);   // v20: media bin (covers / video / audio) + review before export
   // v21 editor: toasts, workspace (resizable / collapsible panels), program monitor, marker list, metadata, export queue,
   // projects, command palette + shortcut overlay
   app.toast = createToast(); app.workspace = createWorkspace(app); app.monitor = createMonitor(app); app.markerList = createMarkerList(app);
@@ -182,7 +186,7 @@ async function boot() {
   }
   async function loadDemo() { store.session.file = null; status('Building the demo beat…'); const buf = await synthDemo(); await load(buf, { name: 'demo beat (synthesised)', title: 'Night Shift', bpm: null }); status($('#status').innerHTML + ' · <b>demo</b>: drop your own beat to replace it'); }
   // v21: projects reopen their audio (a File / Blob) and adopt their saved cue sheet (no regeneration over it)
-  A.loadFile = loadFile; A.loadDemo = loadDemo;
+  A.loadFile = loadFile; A.loadDemo = loadDemo; A.loadBuffer = load;   // loadBuffer: the DAW bridge's live master track
   A.adoptSheet = (doc, label = 'open project') => { needGen = false; cues.replace(parseSheet(doc), label, true); const look = cues.ev().value('look', 0, store.project.look), stage = cues.ev().value('stage', 0, store.project.stage);
     store.set({ project: { look, stage } }); accent(); app.panels.sync(); app.cuetl.markDirty(); app.inspector.show(); app.exporter.info(); };
   $('#file').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) loadFile(f); e.target.value = ''; });

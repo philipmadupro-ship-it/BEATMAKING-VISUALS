@@ -33,7 +33,7 @@ export function createMeters(L) {
   // ---------------------------------------------------------------- SPECTRUM (v12): raw 1/6-oct analyser, spectrumview.js (no EQ curve)
   M.spectrum = (ctx, S, r, t, k) => {
     const [x, y, w, h] = r; reveal(ctx, x, y, w, h, k);
-    drawSpectrum(ctx, r, { t }, { L, S, top: L.meter('spectrum', 'top', -6), bottom: -Math.abs(L.meter('spectrum', 'floor', 72)), hold: L.meter('spectrum', 'hold', true) });
+    drawSpectrum(ctx, r, { t }, { L, S, top: L.meter('spectrum', 'top', -6), bottom: -Math.abs(L.meter('spectrum', 'floor', 72)), hold: L.meter('spectrum', 'hold', true), cmap: L.meter('spectrum', 'cmap', 'stage') });
     ctx.restore();
   };
 
@@ -215,7 +215,7 @@ export function createMeters(L) {
   // ---------------------------------------------------------------- SPECTROGRAM (v12): spectrogramview.js (Edison-style scrolling heat map)
   M8.spectro = (ctx, S, r, t, k) => {
     reveal(ctx, r[0], r[1], r[2], r[3], k);
-    SG.draw(ctx, r, Math.min(NF - 1, Math.max(0, t * FPS)), { S, ms: D.ms, nf: NF, fps: FPS, text, floorSize: L.floorSize, bar: BAR, startBar: D.song.startBar, win: L.meter('spectro', 'window', 8), floor: L.meter('spectro', 'range', 90), gamma: L.meter('spectro', 'gamma', 0.56), mode: L.meter('spectro', 'mode', 'ms') });
+    SG.draw(ctx, r, Math.min(NF - 1, Math.max(0, t * FPS)), { S, ms: D.ms, nf: NF, fps: FPS, text, floorSize: L.floorSize, bar: BAR, startBar: D.song.startBar, win: L.meter('spectro', 'window', 8), floor: L.meter('spectro', 'range', 90), gamma: L.meter('spectro', 'gamma', 0.56), cmap: L.meter('spectro', 'cmap', 'stage'), mode: L.meter('spectro', 'mode', 'ms') });
     ctx.restore();
   };
 

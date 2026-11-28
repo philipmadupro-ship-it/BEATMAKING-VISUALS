@@ -1,0 +1,8 @@
+[package]
+name = "u2c_dsp"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "U2C audio analysis shared by the plugins: band-split spectral-flux hit detector, BS.1770 loudness, true peak, correlation, log spectrum"
+
+[dependencies]

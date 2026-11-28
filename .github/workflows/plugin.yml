@@ -1,0 +1,147 @@
+name: plugin
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: ['**']
+    paths: ['plugin/**', 'web-app/src/**', 'web-app/index.html', 'web-app/assets/**', '.github/workflows/plugin.yml']
+  pull_request:
+    paths: ['plugin/**', 'web-app/src/**', 'web-app/index.html', 'web-app/assets/**']
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15, windows-latest]
+        include:
+          - { os: ubuntu-22.04, zip: linux }
+          - { os: macos-15, zip: mac }
+          - { os: windows-latest, zip: windows }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: plugin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: plugin }
+      - name: Linux system libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libxcb-icccm4-dev libxcb-dri2-0-dev libxcb-randr0-dev libxcb-shape0-dev libgl-dev libx11-xcb-dev libxcursor-dev libasound2-dev libxdo-dev
+      - name: Test
+        run: cargo test --release --workspace --exclude xtask
+      - name: Bundle U2C Studio + U2C Send (VST3 + CLAP)
+        if: runner.os != 'macOS'
+        run: cargo xtask bundle -p u2c_studio -p u2c_send --release
+      - name: Bundle VST3 + CLAP (macOS universal arm64 + Intel, so FL Studio under Rosetta loads it too)
+        if: runner.os == 'macOS'
+        run: |
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+          cargo xtask bundle-universal -p u2c_studio -p u2c_send --release
+      - name: AU via clap-wrapper (macOS)
+        if: runner.os == 'macOS'
+        continue-on-error: true   # clap-wrapper API drifts; see plugin/README.md
+        run: |
+          git clone --depth 1 https://github.com/free-audio/clap-wrapper.git "$RUNNER_TEMP/clap-wrapper"
+          cmake -S au -B build-au -DCLAP_WRAPPER_DIR="$RUNNER_TEMP/clap-wrapper" -DU2C_CLAP="$PWD/target/bundled/U2C Studio.clap" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          cmake --build build-au --config Release
+          mkdir -p target/bundled && cp -R build-au/*.component target/bundled/ || find build-au -name '*.component' -exec cp -R {} target/bundled/ \;
+      - name: Screen Recording usage description (macOS; the plugin captures the DAW window for the hero layer)
+        if: runner.os == 'macOS'
+        run: |
+          D="U2C Studio shows your DAW window as a layer in the visuals. The image never leaves this computer."
+          for b in "target/bundled/U2C Studio.vst3" "target/bundled/U2C Studio.clap" "target/bundled/U2C Studio.component"; do [ -e "$b/Contents/Info.plist" ] && { plutil -replace NSScreenCaptureUsageDescription -string "$D" "$b/Contents/Info.plist" || plutil -insert NSScreenCaptureUsageDescription -string "$D" "$b/Contents/Info.plist"; plutil -p "$b/Contents/Info.plist" | grep -c NSScreenCapture; }; done; true
+      - name: Icon + module info (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p assets/I.iconset
+          for n in 16 32 64 128 256 512; do sips -z $n $n ../web-app/assets/elephant.png --out assets/I.iconset/icon_${n}x${n}.png >/dev/null 2>&1 || true; done
+          iconutil -c icns assets/I.iconset -o assets/Icon.icns || rm -f assets/Icon.icns
+          rm -rf assets/I.iconset
+          python3 tools/bundle_mac.py target/bundled
+      - name: Ad-hoc sign (macOS refuses unsigned plugins)
+        if: runner.os == 'macOS'
+        run: |
+          for b in target/bundled/*.vst3 target/bundled/*.clap target/bundled/*.component; do if [ -e "$b" ]; then codesign --force --deep -s - "$b" && codesign --verify --deep --strict "$b" || { echo "codesign verify failed for $b"; exit 1; }; fi; done; ls target/bundled; lipo -info "target/bundled/U2C Studio.vst3/Contents/MacOS/U2C Studio" "target/bundled/U2C Send.vst3/Contents/MacOS/U2C Send"
+      - name: u2c-update CLI
+        if: runner.os != 'macOS'
+        shell: bash
+        run: |
+          cargo build --release -p u2c_updater
+          cp target/release/u2c-update target/bundled/ || cp target/release/u2c-update.exe target/bundled/
+      - name: u2c-update CLI (macOS universal)
+        if: runner.os == 'macOS'
+        run: |
+          cargo build --release -p u2c_updater --target aarch64-apple-darwin
+          cargo build --release -p u2c_updater --target x86_64-apple-darwin
+          lipo -create -output target/bundled/u2c-update target/aarch64-apple-darwin/release/u2c-update target/x86_64-apple-darwin/release/u2c-update
+      - uses: actions/upload-artifact@v4
+        with:
+          name: u2c-studio-${{ runner.os }}
+          path: plugin/target/bundled/*
+          if-no-files-found: error
+      - name: Release zip
+        shell: bash
+        run: |
+          N=U2C-Studio-${{ matrix.zip }}
+          rm -rf pkg && mkdir -p pkg/$N
+          cp -R target/bundled/. pkg/$N/
+          if [ "$RUNNER_OS" = macOS ]; then cp install-mac.command pkg/$N/; chmod +x pkg/$N/install-mac.command pkg/$N/u2c-update "pkg/$N/U2C Studio.vst3/Contents/MacOS/U2C Studio" "pkg/$N/U2C Studio.clap/Contents/MacOS/U2C Studio" "pkg/$N/U2C Send.vst3/Contents/MacOS/U2C Send" "pkg/$N/U2C Send.clap/Contents/MacOS/U2C Send"; fi
+          if [ "$RUNNER_OS" = Windows ]; then (cd pkg && 7z a -tzip -r "../$N.zip" "$N" >/dev/null); else (cd pkg && zip -qry "../$N.zip" "$N"); fi
+          ls -l $N.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zip-${{ matrix.zip }}
+          path: plugin/U2C-Studio-${{ matrix.zip }}.zip
+          if-no-files-found: error
+
+  # Rolling releases the plugin polls: `webapp-latest` (web app zip + manifest) and `plugin-latest` (plugin zips + manifest).
+  publish:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/vst-plugin'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: zip-*
+          path: rel
+          merge-multiple: true
+      - name: Web app zip + manifests
+        run: |
+          (cd web-app && zip -qr ../rel/webapp.zip index.html src assets)
+          cd rel
+          sha() { sha256sum "$1" | cut -d' ' -f1; }
+          jq -n --arg v "$GITHUB_SHA" --arg h "$(sha webapp.zip)" '{version:$v,file:"webapp.zip",sha256:$h}' > manifest.json
+          jq -n --arg v "$GITHUB_SHA" \
+            --arg m "$(sha U2C-Studio-mac.zip)" --arg w "$(sha U2C-Studio-windows.zip)" --arg l "$(sha U2C-Studio-linux.zip)" \
+            '{version:$v,assets:{macos:{file:"U2C-Studio-mac.zip",sha256:$m},windows:{file:"U2C-Studio-windows.zip",sha256:$w},linux:{file:"U2C-Studio-linux.zip",sha256:$l}}}' > plugin-manifest.json
+          cat manifest.json plugin-manifest.json; ls -l
+      - name: Move rolling tags to this commit
+        run: |
+          git tag -f webapp-latest && git tag -f plugin-latest
+          git push -f origin webapp-latest plugin-latest
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: webapp-latest
+          name: Web app (rolling)
+          body: Latest U2C Studio web app, fetched by the plugin at startup.
+          files: |
+            rel/webapp.zip
+            rel/manifest.json
+          make_latest: false
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: plugin-latest
+          name: Plugin (rolling)
+          body: Latest U2C Studio + U2C Send plugin builds (macOS universal, Windows, Linux). The plugin offers these in its UI; `u2c-update` installs them.
+          files: |
+            rel/U2C-Studio-mac.zip
+            rel/U2C-Studio-windows.zip
+            rel/U2C-Studio-linux.zip
+            rel/plugin-manifest.json
+          make_latest: false

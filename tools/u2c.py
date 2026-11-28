@@ -175,7 +175,7 @@ def test(_=None):
         if r.returncode: bad += 1; print('SYNTAX', os.path.relpath(f, WEB), (r.stderr.strip().splitlines() or [''])[0][:120])
     print(f'syntax: {"all modules OK" if not bad else str(bad) + " broken"}')
     env = dict(os.environ, NOEXPORT='1', CDN_CACHE='/tmp/cdncache')
-    for t in ('tests/meters.mjs', 'tests/smoke.mjs', 'tests/editor.mjs'):   # v24: + the editor UI suite
+    for t in ('tests/meters.mjs', 'tests/smoke.mjs', 'tests/editor.mjs', 'tests/daw.mjs', 'tests/layerpreview.mjs'):   # v24: + the editor UI suite
         r = subprocess.run(['node', t], cwd=WEB, env=env, capture_output=True, text=True, timeout=900)
         for ln in (r.stdout + r.stderr).splitlines():
             if ln.startswith('FAIL') or 'passed' in ln: print(t, ln)
