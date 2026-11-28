@@ -27,15 +27,24 @@ jobs:
       - name: Test
         run: cargo test --release
       - name: Bundle VST3 + CLAP
+        if: runner.os != 'macOS'
         run: cargo xtask bundle u2c_studio --release
+      - name: Bundle VST3 + CLAP (macOS universal arm64 + Intel, so FL Studio under Rosetta loads it too)
+        if: runner.os == 'macOS'
+        run: |
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+          cargo xtask bundle-universal u2c_studio --release
       - name: AU via clap-wrapper (macOS)
         if: runner.os == 'macOS'
         continue-on-error: true   # clap-wrapper API drifts; see plugin/README.md
         run: |
           git clone --depth 1 https://github.com/free-audio/clap-wrapper.git "$RUNNER_TEMP/clap-wrapper"
-          cmake -S au -B build-au -DCLAP_WRAPPER_DIR="$RUNNER_TEMP/clap-wrapper" -DU2C_CLAP="$PWD/target/bundled/U2C Studio.clap" -DCMAKE_BUILD_TYPE=Release
+          cmake -S au -B build-au -DCLAP_WRAPPER_DIR="$RUNNER_TEMP/clap-wrapper" -DU2C_CLAP="$PWD/target/bundled/U2C Studio.clap" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
           cmake --build build-au --config Release
           mkdir -p target/bundled && cp -R build-au/*.component target/bundled/ || find build-au -name '*.component' -exec cp -R {} target/bundled/ \;
+      - name: Ad-hoc sign (macOS refuses unsigned plugins)
+        if: runner.os == 'macOS'
+        run: for b in target/bundled/*.vst3 target/bundled/*.clap target/bundled/*.component; do [ -e "$b" ] && codesign --force --deep -s - "$b"; done; ls target/bundled; lipo -info "target/bundled/U2C Studio.vst3/Contents/MacOS/U2C Studio"
       - uses: actions/upload-artifact@v4
         with:
           name: u2c-studio-${{ runner.os }}
