@@ -34,14 +34,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libxcb-icccm4-dev libxcb-dri2-0-dev libxcb-randr0-dev libxcb-shape0-dev libgl-dev libx11-xcb-dev libxcursor-dev libasound2-dev libxdo-dev
       - name: Test
         run: cargo test --release --workspace --exclude xtask
-      - name: Bundle VST3 + CLAP
+      - name: Bundle U2C Studio + U2C Send (VST3 + CLAP)
         if: runner.os != 'macOS'
-        run: cargo xtask bundle u2c_studio --release
+        run: cargo xtask bundle u2c_studio u2c_send --release
       - name: Bundle VST3 + CLAP (macOS universal arm64 + Intel, so FL Studio under Rosetta loads it too)
         if: runner.os == 'macOS'
         run: |
           rustup target add x86_64-apple-darwin aarch64-apple-darwin
-          cargo xtask bundle-universal u2c_studio --release
+          cargo xtask bundle-universal u2c_studio u2c_send --release
       - name: AU via clap-wrapper (macOS)
         if: runner.os == 'macOS'
         continue-on-error: true   # clap-wrapper API drifts; see plugin/README.md
@@ -54,10 +54,10 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           D="U2C Studio shows your DAW window as a layer in the visuals. The image never leaves this computer."
-          for b in target/bundled/*.vst3 target/bundled/*.clap target/bundled/*.component; do [ -e "$b/Contents/Info.plist" ] && { plutil -replace NSScreenCaptureUsageDescription -string "$D" "$b/Contents/Info.plist" || plutil -insert NSScreenCaptureUsageDescription -string "$D" "$b/Contents/Info.plist"; plutil -p "$b/Contents/Info.plist" | grep -c NSScreenCapture; }; done; true
+          for b in "target/bundled/U2C Studio.vst3" "target/bundled/U2C Studio.clap" "target/bundled/U2C Studio.component"; do [ -e "$b/Contents/Info.plist" ] && { plutil -replace NSScreenCaptureUsageDescription -string "$D" "$b/Contents/Info.plist" || plutil -insert NSScreenCaptureUsageDescription -string "$D" "$b/Contents/Info.plist"; plutil -p "$b/Contents/Info.plist" | grep -c NSScreenCapture; }; done; true
       - name: Ad-hoc sign (macOS refuses unsigned plugins)
         if: runner.os == 'macOS'
-        run: for b in target/bundled/*.vst3 target/bundled/*.clap target/bundled/*.component; do [ -e "$b" ] && codesign --force --deep -s - "$b"; done; ls target/bundled; lipo -info "target/bundled/U2C Studio.vst3/Contents/MacOS/U2C Studio"
+        run: for b in target/bundled/*.vst3 target/bundled/*.clap target/bundled/*.component; do [ -e "$b" ] && codesign --force --deep -s - "$b"; done; ls target/bundled; lipo -info "target/bundled/U2C Studio.vst3/Contents/MacOS/U2C Studio" "target/bundled/U2C Send.vst3/Contents/MacOS/U2C Send"
       - name: u2c-update CLI
         if: runner.os != 'macOS'
         shell: bash
@@ -81,7 +81,7 @@ jobs:
           N=U2C-Studio-${{ matrix.zip }}
           rm -rf pkg && mkdir -p pkg/$N
           cp -R target/bundled/. pkg/$N/
-          if [ "$RUNNER_OS" = macOS ]; then cp install-mac.command pkg/$N/; chmod +x pkg/$N/install-mac.command pkg/$N/u2c-update "pkg/$N/U2C Studio.vst3/Contents/MacOS/U2C Studio" "pkg/$N/U2C Studio.clap/Contents/MacOS/U2C Studio"; fi
+          if [ "$RUNNER_OS" = macOS ]; then cp install-mac.command pkg/$N/; chmod +x pkg/$N/install-mac.command pkg/$N/u2c-update "pkg/$N/U2C Studio.vst3/Contents/MacOS/U2C Studio" "pkg/$N/U2C Studio.clap/Contents/MacOS/U2C Studio" "pkg/$N/U2C Send.vst3/Contents/MacOS/U2C Send" "pkg/$N/U2C Send.clap/Contents/MacOS/U2C Send"; fi
           if [ "$RUNNER_OS" = Windows ]; then (cd pkg && 7z a -tzip -r "../$N.zip" "$N" >/dev/null); else (cd pkg && zip -qry "../$N.zip" "$N"); fi
           ls -l $N.zip
       - uses: actions/upload-artifact@v4
@@ -129,7 +129,7 @@ jobs:
         with:
           tag_name: plugin-latest
           name: Plugin (rolling)
-          body: Latest U2C Studio plugin builds (macOS universal, Windows, Linux). The plugin offers these in its UI; `u2c-update` installs them.
+          body: Latest U2C Studio + U2C Send plugin builds (macOS universal, Windows, Linux). The plugin offers these in its UI; `u2c-update` installs them.
           files: |
             rel/U2C-Studio-mac.zip
             rel/U2C-Studio-windows.zip

@@ -1,2 +1,5 @@
 [u2c_studio]
 name = "U2C Studio"
+
+[u2c_send]
+name = "U2C Send"
