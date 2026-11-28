@@ -263,6 +263,7 @@ export async function initDaw(app) {
     st.follow = plan.follow; ui.setFollow(plan.follow); if (plan.pres === 'daw') { try { setCap(true); ui.setLayerShown(true); } catch (_) {} } dirty();
     pv.blank(plan.blank && !an.playing); if (plan.preview) pv.start();
   }
+  ui.onLayerPreview = () => { if (app.layerPreview) app.layerPreview.toggle(); };
   ui.onPreview = () => { if (!pv.start()) ui.msg('Load a beat first (Receive audio from: Master).'); };
   ui.onLiveSetup = () => { let saved = {}; try { saved = JSON.parse(localStorage.getItem('u2c.live.setup') || '{}') || {}; } catch (_) {} showCard(app, applyPlan, saved); };
   { let seen = true; try { seen = localStorage.getItem('u2c.live.setup') != null; } catch (_) {} if (!seen && document.querySelector('meta[name=u2c-daw-ws]')) setTimeout(() => ui.onLiveSetup(), 600); }
@@ -282,7 +283,7 @@ function mountUi(st) {
   const el = document.createElement('div'); el.id = 'u2cDaw';
   el.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:99999;font:12px/1.3 ui-monospace,monospace;background:#111d;color:#eee;border:1px solid #555;border-radius:8px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;max-width:min(560px,92vw);backdrop-filter:blur(6px)';
   el.innerHTML = '<style>#u2cDaw{font-size:13px!important;max-width:min(720px,94vw)!important;max-height:78vh;overflow:auto}#u2cDaw select,#u2cDaw input[type=number],#u2cDaw input:not([type]){background:#262626;color:#eee;border:1px solid #666;border-radius:4px;padding:3px 5px;font:inherit}#u2cDaw button{background:#2c2c2c;color:#eee;border:1px solid #777;border-radius:5px;padding:4px 10px;font:inherit}#u2cDaw button:hover{background:#3a3a3a}#u2cDaw .g{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;border-top:1px solid #444;padding-top:6px}#u2cDaw .g>h4{flex-basis:100%;margin:0;font:600 11px/1 ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;opacity:.65}</style>' +
-    '<div class="g" style="border:0;padding:0"><b data-mode style="letter-spacing:.06em"></b><span data-s>DAW: connecting</span><button data-pv title="Play the current setup, intro included, without the DAW (click or Esc to stop)">Preview</button><button data-lc title="Presentation, motion and start">Live setup</button></div>' +
+    '<div class="g" style="border:0;padding:0"><b data-mode style="letter-spacing:.06em"></b><span data-s>DAW: connecting</span><button data-lp title="Layer preview: a small panel with each layer on its own">Layers</button><button data-pv title="Play the current setup, intro included, without the DAW (click or Esc to stop)">Preview</button><button data-lc title="Presentation, motion and start">Live setup</button></div>' +
     '<div class="g"><h4>Source</h4><label title="Follow the DAW transport while it plays"><input type="checkbox" data-f checked> follow</label><button data-l>Master live</button><canvas data-fl width="150" height="22" title="Master peak / RMS / held peak (FL mixer style)" style="width:150px;height:22px"></canvas>' +
     '<span data-sends style="flex-basis:100%;display:none"></span></div>' +
     '<div class="g"><h4>Picture</h4><label title="Show the DAW window as a layer (also + Layer, DAW window)"><input type="checkbox" data-c> DAW image</label><select data-vt title="Where the DAW window goes"><option value="hero">hero card</option><option value="full">full background</option><option value="pip">corner picture</option></select>' +
@@ -296,7 +297,7 @@ function mountUi(st) {
   document.body.appendChild(el);
   const q = (s) => el.querySelector(s);
   const ui = {
-    onProp() {}, onPreview() {}, onLiveSetup() {}, onNudge() {}, onReveal() {}, onRq() {}, onSend() {}, onRefFile() {}, onRefAdd() {}, onRefRemove() {}, onRefColor() {}, onRecord() {}, onFollow() {}, onLive() {}, onCap() {}, onLayer() {}, onWindows() {}, onPickWindow() {}, onLat() {}, onBrowser() {},
+    onProp() {}, onLayerPreview() {}, onPreview() {}, onLiveSetup() {}, onNudge() {}, onReveal() {}, onRq() {}, onSend() {}, onRefFile() {}, onRefAdd() {}, onRefRemove() {}, onRefColor() {}, onRecord() {}, onFollow() {}, onLive() {}, onCap() {}, onLayer() {}, onWindows() {}, onPickWindow() {}, onLat() {}, onBrowser() {},
     update(s) { const h = s.host, ts = h && h.ts ? h.ts.join('/') : '4/4', bar = h ? Math.floor(h.beats / 4) + 1 : 0, lp = h && h.loop ? ` loop ${(h.loop[0] / 4 + 1).toFixed(0)}-${(h.loop[1] / 4 + 1).toFixed(0)}` : '';
       q('[data-mode]').textContent = s.live ? 'LIVE' : s.connected ? 'DAW' : 'OFFLINE'; q('[data-mode]').style.color = s.live ? '#ff5d5d' : '#9ad';
       q('[data-s]').textContent = s.connected ? (h ? `${h.playing ? 'play' : 'stop'} ${h.bpm.toFixed(1)} BPM ${ts} bar ${bar}.${(Math.floor(h.beats % 4) + 1)}${lp}` : 'connected') : 'connecting';
@@ -340,7 +341,7 @@ function mountUi(st) {
   q('[data-recs]').addEventListener('click', (e) => { const r = e.target.closest('[data-rec]'); if (r && e.target.matches('[data-show]')) ui.onReveal(r.dataset.rec); });
   q('[data-rq]').onchange = q('[data-rfp]').onchange = () => ui.onRq(q('[data-rq]').value, +q('[data-rfp]').value);
   q('[data-vt]').onchange = (e) => ui.onProp('video.target', e.target.value);
-  q('[data-pv]').onclick = () => ui.onPreview(); q('[data-lc]').onclick = () => ui.onLiveSetup(); q('[data-tm]').onclick = () => ui.onNudge(-10); q('[data-tp]').onclick = () => ui.onNudge(10);
+  q('[data-lp]').onclick = () => ui.onLayerPreview(); q('[data-pv]').onclick = () => ui.onPreview(); q('[data-lc]').onclick = () => ui.onLiveSetup(); q('[data-tm]').onclick = () => ui.onNudge(-10); q('[data-tp]').onclick = () => ui.onNudge(10);
   q('[data-t]').onchange = (e) => ui.onLat(+e.target.value || 0);
   if (big) big.onclick = () => ui.onLive();
   return ui;

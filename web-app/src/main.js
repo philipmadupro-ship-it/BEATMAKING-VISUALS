@@ -25,6 +25,7 @@ import { makeSurface } from './engine/render.js';
 import { createVoiceLab } from './ui/voicelab.js';
 import { createMpc } from './ui/mpc.js';
 import { installDrop } from './ui/dropaudio.js';
+import { createLayerPreview } from './ui/layerpreview.js';
 import { createTips } from './ui/tips.js';
 import { createPip } from './ui/pip.js';
 import { createHistory } from './ui/history.js';
@@ -82,7 +83,7 @@ async function boot() {
   app.timeline = createTimeline(app); app.grid = createGrid(app); app.studio = createStudio(app);
   app.cuetl = createCueTimeline(app, $('#cueCv')); app.inspector = createInspector(app, $('#insp'));
   app.panels = createPanels(app); app.exporter = createExporter(app);
-  app.media = createMedia(app); app.review = createReview(app); app.voiceLab = createVoiceLab(app); app.mpc = createMpc(app); installDrop(app); app.shotList = createShotList(app); app.coverPresets = createCoverPresets(app);   // v20: media bin (covers / video / audio) + review before export
+  app.media = createMedia(app); app.review = createReview(app); app.voiceLab = createVoiceLab(app); app.mpc = createMpc(app); installDrop(app); app.layerPreview = createLayerPreview(app); app.shotList = createShotList(app); app.coverPresets = createCoverPresets(app);   // v20: media bin (covers / video / audio) + review before export
   // v21 editor: toasts, workspace (resizable / collapsible panels), program monitor, marker list, metadata, export queue,
   // projects, command palette + shortcut overlay
   app.toast = createToast(); app.workspace = createWorkspace(app); app.monitor = createMonitor(app); app.markerList = createMarkerList(app);
