@@ -375,13 +375,13 @@ export function createFilm({ D, assets, aspect = '916' }) {
   // Cue props: video.on / .target (hero | full | waveform) / .blend / .opacity / .fit / .desat (offset is read by the UI, which seeks the source).
   // Every draw is wrapped in save()/restore(): the blend op, alpha and filter must never leak (a leaked op broke the invert pass once).
   Object.defineProperty(L, 'videoLayer', { get: () => (assets && assets.videoLayer) || globalThis.u2cVideoLayer || null, configurable: true });
-  const VBLEND = ['screen', 'multiply', 'overlay', 'difference', 'lighten', 'darken', 'luminosity', 'soft-light'];
+  const VBLEND = ['normal', 'screen', 'multiply', 'overlay', 'difference', 'lighten', 'darken', 'luminosity', 'soft-light'];
   function videoDraw(target, rx, ry, rw, rh) {
     const vl = L.videoLayer; if (!vl || !vl.w || !vl.h || (vl.src.readyState != null && vl.src.readyState < 2) || !V('video.on', false)) return;
     const tg = V('video.target', 'hero'); if (tg !== target && !(target === 'full' && tg === 'hero' && LOOK !== 'player')) return;
     const bl = V('video.blend', 'screen'), fit = V('video.fit', 'cover'), ds = clamp(V('video.desat', S.grey ? 1 : 0), 0, 1), sc = (fit === 'cover' ? Math.max : Math.min)(rw / vl.w, rh / vl.h), dw = vl.w * sc, dh = vl.h * sc;
     c.save(); c.beginPath(); c.rect(rx, ry, rw, rh); c.clip();
-    c.globalAlpha = clamp(V('video.opacity', 0.8), 0, 1); c.globalCompositeOperation = VBLEND.includes(bl) ? bl : 'screen';
+    c.globalAlpha = clamp(V('video.opacity', 0.8), 0, 1); c.globalCompositeOperation = bl === 'normal' ? 'source-over' : VBLEND.includes(bl) ? bl : 'screen';
     if (ds > 0 && 'filter' in c) c.filter = `grayscale(${ds})`;
     try { c.drawImage(vl.src, rx + (rw - dw) / 2, ry + (rh - dh) / 2, dw, dh); } catch (_) { /* source not decodable yet */ }
     c.restore();

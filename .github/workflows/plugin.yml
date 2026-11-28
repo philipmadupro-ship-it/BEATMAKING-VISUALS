@@ -42,6 +42,11 @@ jobs:
           cmake -S au -B build-au -DCLAP_WRAPPER_DIR="$RUNNER_TEMP/clap-wrapper" -DU2C_CLAP="$PWD/target/bundled/U2C Studio.clap" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
           cmake --build build-au --config Release
           mkdir -p target/bundled && cp -R build-au/*.component target/bundled/ || find build-au -name '*.component' -exec cp -R {} target/bundled/ \;
+      - name: Screen Recording usage description (macOS; the plugin captures the DAW window for the hero layer)
+        if: runner.os == 'macOS'
+        run: |
+          D="U2C Studio shows your DAW window as a layer in the visuals. The image never leaves this computer."
+          for b in target/bundled/*.vst3 target/bundled/*.clap target/bundled/*.component; do [ -e "$b/Contents/Info.plist" ] && { plutil -replace NSScreenCaptureUsageDescription -string "$D" "$b/Contents/Info.plist" || plutil -insert NSScreenCaptureUsageDescription -string "$D" "$b/Contents/Info.plist"; plutil -p "$b/Contents/Info.plist" | grep -c NSScreenCapture; }; done; true
       - name: Ad-hoc sign (macOS refuses unsigned plugins)
         if: runner.os == 'macOS'
         run: for b in target/bundled/*.vst3 target/bundled/*.clap target/bundled/*.component; do [ -e "$b" ] && codesign --force --deep -s - "$b"; done; ls target/bundled; lipo -info "target/bundled/U2C Studio.vst3/Contents/MacOS/U2C Studio"

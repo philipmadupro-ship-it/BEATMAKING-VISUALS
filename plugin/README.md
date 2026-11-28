@@ -4,8 +4,11 @@ Rust plugin (nih-plug). Audio passes through untouched. The editor is the U2C St
 The plugin runs two servers on 127.0.0.1 only: HTTP `17870` (the embedded web app, bundled into the binary) and WebSocket `17871`
 (next free port if taken; the served page carries it in a `u2c-daw-ws` meta tag).
 
-- Transport (BPM, play state, position in beats, RMS, peak) is pushed about 30 times per second.
-- A ring buffer of the mono mix (about 2.7 s) is pulled by the web app as PCM: client sends `{"t":"pull"}`, server replies binary `[u32 sampleRate][u32 n][f32 mono x n]`, little endian.
+- Transport `{bpm, beats (host PPQ of the newest sample), widx, playing, ts:[n,d], loop:[a,b]|null, rms, peak, sr}` is pushed about 60 times per second. The app interpolates the PPQ every animation frame, so beats land within a frame of the DAW grid.
+- A stereo ring (about 3 s) is pulled as PCM: `{"t":"pull"}` -> binary `"PCM0" [u32 sr][u32 n][f64 first sample index][f32 L x n][f32 R x n]`, little endian.
+- **Receive audio from: Master** (home screen, replaces "Choose audio"): the live master is written into a 4-bar window by host PPQ and analysed like a file; a looping DAW is exact from the second pass, a linear one trails by the analysis time (about 1.5 s).
+- **DAW image**: `{"t":"cap","on":true}` starts a capture thread (xcap, macOS and Windows) that sends the DAW's biggest window as `"JPG0"`+JPEG (about 20 fps, 960 px wide) to the hero card (cue props `video.on/opacity/blend/target`, opacity 60 % and blend normal by default). Inside the DAW process its own windows need no permission; if macOS refuses, it asks for Screen Recording once and the app says what to allow.
+- **Record DAW** records the studio canvas (`captureStream`) with the live master audio and has the plugin write the file to `~/Movies/U2C Studio` (webviews cannot download). No screen-capture permission is involved.
 - The preview follows the DAW playhead (tick "follow" in the DAW box, bottom right). Export stays the existing web export.
 - The same web app in a normal browser: open `http://127.0.0.1:17870/` while the plugin is loaded. It connects to the same WebSocket. Or `?daw=ws://127.0.0.1:17871` on any copy of the app.
 - Only one plugin instance feeds the tap at a time (the last one that processes audio).
@@ -41,14 +44,12 @@ cmake --build build-au --config Release
 
 ## Record the DAW screen with the plugin audio
 
-1. Load the plugin on a track or the master bus (it taps what passes through it).
-2. In the plugin window or a browser tab on `http://127.0.0.1:17870/`, click **Record DAW**, pick the DAW window or screen, play the project.
-3. **Stop + save** downloads `u2c-daw-<time>.webm` (screen video + plugin audio).
-4. Edit and export the video as usual in U2C Studio (MP4 export is the existing web export).
+1. Load the plugin on the master bus.
+2. Press **Receive audio from: Master**, then **Record DAW**, then play the project.
+3. **Stop + save** writes `u2c-daw-<time>.mp4` (or `.webm`) to `~/Movies/U2C Studio` (`~/Videos/U2C Studio` elsewhere).
 
 Limits:
-- Screen capture (`getDisplayMedia`) is often blocked or missing in embedded webviews (WebKitGTK, WKWebView inside a host). If the button reports it, open the same URL in Chrome, Edge or Firefox: it records the same way. This is the main reason the browser connection exists.
-- macOS: grant the browser (or host) Screen Recording permission in System Settings, Privacy and Security, then restart it.
-- Recording is WebM (VP9/Opus), not MP4. Audio is the plugin's mono mix, sent in 50 ms pulls, so A/V sync is within roughly 100 ms; trim in the editor if needed.
+- Recording is the studio preview canvas (display size), not an offscreen full-size render; A/V sync is within roughly 100 ms. Use the web export for final quality.
+- Bars are 4 beats in the app; the host time signature is shown but does not change the grid.
 - Plugin audio is whatever reaches the plugin; place it after the instruments you want in the video.
-- Untested in a real DAW so far: built and unit-tested on Linux only (server, WebSocket, PCM, bundles load). The webview embed and host transport values still need a check in a host on each OS.
+- Window capture is compiled for macOS/Windows only by CI; it needs a check in a real host (which window is picked, permission flow).

@@ -183,7 +183,7 @@ async function boot() {
   }
   async function loadDemo() { store.session.file = null; status('Building the demo beat…'); const buf = await synthDemo(); await load(buf, { name: 'demo beat (synthesised)', title: 'Night Shift', bpm: null }); status($('#status').innerHTML + ' · <b>demo</b>: drop your own beat to replace it'); }
   // v21: projects reopen their audio (a File / Blob) and adopt their saved cue sheet (no regeneration over it)
-  A.loadFile = loadFile; A.loadDemo = loadDemo;
+  A.loadFile = loadFile; A.loadDemo = loadDemo; A.loadBuffer = load;   // loadBuffer: the DAW bridge's live master track
   A.adoptSheet = (doc, label = 'open project') => { needGen = false; cues.replace(parseSheet(doc), label, true); const look = cues.ev().value('look', 0, store.project.look), stage = cues.ev().value('stage', 0, store.project.stage);
     store.set({ project: { look, stage } }); accent(); app.panels.sync(); app.cuetl.markDirty(); app.inspector.show(); app.exporter.info(); };
   $('#file').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) loadFile(f); e.target.value = ''; });

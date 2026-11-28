@@ -3,6 +3,7 @@ use nih_plug::prelude::*;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 
+mod capture;
 mod editor;
 mod server;
 
@@ -52,23 +53,26 @@ impl Plugin for U2cStudio {
     }
 
     fn process(&mut self, buffer: &mut Buffer, _aux: &mut AuxiliaryBuffers, ctx: &mut impl ProcessContext<Self>) -> ProcessStatus {
-        // Audio is left untouched (pass-through). Tap: mono mix to the ring, RMS/peak per block.
-        let t = ctx.transport();
+                let t = ctx.transport();
         let sh = &self.shared;
         if let Some(b) = t.tempo {
             sh.bpm.store(b.to_bits(), Relaxed);
         }
-        if let Some(p) = t.pos_beats() {
-            sh.beats.store(p.to_bits(), Relaxed);
-        }
+        sh.begin_block(t.pos_beats());
         sh.playing.store(t.playing, Relaxed);
+        sh.tsn.store(t.time_sig_numerator.unwrap_or(4).max(1) as u32, Relaxed);
+        sh.tsd.store(t.time_sig_denominator.unwrap_or(4).max(1) as u32, Relaxed);
+        let (la, lb) = t.loop_range_beats().unwrap_or((f64::NAN, f64::NAN));
+        sh.loop_a.store(la.to_bits(), Relaxed);
+        sh.loop_b.store(lb.to_bits(), Relaxed);
         let (mut sum, mut peak, mut n) = (0f32, 0f32, 0usize);
-        for ch in buffer.iter_samples() {
-            let len = ch.len().max(1) as f32;
-            let m = ch.into_iter().map(|s| *s).sum::<f32>() / len;
-            sh.push(m);
+        for mut ch in buffer.iter_samples() {
+            let l = ch.get_mut(0).map(|s| *s).unwrap_or(0.0);
+            let r = ch.get_mut(1).map(|s| *s).unwrap_or(l);
+            sh.push(l, r);
+            let m = (l + r) * 0.5;
             sum += m * m;
-            peak = peak.max(m.abs());
+            peak = peak.max(l.abs()).max(r.abs());
             n += 1;
         }
         if n > 0 {

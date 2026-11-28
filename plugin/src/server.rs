@@ -4,6 +4,7 @@
 use include_dir::{include_dir, Dir};
 use std::io::ErrorKind;
 use std::net::{TcpListener, TcpStream};
+use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::Relaxed};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
@@ -18,58 +19,102 @@ pub const WS_PORT: u16 = 17871;
 const RING: usize = 1 << 17;
 const MAX_PULL: usize = 32768;
 
+use crate::capture::Capture;
+
 /// Audio-thread to server-thread state. Lock-free; f32/f64 travel as bits in atomics.
 pub struct Shared {
     pub bpm: AtomicU64,
+    /// Host PPQ at the start of the last block, and the ring index of that block's first sample.
     pub beats: AtomicU64,
+    pub blk_widx: AtomicU64,
     pub playing: AtomicBool,
     pub rms: AtomicU32,
     pub peak: AtomicU32,
     pub sr: AtomicU32,
     pub widx: AtomicU64,
-    ring: Vec<AtomicU32>,
+    pub tsn: AtomicU32,
+    pub tsd: AtomicU32,
+    /// Host loop range in beats (NaN bits = none).
+    pub loop_a: AtomicU64,
+    pub loop_b: AtomicU64,
+    ring_l: Vec<AtomicU32>,
+    ring_r: Vec<AtomicU32>,
 }
 
 impl Shared {
     fn new() -> Self {
+        let ring = || (0..RING).map(|_| AtomicU32::new(0)).collect::<Vec<_>>();
         Self {
             bpm: AtomicU64::new(120f64.to_bits()),
             beats: AtomicU64::new(0),
+            blk_widx: AtomicU64::new(0),
             playing: AtomicBool::new(false),
             rms: AtomicU32::new(0),
             peak: AtomicU32::new(0),
             sr: AtomicU32::new(44100),
             widx: AtomicU64::new(0),
-            ring: (0..RING).map(|_| AtomicU32::new(0)).collect(),
+            tsn: AtomicU32::new(4),
+            tsd: AtomicU32::new(4),
+            loop_a: AtomicU64::new(f64::NAN.to_bits()),
+            loop_b: AtomicU64::new(f64::NAN.to_bits()),
+            ring_l: ring(),
+            ring_r: ring(),
         }
     }
-    /// Push one mono sample (audio thread).
+    /// Mark the start of an audio block: host PPQ of its first sample (audio thread).
     #[inline]
-    pub fn push(&self, s: f32) {
+    pub fn begin_block(&self, beats: Option<f64>) {
+        if let Some(b) = beats {
+            self.beats.store(b.to_bits(), Relaxed);
+        }
+        self.blk_widx.store(self.widx.load(Relaxed), Relaxed);
+    }
+    /// Push one stereo sample (audio thread).
+    #[inline]
+    pub fn push(&self, l: f32, r: f32) {
         let w = self.widx.load(Relaxed);
-        self.ring[(w as usize) & (RING - 1)].store(s.to_bits(), Relaxed);
+        let i = (w as usize) & (RING - 1);
+        self.ring_l[i].store(l.to_bits(), Relaxed);
+        self.ring_r[i].store(r.to_bits(), Relaxed);
         self.widx.store(w + 1, Relaxed);
     }
-    /// Copy samples [from, to) as little-endian bytes, preceded by the [sr][n] header.
+    /// Samples [from, to) as: "PCM0" [u32 sr][u32 n][f64 index of the first sample][f32 L * n][f32 R * n], little-endian.
     pub fn pcm_since(&self, from: u64, to: u64) -> Vec<u8> {
         let n = (to - from) as usize;
-        let mut out = Vec::with_capacity(8 + n * 4);
+        let mut out = Vec::with_capacity(20 + n * 8);
+        out.extend_from_slice(b"PCM0");
         out.extend_from_slice(&self.sr.load(Relaxed).to_le_bytes());
         out.extend_from_slice(&(n as u32).to_le_bytes());
-        for i in from..to {
-            out.extend_from_slice(&f32::from_bits(self.ring[(i as usize) & (RING - 1)].load(Relaxed)).to_le_bytes());
+        out.extend_from_slice(&(from as f64).to_le_bytes());
+        for ring in [&self.ring_l, &self.ring_r] {
+            for i in from..to {
+                out.extend_from_slice(&f32::from_bits(ring[(i as usize) & (RING - 1)].load(Relaxed)).to_le_bytes());
+            }
         }
         out
     }
+    /// Host PPQ for the newest sample in the ring (end of the last block).
+    pub fn beats_now(&self) -> f64 {
+        let blk = f64::from_bits(self.beats.load(Relaxed));
+        if !self.playing.load(Relaxed) {
+            return blk;
+        }
+        let (w, bw) = (self.widx.load(Relaxed), self.blk_widx.load(Relaxed));
+        blk + w.saturating_sub(bw) as f64 / self.sr.load(Relaxed).max(1) as f64 * f64::from_bits(self.bpm.load(Relaxed)) / 60.0
+    }
     fn transport_json(&self) -> String {
+        let (la, lb) = (f64::from_bits(self.loop_a.load(Relaxed)), f64::from_bits(self.loop_b.load(Relaxed)));
         serde_json::json!({
             "t": "transport",
             "bpm": f64::from_bits(self.bpm.load(Relaxed)),
-            "beats": f64::from_bits(self.beats.load(Relaxed)),
+            "beats": self.beats_now(),
+            "widx": self.widx.load(Relaxed),
             "playing": self.playing.load(Relaxed),
             "rms": f32::from_bits(self.rms.load(Relaxed)),
             "peak": f32::from_bits(self.peak.load(Relaxed)),
             "sr": self.sr.load(Relaxed),
+            "ts": [self.tsn.load(Relaxed), self.tsd.load(Relaxed)],
+            "loop": if la.is_finite() && lb.is_finite() { serde_json::json!([la, lb]) } else { serde_json::Value::Null },
         })
         .to_string()
     }
@@ -87,16 +132,17 @@ static SERVERS: OnceLock<Servers> = OnceLock::new();
 pub fn servers() -> &'static Servers {
     SERVERS.get_or_init(|| {
         let shared = Arc::new(Shared::new());
+        let cap = Arc::new(Capture::new());
         let ws_l = bind(WS_PORT);
         let http = bind_http(HTTP_PORT);
         let ws_port = ws_l.local_addr().map(|a| a.port()).unwrap_or(WS_PORT);
         let http_port = http.server_addr().to_ip().map(|a| a.port()).unwrap_or(HTTP_PORT);
-        let sh = shared.clone();
+        let (sh, cp) = (shared.clone(), cap.clone());
         std::thread::spawn(move || {
             for s in ws_l.incoming().flatten() {
-                let sh = sh.clone();
+                let (sh, cp) = (sh.clone(), cp.clone());
                 std::thread::spawn(move || {
-                    let _ = client(s, sh);
+                    let _ = client(s, sh, cp);
                 });
             }
         });
@@ -191,7 +237,28 @@ fn origin_ok(origin: &str) -> bool {
     std::env::var("U2C_DAW_ORIGINS").map(|v| v.split(',').any(|o| o.trim() == origin)).unwrap_or(false)
 }
 
-fn client(stream: TcpStream, sh: Arc<Shared>) -> Result<(), Box<dyn std::error::Error>> {
+/// Folder for saved recordings (the webview cannot download files itself): ~/Movies/U2C Studio (macOS), ~/Videos/U2C Studio.
+fn out_dir() -> std::path::PathBuf {
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    home.join(if cfg!(target_os = "macos") { "Movies" } else { "Videos" }).join("U2C Studio")
+}
+
+fn safe_name(n: &str) -> String {
+    let n: String = n.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')).take(80).collect();
+    if n.is_empty() || n.starts_with('.') { "u2c-recording.webm".into() } else { n }
+}
+
+/// Releases this client's claim on the window capture when it disconnects.
+struct CapGuard(Option<Arc<Capture>>);
+impl Drop for CapGuard {
+    fn drop(&mut self) {
+        if let Some(c) = self.0.take() {
+            c.release();
+        }
+    }
+}
+
+fn client(stream: TcpStream, sh: Arc<Shared>, cap: Arc<Capture>) -> Result<(), Box<dyn std::error::Error>> {
     let mut ws = tungstenite::accept_hdr(stream, |req: &Request, resp: Response| -> Result<Response, ErrorResponse> {
         match req.headers().get("origin").and_then(|v| v.to_str().ok()) {
             Some(o) if !origin_ok(o) => Err(ErrorResponse::new(Some("origin not allowed".into()))),
@@ -199,32 +266,84 @@ fn client(stream: TcpStream, sh: Arc<Shared>) -> Result<(), Box<dyn std::error::
         }
     })
     .map_err(|e| e.to_string())?;
-    ws.get_ref().set_read_timeout(Some(Duration::from_millis(20)))?;
+    ws.get_ref().set_read_timeout(Some(Duration::from_millis(10)))?;
     ws.get_ref().set_nodelay(true)?;
     let mut cursor: Option<u64> = None;
     let mut last = Instant::now() - Duration::from_secs(1);
+    let (mut frame_seq, mut status_seq) = (0u64, 0u64);
+    let mut guard = CapGuard(None);
+    let mut save: Option<(std::fs::File, std::path::PathBuf)> = None;
     loop {
-        if last.elapsed() >= Duration::from_millis(33) {
+        if last.elapsed() >= Duration::from_millis(16) {
             last = Instant::now();
             ws.send(Message::Text(sh.transport_json()))?;
         }
+        if guard.0.is_some() {
+            if let Some((seq, f)) = cap.frame_if_newer(frame_seq) {
+                frame_seq = seq;
+                ws.send(Message::Binary(f))?;
+            }
+            if let Some((seq, st)) = cap.status_if_newer(status_seq) {
+                status_seq = seq;
+                ws.send(Message::Text(serde_json::json!({"t": "cap_status", "msg": st}).to_string()))?;
+            }
+        }
         match ws.read() {
             Ok(Message::Text(t)) => {
-                if t.contains("\"open_browser\"") {
-                    // Embedded webviews block screen capture: open the same app in the system browser, where Record works.
-                    let url = "http://127.0.0.1:17870/?daw=ws://127.0.0.1:17871&record=1";
-                    #[cfg(target_os = "macos")] let _ = std::process::Command::new("open").arg(url).spawn();
-                    #[cfg(target_os = "windows")] let _ = std::process::Command::new("cmd").args(["/C", "start", "", url]).spawn();
-                    #[cfg(target_os = "linux")] let _ = std::process::Command::new("xdg-open").arg(url).spawn();
-                } else if t.contains("\"pull\"") {
-                    let w = sh.widx.load(Relaxed);
-                    let mut c = cursor.unwrap_or(w);
-                    if w.saturating_sub(c) > (RING as u64) / 2 {
-                        c = w.saturating_sub(MAX_PULL as u64);
+                let v: serde_json::Value = serde_json::from_str(&t).unwrap_or(serde_json::Value::Null);
+                match v["t"].as_str().unwrap_or("") {
+                    "open_browser" => {
+                        // Embedded webviews are sandboxed in places: open the same app in the system browser.
+                        let url = "http://127.0.0.1:17870/?daw=ws://127.0.0.1:17871&record=1";
+                        #[cfg(target_os = "macos")] let _ = std::process::Command::new("open").arg(url).spawn();
+                        #[cfg(target_os = "windows")] let _ = std::process::Command::new("cmd").args(["/C", "start", "", url]).spawn();
+                        #[cfg(target_os = "linux")] let _ = std::process::Command::new("xdg-open").arg(url).spawn();
                     }
-                    let to = (c + MAX_PULL as u64).min(w);
-                    ws.send(Message::Binary(sh.pcm_since(c, to)))?;
-                    cursor = Some(to);
+                    "pull" => {
+                        let w = sh.widx.load(Relaxed);
+                        let mut c = cursor.unwrap_or(w);
+                        if w.saturating_sub(c) > (RING as u64) / 2 {
+                            c = w.saturating_sub(MAX_PULL as u64);
+                        }
+                        let to = (c + MAX_PULL as u64).min(w);
+                        ws.send(Message::Binary(sh.pcm_since(c, to)))?;
+                        cursor = Some(to);
+                    }
+                    "cap" => {
+                        if v["on"].as_bool().unwrap_or(false) {
+                            cap.configure(v["fps"].as_u64().unwrap_or(20) as u32, v["w"].as_u64().unwrap_or(960) as u32);
+                            if guard.0.is_none() {
+                                cap.acquire(cap.clone());
+                                guard.0 = Some(cap.clone());
+                                frame_seq = 0;
+                                status_seq = 0;
+                            }
+                        } else if let Some(c) = guard.0.take() {
+                            c.release();
+                        }
+                    }
+                    "save_begin" => {
+                        let dir = out_dir();
+                        let _ = std::fs::create_dir_all(&dir);
+                        let path = dir.join(safe_name(v["name"].as_str().unwrap_or("")));
+                        save = std::fs::File::create(&path).ok().map(|f| (f, path));
+                    }
+                    "save_end" => {
+                        let msg = match save.take() {
+                            Some((mut f, p)) => {
+                                let _ = f.flush();
+                                serde_json::json!({"t": "saved", "path": p.to_string_lossy()})
+                            }
+                            None => serde_json::json!({"t": "saved", "path": null}),
+                        };
+                        ws.send(Message::Text(msg.to_string()))?;
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Message::Binary(b)) => {
+                if let Some((f, _)) = save.as_mut() {
+                    let _ = f.write_all(&b);
                 }
             }
             Ok(Message::Close(_)) => return Ok(()),
@@ -245,22 +364,35 @@ mod tests {
         assert!(!origin_ok("https://evil.example"));
     }
     #[test]
+    fn names() {
+        assert_eq!(safe_name("../../x y.mp4"), "u2c-recording.webm");
+        assert_eq!(safe_name("u2c daw.mp4"), "u2cdaw.mp4");
+    }
+    #[test]
     fn serves_app_and_ws_streams() {
         let s = servers();
         s.shared.bpm.store(133f64.to_bits(), Relaxed);
+        s.shared.begin_block(Some(8.0));
+        s.shared.playing.store(true, Relaxed);
         for i in 0..1000 {
-            s.shared.push(i as f32 / 1000.0);
+            s.shared.push(i as f32 / 1000.0, -(i as f32) / 1000.0);
         }
+        // 1000 samples at 44.1 kHz, 133 BPM past beat 8
+        let want = 8.0 + 1000.0 / 44100.0 * 133.0 / 60.0;
+        assert!((s.shared.beats_now() - want).abs() < 1e-9);
         let idx = lookup("/index.html").unwrap();
         assert!(idx.len() > 1000);
         assert!(lookup("/src/bridge/daw.js").is_some());
         let (mut ws, _) = tungstenite::connect(format!("ws://127.0.0.1:{}", s.ws_port)).unwrap();
         let m = ws.read().unwrap();
-        assert!(m.to_text().unwrap().contains("\"bpm\":133"));
+        let t = m.to_text().unwrap();
+        assert!(t.contains("\"bpm\":133") && t.contains("\"ts\":[4,4]"));
         ws.send(Message::Text("{\"t\":\"pull\"}".into())).unwrap();
         loop {
             if let Message::Binary(b) = ws.read().unwrap() {
-                assert!(b.len() >= 8);
+                assert_eq!(&b[..4], b"PCM0");
+                let n = u32::from_le_bytes(b[8..12].try_into().unwrap()) as usize;
+                assert_eq!(b.len(), 20 + n * 8);
                 break;
             }
         }
