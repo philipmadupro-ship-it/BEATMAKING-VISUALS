@@ -21,15 +21,19 @@ export async function initDaw(app) {
   const dirty = () => { if (app.studio && app.studio.markDirty) app.studio.markDirty(); };
 
   // ---- host clock: last transport message + per-frame interpolation of the host PPQ
-  const an = { beats: 0, t: 0, bpm: 120, playing: false, widx: 0 };
-  const beatsAt = (now) => (an.playing ? an.beats + (now - an.t) / 1000 * an.bpm / 60 : an.beats);
+  // beats(now) = (now - O) * bps: O is the lowest-delay offset seen over 2.5 s (a late message only ever raises it), so a busy frame
+  // cannot drag the clock behind; the plugin counts transport jumps (seek, loop, start/stop, tempo) and each one restarts the estimate.
+  const an = { beats: 0, O: 0, bps: 2, playing: false, jump: -1, widx: 0, sr: 44100 }, offs = [];
+  const beatsAt = (now) => (an.playing ? (now - an.O) / 1000 * an.bps : an.beats);
   function anchor(h) {
-    const now = h.rx || performance.now(), pred = beatsAt(now);
-    if (!an.playing || !h.playing || Math.abs(h.beats - pred) > 0.5 || h.bpm !== an.bpm) { an.beats = h.beats; }
-    else an.beats = pred + (h.beats - pred) * 0.25;   // small jitter of the message arrival is smoothed, a real jump snaps
-    an.t = now; an.bpm = h.bpm || 120; an.playing = !!h.playing; an.widx = h.widx; an.sr = h.sr;
+    const bps = (h.bpm || 120) / 60, rx = h.rx; an.widx = h.widx; an.sr = h.sr;
+    if (!h.playing) { an.playing = false; an.beats = h.beats; an.bps = bps; offs.length = 0; return; }
+    if (!an.playing || h.jump !== an.jump || bps !== an.bps) offs.length = 0;
+    an.jump = h.jump; an.bps = bps; an.playing = true; offs.push([rx, rx - h.beats / bps * 1000]);
+    while (offs.length > 1 && rx - offs[0][0] > 2500) offs.shift();
+    an.O = Math.min(...offs.map((x) => x[1]));
   }
-  const beatsToT = (b) => { const tr = trk(); return tr ? tr.t0 + b * tr.spb : b * 60 / (an.bpm || 120); };
+  const beatsToT = (b) => { const tr = trk(); return tr ? tr.t0 + b * tr.spb : b / an.bps; };
 
   // ---- live master window
   const lv = { on: false, bpm: 0, spb: 0, sr: 44100, len: 0, L: null, R: null, win: null, dirty: false, last: 0, busy: false, ready: null, origCurrent: null, filled: 0 };
@@ -61,7 +65,7 @@ export async function initDaw(app) {
     lv.L.set(L.subarray(a, z), off + a); lv.R.set(R.subarray(a, z), off + a); lv.filled = Math.max(lv.filled, off + z); lv.dirty = true;
   }
   // host PPQ of ring sample index w: anchored on the newest transport message (its beats are those of its widx)
-  const hostBeatsAtIndex = (w, sr) => { const h = st.host; return (h ? h.beats : an.beats) + (w - (h ? h.widx : an.widx)) / sr * (an.bpm / 60); };
+  const hostBeatsAtIndex = (w, sr) => { const h = st.host; return (h ? h.beats : an.beats) + (w - (h ? h.widx : an.widx)) / sr * an.bps; };
   function liveRebuild(now) {
     if (!lv.on || !lv.dirty || lv.busy || now - lv.last < 700 || !an.playing) return;
     const e = lv.origCurrent && lv.origCurrent(); if (e && !e.ready) return;   // the previous window is still being measured
@@ -102,7 +106,7 @@ export async function initDaw(app) {
   function apply(h) {
     const was = an.playing; st.host = h; anchor(h); ui.update(st);
     if (h.bpm) { if (lv.on) { if (Math.abs(h.bpm - lv.bpm) > 0.05 && !lv.busy) startLive(); }
-      else if (Math.abs(h.bpm - (onTransport.last || 0)) > 0.01 && A().setBpm) { onTransport.last = h.bpm; try { A().setBpm(Math.round(h.bpm * 1000) / 1000); } catch (_) {} } }
+      else if (trk() && A().setBpm && h.bpm >= 40 && h.bpm <= 250 && Math.abs(h.bpm - trk().bpm) > 0.01 && !app.store.session.exporting) { try { A().setBpm(Math.round(h.bpm * 1000) / 1000); } catch (_) {} } }   // also after a re-analysis replaced the track
     if (was && !h.playing) release();
   }
   // host stopped: hand the clock back, at the position we were at, so the intro / sphere / scrubbing work as in the web app
@@ -113,7 +117,7 @@ export async function initDaw(app) {
     if (pending) { const h = pending; pending = null; apply(h); }
     if (app.store.session.exporting) { return; }
     if (st.follow && an.playing && trk()) {
-      const b = beatsAt(now) + st.lat / 1000 * an.bpm / 60;
+      const b = beatsAt(now) + st.lat / 1000 * an.bps;
       clk().setManual(Math.max(0, lv.on ? liveT(b) : beatsToT(b))); following = true; dirty();
     } else release();
     liveRebuild(now);
@@ -187,7 +191,7 @@ function mountUi(st) {
   const lab = document.querySelector('label[for=file]'), hint = lab && lab.parentElement && lab.parentElement.querySelector('.hint');
   let big = null;
   if (lab) { big = document.createElement('button'); big.className = 'btn primary'; big.id = 'liveBtn'; big.textContent = 'Receive audio from: Master'; lab.after(big); lab.hidden = true; if (hint) hint.textContent = 'U2C Studio sits on your master: press play in the DAW and every visual follows it live.'; }
-  const el = document.createElement('div');
+  const el = document.createElement('div'); el.id = 'u2cDaw';
   el.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:99999;font:12px/1.3 ui-monospace,monospace;background:#111d;color:#eee;border:1px solid #555;border-radius:8px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;max-width:min(560px,92vw);backdrop-filter:blur(6px)';
   el.innerHTML = '<b data-mode style="letter-spacing:.06em"></b><span data-s>DAW: connecting</span><label title="Follow the DAW transport while it plays"><input type="checkbox" data-f checked> follow</label>' +
     '<button data-l style="cursor:pointer">Master live</button><label title="Show the DAW window on the hero card"><input type="checkbox" data-c> DAW image</label>' +

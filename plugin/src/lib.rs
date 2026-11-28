@@ -58,8 +58,7 @@ impl Plugin for U2cStudio {
         if let Some(b) = t.tempo {
             sh.bpm.store(b.to_bits(), Relaxed);
         }
-        sh.begin_block(t.pos_beats());
-        sh.playing.store(t.playing, Relaxed);
+        sh.begin_block(t.pos_beats(), t.playing, buffer.samples());
         sh.tsn.store(t.time_sig_numerator.unwrap_or(4).max(1) as u32, Relaxed);
         sh.tsd.store(t.time_sig_denominator.unwrap_or(4).max(1) as u32, Relaxed);
         let (la, lb) = t.loop_range_beats().unwrap_or((f64::NAN, f64::NAN));

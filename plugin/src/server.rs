@@ -32,6 +32,9 @@ pub struct Shared {
     pub peak: AtomicU32,
     pub sr: AtomicU32,
     pub widx: AtomicU64,
+    /// Counts transport discontinuities (seek, loop wrap, start/stop, tempo change): the web clock restarts its estimate on each.
+    pub jumps: AtomicU32,
+    exp_beats: AtomicU64,
     pub tsn: AtomicU32,
     pub tsd: AtomicU32,
     /// Host loop range in beats (NaN bits = none).
@@ -53,6 +56,8 @@ impl Shared {
             peak: AtomicU32::new(0),
             sr: AtomicU32::new(44100),
             widx: AtomicU64::new(0),
+            jumps: AtomicU32::new(0),
+            exp_beats: AtomicU64::new(0),
             tsn: AtomicU32::new(4),
             tsd: AtomicU32::new(4),
             loop_a: AtomicU64::new(f64::NAN.to_bits()),
@@ -61,11 +66,17 @@ impl Shared {
             ring_r: ring(),
         }
     }
-    /// Mark the start of an audio block: host PPQ of its first sample (audio thread).
+    /// Mark the start of an audio block of `n` samples: host PPQ of its first sample, play state (audio thread).
     #[inline]
-    pub fn begin_block(&self, beats: Option<f64>) {
+    pub fn begin_block(&self, beats: Option<f64>, playing: bool, n: usize) {
+        let (bpm, sr) = (f64::from_bits(self.bpm.load(Relaxed)), self.sr.load(Relaxed).max(1) as f64);
+        let was = self.playing.swap(playing, Relaxed);
         if let Some(b) = beats {
+            if was != playing || (b - f64::from_bits(self.exp_beats.load(Relaxed))).abs() > 0.05 {
+                self.jumps.fetch_add(1, Relaxed);
+            }
             self.beats.store(b.to_bits(), Relaxed);
+            self.exp_beats.store((b + n as f64 / sr * bpm / 60.0).to_bits(), Relaxed);
         }
         self.blk_widx.store(self.widx.load(Relaxed), Relaxed);
     }
@@ -109,6 +120,7 @@ impl Shared {
             "bpm": f64::from_bits(self.bpm.load(Relaxed)),
             "beats": self.beats_now(),
             "widx": self.widx.load(Relaxed),
+            "jump": self.jumps.load(Relaxed),
             "playing": self.playing.load(Relaxed),
             "rms": f32::from_bits(self.rms.load(Relaxed)),
             "peak": f32::from_bits(self.peak.load(Relaxed)),
@@ -372,14 +384,20 @@ mod tests {
     fn serves_app_and_ws_streams() {
         let s = servers();
         s.shared.bpm.store(133f64.to_bits(), Relaxed);
-        s.shared.begin_block(Some(8.0));
-        s.shared.playing.store(true, Relaxed);
+        s.shared.begin_block(Some(8.0), true, 1000);
         for i in 0..1000 {
             s.shared.push(i as f32 / 1000.0, -(i as f32) / 1000.0);
         }
         // 1000 samples at 44.1 kHz, 133 BPM past beat 8
         let want = 8.0 + 1000.0 / 44100.0 * 133.0 / 60.0;
         assert!((s.shared.beats_now() - want).abs() < 1e-9);
+        assert!(s.shared.jumps.load(Relaxed) >= 1);
+        let j = s.shared.jumps.load(Relaxed);
+        s.shared.begin_block(Some(8.0 + 1000.0 / 44100.0 * 133.0 / 60.0), true, 1000);   // contiguous: no jump
+        assert_eq!(s.shared.jumps.load(Relaxed), j);
+        s.shared.begin_block(Some(2.0), true, 1000);   // seek
+        assert_eq!(s.shared.jumps.load(Relaxed), j + 1);
+        s.shared.begin_block(Some(8.0), true, 1000);
         let idx = lookup("/index.html").unwrap();
         assert!(idx.len() > 1000);
         assert!(lookup("/src/bridge/daw.js").is_some());

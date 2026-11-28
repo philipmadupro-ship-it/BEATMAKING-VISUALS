@@ -27,7 +27,7 @@ if (CACHE) await ctx.route(/^https:\/\/(cdn\.jsdelivr\.net|fonts\.googleapis\.co
 
 // ---- a mock of the plugin's WebSocket: a simulated host at 128 BPM that plays a kick on every beat
 const SR = 44100, BPM = 128, SPB = 60 / BPM;
-const T0 = Date.now(), host = { playing: false, t0: 0, beat0: 0 }, rx = { saved: [], names: [], capOn: false };
+const T0 = Date.now(), host = { playing: false, t0: 0, beat0: 0, jump: 0 }, rx = { saved: [], names: [], capOn: false };
 const widxNow = () => Math.floor((Date.now() - T0) / 1000 * SR);
 const beatsNow = () => (host.playing ? host.beat0 + (Date.now() - host.t0) / 1000 * BPM / 60 : host.beat0);
 let cursor = 0, sock = null;
@@ -35,7 +35,7 @@ let cursor = 0, sock = null;
 const kickAt = (i) => { const bt = host.beat0 + (i - (host.t0 - T0) / 1000 * SR) / SR / SPB, p = (((bt % 1) + 1) % 1) * SPB, t = i / SR; return Math.sin(2 * Math.PI * (50 + 110 * Math.exp(-p * 30)) * p) * Math.exp(-p * 9) * 0.8 + 0.04 * Math.sin(2 * Math.PI * 1000 * t); };
 await page.routeWebSocket(/127\.0\.0\.1:17871/, (ws) => {
   sock = ws;
-  const iv = setInterval(() => ws.send(JSON.stringify({ t: 'transport', bpm: BPM, beats: beatsNow(), widx: widxNow(), playing: host.playing, ts: [4, 4], loop: null, rms: 0, peak: 0, sr: SR })), 16);
+  const iv = setInterval(() => ws.send(JSON.stringify({ t: 'transport', bpm: BPM, beats: beatsNow(), widx: widxNow(), jump: host.jump, playing: host.playing, ts: [4, 4], loop: null, rms: 0, peak: 0, sr: SR })), 16);
   ws.onMessage((m) => {
     if (typeof m !== 'string') { rx.saved.push(m.length); return; }
     const j = JSON.parse(m);
@@ -48,8 +48,8 @@ await page.routeWebSocket(/127\.0\.0\.1:17871/, (ws) => {
   });
   ws.onClose(() => clearInterval(iv));
 });
-const play = (beat = 0) => { host.beat0 = beat; host.t0 = Date.now(); host.playing = true; cursor = 0; };
-const stop = () => { host.beat0 = beatsNow(); host.playing = false; };
+const play = (beat = 0) => { host.beat0 = beat; host.t0 = Date.now(); host.playing = true; host.jump++; cursor = 0; };
+const stop = () => { host.beat0 = beatsNow(); host.playing = false; host.jump++; };
 const ev = (fn, arg) => page.evaluate(fn, arg);
 
 await page.goto(`http://127.0.0.1:${server.address().port}/?daw=ws://127.0.0.1:17871`);
@@ -87,8 +87,7 @@ ok('host stopped again: no manual writes', await ev(() => window.__manual.filter
 await page.click('#backBtn').catch(() => {}); await page.waitForTimeout(200);
 await page.click('#liveBtn'); await page.waitForFunction(() => window.u2c.daw.state.live && !document.querySelector('#studio').hidden, null, { timeout: 60000 });
 ok('Receive audio from: Master opens the studio on a live 4-bar track', await ev(() => { const tr = window.u2c.store.session.track; return tr.t0 === 0 && Math.abs(tr.bpm - 128) < 0.01 && Math.abs(window.u2c.store.project.outT - 4 * 4 * 60 / 128) < 0.01; }));
-play(0); await page.waitForTimeout(6500);
-console.log(await ev(() => { const l = window.u2c.daw.live; return JSON.stringify({ on: l.on, win: l.win, filled: l.filled, dirty: l.dirty, len: l.len, pk: l.L && Math.max(...l.L.subarray(0, 20000)), host: window.u2c.daw.state.host.beats }); }));
+play(0); await page.waitForFunction(() => { const e = window.u2c.clip.current(); return e && e.D && Math.max(...e.D.frame.M) > -40; }, null, { timeout: 60000 }).catch(() => {});
 const live = await ev(() => { const e = window.u2c.clip.current(), D = e && e.D; if (!D) return null; const lv = D.lv || {}; let mx = -99; const m = D.frame && D.frame.M; if (m) for (const v of m) mx = Math.max(mx, v); return { ready: e.ready, momentary: mx, kicks: D.onsets ? D.onsets.kick.length : 0 }; });
 ok('live PCM becomes clip data (loudness measured, kicks found)', live && live.ready && live.momentary > -40 && live.kicks >= 4, JSON.stringify(live));
 // beat events within a frame: onset times (kick) against the DAW grid
@@ -98,12 +97,12 @@ ok('live kicks land on the DAW grid (<= 1 frame at 30 fps)', kt.length > 3 && kt
 // ---- DAW image layer
 await page.waitForTimeout(200);
 const jpg = await page.screenshot({ type: 'jpeg', quality: 60, clip: { x: 0, y: 0, width: 320, height: 200 } });
-await ev(() => { const c = document.querySelector('[data-c]'); c.checked = true; c.dispatchEvent(new Event('change')); });
+await ev(() => { const c = document.querySelector('#u2cDaw [data-c]'); c.checked = true; c.dispatchEvent(new Event('change')); });
 await page.waitForTimeout(200); ok('DAW image: the plugin is asked for frames', rx.capOn);
 sock.send(Buffer.concat([Buffer.from('JPG0'), jpg])); await page.waitForTimeout(400);
 const lay = await ev(() => { const L = globalThis.u2cVideoLayer, e = window.u2c.cues.ev(); return { w: L && L.w, on: e.value('video.on', 0, false), op: e.value('video.opacity', 0, 0.8), bl: e.value('video.blend', 0, 'x'), tg: e.value('video.target', 0, 'x') }; });
 ok('DAW image: video layer fed, on, opacity 60 %, blend normal, on the hero', lay.w === 320 && lay.on === true && Math.abs(lay.op - 0.6) < 1e-6 && lay.bl === 'normal' && lay.tg === 'hero', JSON.stringify(lay));
-await ev(() => { const o = document.querySelector('[data-o]'); o.value = 25; o.dispatchEvent(new Event('input')); o.dispatchEvent(new Event('change')); const b = document.querySelector('[data-b]'); b.value = 'multiply'; b.dispatchEvent(new Event('change')); });
+await ev(() => { const o = document.querySelector('#u2cDaw [data-o]'); o.value = 25; o.dispatchEvent(new Event('input')); o.dispatchEvent(new Event('change')); const b = document.querySelector('#u2cDaw [data-b]'); b.value = 'multiply'; b.dispatchEvent(new Event('change')); });
 const lay2 = await ev(() => { const e = window.u2c.cues.ev(); return [e.value('video.opacity', 0, 0), e.value('video.blend', 0, 'x')]; });
 ok('DAW image: opacity slider + blend are cue-sheet properties', Math.abs(lay2[0] - 0.25) < 1e-6 && lay2[1] === 'multiply', JSON.stringify(lay2));
 await page.waitForTimeout(500);
@@ -111,9 +110,9 @@ const px = await ev(() => { const v = document.getElementById('view'), d = v.get
 ok('studio canvas draws with the layer on', px > 0);
 
 // ---- Record: canvas + live master audio -> the plugin
-await ev(() => document.querySelector('[data-r]').click()); await page.waitForTimeout(3500);
-await ev(() => document.querySelector('[data-r]').click());
-await page.waitForFunction(() => /Saved/.test(document.querySelector('[data-m]').textContent), null, { timeout: 30000 }).catch(() => {});
+await ev(() => document.querySelector('#u2cDaw [data-r]').click()); await page.waitForTimeout(3500);
+await ev(() => document.querySelector('#u2cDaw [data-r]').click());
+await page.waitForFunction(() => /Saved/.test(document.querySelector('#u2cDaw [data-m]').textContent), null, { timeout: 30000 }).catch(() => {});
 const total = rx.saved.reduce((a, b) => a + b, 0);
 ok('Record: a file with video + audio reaches the plugin', rx.names.length === 1 && /\.(mp4|webm)$/.test(rx.names[0]) && total > 20000, `${rx.names[0]} ${total} bytes`);
 const real = errors.filter((e) => !/favicon|Failed to load resource/.test(e));
